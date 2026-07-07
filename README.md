@@ -25,6 +25,15 @@ first — two editors talking to one keyboard interleave HID responses.
   (after unlock), and the NLKB16 OLED mirror. Falls back to an in-page
   draggable overlay where PiP isn't available.
 - **Unlock** — full Vial unlock flow (hold-keys + progress).
+- **Offline workspaces** — edit with no keyboard attached (`offline.js`).
+  Pick a device on the landing page (curated Adept/NLKB16 templates, or a
+  snapshot captured automatically on every real connect — Svalboard and
+  generic boards get one after their first connect). Edits journal to
+  localStorage (last-write-wins per key/value) and apply on the next
+  connect: confirm modal with a change list, or fully automatic after
+  ticking "apply automatically". Only touched entries are written — a
+  blank template can never wipe a real keymap. Works in browsers without
+  WebHID too (queue from Firefox/phone, apply later from Chromium).
 
 Coming from the macOS app, still to port: macros, tap dance, combos, key
 overrides, RGB painter, Display tab, gestures, wheel chords, .vil save/load.

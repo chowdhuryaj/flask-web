@@ -400,3 +400,9 @@ body.hud-pip .hud { border-radius: 0; min-height: 100vh; }
   background: var(--ok-bg);
   color: var(--ok);
 }
+
+/* ---------- offline mode ---------- */
+#offline-banner { align-items: center; gap: 8px; }
+.pill.offline { border-color: #e5a50a; }
+.pill.offline .dot { background: #e5a50a; }
+.badge.faint { opacity: 0.6; }

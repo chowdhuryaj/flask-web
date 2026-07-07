@@ -2,8 +2,8 @@
 // LT()/MT()/layer-op composer. Pattern from AlooMapper's renderPicker;
 // data from keycodes.js.
 
-import { el, toast } from './ui.js?v=2';
-import { PICKER_CATEGORIES, compose, MODS, hoverText, describe } from './keycodes.js?v=2';
+import { el, toast } from './ui.js?v=3';
+import { PICKER_CATEGORIES, compose, MODS, hoverText, describe } from './keycodes.js?v=3';
 
 /**
  * Build a picker panel. onPick(keycode) is called when the user chooses.

@@ -2,20 +2,23 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast } from './ui.js?v=2';
-import { FlaskHID } from './webhid.js?v=2';
-import { FlaskProto, EXPECTED_PROTOCOL } from './flaskproto.js?v=2';
-import { VialClient } from './vialclient.js?v=2';
-import { parseDefinition } from './vialdef.js?v=2';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=2';
-import { capabilities } from './caps.js?v=2';
-import { setDeviceCustomKeys } from './keycodes.js?v=2';
-import { KeymapTab } from './keymap-tab.js?v=2';
-import { MouseTab } from './mouse-tab.js?v=2';
-import { TypingTab } from './typing-tab.js?v=2';
-import { SettingsTab } from './settings-tab.js?v=2';
-import { HUD } from './hud.js?v=2';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=2';
+import { el, toast } from './ui.js?v=3';
+import { FlaskHID } from './webhid.js?v=3';
+import { FlaskProto, EXPECTED_PROTOCOL } from './flaskproto.js?v=3';
+import { VialClient } from './vialclient.js?v=3';
+import { parseDefinition } from './vialdef.js?v=3';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=3';
+import { capabilities } from './caps.js?v=3';
+import { setDeviceCustomKeys } from './keycodes.js?v=3';
+import { KeymapTab } from './keymap-tab.js?v=3';
+import { MouseTab } from './mouse-tab.js?v=3';
+import { TypingTab } from './typing-tab.js?v=3';
+import { SettingsTab } from './settings-tab.js?v=3';
+import { HUD } from './hud.js?v=3';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=3';
+import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
+         saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
+         maybeSyncOffline, captureSnapshot } from './offline.js?v=3';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -68,6 +71,8 @@ const app = {
     unlocked: false,
     hud: null,
     onHudLockClick: null,
+    offline: false,
+    offlineWs: null,
 };
 app.flask = new FlaskProto(app.hid);
 app.vial = new VialClient(app.hid);
@@ -79,6 +84,7 @@ const TABS = [];
 // ---------- connect / load ----------
 
 async function connectFlow(device) {
+    if (app.offline) exitOffline(); // restore the real clients first
     try {
         await app.hid.open(device);
     } catch (e) {
@@ -117,6 +123,13 @@ async function loadDevice(device) {
     try { app.unlocked = (await app.vial.unlockStatus()).unlocked; }
     catch { app.unlocked = false; }
 
+    // 5. Offline queue → device (awaited so tabs render post-sync state),
+    // then refresh the stored snapshot in the background (FIFO-safe).
+    await maybeSyncOffline(app, device);
+    captureSnapshot(app, device)
+        .then(() => renderOfflineList())
+        .catch((e) => console.warn('snapshot failed:', e));
+
     // UI
     $('landing').style.display = 'none';
     $('main-tabs').style.display = '';
@@ -129,6 +142,7 @@ async function loadDevice(device) {
 
 function updateStatus(device) {
     const pill = $('status-pill');
+    pill.classList.remove('offline');
     pill.classList.add('connected');
     const fam = familyLabel(app.family);
     const proto = app.protocolVersion != null ? ` · Flask v${app.protocolVersion}` : ' · plain Vial';
@@ -163,6 +177,92 @@ function disconnectUI() {
     $('panels').replaceChildren();
     $('landing').style.display = '';
     refreshDeviceList();
+    renderOfflineList();
+}
+
+// ---------- offline mode ----------
+
+function startOffline(key, family) {
+    const ws = loadWorkspace(key) ?? createTemplate(family);
+    ws._notify = updateOfflineBanner; // dropped by JSON.stringify on persist
+    saveWorkspace(ws);
+    app.offline = true;
+    app.offlineWs = ws;
+    app.flask = new OfflineFlask(ws);
+    app.vial = new OfflineVial(ws);
+    app.family = ws.family;
+    app.protocolVersion = ws.protocolVersion;
+    app.caps = capabilities(ws.family, ws.protocolVersion);
+    app.profile = ws.profile;
+    app.layerCount = ws.layerCount;
+    app.keymap = null;
+    app.unlocked = false;
+    setDeviceCustomKeys(ws.profile.customKeycodes || []);
+
+    $('landing').style.display = 'none';
+    $('main-tabs').style.display = '';
+    $('hud-btn').style.display = 'none';   // HUD is live device state
+    $('lock-btn').style.display = 'none';
+    $('proto-warn').style.display = 'none';
+    $('status-pill').classList.add('offline');
+    $('status-text').textContent = `Offline — ${ws.label}`;
+    $('offline-banner').style.display = 'flex';
+    updateOfflineBanner();
+    buildTabs();
+    showTab('keymap');
+}
+
+function updateOfflineBanner() {
+    if (!app.offline || !app.offlineWs) return;
+    const n = pendingCount(app.offlineWs);
+    $('offline-msg').textContent = n
+        ? `Offline — ${n} change${n === 1 ? '' : 's'} queued for ${app.offlineWs.label}; they apply on the next connect.`
+        : `Offline — edits queue here and apply when ${app.offlineWs.label} is next connected.`;
+}
+
+function exitOffline() {
+    if (app.offlineWs) delete app.offlineWs._notify;
+    app.offline = false;
+    app.offlineWs = null;
+    app.flask = new FlaskProto(app.hid);
+    app.vial = new VialClient(app.hid);
+    $('offline-banner').style.display = 'none';
+    $('status-pill').classList.remove('offline');
+    disconnectUI();
+}
+
+function renderOfflineList() {
+    const list = $('offline-list');
+    if (!list) return;
+    const saved = new Map(listWorkspaces().map((w) => [w.key, w]));
+    const entries = [];
+    for (const fam of TEMPLATE_FAMILIES) {
+        if (!saved.has(fam)) entries.push({ key: fam, family: fam, label: familyLabel(fam), pending: 0, saved: false });
+    }
+    for (const ws of saved.values()) {
+        entries.push({
+            key: ws.key, family: ws.family, label: ws.label,
+            pending: pendingCount(ws), saved: true,
+            fromDevice: ws.source === 'device',
+        });
+    }
+    list.replaceChildren(...entries.map((e) => el('button', {
+        class: 'dev-item', onclick: () => startOffline(e.key, e.family),
+        title: e.fromDevice ? 'Workspace from the last real connect' : 'Blank template — geometry only',
+    },
+        `✈️ ${e.label}`,
+        e.pending ? el('span', { class: 'badge', text: `${e.pending} queued` }) : null,
+        el('span', { class: 'badge faint', text: e.fromDevice ? 'snapshot' : 'template' }),
+        e.saved ? el('span', {
+            class: 'badge', text: '✕', title: 'Delete this offline workspace',
+            onclick: (ev) => {
+                ev.stopPropagation();
+                if (confirm(`Delete the offline workspace for ${e.label}? Queued changes are lost.`)) {
+                    deleteWorkspace(e.key);
+                    renderOfflineList();
+                }
+            },
+        }) : null)));
 }
 
 // ---------- tabs ----------
@@ -231,11 +331,12 @@ async function connectClick() {
 }
 
 function init() {
+    // No WebHID (Firefox/Safari): connecting is off, but offline editing
+    // still works — the queue applies later from a Chromium browser.
     if (!FlaskHID.supported()) {
         $('unsupported').style.display = '';
         $('connect-btn').disabled = true;
         $('landing-connect').disabled = true;
-        return;
     }
 
     // Single-tab guard: two tabs would interleave responses (same failure
@@ -253,6 +354,12 @@ function init() {
     $('connect-btn').addEventListener('click', connectClick);
     $('landing-connect').addEventListener('click', connectClick);
     $('hud-btn').addEventListener('click', () => app.hud.toggle());
+    $('offline-exit').addEventListener('click', exitOffline);
+    $('offline-discard').addEventListener('click', () => {
+        if (!app.offlineWs || !pendingCount(app.offlineWs)) { toast('Nothing queued'); return; }
+        clearDirty(app.offlineWs);
+        toast('Queued changes discarded');
+    });
 
     app.onHudLockClick = () => $('lock-btn').click();
     $('lock-btn').addEventListener('click', async () => {
@@ -269,11 +376,15 @@ function init() {
     });
     app.hid.addEventListener('deviceavailable', async (e) => {
         // Replug of a previously-granted device: silent reconnect if it's
-        // the one we were using (or nothing is connected).
+        // the one we were using (or nothing is connected). While editing
+        // offline, a plug-in of the SAME family also connects — that's the
+        // moment the queued changes apply.
         if (app.hid.connected) return;
         const last = localStorage.getItem('flask-last-device');
         const key = `${e.detail.vendorId.toString(16).padStart(4, '0')}:${e.detail.productId.toString(16).padStart(4, '0')}`;
-        if (last === key) {
+        const offlineMatch = app.offline
+            && familyOf(e.detail.vendorId, e.detail.productId) === app.offlineWs?.family;
+        if (last === key || offlineMatch) {
             toast('Reconnecting…');
             await connectFlow(e.detail);
         }
@@ -298,6 +409,7 @@ function init() {
     });
 
     // Silent reconnect to the remembered device on page load.
+    renderOfflineList();
     (async () => {
         await refreshDeviceList();
         const last = localStorage.getItem('flask-last-device');
