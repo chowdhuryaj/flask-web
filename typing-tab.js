@@ -2,10 +2,10 @@
 // case), leader sequences, OS-aware shortcuts, num word. Port of
 // AdeptCompanion TypingTab.swift over the same Flask channels.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=3';
-import { CH, V, slot, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS, osName } from './flaskproto.js?v=3';
-import { capLabel, describe } from './keycodes.js?v=3';
-import { buildPicker } from './picker.js?v=3';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=4';
+import { CH, V, slot, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS, osName } from './flaskproto.js?v=4';
+import { capLabel, describe } from './keycodes.js?v=4';
+import { buildPicker } from './picker.js?v=4';
 
 export class TypingTab {
     constructor(app) {

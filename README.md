@@ -35,8 +35,28 @@ first — two editors talking to one keyboard interleave HID responses.
   blank template can never wipe a real keymap. Works in browsers without
   WebHID too (queue from Firefox/phone, apply later from Chromium).
 
-Coming from the macOS app, still to port: macros, tap dance, combos, key
-overrides, RGB painter, Display tab, gestures, wheel chords, .vil save/load.
+- **Macros** — action-chip editor (text/tap/down/up/delay), whole-buffer
+  save with unlock gate + verify re-read (locked writes are silently
+  ignored by firmware — the tab tells you).
+- **Tap Dance / Combos / Key Overrides** — Vial dynamic entries; combos
+  include per-combo layer masks (Flask channel 0x20) where supported.
+- **Gestures & Mouse Chords** (trackballs) — 8×8 slot grids; the picker
+  vetoes anything tap_code16 can't fire (basic + mod combos only).
+- **RGB painter + effect engine** (NLKB16) — per-layer HSV map (channel
+  0x21, payload-addressed) plus stock VialRGB modes via raw frames.
+- **Display tab** (NLKB16) — widgets per big line, custom text, idle
+  sleep, overlays, push test, panel health + re-init.
+- **.vil save/load** — Vial-GUI-compatible (int keycodes) with the
+  `flask_tunings` + `flask_rgbmap` extension keys; works offline (import
+  queues, export dumps the workspace). The NLKB16 bootloader-erase
+  restore path.
+
+All of the above work in offline workspaces too — entries, macros, RGB
+paints, and display text journal and replay on the next connect.
+
+Web/desktop parity: everything except the desktop Build tab (compile +
+flash needs local disk), matrix tester, and the typing-test/tap-calibrator
+toys. Desktop lacks offline workspaces.
 
 ## Architecture
 

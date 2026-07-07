@@ -2,23 +2,29 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast } from './ui.js?v=3';
-import { FlaskHID } from './webhid.js?v=3';
-import { FlaskProto, EXPECTED_PROTOCOL } from './flaskproto.js?v=3';
-import { VialClient } from './vialclient.js?v=3';
-import { parseDefinition } from './vialdef.js?v=3';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=3';
-import { capabilities } from './caps.js?v=3';
-import { setDeviceCustomKeys } from './keycodes.js?v=3';
-import { KeymapTab } from './keymap-tab.js?v=3';
-import { MouseTab } from './mouse-tab.js?v=3';
-import { TypingTab } from './typing-tab.js?v=3';
-import { SettingsTab } from './settings-tab.js?v=3';
-import { HUD } from './hud.js?v=3';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=3';
+import { el, toast } from './ui.js?v=4';
+import { FlaskHID } from './webhid.js?v=4';
+import { FlaskProto, EXPECTED_PROTOCOL } from './flaskproto.js?v=4';
+import { VialClient } from './vialclient.js?v=4';
+import { parseDefinition } from './vialdef.js?v=4';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=4';
+import { capabilities } from './caps.js?v=4';
+import { setDeviceCustomKeys } from './keycodes.js?v=4';
+import { KeymapTab } from './keymap-tab.js?v=4';
+import { MouseTab } from './mouse-tab.js?v=4';
+import { TypingTab } from './typing-tab.js?v=4';
+import { SettingsTab } from './settings-tab.js?v=4';
+import { HUD } from './hud.js?v=4';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=4';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot } from './offline.js?v=3';
+         maybeSyncOffline, captureSnapshot } from './offline.js?v=4';
+import { MacrosTab } from './macros-tab.js?v=4';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=4';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=4';
+import { RgbTab } from './rgb-tab.js?v=4';
+import { DisplayTab } from './display-tab.js?v=4';
+import { exportVil, importVil, downloadText } from './vil.js?v=4';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -108,6 +114,8 @@ async function loadDevice(device) {
     const via = await app.vial.viaProtocolVersion();
     const kbId = await app.vial.vialKeyboardID();
     console.log(`VIA v${via}, Vial v${kbId.version}, uid`, kbId.uid);
+    app.viaVersion = via;
+    app.vialVersion = kbId.version;
     const definition = await parseDefinition(await app.vial.definition());
     app.layerCount = await app.vial.layerCount();
 
@@ -135,6 +143,8 @@ async function loadDevice(device) {
     $('main-tabs').style.display = '';
     $('hud-btn').style.display = '';
     $('lock-btn').style.display = '';
+    $('vil-save').style.display = '';
+    $('vil-load').style.display = '';
     updateStatus(device);
     buildTabs();
     await showTab(TABS[0].id);
@@ -174,6 +184,8 @@ function disconnectUI() {
     $('main-tabs').style.display = 'none';
     $('hud-btn').style.display = 'none';
     $('lock-btn').style.display = 'none';
+    $('vil-save').style.display = 'none';
+    $('vil-load').style.display = 'none';
     $('panels').replaceChildren();
     $('landing').style.display = '';
     refreshDeviceList();
@@ -203,6 +215,8 @@ function startOffline(key, family) {
     $('main-tabs').style.display = '';
     $('hud-btn').style.display = 'none';   // HUD is live device state
     $('lock-btn').style.display = 'none';
+    $('vil-save').style.display = '';
+    $('vil-load').style.display = '';
     $('proto-warn').style.display = 'none';
     $('status-pill').classList.add('offline');
     $('status-text').textContent = `Offline — ${ws.label}`;
@@ -270,8 +284,16 @@ function renderOfflineList() {
 function buildTabs() {
     TABS.length = 0;
     TABS.push({ id: 'keymap', label: 'Keymap', ctor: KeymapTab });
+    TABS.push({ id: 'macros', label: 'Macros', ctor: MacrosTab });
+    TABS.push({ id: 'tapdance', label: 'Tap Dance', ctor: TapDanceTab });
+    TABS.push({ id: 'combos', label: 'Combos', ctor: ComboTab });
+    TABS.push({ id: 'overrides', label: 'Key Overrides', ctor: KeyOverrideTab });
+    if (app.caps.gestures) TABS.push({ id: 'gestures', label: 'Gestures', ctor: GesturesTab });
+    if (app.caps.wheelChords) TABS.push({ id: 'chords', label: 'Mouse Chords', ctor: ChordsTab });
     if (app.caps.mouse) TABS.push({ id: 'mouse', label: 'Mouse', ctor: MouseTab });
     if (app.caps.typing) TABS.push({ id: 'typing', label: 'Typing', ctor: TypingTab });
+    if (app.caps.rgbMap) TABS.push({ id: 'rgb', label: 'RGB', ctor: RgbTab });
+    if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
     TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
 
     const nav = $('main-tabs');
@@ -354,6 +376,31 @@ function init() {
     $('connect-btn').addEventListener('click', connectClick);
     $('landing-connect').addEventListener('click', connectClick);
     $('hud-btn').addEventListener('click', () => app.hud.toggle());
+    $('vil-save').addEventListener('click', async () => {
+        try {
+            toast('Reading layout…');
+            const text = await exportVil(app);
+            const name = (app.profile?.name ?? 'layout').replace(/[^\w-]+/g, '_');
+            downloadText(`${name}.vil`, text);
+            toast('.vil saved');
+        } catch (e) { toast(`Export failed: ${e.message}`, true); }
+    });
+    $('vil-load').addEventListener('click', () => $('vil-file').click());
+    $('vil-file').addEventListener('change', async () => {
+        const file = $('vil-file').files[0];
+        $('vil-file').value = '';
+        if (!file) return;
+        try {
+            toast('Applying layout…');
+            const stats = await importVil(app, await file.text());
+            let msg = `Applied ${stats.applied} items`;
+            if (stats.skipped) msg += `, ${stats.skipped} named keycodes skipped`;
+            if (stats.notes.length) msg += ` — ${stats.notes.join('; ')}`;
+            toast(msg, stats.notes.length > 0);
+            buildTabs();          // tabs re-read post-import state
+            await showTab('keymap');
+        } catch (e) { toast(`Import failed: ${e.message}`, true); }
+    });
     $('offline-exit').addEventListener('click', exitOffline);
     $('offline-discard').addEventListener('click', () => {
         if (!app.offlineWs || !pendingCount(app.offlineWs)) { toast('Nothing queued'); return; }
