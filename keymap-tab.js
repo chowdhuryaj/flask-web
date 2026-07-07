@@ -2,10 +2,10 @@
 // SVG rendering pattern from AlooMapper's renderDiagram; geometry from
 // profiles.js (key units × UNIT px).
 
-import { el, svgEl, toast, card } from './ui.js?v=1';
-import { capLabel, hoverText } from './keycodes.js?v=1';
-import { buildPicker } from './picker.js?v=1';
-import { encoderCount } from './profiles.js?v=1';
+import { el, svgEl, toast, card } from './ui.js?v=2';
+import { capLabel, hoverText } from './keycodes.js?v=2';
+import { buildPicker } from './picker.js?v=2';
+import { encoderCount } from './profiles.js?v=2';
 
 const UNIT = 56;
 const GAP = 3;
@@ -43,6 +43,12 @@ export class KeymapTab {
             if (sel.kind === 'key') {
                 await app.vial.setKeycode(this.layer, sel.row, sel.col, kc);
                 app.keymap[this.layer][sel.row][sel.col] = kc;
+                // Vial-GUI-style auto-advance: selection moves to the next
+                // key so a whole layer can be filled by picking in sequence.
+                const keys = app.profile.keys;
+                const i = keys.findIndex((k) => k.row === sel.row && k.col === sel.col);
+                const next = keys[i + 1];
+                this.selected = next ? { kind: 'key', row: next.row, col: next.col } : null;
             } else {
                 await app.vial.encoderSet(this.layer, sel.index, sel.cw, kc);
                 this.encoders[this.layer][sel.index][sel.cw ? 'cw' : 'ccw'] = kc;

@@ -2,8 +2,8 @@
 // LT()/MT()/layer-op composer. Pattern from AlooMapper's renderPicker;
 // data from keycodes.js.
 
-import { el } from './ui.js?v=1';
-import { PICKER_CATEGORIES, compose, MODS, hoverText, describe } from './keycodes.js?v=1';
+import { el, toast } from './ui.js?v=2';
+import { PICKER_CATEGORIES, compose, MODS, hoverText, describe } from './keycodes.js?v=2';
 
 /**
  * Build a picker panel. onPick(keycode) is called when the user chooses.
@@ -87,7 +87,7 @@ export function buildPicker({ layerCount, onPick }) {
         const kcInput = el('input', { type: 'text', placeholder: 'e.g. A', size: 4 });
         let baseKc = 0;
         kcInput.addEventListener('input', () => {
-            const q = kcInput.value.toLowerCase();
+            const q = kcInput.value.trim().toLowerCase();
             const match = PICKER_CATEGORIES.flatMap((c) => c.keys())
                 .find((key) => key.code <= 0xFF
                     && (key.label.toLowerCase() === q || key.cap.toLowerCase() === q));
@@ -101,31 +101,41 @@ export function buildPicker({ layerCount, onPick }) {
             return { m, cb, node: el('label', {}, cb, ` ${m.label}`) };
         });
         const modBits = () => modChecks.reduce((acc, { m, cb }) => acc | (cb.checked ? m.bit : 0), 0);
+        // Guard with feedback — the old silent `baseKc && …` short-circuits
+        // made a missing tap key / unchecked mods look like a dead button.
+        const need = (wantKc, wantMods) => {
+            if (wantKc && !baseKc) { toast('Type the tap key first (e.g. A)', true); return false; }
+            if (wantMods && !modBits()) { toast('Check at least one modifier first', true); return false; }
+            return true;
+        };
         return el('div', { class: 'composer' },
             el('label', { text: 'Compose: tap' }), kcInput,
             el('button', {
                 class: 'code', title: 'Layer-tap: tap for the key, hold for the layer',
-                onclick: () => baseKc && onPick(compose.layerTap(Number(layerSel.value), baseKc)),
+                onclick: () => need(true, false) && onPick(compose.layerTap(Number(layerSel.value), baseKc)),
             }, 'LT'), layerSel,
             ...modChecks.map((c) => c.node),
             el('button', {
                 class: 'code', title: 'Mod-tap: tap for the key, hold for the modifiers',
-                onclick: () => baseKc && modBits() && onPick(compose.modTap(modBits(), baseKc)),
+                onclick: () => need(true, true) && onPick(compose.modTap(modBits(), baseKc)),
             }, 'MT'),
             el('button', {
                 class: 'code', title: 'Key with the checked modifiers held',
-                onclick: () => baseKc && modBits() && onPick(compose.modsWrap(modBits(), baseKc)),
+                onclick: () => need(true, true) && onPick(compose.modsWrap(modBits(), baseKc)),
             }, 'Mods+key'),
             el('button', {
                 class: 'code', title: 'One-shot modifier',
-                onclick: () => modBits() && onPick(compose.oneShotMod(modBits() >> 8)),
+                onclick: () => need(false, true) && onPick(compose.oneShotMod(modBits() >> 8)),
             }, 'OSM'),
         );
     }
 
+    // Attach children BEFORE the first renderCodes() — buildComposer is
+    // inserted via codes.after(), which is a silent no-op while codes has
+    // no parent (this hid the LT/MT composer on every fresh picker).
+    root.append(cats, search, codes);
     renderCats();
     renderCodes();
-    root.append(cats, search, codes);
     return root;
 }
 

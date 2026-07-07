@@ -3,7 +3,7 @@
 // Curated geometry for the three Flask devices; generic profile built from
 // any Vial keyboard's self-served definition.
 
-import { VIDPID } from './flaskproto.js?v=1';
+import { VIDPID } from './flaskproto.js?v=2';
 
 // Adept geometry mirrors keyboards/ploopyco/madromys/info.json (key units).
 const ADEPT_KEYS = [

@@ -173,7 +173,10 @@ let deviceCustomKeys = new Map();
 export function setDeviceCustomKeys(customKeycodes) {
     deviceCustomKeys = new Map(customKeycodes.map((e) => [
         R.kbBase + e.index,
-        K(R.kbBase + e.index, e.name, e.shortName, e.title),
+        // Fall back if a vial.json entry lacks name/shortName — search
+        // filters call .toLowerCase() on both, undefined would throw.
+        K(R.kbBase + e.index, e.name || `KB ${e.index}`,
+            e.shortName || (e.name || `KB${e.index}`).slice(0, 5), e.title),
     ]));
 }
 

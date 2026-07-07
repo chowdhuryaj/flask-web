@@ -2,20 +2,20 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast } from './ui.js?v=1';
-import { FlaskHID } from './webhid.js?v=1';
-import { FlaskProto, EXPECTED_PROTOCOL } from './flaskproto.js?v=1';
-import { VialClient } from './vialclient.js?v=1';
-import { parseDefinition } from './vialdef.js?v=1';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=1';
-import { capabilities } from './caps.js?v=1';
-import { setDeviceCustomKeys } from './keycodes.js?v=1';
-import { KeymapTab } from './keymap-tab.js?v=1';
-import { MouseTab } from './mouse-tab.js?v=1';
-import { TypingTab } from './typing-tab.js?v=1';
-import { SettingsTab } from './settings-tab.js?v=1';
-import { HUD } from './hud.js?v=1';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=1';
+import { el, toast } from './ui.js?v=2';
+import { FlaskHID } from './webhid.js?v=2';
+import { FlaskProto, EXPECTED_PROTOCOL } from './flaskproto.js?v=2';
+import { VialClient } from './vialclient.js?v=2';
+import { parseDefinition } from './vialdef.js?v=2';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=2';
+import { capabilities } from './caps.js?v=2';
+import { setDeviceCustomKeys } from './keycodes.js?v=2';
+import { KeymapTab } from './keymap-tab.js?v=2';
+import { MouseTab } from './mouse-tab.js?v=2';
+import { TypingTab } from './typing-tab.js?v=2';
+import { SettingsTab } from './settings-tab.js?v=2';
+import { HUD } from './hud.js?v=2';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=2';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
