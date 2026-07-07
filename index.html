@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flask — Vial configurator</title>
+  <link rel="stylesheet" href="styles.css?v=1">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚗️</text></svg>">
+  <!-- Classic script (not a module): UMD root detection needs a real `this`.
+       Exposes window['xz-decompress'].XzReadableStream — used by vialdef.js. -->
+  <script src="vendor/xz-decompress.js?v=1"></script>
+</head>
+<body>
+  <header>
+    <h1>⚗️ Flask</h1>
+    <span class="pill" id="status-pill"><span class="dot"></span><span id="status-text">Not connected</span></span>
+    <span class="pill warn" id="proto-warn" style="display:none"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="hud-btn" style="display:none">HUD</button>
+    <button class="btn" id="lock-btn" style="display:none"></button>
+    <select id="theme-sel" title="Theme"></select>
+    <select id="zoom-sel" title="Zoom">
+      <option value="80">80%</option><option value="90">90%</option>
+      <option value="100" selected>100%</option><option value="110">110%</option>
+      <option value="125">125%</option><option value="150">150%</option>
+    </select>
+    <button class="btn primary" id="connect-btn">Connect</button>
+  </header>
+
+  <nav class="tabs" id="main-tabs" style="display:none"></nav>
+
+  <main>
+    <div id="unsupported" class="banner" style="display:none">
+      This browser has no WebHID. Use Chrome, Edge, or another Chromium-based
+      browser (WebHID is not available in Firefox or Safari).
+    </div>
+    <div id="landing" class="landing">
+      <h2>Flask web configurator</h2>
+      <p>Keymap editor + live tuning for Flask-firmware keyboards
+        (Ploopy Adept, Svalboard, NLKB16-02) and any Vial keyboard.</p>
+      <p class="faint">Close the Vial desktop GUI and any other Flask app first —
+        two editors talking to one keyboard interleave responses.</p>
+      <div class="dev-list" id="dev-list"></div>
+      <button class="btn primary" id="landing-connect">Connect a keyboard</button>
+    </div>
+    <div id="panels"></div>
+  </main>
+
+  <script type="module" src="main.js?v=1"></script>
+</body>
+</html>
