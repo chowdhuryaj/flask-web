@@ -180,7 +180,9 @@ async function loadZmkDevice(device) {
     $('hud-btn').style.display = '';
     updateStatus(device);
     buildTabs();
-    await showTab(TABS[0].id);
+    // Pre-autoscroll (v<2) firmware can yield a single empty Mouse tab but
+    // never zero tabs; guard anyway — TABS[0] on [] is a connect crash.
+    if (TABS.length) await showTab(TABS[0].id);
 }
 
 function updateStatus(device) {
