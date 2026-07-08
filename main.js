@@ -161,6 +161,9 @@ async function loadDevice(device) {
 async function loadZmkDevice(device) {
     app.viaVersion = null;
     app.vialVersion = null;
+    app.vial = null;    // no Vial surface — a stale client from a prior QMK
+                        // connect must not leak into HUD/unlock paths
+    app.keymap = null;  // ZMK keymap tab publishes the real one post-Studio-load
 
     app.protocolVersion = await app.flask.handshake();
     if (app.protocolVersion == null) {

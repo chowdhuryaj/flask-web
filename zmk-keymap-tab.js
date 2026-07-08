@@ -169,11 +169,30 @@ export class ZmkKeymapTab {
 
             this.unsaved = await this.client.checkUnsavedChanges();
             this._applyUnloadGuard();
+            this._publishToApp();
             this.state = 'ready';
             this.render();
         } catch (e) {
             this._handleRpcError(e, 'Keymap load failed');
         }
+    }
+
+    /** Feed the HUD: publish device-sourced geometry, layer names, and the
+     * live keymap onto the shared app state so the HUD board renders ZMK
+     * bindings and follows the active layer. ZMK-module-mutates-shared-state
+     * is the sanctioned pattern (no QMK code changes). */
+    _publishToApp() {
+        const { app } = this;
+        if (!app?.profile || !this.geomKeys || !this.keymap) return;
+        app.profile.keys = this.geomKeys;
+        app.profile.labelFor = bindingCap;
+        app.profile.hoverFor = bindingHover;
+        app.profile.keyName = (k) => String(k.pos);
+        app.profile.layerNames = this.keymap.layers.map((l, i) => l.name || `Layer ${i}`);
+        app.layerCount = this.keymap.layers.length;
+        // HUD reads [layer][row][col]; our rows collapse to row 0.
+        app.keymap = this.keymap.layers.map((l) => [l.bindings]);
+        app.hud?.open && app.hud.render();
     }
 
     _setContext(behaviors) {
@@ -265,6 +284,8 @@ export class ZmkKeymapTab {
             // Vial-style auto-advance to the next key position.
             this.selected = pos + 1 < this.geomKeys.length ? pos + 1 : null;
             this.renderBoard();
+            // app.keymap shares this layer's bindings array — repaint the HUD.
+            this.app.hud?.open && this.app.hud.render();
             toast(`Key ${pos} → ${bindingDescribe(binding)}`);
         } catch (e) {
             if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
@@ -289,6 +310,7 @@ export class ZmkKeymapTab {
             this.keymap = await this.client.getKeymap();
             if (this.layer >= this.keymap.layers.length) this.layer = 0;
             this._setContextFromCurrent();
+            this._publishToApp();   // discard re-fetched: new arrays, republish
             this._setUnsaved(false);
             this.render();
             toast('Changes discarded');
@@ -306,6 +328,7 @@ export class ZmkKeymapTab {
             await this.client.setLayerProps(layer.id, name);
             layer.name = name;
             this._setContextFromCurrent();      // picker layer dropdowns update
+            this._publishToApp();               // HUD layer strip names
             this._setUnsaved(true);
             this.renaming = false;
             this.render();

@@ -155,7 +155,16 @@ export class HUD {
                 this.oledLines = lines;
                 this.renderOled();
             }
-        } catch { /* transient — next tick retries */ }
+        } catch (e) {
+            // Transient — next tick retries. But log each DISTINCT failure
+            // once: a silently-swallowed permanent error looks like a frozen
+            // HUD (bench 2026-07-08: "layer stopped updating" was
+            // undiagnosable without this).
+            if (e?.message !== this._lastPollErr) {
+                this._lastPollErr = e?.message;
+                console.warn('HUD poll error (retrying):', e);
+            }
+        }
         this._busy = false;
     }
 
@@ -197,10 +206,20 @@ export class HUD {
             pressed: this.pressed,
             scale: 0.62,
         }));
-        this.lockEl.textContent = app.unlocked ? '🔓 Lock' : '🔒 Unlock';
-        this.hintEl.textContent = app.unlocked
-            ? (app.caps.hudLayer ? 'Live: layer follows the board; keys light on press.' : 'Keys light on press.')
-            : 'Unlock to see live key presses.';
+        // Pressed-key display rides the Vial matrix-state read — devices
+        // without a Vial surface (caps.vial false) have no unlock and no
+        // matrix poll, so the button and its hint would only mislead.
+        if (app.caps.vial) {
+            this.lockEl.style.display = '';
+            this.lockEl.textContent = app.unlocked ? '🔓 Lock' : '🔒 Unlock';
+            this.hintEl.textContent = app.unlocked
+                ? (app.caps.hudLayer ? 'Live: layer follows the board; keys light on press.' : 'Keys light on press.')
+                : 'Unlock to see live key presses.';
+        } else {
+            this.lockEl.style.display = 'none';
+            this.hintEl.textContent = app.caps.hudLayer
+                ? 'Live: layer follows the board.' : '';
+        }
     }
 
     renderOled() {
