@@ -4,7 +4,8 @@
 //
 // Each firmware family versions its OWN Flask protocol line: Adept and
 // Svalboard share one (v11 today), NLKB16-02 has its own (v8 today), and
-// imprint (the ZMK line, zmk-flask-modules flask_proto) starts at v1.
+// imprint (the ZMK line, zmk-flask-modules flask_proto) is at v3 (v2 =
+// +autoscroll, v3 = dragscroll dropped — stock ZMK scroll on the Imprint).
 // A raw `version >= N` compare across families is WRONG — always gate here.
 
 export function capabilities(family, version) {
@@ -24,13 +25,14 @@ export function capabilities(family, version) {
         accel: flask && trackball,
         dpi: flask && trackball,
         smoothing: flask && trackball,
-        // Drag-scroll knob shapes: per-axis divisors (Adept + imprint),
-        // emit-window tuning (Sval + imprint), horizontal-orientation invert
-        // and no live-rescue override (imprint only).
-        dragPerAxis: flask && (family === 'adept' || imprint),
-        dragWindow: flask && (family === 'svalboard' || imprint),
-        dragInvertX: flask && imprint,
-        dragRescue: flask && !imprint,
+        // Drag scroll (0x15): QMK trackballs only — the Imprint dropped
+        // flask_scroll for the stock ZMK chain at imprint v3. Knob shapes:
+        // per-axis divisors (Adept), emit-window tuning (Sval).
+        drag: flask && trackball,
+        dragPerAxis: flask && family === 'adept',
+        dragWindow: flask && family === 'svalboard',
+        dragInvertX: false, // was imprint-only; gone with its drag channel
+        dragRescue: flask && trackball,
         gestures: flask && (family === 'adept' || (family === 'svalboard' && v >= 10)),
         wiggle: flask && trackball,
         autoMouse: flask && trackball && v >= 6,
@@ -40,10 +42,11 @@ export function capabilities(family, version) {
         osShortcuts: flask && (nlkb || (!imprint && v >= 7)),
         numWord: flask && (nlkb ? true : (family === 'svalboard' ? v >= 7 : !imprint && v >= 10)),
         leaderTimeout: flask && nlkb && v >= 5,
-        // Autoscroll (0x1A): trackballs v5+; NLKB16 v4+ (stepped only, no jog).
-        autoscroll: flask && !imprint && (nlkb ? v >= 4 : v >= 5),
-        autoscrollJog: flask && trackball && v >= 5,
-        autoscrollStopOnKey: flask && !imprint && (nlkb ? v >= 4 : v >= 11),
+        // Autoscroll (0x1A): trackballs v5+; NLKB16 v4+ (stepped only, no
+        // jog); imprint v2+ (full port incl. jog + stop-on-key from day one).
+        autoscroll: flask && (nlkb ? v >= 4 : imprint ? v >= 2 : v >= 5),
+        autoscrollJog: flask && (imprint ? v >= 2 : trackball && v >= 5),
+        autoscrollStopOnKey: flask && (nlkb ? v >= 4 : imprint ? v >= 2 : v >= 11),
         comboLayerMasks: flask && (nlkb || (!imprint && v >= 9)),
         rgbMap: flask && nlkb,
         display: flask && nlkb,

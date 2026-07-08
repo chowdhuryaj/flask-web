@@ -99,13 +99,13 @@ export class MouseTab {
         }
 
         // ---- drag scroll ----
-        // Knob shapes vary by family: per-axis divisors (Adept + imprint),
-        // emit-window tuning (Sval + imprint), horizontal-orientation invert
-        // (imprint), live rescue override (QMK families only).
+        // QMK trackballs only (caps.drag) — the Imprint runs the stock ZMK
+        // scroll chain since imprint v3. Knob shapes vary by family:
+        // per-axis divisors (Adept), emit-window tuning (Sval).
+        if (caps.drag) {
         const perAxis = caps.dragPerAxis;
         const drag = card('Drag scroll',
             sval ? 'left-ball scrolling'
-                 : family === 'imprint' ? 'left-ball scrolling (rate-capped)'
                  : 'DRG_TOG / scroll layer',
             sliderRow({ label: perAxis ? 'Horizontal divisor' : 'Divisor',
                 min: 1, max: family === 'adept' ? 64 : 120, step: 1,
@@ -145,6 +145,7 @@ export class MouseTab {
         }
         drag.append(saveBar(() => flask.save(CH.dragScroll)));
         cardsRow.append(drag);
+        }
 
         // ---- wiggle ----
         if (caps.wiggle) {

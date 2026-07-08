@@ -18,8 +18,10 @@ export const VIDPID = {
 };
 
 // Per-family protocol version lines — INDEPENDENT; never compare across.
-// imprint = the ZMK line (zmk-flask-modules flask_proto), starts at 1.
-export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 11, nlkb16: 8, imprint: 1 };
+// imprint = the ZMK line (zmk-flask-modules flask_proto): v2 added
+// autoscroll (0x1A), v3 dropped dragscroll (0x15 answers unhandled — the
+// Imprint uses the stock ZMK scroll chain now).
+export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 11, nlkb16: 8, imprint: 3 };
 
 // meta 0x03 family codes (ZMK line; QMK families are identified by VID/PID).
 export const FAMILY_CODES = { 1: 'adept', 2: 'svalboard', 3: 'nlkb16', 4: 'imprint' };
