@@ -5,7 +5,8 @@
 import { el, toast } from './ui.js?v=4';
 import { FlaskHID } from './webhid.js?v=4';
 import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=4';
-import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL } from './zmk.js?v=4';
+import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
+         zmkReadKeyState } from './zmk.js?v=4';
 import { VialClient } from './vialclient.js?v=4';
 import { parseDefinition } from './vialdef.js?v=4';
 import { buildProfile, familyOf, familyLabel } from './profiles.js?v=4';
@@ -136,6 +137,7 @@ async function loadDevice(device) {
     // 4. Unlock state (for HUD pressed keys + macro editing later).
     try { app.unlocked = (await app.vial.unlockStatus()).unlocked; }
     catch { app.unlocked = false; }
+    app.readKeyState = null;    // QMK presses ride the Vial matrix read
 
     // 5. Offline queue → device (awaited so tabs render post-sync state),
     // then refresh the stored snapshot in the background (FIFO-safe).
@@ -178,6 +180,9 @@ async function loadZmkDevice(device) {
     app.profile = zmkProfile(app.family);
     app.layerCount = app.profile.layerNames.length;
     app.unlocked = false;
+    // HUD press highlight rides the key-state bitmap instead of the Vial
+    // matrix read (hud.js polls this generically when caps.keyState).
+    app.readKeyState = app.caps.keyState ? () => zmkReadKeyState(app.flask) : null;
 
     $('landing').style.display = 'none';
     $('main-tabs').style.display = '';

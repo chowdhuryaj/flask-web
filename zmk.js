@@ -36,8 +36,23 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // every QMK line; never compare across. imprint: v2 added autoscroll
 // (0x1A); v3 dropped dragscroll (0x15 answers unhandled — the Imprint runs
 // the stock ZMK scroll chain); v4 removed autoscroll jog mode
-// (AS_DEADZONE/AS_RANGE 0x03/0x04 answer unhandled — stepped-only).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 4 };
+// (AS_DEADZONE/AS_RANGE 0x03/0x04 answer unhandled — stepped-only); v5
+// added the key-state channel 0x23 (HUD live press highlight).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 5 };
+
+/** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
+ * "row,col" strings matching the published ZMK geometry (row 0, col =
+ * position index). */
+export async function zmkReadKeyState(flask) {
+    const bytes = await flask.getBytes(CH.keyState, V.keyStateBitmap, []);
+    const next = new Set();
+    bytes.forEach((b, i) => {
+        for (let bit = 0; bit < 8; bit++) {
+            if (b & (1 << bit)) next.add(`0,${i * 8 + bit}`);
+        }
+    });
+    return next;
+}
 
 /** Capability table for ZMK families — deliberately its OWN function, not
  * exceptions inside the QMK table. Anything not listed is absent on ZMK
@@ -75,6 +90,9 @@ export function zmkCapabilities(family, version) {
         autoscroll: flask && v >= 2,
         autoscrollJog: false,
         autoscrollStopOnKey: flask && v >= 2,
+        // Key-state bitmap (0x23, v5): HUD lights pressed keys without a
+        // Vial matrix read. loadZmkDevice injects app.readKeyState.
+        keyState: flask && v >= 5,
         comboLayerMasks: false, // ZMK combos gate layers natively
         rgbMap: false,
         display: false,
@@ -98,8 +116,10 @@ export function zmkProfile(family) {
         matrixCols: 0,
         keys: [],
         encoderKeys: [],
-        // Mirrors config/imprint.keymap layer order (Cyboard-ZMK repo).
-        layerNames: ['Base', 'Control', 'Fn', 'Mouse', 'Snipe'],
+        // Mirrors config/imprint.keymap layer order (Cyboard-ZMK repo);
+        // cosmetic only — the ZMK keymap tab republishes the device's real
+        // names after its Studio load.
+        layerNames: ['Base', 'Control', 'Fn', 'Mouse', 'Snipe', 'Num'],
         displayTile: null,
         encoderPushKeys: {},
         customKeycodes: [],

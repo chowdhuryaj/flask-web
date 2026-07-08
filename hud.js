@@ -135,10 +135,11 @@ export class HUD {
                         if ((bits >> BigInt(col)) & 1n) next.add(`${row},${col}`);
                     }
                 });
-                if (next.size !== this.pressed.size || [...next].some((k) => !this.pressed.has(k))) {
-                    this.pressed = next;
-                    this.render();
-                }
+                this._applyPressed(next);
+            } else if (app.readKeyState) {
+                // Non-Vial press feed (ZMK key-state bitmap) — no unlock
+                // concept, polled whenever the device offers it.
+                this._applyPressed(await app.readKeyState());
             }
             // NLKB16 OLED mirror at ~4 Hz (every 4th tick).
             if (app.caps.displayMirror && (this._tick++ % 4) === 0) {
@@ -166,6 +167,13 @@ export class HUD {
             }
         }
         this._busy = false;
+    }
+
+    _applyPressed(next) {
+        if (next.size !== this.pressed.size || [...next].some((k) => !this.pressed.has(k))) {
+            this.pressed = next;
+            this.render();
+        }
     }
 
     // ---------- rendering ----------
@@ -217,8 +225,9 @@ export class HUD {
                 : 'Unlock to see live key presses.';
         } else {
             this.lockEl.style.display = 'none';
-            this.hintEl.textContent = app.caps.hudLayer
-                ? 'Live: layer follows the board.' : '';
+            this.hintEl.textContent = app.readKeyState
+                ? 'Live: layer follows the board; keys light on press.'
+                : (app.caps.hudLayer ? 'Live: layer follows the board.' : '');
         }
     }
 

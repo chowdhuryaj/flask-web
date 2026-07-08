@@ -29,6 +29,7 @@ export const CH = {
     customShift: 0x16, selectWord: 0x17, sentenceCase: 0x18, leader: 0x19,
     autoscroll: 0x1A, autoMouse: 0x1B, wheelChords: 0x1C, os: 0x1D,
     numWord: 0x1E, diag: 0x1F, comboLayers: 0x20, rgbMap: 0x21, display: 0x22,
+    keyState: 0x23, // ZMK line v5+: pressed-position bitmap (HUD press feed)
 };
 
 export const V = {
@@ -91,6 +92,9 @@ export const V = {
     dispSleepS: 0x0A, dispOverlayMs: 0x0B,
     dispLine: 0x0C, // fw v6: rendered-line mirror — HUD OLED tile feed
     dispPush: 0x10, dispRelease: 0x11,
+    // key state (0x23) — PAYLOAD-ADDRESSED byte frame (getBytes):
+    // payload byte N/8 bit N%8 = key position N pressed. Read-only.
+    keyStateBitmap: 0x01,
 };
 
 // Slot value-id helpers (append-only wire ids).
