@@ -12,6 +12,7 @@ import { buildProfile, familyOf, familyLabel } from './profiles.js?v=4';
 import { capabilities } from './caps.js?v=4';
 import { setDeviceCustomKeys } from './keycodes.js?v=4';
 import { KeymapTab } from './keymap-tab.js?v=4';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=4';
 import { MouseTab } from './mouse-tab.js?v=4';
 import { TypingTab } from './typing-tab.js?v=4';
 import { SettingsTab } from './settings-tab.js?v=4';
@@ -319,6 +320,7 @@ function renderOfflineList() {
 
 function buildTabs() {
     TABS.length = 0;
+    if (app.caps.zmkStudio) TABS.push({ id: 'zmk-keymap', label: 'Keymap', ctor: ZmkKeymapTab });
     if (app.caps.vial) {
         TABS.push({ id: 'keymap', label: 'Keymap', ctor: KeymapTab });
         TABS.push({ id: 'macros', label: 'Macros', ctor: MacrosTab });

@@ -106,6 +106,12 @@ export class KeymapTab {
  */
 export function renderKeyboardSVG(opts) {
     const { profile } = opts;
+    // Label functions are profile-overridable so non-QMK profiles (the ZMK
+    // line renders opaque binding objects, not 16-bit ints) reuse this
+    // renderer. QMK profiles define none of these — defaults preserved.
+    const labelFor = profile.labelFor ?? capLabel;
+    const hoverFor = profile.hoverFor ?? hoverText;
+    const keyName = profile.keyName ?? ((k) => `${k.row},${k.col}`);
     const scale = opts.scale ?? 1;
     const unit = UNIT * scale;
     const all = [...profile.keys, ...profile.encoderKeys];
@@ -131,16 +137,16 @@ export function renderKeyboardSVG(opts) {
             x, y, width: w, height: h, rx: 5 * scale,
             onclick: opts.onSelect ? () => opts.onSelect({ kind: 'key', row: key.row, col: key.col }) : null,
         });
-        const title = svgEl('title', { text: `${key.label}\n${hoverText(kc)}` });
+        const title = svgEl('title', { text: `${key.label}\n${hoverFor(kc)}` });
         rect.append(title);
         svg.append(rect,
             svgEl('text', {
                 x: x + w / 2, y: y + h / 2 + 4 * scale,
-                'text-anchor': 'middle', text: fitCap(capLabel(kc)),
+                'text-anchor': 'middle', text: fitCap(labelFor(kc)),
             }),
             svgEl('text', {
                 class: 'keyname', x: x + w / 2, y: y + h - 5 * scale,
-                'text-anchor': 'middle', text: `${key.row},${key.col}`,
+                'text-anchor': 'middle', text: keyName(key),
             }));
     }
 
@@ -154,11 +160,11 @@ export function renderKeyboardSVG(opts) {
             x, y, width: w, height: h, rx: h / 2,
             onclick: opts.onSelect ? () => opts.onSelect({ kind: 'enc', index: enc.index, cw: enc.clockwise }) : null,
         });
-        rect.append(svgEl('title', { text: `Encoder ${enc.index} ${enc.clockwise ? 'CW ↻' : 'CCW ↺'}\n${hoverText(kc)}` }));
+        rect.append(svgEl('title', { text: `Encoder ${enc.index} ${enc.clockwise ? 'CW ↻' : 'CCW ↺'}\n${hoverFor(kc)}` }));
         svg.append(rect,
             svgEl('text', {
                 x: x + w / 2, y: y + h / 2 + 4 * scale,
-                'text-anchor': 'middle', text: `${enc.clockwise ? '↻' : '↺'}${fitCap(capLabel(kc))}`,
+                'text-anchor': 'middle', text: `${enc.clockwise ? '↻' : '↺'}${fitCap(labelFor(kc))}`,
             }));
     }
 

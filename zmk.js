@@ -35,8 +35,9 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // Per-family expected protocol versions — the ZMK lines are independent of
 // every QMK line; never compare across. imprint: v2 added autoscroll
 // (0x1A); v3 dropped dragscroll (0x15 answers unhandled — the Imprint runs
-// the stock ZMK scroll chain).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 3 };
+// the stock ZMK scroll chain); v4 removed autoscroll jog mode
+// (AS_DEADZONE/AS_RANGE 0x03/0x04 answer unhandled — stepped-only).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 4 };
 
 /** Capability table for ZMK families — deliberately its OWN function, not
  * exceptions inside the QMK table. Anything not listed is absent on ZMK
@@ -46,7 +47,12 @@ export function zmkCapabilities(family, version) {
     const flask = version != null;
     return {
         flask,
-        vial: false,        // no Vial surface — keymap = git + ZMK Studio
+        vial: false,        // no Vial surface — ZMK keymap editing is Studio RPC
+        // Live keymap editor over ZMK Studio RPC (WebSerial) — the ZMK
+        // line's Vial equivalent. Firmware side needs CONFIG_ZMK_STUDIO=y +
+        // the studio-rpc-usb-uart snippet (the tab feature-probes and
+        // explains if absent).
+        zmkStudio: true,
         mouse: flask,       // Mouse tuning tab (autoscroll)
         accel: false,
         dpi: false,
@@ -64,10 +70,10 @@ export function zmkCapabilities(family, version) {
         osShortcuts: false, // keymap-level (zmk-switch-layout)
         numWord: false,
         leaderTimeout: false,
-        // Autoscroll (0x1A): full port since imprint v2 — jog and
-        // stop-on-key from day one.
+        // Autoscroll (0x1A): imprint v2. Stepped-only — jog mode was
+        // removed in v4 (spring-less trackball made it unusable).
         autoscroll: flask && v >= 2,
-        autoscrollJog: flask && v >= 2,
+        autoscrollJog: false,
         autoscrollStopOnKey: flask && v >= 2,
         comboLayerMasks: false, // ZMK combos gate layers natively
         rgbMap: false,
