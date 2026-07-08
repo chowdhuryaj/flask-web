@@ -23,6 +23,7 @@ export class MouseTab {
         this.root.replaceChildren(cardsRow);
 
         // ---- acceleration ----
+        if (caps.accel) {
         const accel = card('Acceleration', 'sigmoid curve (drashna pd_accel)',
             toggleRow({ label: 'Enabled', value: await g(CH.accel, V.accelEnabled),
                 onChange: (v) => flask.setU16(CH.accel, V.accelEnabled, v ? 1 : 0) }),
@@ -40,8 +41,10 @@ export class MouseTab {
                 onChange: (v) => flask.setU16(CH.accel, V.accelLimit, v) }),
             saveBar(() => flask.save(CH.accel)));
         cardsRow.append(accel);
+        }
 
         // ---- DPI ----
+        if (caps.dpi) {
         const dpi = card('DPI', sval ? 'per-ball sensor CPI' : 'sensor CPI');
         if (sval) {
             const mk = async (label, idxId, cpiId) => {
@@ -79,8 +82,10 @@ export class MouseTab {
         }
         dpi.append(el('div', { class: 'note faint', text: 'DPI persists immediately — no save needed.' }));
         cardsRow.append(dpi);
+        }
 
         // ---- smoothing ----
+        if (caps.smoothing) {
         cardsRow.append(card('Smoothing', 'EMA (drashna pointing_device_smoothing)',
             toggleRow({ label: 'Enabled', value: await g(CH.smoothing, V.smoothingEnabled),
                 onChange: (v) => flask.setU16(CH.smoothing, V.smoothingEnabled, v ? 1 : 0) }),
@@ -91,39 +96,54 @@ export class MouseTab {
                 value: await g(CH.smoothing, V.smoothingTimeout),
                 onChange: (v) => flask.setU16(CH.smoothing, V.smoothingTimeout, v) }),
             saveBar(() => flask.save(CH.smoothing))));
+        }
 
         // ---- drag scroll ----
+        // Knob shapes vary by family: per-axis divisors (Adept + imprint),
+        // emit-window tuning (Sval + imprint), horizontal-orientation invert
+        // (imprint), live rescue override (QMK families only).
+        const perAxis = caps.dragPerAxis;
         const drag = card('Drag scroll',
-            sval ? 'left-ball scrolling' : 'DRG_TOG / scroll layer',
-            sliderRow({ label: sval ? 'Divisor' : 'Horizontal divisor', min: 1, max: sval ? 120 : 64, step: 1,
+            sval ? 'left-ball scrolling'
+                 : family === 'imprint' ? 'left-ball scrolling (rate-capped)'
+                 : 'DRG_TOG / scroll layer',
+            sliderRow({ label: perAxis ? 'Horizontal divisor' : 'Divisor',
+                min: 1, max: family === 'adept' ? 64 : 120, step: 1,
                 value: await g(CH.dragScroll, V.dragDivH),
                 onChange: (v) => flask.setU16(CH.dragScroll, V.dragDivH, v) }));
-        if (!sval) {
-            drag.append(sliderRow({ label: 'Vertical divisor', min: 1, max: 64, step: 1,
+        if (perAxis) {
+            drag.append(sliderRow({ label: 'Vertical divisor',
+                min: 1, max: family === 'adept' ? 64 : 120, step: 1,
                 value: await g(CH.dragScroll, V.dragDivV),
                 onChange: (v) => flask.setU16(CH.dragScroll, V.dragDivV, v) }));
         }
         drag.append(toggleRow({ label: 'Inverted (natural)', value: await g(CH.dragScroll, V.dragInverted),
             onChange: (v) => flask.setU16(CH.dragScroll, V.dragInverted, v ? 1 : 0) }));
-        if (sval) {
+        if (caps.dragInvertX) {
+            drag.append(toggleRow({ label: 'Invert horizontal', hint: 'orientation correction',
+                value: await g(CH.dragScroll, V.dragInvertX),
+                onChange: (v) => flask.setU16(CH.dragScroll, V.dragInvertX, v ? 1 : 0) }));
+        }
+        if (caps.dragWindow) {
             drag.append(
-                sliderRow({ label: 'Emit interval (ms)', hint: 'coalescing window — the PACS knob',
+                sliderRow({ label: 'Emit interval (ms)', hint: 'coalescing window for slow viewers',
                     min: 0, max: 200, step: 2, value: await g(CH.dragScroll, V.dragInterval),
                     onChange: (v) => flask.setU16(CH.dragScroll, V.dragInterval, v) }),
                 sliderRow({ label: 'Max notches/report', min: 1, max: 30, step: 1,
                     value: await g(CH.dragScroll, V.dragMaxNotches),
                     onChange: (v) => flask.setU16(CH.dragScroll, V.dragMaxNotches, v) }));
         }
-        drag.append(
-            el('button', {
+        if (caps.dragRescue) {
+            drag.append(el('button', {
                 class: 'btn small', text: 'Force scroll off (rescue)',
                 title: 'Live-state override — if the cursor is stuck in scroll mode',
                 onclick: async () => {
                     try { await flask.setU16(CH.dragScroll, V.dragActive, 0); toast('Scroll forced off'); }
                     catch (e) { toast(e.message, true); }
                 },
-            }),
-            saveBar(() => flask.save(CH.dragScroll)));
+            }));
+        }
+        drag.append(saveBar(() => flask.save(CH.dragScroll)));
         cardsRow.append(drag);
 
         // ---- wiggle ----

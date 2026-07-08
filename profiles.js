@@ -19,11 +19,34 @@ export function familyOf(vid, pid) {
     if (vid === VIDPID.adept.vid && pid === VIDPID.adept.pid) return 'adept';
     if (vid === VIDPID.nlkb16.vid && pid === VIDPID.nlkb16.pid) return 'nlkb16';
     if (vid === VIDPID.svalboard.vid && pid === VIDPID.svalboard.pid) return 'svalboard';
+    // ZMK default identity — candidate only; loadDevice confirms via meta 0x03.
+    if (vid === VIDPID.imprint.vid && pid === VIDPID.imprint.pid) return 'imprint';
     return 'generic';
 }
 
 export function familyLabel(family) {
-    return { adept: 'Ploopy Adept', svalboard: 'Svalboard', nlkb16: 'NLKB16-02', generic: 'Vial keyboard' }[family];
+    return {
+        adept: 'Ploopy Adept', svalboard: 'Svalboard', nlkb16: 'NLKB16-02',
+        imprint: 'Cyboard Imprint (ZMK)', generic: 'Vial keyboard',
+    }[family];
+}
+
+/** Profile for the ZMK line — no Vial definition to build from; the keymap
+ * lives in git + ZMK Studio, so the editor renders tuning tabs only. */
+export function buildZmkProfile(family) {
+    return {
+        family,
+        name: familyLabel(family),
+        matrixRows: 0,
+        matrixCols: 0,
+        keys: [],
+        encoderKeys: [],
+        // Mirrors config/imprint.keymap layer order (Cyboard-ZMK repo).
+        layerNames: ['Base', 'Control', 'Fn', 'Mouse', 'Snipe'],
+        displayTile: null,
+        encoderPushKeys: {},
+        customKeycodes: [],
+    };
 }
 
 /**

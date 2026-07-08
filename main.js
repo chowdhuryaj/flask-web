@@ -4,10 +4,10 @@
 
 import { el, toast } from './ui.js?v=4';
 import { FlaskHID } from './webhid.js?v=4';
-import { FlaskProto, EXPECTED_PROTOCOL } from './flaskproto.js?v=4';
+import { FlaskProto, EXPECTED_PROTOCOL, FAMILY_CODES, CH, V } from './flaskproto.js?v=4';
 import { VialClient } from './vialclient.js?v=4';
 import { parseDefinition } from './vialdef.js?v=4';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=4';
+import { buildProfile, buildZmkProfile, familyOf, familyLabel } from './profiles.js?v=4';
 import { capabilities } from './caps.js?v=4';
 import { setDeviceCustomKeys } from './keycodes.js?v=4';
 import { KeymapTab } from './keymap-tab.js?v=4';
@@ -110,6 +110,9 @@ async function connectFlow(device) {
 async function loadDevice(device) {
     app.family = familyOf(device.vendorId, device.productId);
 
+    // ZMK line: no Vial surface at all — Flask protocol only.
+    if (app.family === 'imprint') return loadZmkDevice(device);
+
     // 1. Vial identity + definition (any Vial keyboard).
     const via = await app.vial.viaProtocolVersion();
     const kbId = await app.vial.vialKeyboardID();
@@ -145,6 +148,37 @@ async function loadDevice(device) {
     $('lock-btn').style.display = '';
     $('vil-save').style.display = '';
     $('vil-load').style.display = '';
+    updateStatus(device);
+    buildTabs();
+    await showTab(TABS[0].id);
+}
+
+/** ZMK-line load: Flask handshake only. The keymap lives in git + ZMK
+ * Studio, so vil import/export and all Vial tabs stay hidden. */
+async function loadZmkDevice(device) {
+    app.viaVersion = null;
+    app.vialVersion = null;
+
+    app.protocolVersion = await app.flask.handshake();
+    if (app.protocolVersion == null) {
+        throw new Error('ZMK device without the Flask protocol — is raw_hid_adapter + CONFIG_ZMK_FLASK_PROTO in the firmware?');
+    }
+
+    // The stock ZMK VID/PID is shared by every ZMK board — confirm the
+    // family from meta 0x03 (pre-family firmware keeps the VID/PID guess).
+    try {
+        const code = await app.flask.getU16(CH.meta, V.metaFamily);
+        if (FAMILY_CODES[code]) app.family = FAMILY_CODES[code];
+    } catch { /* keep candidate family */ }
+
+    app.caps = capabilities(app.family, app.protocolVersion);
+    app.profile = buildZmkProfile(app.family);
+    app.layerCount = app.profile.layerNames.length;
+    app.unlocked = false;
+
+    $('landing').style.display = 'none';
+    $('main-tabs').style.display = '';
+    $('hud-btn').style.display = '';
     updateStatus(device);
     buildTabs();
     await showTab(TABS[0].id);
@@ -283,18 +317,20 @@ function renderOfflineList() {
 
 function buildTabs() {
     TABS.length = 0;
-    TABS.push({ id: 'keymap', label: 'Keymap', ctor: KeymapTab });
-    TABS.push({ id: 'macros', label: 'Macros', ctor: MacrosTab });
-    TABS.push({ id: 'tapdance', label: 'Tap Dance', ctor: TapDanceTab });
-    TABS.push({ id: 'combos', label: 'Combos', ctor: ComboTab });
-    TABS.push({ id: 'overrides', label: 'Key Overrides', ctor: KeyOverrideTab });
+    if (app.caps.vial) {
+        TABS.push({ id: 'keymap', label: 'Keymap', ctor: KeymapTab });
+        TABS.push({ id: 'macros', label: 'Macros', ctor: MacrosTab });
+        TABS.push({ id: 'tapdance', label: 'Tap Dance', ctor: TapDanceTab });
+        TABS.push({ id: 'combos', label: 'Combos', ctor: ComboTab });
+        TABS.push({ id: 'overrides', label: 'Key Overrides', ctor: KeyOverrideTab });
+    }
     if (app.caps.gestures) TABS.push({ id: 'gestures', label: 'Gestures', ctor: GesturesTab });
     if (app.caps.wheelChords) TABS.push({ id: 'chords', label: 'Mouse Chords', ctor: ChordsTab });
     if (app.caps.mouse) TABS.push({ id: 'mouse', label: 'Mouse', ctor: MouseTab });
     if (app.caps.typing) TABS.push({ id: 'typing', label: 'Typing', ctor: TypingTab });
     if (app.caps.rgbMap) TABS.push({ id: 'rgb', label: 'RGB', ctor: RgbTab });
     if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
-    TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
+    if (app.caps.vial) TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
 
     const nav = $('main-tabs');
     nav.replaceChildren(...TABS.map((t) =>
