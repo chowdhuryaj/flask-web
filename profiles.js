@@ -1,9 +1,11 @@
 // Device profiles: what the editor renders and how the keymap is addressed.
 // Port of AdeptCompanion Sources/AdeptCore/DeviceProfile.swift.
-// Curated geometry for the three Flask devices; generic profile built from
-// any Vial keyboard's self-served definition.
+// Curated geometry for the QMK Flask devices; generic profile built from
+// any Vial keyboard's self-served definition. ZMK devices are profiled by
+// zmk.js (zmkProfile) — this file only delegates identification/labels.
 
 import { VIDPID } from './flaskproto.js?v=4';
+import { zmkFamilyCandidate, ZMK_FAMILY_LABELS } from './zmk.js?v=4';
 
 // Adept geometry mirrors keyboards/ploopyco/madromys/info.json (key units).
 const ADEPT_KEYS = [
@@ -19,34 +21,18 @@ export function familyOf(vid, pid) {
     if (vid === VIDPID.adept.vid && pid === VIDPID.adept.pid) return 'adept';
     if (vid === VIDPID.nlkb16.vid && pid === VIDPID.nlkb16.pid) return 'nlkb16';
     if (vid === VIDPID.svalboard.vid && pid === VIDPID.svalboard.pid) return 'svalboard';
-    // ZMK default identity — candidate only; loadDevice confirms via meta 0x03.
-    if (vid === VIDPID.imprint.vid && pid === VIDPID.imprint.pid) return 'imprint';
+    // ZMK candidate (stock ZMK VID/PID; loadZmkDevice confirms via meta 0x03).
+    const zmk = zmkFamilyCandidate(vid, pid);
+    if (zmk) return zmk;
     return 'generic';
 }
 
 export function familyLabel(family) {
     return {
         adept: 'Ploopy Adept', svalboard: 'Svalboard', nlkb16: 'NLKB16-02',
-        imprint: 'Cyboard Imprint (ZMK)', generic: 'Vial keyboard',
+        generic: 'Vial keyboard',
+        ...ZMK_FAMILY_LABELS,
     }[family];
-}
-
-/** Profile for the ZMK line — no Vial definition to build from; the keymap
- * lives in git + ZMK Studio, so the editor renders tuning tabs only. */
-export function buildZmkProfile(family) {
-    return {
-        family,
-        name: familyLabel(family),
-        matrixRows: 0,
-        matrixCols: 0,
-        keys: [],
-        encoderKeys: [],
-        // Mirrors config/imprint.keymap layer order (Cyboard-ZMK repo).
-        layerNames: ['Base', 'Control', 'Fn', 'Mouse', 'Snipe'],
-        displayTile: null,
-        encoderPushKeys: {},
-        customKeycodes: [],
-    };
 }
 
 /**

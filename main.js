@@ -4,10 +4,11 @@
 
 import { el, toast } from './ui.js?v=4';
 import { FlaskHID } from './webhid.js?v=4';
-import { FlaskProto, EXPECTED_PROTOCOL, FAMILY_CODES, CH, V } from './flaskproto.js?v=4';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=4';
+import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL } from './zmk.js?v=4';
 import { VialClient } from './vialclient.js?v=4';
 import { parseDefinition } from './vialdef.js?v=4';
-import { buildProfile, buildZmkProfile, familyOf, familyLabel } from './profiles.js?v=4';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=4';
 import { capabilities } from './caps.js?v=4';
 import { setDeviceCustomKeys } from './keycodes.js?v=4';
 import { KeymapTab } from './keymap-tab.js?v=4';
@@ -110,8 +111,9 @@ async function connectFlow(device) {
 async function loadDevice(device) {
     app.family = familyOf(device.vendorId, device.productId);
 
-    // ZMK line: no Vial surface at all — Flask protocol only.
-    if (app.family === 'imprint') return loadZmkDevice(device);
+    // ZMK line: a different firmware language — no Vial surface at all,
+    // Flask protocol only. Everything ZMK-specific lives in zmk.js.
+    if (isZmkFamily(app.family)) return loadZmkDevice(device);
 
     // 1. Vial identity + definition (any Vial keyboard).
     const via = await app.vial.viaProtocolVersion();
@@ -166,13 +168,10 @@ async function loadZmkDevice(device) {
 
     // The stock ZMK VID/PID is shared by every ZMK board — confirm the
     // family from meta 0x03 (pre-family firmware keeps the VID/PID guess).
-    try {
-        const code = await app.flask.getU16(CH.meta, V.metaFamily);
-        if (FAMILY_CODES[code]) app.family = FAMILY_CODES[code];
-    } catch { /* keep candidate family */ }
+    app.family = await confirmZmkFamily(app.flask, app.family);
 
     app.caps = capabilities(app.family, app.protocolVersion);
-    app.profile = buildZmkProfile(app.family);
+    app.profile = zmkProfile(app.family);
     app.layerCount = app.profile.layerNames.length;
     app.unlocked = false;
 
@@ -194,7 +193,8 @@ function updateStatus(device) {
     pill.title = `${fam} — ${device.vendorId.toString(16)}:${device.productId.toString(16)}`;
 
     const warn = $('proto-warn');
-    const expected = EXPECTED_PROTOCOL[app.family];
+    const expected = isZmkFamily(app.family)
+        ? ZMK_EXPECTED_PROTOCOL[app.family] : EXPECTED_PROTOCOL[app.family];
     if (app.protocolVersion != null && expected && app.protocolVersion !== expected) {
         warn.style.display = '';
         warn.textContent = `firmware protocol v${app.protocolVersion}, app expects v${expected}`;

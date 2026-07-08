@@ -1,0 +1,112 @@
+// ZMK-line support — everything the app knows about ZMK Flask devices
+// (today: the Cyboard Imprint, family "imprint") lives HERE, and nothing
+// in the QMK modules (caps.js, profiles.js, vial*/keymap code) may special-
+// case a ZMK family. QMK and ZMK are different firmware languages: QMK
+// devices carry a Vial surface (keymap/macros/dynamic entries/QMK settings)
+// and per-family raw-HID version lines; ZMK devices have NO Vial surface at
+// all (the keymap lives in git + ZMK Studio) and speak only the Flask frame
+// via zmk-flask-modules flask_proto. The only shared layer is that frame
+// vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
+
+import { CH, V } from './flaskproto.js?v=4';
+
+// Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
+// match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
+export const ZMK_VIDPID = { vid: 0x1D50, pid: 0x615E };
+
+// meta 0x03 family codes on the ZMK line. Codes 1-3 mirror the QMK family
+// names in the shared numbering but are never reported by a ZMK device.
+export const ZMK_FAMILY_CODES = { 4: 'imprint' };
+
+export const ZMK_FAMILIES = ['imprint'];
+
+export function isZmkFamily(family) {
+    return ZMK_FAMILIES.includes(family);
+}
+
+/** VID/PID candidate match (see ZMK_VIDPID caveat). Returns a family name
+ * or null. */
+export function zmkFamilyCandidate(vid, pid) {
+    return (vid === ZMK_VIDPID.vid && pid === ZMK_VIDPID.pid) ? 'imprint' : null;
+}
+
+export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
+
+// Per-family expected protocol versions — the ZMK lines are independent of
+// every QMK line; never compare across. imprint: v2 added autoscroll
+// (0x1A); v3 dropped dragscroll (0x15 answers unhandled — the Imprint runs
+// the stock ZMK scroll chain).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 3 };
+
+/** Capability table for ZMK families — deliberately its OWN function, not
+ * exceptions inside the QMK table. Anything not listed is absent on ZMK
+ * (most QMK caps map to Vial surfaces or QMK-only channels). */
+export function zmkCapabilities(family, version) {
+    const v = version ?? 0;
+    const flask = version != null;
+    return {
+        flask,
+        vial: false,        // no Vial surface — keymap = git + ZMK Studio
+        mouse: flask,       // Mouse tuning tab (autoscroll)
+        accel: false,
+        dpi: false,
+        smoothing: false,
+        drag: false,        // stock ZMK scroll chain (flask_scroll dropped, v3)
+        dragPerAxis: false,
+        dragWindow: false,
+        dragInvertX: false,
+        dragRescue: false,
+        gestures: false,    // keymap-level (kot149/zmk-mouse-gesture)
+        wiggle: false,
+        autoMouse: false,   // keymap-level (zip_temp_layer)
+        wheelChords: false,
+        typing: false,
+        osShortcuts: false, // keymap-level (zmk-switch-layout)
+        numWord: false,
+        leaderTimeout: false,
+        // Autoscroll (0x1A): full port since imprint v2 — jog and
+        // stop-on-key from day one.
+        autoscroll: flask && v >= 2,
+        autoscrollJog: flask && v >= 2,
+        autoscrollStopOnKey: flask && v >= 2,
+        comboLayerMasks: false, // ZMK combos gate layers natively
+        rgbMap: false,
+        display: false,
+        displayWidgets: false,
+        bigDisplay: false,
+        displayMirror: false,
+        vialRGB: false,
+        diag: false,
+        hudLayer: flask,    // meta 0x02 active layer — always on the ZMK line
+        rawCpi: false,
+    };
+}
+
+/** Editor profile for a ZMK device — no Vial definition to build from, so
+ * the editor renders tuning tabs only. */
+export function zmkProfile(family) {
+    return {
+        family,
+        name: ZMK_FAMILY_LABELS[family],
+        matrixRows: 0,
+        matrixCols: 0,
+        keys: [],
+        encoderKeys: [],
+        // Mirrors config/imprint.keymap layer order (Cyboard-ZMK repo).
+        layerNames: ['Base', 'Control', 'Fn', 'Mouse', 'Snipe'],
+        displayTile: null,
+        encoderPushKeys: {},
+        customKeycodes: [],
+    };
+}
+
+/** Confirm the family from meta 0x03 — the stock ZMK VID/PID is shared by
+ * every ZMK board, so the candidate from zmkFamilyCandidate() is a guess
+ * until the device names itself. Pre-family firmware keeps the guess. */
+export async function confirmZmkFamily(flask, candidate) {
+    try {
+        const code = await flask.getU16(CH.meta, V.metaFamily);
+        if (ZMK_FAMILY_CODES[code]) return ZMK_FAMILY_CODES[code];
+    } catch { /* keep candidate */ }
+    return candidate;
+}

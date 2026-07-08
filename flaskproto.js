@@ -8,23 +8,16 @@
 // Setters CLAMP firmware-side and echo the applied value; callers must
 // adopt the echo (see ui.js sliderRow).
 
+// QMK families only — ZMK identity/versions live in zmk.js (different
+// firmware language; only the frame vocabulary below is shared).
 export const VIDPID = {
     adept: { vid: 0x5043, pid: 0x5C47 },
     svalboard: { vid: 0x303A, pid: 0x4044 },
     nlkb16: { vid: 0xD020, pid: 0x1603 },
-    // ZMK default USB identity — shared by ALL stock ZMK boards, so this is
-    // only a candidate match; loadDevice confirms via meta family (0x03).
-    imprint: { vid: 0x1D50, pid: 0x615E },
 };
 
 // Per-family protocol version lines — INDEPENDENT; never compare across.
-// imprint = the ZMK line (zmk-flask-modules flask_proto): v2 added
-// autoscroll (0x1A), v3 dropped dragscroll (0x15 answers unhandled — the
-// Imprint uses the stock ZMK scroll chain now).
-export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 11, nlkb16: 8, imprint: 3 };
-
-// meta 0x03 family codes (ZMK line; QMK families are identified by VID/PID).
-export const FAMILY_CODES = { 1: 'adept', 2: 'svalboard', 3: 'nlkb16', 4: 'imprint' };
+export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 11, nlkb16: 8 };
 
 // VIA custom-value command IDs (routed to the keymap by VIA_CUSTOM_LIGHTING_ENABLE).
 export const CMD = { set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
@@ -42,7 +35,7 @@ export const V = {
     // meta
     metaProtocolVersion: 0x01,
     metaActiveLayer: 0x02, // v10 RO: highest active layer (HUD feed)
-    metaFamily: 0x03,      // imprint line: numeric family code (FAMILY_CODES)
+    metaFamily: 0x03,      // ZMK line only: numeric family code (zmk.js ZMK_FAMILY_CODES)
     // accel (x100-scaled floats on the wire; offset is SIGNED)
     accelEnabled: 0x01, accelTakeoff: 0x02, accelGrowth: 0x03,
     accelOffset: 0x04, accelLimit: 0x05,
@@ -62,7 +55,7 @@ export const V = {
     dragDivH: 0x01, dragDivV: 0x02, dragInverted: 0x03,
     dragActive: 0x04, // live: GET diagnostic, SET force on/off — never persisted
     dragInterval: 0x06, dragMaxNotches: 0x07, // Sval extensions
-    dragInvertX: 0x0A, // imprint: horizontal orientation correction
+    dragInvertX: 0x0A, // retired (was ZMK-line only; no current family exposes it)
     // custom shift keys
     cskEnabled: 0x01, cskSlotCount: 0x02,
     // select word
