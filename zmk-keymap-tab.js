@@ -320,6 +320,100 @@ export class ZmkKeymapTab {
         }
     }
 
+    // ---- keymap file export / import ----
+
+    exportKeymap() {
+        const behaviors = zmkBehaviors();
+        const data = {
+            kind: 'flask-zmk-keymap',
+            version: 1,
+            device: this.deviceName,
+            exported: new Date().toISOString(),
+            layers: this.keymap.layers.map((l) => ({
+                name: l.name,
+                bindings: l.bindings.map((b) => ({
+                    // Display name first-class: behavior ids can shift across
+                    // firmware builds, names are stable.
+                    behavior: behaviors.get(b.behaviorId)?.displayName ?? null,
+                    behaviorId: b.behaviorId,
+                    param1: b.param1,
+                    param2: b.param2,
+                })),
+            })),
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = el('a', {
+            href: URL.createObjectURL(blob),
+            download: `${(this.deviceName || 'zmk').replace(/\s+/g, '-').toLowerCase()}-keymap.json`,
+        });
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast('Keymap exported');
+    }
+
+    async importKeymap(file) {
+        let data;
+        try {
+            data = JSON.parse(await file.text());
+        } catch {
+            toast('Not a JSON file', true);
+            return;
+        }
+        if (data?.kind !== 'flask-zmk-keymap' || !Array.isArray(data.layers)) {
+            toast('Not a flask ZMK keymap export', true);
+            return;
+        }
+        const behaviors = zmkBehaviors();
+        const byName = new Map();
+        for (const [id, d] of behaviors) byName.set(d.displayName, id);
+        const resolve = (fb) => byName.get(fb.behavior)
+            ?? (behaviors.has(fb.behaviorId) ? fb.behaviorId : null);
+
+        const layerCount = Math.min(data.layers.length, this.keymap.layers.length);
+        let wrote = 0, skipped = 0, renamed = 0;
+        try {
+            for (let li = 0; li < layerCount; li++) {
+                const src = data.layers[li];
+                const dst = this.keymap.layers[li];
+                const n = Math.min(src.bindings?.length ?? 0, dst.bindings.length);
+                for (let pos = 0; pos < n; pos++) {
+                    const fb = src.bindings[pos];
+                    const id = resolve(fb);
+                    if (id == null) { skipped++; continue; }
+                    const binding = {
+                        behaviorId: id,
+                        param1: (fb.param1 ?? 0) >>> 0,
+                        param2: (fb.param2 ?? 0) >>> 0,
+                    };
+                    const cur = dst.bindings[pos];
+                    if (cur && cur.behaviorId === id
+                        && cur.param1 === binding.param1
+                        && cur.param2 === binding.param2) continue;
+                    await this.client.setLayerBinding(dst.id, pos, binding);
+                    dst.bindings[pos] = binding;
+                    wrote++;
+                }
+                const name = (src.name || '').trim().slice(0, this.keymap.maxLayerNameLength || 20);
+                if (name && name !== dst.name) {
+                    await this.client.setLayerProps(dst.id, name);
+                    dst.name = name;
+                    renamed++;
+                }
+            }
+        } catch (e) {
+            if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
+            toast(`Import stopped: ${e.message} (${wrote} keys applied so far)`, true);
+        }
+        if (wrote || renamed) this._setUnsaved(true);
+        this._setContextFromCurrent();
+        this._publishToApp();
+        this.render();
+        const layerNote = data.layers.length !== this.keymap.layers.length
+            ? ` — file has ${data.layers.length} layers, device ${this.keymap.layers.length}` : '';
+        toast(`Import: ${wrote} keys written, ${renamed} renamed`
+            + `${skipped ? `, ${skipped} skipped (unknown behavior)` : ''}${layerNote}. Save to persist.`);
+    }
+
     async renameLayer(newName) {
         const layer = this.currentLayer;
         const name = newName.trim().slice(0, this.keymap.maxLayerNameLength || 20);
@@ -389,14 +483,15 @@ export class ZmkKeymapTab {
     _buildBoardCardBody(readOnly) {
         this.strip = el('div', { class: 'layer-strip' });
         this.boardWrap = el('div', { class: 'kb-wrap' });
-        const bits = el('div', {}, this.strip, this.boardWrap);
+        const bits = el('div', {});
+        if (!readOnly) bits.append(this._buildToolbar());
+        bits.append(this.strip, this.boardWrap);
         this.renderStrip(readOnly);
         this.renderBoard(readOnly);
         if (!readOnly) {
             bits.append(
                 el('div', { class: 'faint', style: 'margin-top:6px; font-size:12px' },
                     'Click a key, then pick a binding. Writes apply immediately; Save makes them survive power-off.'),
-                this._buildSaveBar(),
                 buildZmkPicker({
                     keyPressId: this.keyPressId,
                     onPick: (binding) => this.assign(binding),
@@ -406,18 +501,44 @@ export class ZmkKeymapTab {
         return bits;
     }
 
-    _buildSaveBar() {
-        const bar = el('div', { class: 'savebar' },
+    /** Top toolbar, always visible next to the board: Save/Discard (disabled
+     * until there's something unsaved) + keymap file export/import. */
+    _buildToolbar() {
+        const save = el('button', {
+            class: 'btn small primary', text: 'Save to keyboard',
+            onclick: () => this.saveChanges(),
+        });
+        const discard = el('button', {
+            class: 'btn small', text: 'Discard',
+            onclick: () => this.discardChanges(),
+        });
+        const note = el('span', { class: 'note' });
+        const file = el('input', { type: 'file', accept: '.json,application/json', style: 'display:none' });
+        file.addEventListener('change', () => {
+            const f = file.files?.[0];
+            file.value = '';
+            if (f) this.importKeymap(f);
+        });
+        const bar = el('div', { class: 'savebar', style: 'margin: 0 0 10px' },
+            save, discard, note,
+            el('span', { style: 'flex:1' }),
             el('button', {
-                class: 'btn small', text: 'Save to keyboard',
-                onclick: () => this.saveChanges(),
+                class: 'btn small', text: 'Export…',
+                title: 'Download the current keymap (incl. unsaved edits) as a JSON file',
+                onclick: () => this.exportKeymap(),
             }),
             el('button', {
-                class: 'btn small', text: 'Discard changes',
-                onclick: () => this.discardChanges(),
+                class: 'btn small', text: 'Import…',
+                title: 'Apply a keymap JSON file live — then Save to persist',
+                onclick: () => file.click(),
             }),
-            el('span', { class: 'note', text: 'Changes are live now but revert on power-off until saved.' }));
-        this._updateSaveBar = () => { bar.style.display = this.unsaved ? '' : 'none'; };
+            file);
+        this._updateSaveBar = () => {
+            save.disabled = discard.disabled = !this.unsaved;
+            note.textContent = this.unsaved
+                ? 'Unsaved — live now, reverts on power-off.'
+                : 'No unsaved changes.';
+        };
         this._updateSaveBar();
         return bar;
     }
