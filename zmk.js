@@ -37,8 +37,10 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // (0x1A); v3 dropped dragscroll (0x15 answers unhandled — the Imprint runs
 // the stock ZMK scroll chain); v4 removed autoscroll jog mode
 // (AS_DEADZONE/AS_RANGE 0x03/0x04 answer unhandled — stepped-only); v5
-// added the key-state channel 0x23 (HUD live press highlight).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 5 };
+// added the key-state channel 0x23 (HUD live press highlight); v6 added
+// the flask_rgb map channel 0x21 (per-key per-layer HSV, NLKB16 wire
+// shape — dims are device-sourced via 0x02/0x03).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 6 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -94,7 +96,9 @@ export function zmkCapabilities(family, version) {
         // Vial matrix read. loadZmkDevice injects app.readKeyState.
         keyState: flask && v >= 5,
         comboLayerMasks: false, // ZMK combos gate layers natively
-        rgbMap: false,
+        // flask_rgb per-key per-layer map (0x21, v6) — rendered by the
+        // ZMK-line painter (zmk-rgb-tab.js), not the NLKB16 RgbTab.
+        rgbMap: flask && v >= 6,
         display: false,
         displayWidgets: false,
         bigDisplay: false,

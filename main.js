@@ -14,6 +14,7 @@ import { capabilities } from './caps.js?v=4';
 import { setDeviceCustomKeys } from './keycodes.js?v=4';
 import { KeymapTab } from './keymap-tab.js?v=4';
 import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=4';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=4';
 import { MouseTab } from './mouse-tab.js?v=4';
 import { TypingTab } from './typing-tab.js?v=4';
 import { SettingsTab } from './settings-tab.js?v=4';
@@ -340,7 +341,10 @@ function buildTabs() {
     if (app.caps.wheelChords) TABS.push({ id: 'chords', label: 'Mouse Chords', ctor: ChordsTab });
     if (app.caps.mouse) TABS.push({ id: 'mouse', label: 'Mouse', ctor: MouseTab });
     if (app.caps.typing) TABS.push({ id: 'typing', label: 'Typing', ctor: TypingTab });
-    if (app.caps.rgbMap) TABS.push({ id: 'rgb', label: 'RGB', ctor: RgbTab });
+    if (app.caps.rgbMap) {
+        TABS.push({ id: 'rgb', label: 'RGB',
+            ctor: isZmkFamily(app.family) ? ZmkRgbTab : RgbTab });
+    }
     if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
     if (app.caps.vial) TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
 
