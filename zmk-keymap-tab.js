@@ -7,16 +7,16 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=5';
-import { renderKeyboardSVG } from './keymap-tab.js?v=5';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=5';
-import { ZMK_VIDPID } from './zmk.js?v=5';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=5';
+import { el, toast, card } from './ui.js?v=6';
+import { renderKeyboardSVG } from './keymap-tab.js?v=6';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=6';
+import { ZMK_VIDPID } from './zmk.js?v=6';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=6';
 import {
     consumerUsages, kpParam, cpParam, usageFromName,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe,
-} from './zmk-keycodes.js?v=5';
+} from './zmk-keycodes.js?v=6';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -32,7 +32,9 @@ function studioClient() {
 export class ZmkKeymapTab {
     constructor(app) {
         this.app = app;
-        this.client = studioClient();
+        // Offline preview: the workspace supplies a simulated Studio client
+        // (zmk-offline.js); hardware sessions share the real serial client.
+        this.client = app.zmkStudioSim ?? studioClient();
         this.root = el('div');
         this.state = 'idle';    // idle | connecting | loading | locked | ready | error
         this.statusMsg = '';
@@ -58,7 +60,7 @@ export class ZmkKeymapTab {
     }
 
     async load() {
-        if (!StudioClient.supported()) {
+        if (!this.app.zmkStudioSim && !StudioClient.supported()) {
             this.state = 'unsupported';
             this.render();
             return;

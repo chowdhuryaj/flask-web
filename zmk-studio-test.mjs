@@ -370,4 +370,60 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(macroIsEmpty([]), true, 'no steps = empty macro');
 }
 
+// ---- offline imprint preview template (zmk-offline.js) ----
+{
+    const { createZmkTemplate, ZmkOfflineFlask, OfflineStudioClient,
+            zmkPendingCount } = await import('./zmk-offline.js');
+    const { CH, V } = await import('./flaskproto.js');
+
+    // localStorage shim so saveWorkspace calls inside the sims don't throw.
+    globalThis.localStorage ??= {
+        _m: new Map(),
+        getItem(k) { return this._m.get(k) ?? null; },
+        setItem(k, v) { this._m.set(k, String(v)); },
+        removeItem(k) { this._m.delete(k); },
+        key(i) { return [...this._m.keys()][i] ?? null; },
+        get length() { return this._m.size; },
+    };
+
+    const ws = createZmkTemplate('imprint');
+    eq(ws.zmk.keymap.layers.length, 10, 'template has 10 layers');
+    eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
+        'every template layer has 70 bindings');
+    eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
+    eq(ws.protocolVersion, 8, 'template speaks the expected imprint protocol');
+
+    const flask = new ZmkOfflineFlask(ws);
+    eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
+    eq(await flask.getU16(CH.macros, V.macrosSlotCount), 16, 'sim macro slots');
+    eq(await flask.getU16(CH.combos, V.combosTimeout), 50, 'sim seeds combo timeout default');
+    eq(await flask.getU16(CH.autoscroll, V.asSpeedScale), 100, 'sim seeds autoscroll scale');
+
+    // Combo slot write round-trip + journal.
+    const echo = await flask.setBytes(CH.combos, V.combosSlot,
+        [2, 10, 20, 0xFF, 0xFF, 0x00, 0x07, 0x00, 0x04]);
+    eq([...echo], [2, 10, 20, 0xFF, 0xFF, 0x00, 0x07, 0x00, 0x04], 'sim combo slot echoes');
+    eq(zmkPendingCount(ws), 1, 'combo edit journals');
+
+    // Macro step write normalizes unknown actions like the firmware.
+    const mecho = await flask.setBytes(CH.macros, V.macrosStep, [0, 0, 9, 0, 0, 0, 5]);
+    eq([...mecho], [0, 0, 0, 0, 0, 0, 0], 'sim macro step normalizes bad action to empty');
+
+    // Studio sim: binding write + layer ops mirror real semantics.
+    const studio = new OfflineStudioClient(ws);
+    const km = await studio.getKeymap();
+    eq(km.availableLayers, 0, 'template starts with no free layer slots');
+    await studio.setLayerBinding(0, 13, { behaviorId: 1, param1: 0x70004, param2: 0 });
+    eq(ws.zmk.keymap.layers[0].bindings[13].param1, 0x70004, 'sim binding write lands');
+    await studio.removeLayer(9);
+    eq((await studio.getKeymap()).availableLayers, 1, 'remove frees a slot');
+    const added = await studio.addLayer();
+    eq(added.index, 9, 'add reuses the freed slot at the end');
+    eq((await studio.getKeymap()).availableLayers, 0, 'add consumes the slot');
+    const moved = await studio.moveLayer(9, 0);
+    eq(moved.layers.length, 10, 'move returns the full keymap');
+    await studio.discardChanges();
+    eq((await studio.getKeymap()).layers[9].name, 'spare4', 'discard restores the saved structure');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

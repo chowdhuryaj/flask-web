@@ -2,35 +2,37 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast } from './ui.js?v=5';
-import { FlaskHID } from './webhid.js?v=5';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=5';
+import { el, toast } from './ui.js?v=6';
+import { FlaskHID } from './webhid.js?v=6';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=6';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState } from './zmk.js?v=5';
-import { VialClient } from './vialclient.js?v=5';
-import { parseDefinition } from './vialdef.js?v=5';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=5';
-import { capabilities } from './caps.js?v=5';
-import { setDeviceCustomKeys } from './keycodes.js?v=5';
-import { KeymapTab } from './keymap-tab.js?v=5';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=5';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=5';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=5';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=5';
-import { MouseTab } from './mouse-tab.js?v=5';
-import { TypingTab } from './typing-tab.js?v=5';
-import { SettingsTab } from './settings-tab.js?v=5';
-import { HUD } from './hud.js?v=5';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=5';
+         zmkReadKeyState } from './zmk.js?v=6';
+import { VialClient } from './vialclient.js?v=6';
+import { parseDefinition } from './vialdef.js?v=6';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=6';
+import { capabilities } from './caps.js?v=6';
+import { setDeviceCustomKeys } from './keycodes.js?v=6';
+import { KeymapTab } from './keymap-tab.js?v=6';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=6';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=6';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=6';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=6';
+import { MouseTab } from './mouse-tab.js?v=6';
+import { TypingTab } from './typing-tab.js?v=6';
+import { SettingsTab } from './settings-tab.js?v=6';
+import { HUD } from './hud.js?v=6';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=6';
+import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
+         zmkSyncExtras, zmkPendingCount } from './zmk-offline.js?v=6';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot } from './offline.js?v=5';
-import { MacrosTab } from './macros-tab.js?v=5';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=5';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=5';
-import { RgbTab } from './rgb-tab.js?v=5';
-import { DisplayTab } from './display-tab.js?v=5';
-import { exportVil, importVil, downloadText } from './vil.js?v=5';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=6';
+import { MacrosTab } from './macros-tab.js?v=6';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=6';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=6';
+import { RgbTab } from './rgb-tab.js?v=6';
+import { DisplayTab } from './display-tab.js?v=6';
+import { exportVil, importVil, downloadText } from './vil.js?v=6';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -187,6 +189,20 @@ async function loadZmkDevice(device) {
     // matrix read (hud.js polls this generically when caps.keyState).
     app.readKeyState = app.caps.keyState ? () => zmkReadKeyState(app.flask) : null;
 
+    // Offline preview queue → device (tunables + RGB ride the shared
+    // journal; combo slots + macro steps are ZMK-shaped extras).
+    await maybeSyncOffline(app, device);
+    const ws = loadWorkspace(workspaceKey(app.family, device));
+    if (ws && zmkPendingCount(ws)) {
+        const { applied, failures } = await zmkSyncExtras(app, ws);
+        if (failures.length) {
+            console.warn('zmk offline sync failures:', failures);
+            toast(`Applied ${applied} offline slot edits — ${failures.length} failed, still queued`, true);
+        } else if (applied) {
+            toast(`Applied ${applied} offline combo/macro slot edits`);
+        }
+    }
+
     $('landing').style.display = 'none';
     $('main-tabs').style.display = '';
     $('hud-btn').style.display = '';
@@ -243,40 +259,45 @@ function disconnectUI() {
 // ---------- offline mode ----------
 
 function startOffline(key, family) {
-    const ws = loadWorkspace(key) ?? createTemplate(family);
+    const zmk = isZmkFamily(family);
+    const ws = loadWorkspace(key) ?? (zmk ? createZmkTemplate(family) : createTemplate(family));
     ws._notify = updateOfflineBanner; // dropped by JSON.stringify on persist
     saveWorkspace(ws);
     app.offline = true;
     app.offlineWs = ws;
-    app.flask = new OfflineFlask(ws);
-    app.vial = new OfflineVial(ws);
-    app.family = ws.family;
-    app.protocolVersion = ws.protocolVersion;
-    app.caps = capabilities(ws.family, ws.protocolVersion);
-    app.profile = ws.profile;
-    app.layerCount = ws.layerCount;
-    app.keymap = null;
-    app.unlocked = false;
+    if (zmk) {
+        attachZmkOffline(app, ws);      // flask sim + Studio sim + caps/profile
+    } else {
+        app.flask = new OfflineFlask(ws);
+        app.vial = new OfflineVial(ws);
+        app.family = ws.family;
+        app.protocolVersion = ws.protocolVersion;
+        app.caps = capabilities(ws.family, ws.protocolVersion);
+        app.profile = ws.profile;
+        app.layerCount = ws.layerCount;
+        app.keymap = null;
+        app.unlocked = false;
+    }
     setDeviceCustomKeys(ws.profile.customKeycodes || []);
 
     $('landing').style.display = 'none';
     $('main-tabs').style.display = '';
     $('hud-btn').style.display = 'none';   // HUD is live device state
     $('lock-btn').style.display = 'none';
-    $('vil-save').style.display = '';
-    $('vil-load').style.display = '';
+    $('vil-save').style.display = zmk ? 'none' : '';   // .vil is a Vial format
+    $('vil-load').style.display = zmk ? 'none' : '';
     $('proto-warn').style.display = 'none';
     $('status-pill').classList.add('offline');
     $('status-text').textContent = `Offline — ${ws.label}`;
     $('offline-banner').style.display = 'flex';
     updateOfflineBanner();
     buildTabs();
-    showTab('keymap');
+    showTab(zmk ? 'zmk-keymap' : 'keymap');
 }
 
 function updateOfflineBanner() {
     if (!app.offline || !app.offlineWs) return;
-    const n = pendingCount(app.offlineWs);
+    const n = pendingCount(app.offlineWs) + zmkPendingCount(app.offlineWs);
     $('offline-msg').textContent = n
         ? `Offline — ${n} change${n === 1 ? '' : 's'} queued for ${app.offlineWs.label}; they apply on the next connect.`
         : `Offline — edits queue here and apply when ${app.offlineWs.label} is next connected.`;
@@ -288,6 +309,8 @@ function exitOffline() {
     app.offlineWs = null;
     app.flask = new FlaskProto(app.hid);
     app.vial = new VialClient(app.hid);
+    app.zmkStudioSim = null;    // keymap tab falls back to the real serial client
+    app.readKeyState = null;
     $('offline-banner').style.display = 'none';
     $('status-pill').classList.remove('offline');
     disconnectUI();
@@ -301,10 +324,13 @@ function renderOfflineList() {
     for (const fam of TEMPLATE_FAMILIES) {
         if (!saved.has(fam)) entries.push({ key: fam, family: fam, label: familyLabel(fam), pending: 0, saved: false });
     }
+    for (const fam of ZMK_TEMPLATE_FAMILIES) {
+        if (!saved.has(fam)) entries.push({ key: fam, family: fam, label: familyLabel(fam), pending: 0, saved: false });
+    }
     for (const ws of saved.values()) {
         entries.push({
             key: ws.key, family: ws.family, label: ws.label,
-            pending: pendingCount(ws), saved: true,
+            pending: pendingCount(ws) + zmkPendingCount(ws), saved: true,
             fromDevice: ws.source === 'device',
         });
     }
