@@ -9,10 +9,40 @@
 // [0, ledCount/2), the peripheral (right) follows. The bench paint-sweep
 // is how the physical mapping gets confirmed — paint one LED at a time
 // and watch which key lights.
+//
+// The paint surface renders on the same device-sourced key geometry as the
+// keymap tab (app.profile.keys, published by ZmkKeymapTab/HUD load) — halves
+// side by side, thumb clusters where they physically sit. Falls back to the
+// flat index grid until the keymap tab has connected once.
 
 import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=6';
 import { CH, V } from './flaskproto.js?v=6';
 import { hsvCss } from './rgb-tab.js?v=6';
+import { renderKeyboardSVG } from './keymap-tab.js?v=6';
+
+/**
+ * LED index → key mapping over the physical layout: the central (left) half
+ * owns LEDs [0, ledCount/2), the peripheral (right) the rest. Halves are
+ * split at the geometry's x midpoint; within a half, LED order is assumed to
+ * follow key-position order until the bench paint-sweep says otherwise (fix
+ * the ordering HERE if the sweep disagrees — the wire is index-addressed
+ * either way). Returns an array where entry i = the key lit by LED i (or
+ * undefined for LEDs beyond the mapped keys).
+ */
+export function ledKeyOrder(keys, ledCount) {
+    if (!keys?.length) return [];
+    const xs = keys.map((k) => k.x + k.w / 2);
+    const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const half = (pred) => keys.filter(pred).sort((a, b) => a.pos - b.pos);
+    const left = half((k) => k.x + k.w / 2 < mid);
+    const right = half((k) => k.x + k.w / 2 >= mid);
+    const central = Math.ceil(ledCount / 2);
+    const order = [];
+    for (let i = 0; i < ledCount; i++) {
+        order.push(i < central ? left[i] : right[i - central]);
+    }
+    return order;
+}
 
 export class ZmkRgbTab {
     constructor(app) {
@@ -89,6 +119,61 @@ export class ZmkRgbTab {
                 ...Array.from({ length: count }, (_, i) => this.swatch(start + i))));
     }
 
+    /** Paint surface on the keymap tab's device-sourced geometry (halves side
+     * by side, thumb clusters separated). LEDs that map past the key list —
+     * or everything, before the keymap tab has connected — fall back to the
+     * flat index grids. */
+    board() {
+        const keys = this.app.profile?.keys;
+        const central = Math.ceil(this.ledCount / 2);
+        if (!keys?.length) {
+            return el('div', {},
+                el('div', { class: 'note faint',
+                    text: 'Open the Keymap tab once for the board view — index grid meanwhile.' }),
+                this.half('Left half (central) — LEDs 0…' + (central - 1), 0, central),
+                this.half(`Right half — LEDs ${central}…${this.ledCount - 1}`, central,
+                    this.ledCount - central));
+        }
+
+        const order = ledKeyOrder(keys, this.ledCount);
+        const ledOf = new Map();   // key identity → led index
+        order.forEach((k, led) => { if (k) ledOf.set(k, led); });
+        const mapped = order.filter(Boolean);
+
+        const svg = renderKeyboardSVG({
+            profile: {
+                keys: mapped,
+                encoderKeys: [],
+                labelFor: () => '',
+                hoverFor: (led) => {
+                    const [h, s, v] = this.leds[led] ?? [0, 0, 0];
+                    return `LED ${led} — hsv(${h}, ${s}, ${v}). Click paints; right-click clears.`;
+                },
+                keyName: (k) => String(ledOf.get(k)),
+            },
+            keycodeAt: (row, col) => ledOf.get(mapped.find((k) => k.row === row && k.col === col)),
+            fillFor: (k) => {
+                const [h, s, v] = this.leds[ledOf.get(k)] ?? [0, 0, 0];
+                return v ? hsvCss(h, s, v) : null;
+            },
+            onSelect: (sel) => {
+                const k = mapped.find((m) => m.row === sel.row && m.col === sel.col);
+                if (k) this.paint(ledOf.get(k));
+            },
+            onContext: (sel) => {
+                const k = mapped.find((m) => m.row === sel.row && m.col === sel.col);
+                if (k) this.clear(ledOf.get(k));
+            },
+            scale: 0.72,
+        });
+
+        const spill = this.ledCount - mapped.length;
+        return el('div', {},
+            el('div', { style: 'overflow-x:auto' }, svg),
+            spill > 0 ? this.half(`Unmapped LEDs ${mapped.length}…${this.ledCount - 1}`,
+                mapped.length, spill) : null);
+    }
+
     render() {
         const { flask } = this.app;
         const [h, s, v] = this.brush;
@@ -105,7 +190,6 @@ export class ZmkRgbTab {
             },
         });
 
-        const central = Math.ceil(this.ledCount / 2);
         const painter = card('Per-key RGB map',
             'layer-colored keys — edits are live on the board; Save persists',
             toggleRow({
@@ -131,9 +215,7 @@ export class ZmkRgbTab {
                 el('span', { class: 'lbl', text: 'Brush' }),
                 el('span', { style: 'flex:1' }), preview),
             brushSlider('Hue', 0), brushSlider('Saturation', 1), brushSlider('Value', 2),
-            this.half('Left half (central) — LEDs 0…' + (central - 1), 0, central),
-            this.half(`Right half — LEDs ${central}…${this.ledCount - 1}`, central,
-                this.ledCount - central),
+            this.board(),
             el('div', { class: 'savebar' },
                 el('button', { class: 'btn small', text: 'Fill layer with brush', onclick: () => this.fill() }),
                 el('button', {

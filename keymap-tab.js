@@ -100,9 +100,14 @@ export class KeymapTab {
 }
 
 /**
- * Shared SVG keyboard renderer — used by the keymap tab and the HUD.
+ * Shared SVG keyboard renderer — used by the keymap tab, the HUD, and the
+ * ZMK RGB painter.
  * opts: { profile, keycodeAt(row,col), encoderAt(index,cw)?, selected?,
- *         onSelect(sel)?, pressed?: Set<"row,col">, scale? }
+ *         onSelect(sel)?, onContext(sel)?, fillFor(key)?,
+ *         pressed?: Set<"row,col">, scale? }
+ * fillFor(key) → CSS color painted onto the keycap rect (the RGB painter's
+ * swatch fill); onContext(sel) fires on right-click (paint-clear). Both are
+ * generic hooks — QMK callers pass neither and render unchanged.
  */
 export function renderKeyboardSVG(opts) {
     const { profile } = opts;
@@ -132,10 +137,16 @@ export function renderKeyboardSVG(opts) {
         const kc = opts.keycodeAt(key.row, key.col);
         const isSel = sel?.kind === 'key' && sel.row === key.row && sel.col === key.col;
         const isPressed = opts.pressed?.has(`${key.row},${key.col}`);
+        const fill = opts.fillFor?.(key);
         const rect = svgEl('rect', {
             class: 'keycap' + (isSel ? ' sel' : '') + (isPressed ? ' pressed' : ''),
             x, y, width: w, height: h, rx: 5 * scale,
+            style: fill ? `fill:${fill}` : null,
             onclick: opts.onSelect ? () => opts.onSelect({ kind: 'key', row: key.row, col: key.col }) : null,
+            oncontextmenu: opts.onContext ? (e) => {
+                e.preventDefault();
+                opts.onContext({ kind: 'key', row: key.row, col: key.col });
+            } : null,
         });
         const title = svgEl('title', { text: `${key.label}\n${hoverFor(kc)}` });
         rect.append(title);
