@@ -204,10 +204,14 @@ export class FlaskProto {
         return r.slice(3);
     }
 
-    /** Payload-addressed SET (RGB paint/fill, display push). */
+    /** Payload-addressed SET (RGB paint/fill, display push, combo/macro
+     * slots). Returns the echoed payload — the firmware answers in place
+     * with what actually stuck (normalized slots), and the ZMK combo/macro
+     * tabs adopt that echo. */
     async setBytes(channel, valueID, payload) {
         const r = await this.hid.request([CMD.set, channel, valueID, ...payload]);
         if (r[0] !== CMD.set) throw new Error('unhandled');
+        return r.slice(3);
     }
 
     /** Flask handshake: protocol version, or null if firmware is plain Vial. */

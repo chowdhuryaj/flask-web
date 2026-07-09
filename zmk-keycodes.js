@@ -8,7 +8,7 @@
 // vocabulary is HID usages: param = (page << 16) | id, with implicit
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=5';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=6';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;
@@ -128,6 +128,11 @@ const BEHAVIOR_ABBREV = new Map([
     ['Layer Tap', 'LT'],
     ['Sticky Layer', 'SL'],
     ['Sticky Key', 'SK'],
+    // Core ZMK spells these hyphenated (app/dts/behaviors/*.dtsi display-name
+    // strings at pin 484a0547) — keep the space variants too, they cost nothing.
+    ['Mod-Tap', 'MT'],
+    ['Layer-Tap', 'LT'],
+    ['Mouse Key Press', 'MB'],
     ['Mod Tap', 'MT'],
     ['Hold Tap', 'HT'],
     ['Key Toggle', 'KT'],
