@@ -23,7 +23,7 @@ import { SettingsTab } from './settings-tab.js?v=6';
 import { HUD } from './hud.js?v=6';
 import { runUnlockFlow, lockKeyboard } from './unlock.js?v=6';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount } from './zmk-offline.js?v=6';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=6';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
          maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=6';
@@ -193,6 +193,7 @@ async function loadZmkDevice(device) {
     // journal; combo slots + macro steps are ZMK-shaped extras).
     await maybeSyncOffline(app, device);
     const ws = loadWorkspace(workspaceKey(app.family, device));
+    app.zmkQueuedWs = null;   // never let a prior connect's queue leak across
     if (ws && zmkPendingCount(ws)) {
         const { applied, failures } = await zmkSyncExtras(app, ws);
         if (failures.length) {
@@ -488,8 +489,10 @@ function init() {
     });
     $('offline-exit').addEventListener('click', exitOffline);
     $('offline-discard').addEventListener('click', () => {
-        if (!app.offlineWs || !pendingCount(app.offlineWs)) { toast('Nothing queued'); return; }
-        clearDirty(app.offlineWs);
+        const ws = app.offlineWs;
+        if (!ws || !(pendingCount(ws) + zmkPendingCount(ws))) { toast('Nothing queued'); return; }
+        clearDirty(ws);
+        zmkClearDirty(ws);
         toast('Queued changes discarded');
     });
 

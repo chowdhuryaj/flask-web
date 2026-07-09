@@ -10,6 +10,7 @@
 import { el, toast, card } from './ui.js?v=6';
 import { renderKeyboardSVG } from './keymap-tab.js?v=6';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=6';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=6';
 import { ZMK_VIDPID } from './zmk.js?v=6';
 import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=6';
 import {
@@ -175,8 +176,28 @@ export class ZmkKeymapTab {
             this._publishToApp();
             this.state = 'ready';
             this.render();
+            await this._applyQueuedOfflineKeymap();
         } catch (e) {
             this._handleRpcError(e, 'Keymap load failed');
+        }
+    }
+
+    /** Offline-preview keymap auto-sync: the latest keymap SAVED in the
+     * device-less workspace replays here — the first moment a real device
+     * is connected, unlocked, and fully loaded (Studio RPC can't run any
+     * earlier: serial needs a user gesture, unlock is physical). Mirrors
+     * the QMK families' .vil queue-apply. Applied by display name, then
+     * persisted, so a power-cycle keeps it. */
+    async _applyQueuedOfflineKeymap() {
+        if (this.app?.zmkStudioSim || !this.app?.zmkQueuedWs) return;
+        try {
+            const res = await zmkApplyPendingKeymap(this.app,
+                (data) => this.applyKeymapData(data, { quiet: true }));
+            if (!res || res.stopped) return;    // locked/partial: stays queued, applier toasted
+            if (res.wrote || res.renamed) await this.saveChanges();
+            toast(`Offline keymap applied: ${res.wrote} keys, ${res.renamed} renamed — saved to keyboard`);
+        } catch (e) {
+            toast(`Offline keymap sync failed: ${e.message} — still queued`, true);
         }
     }
 
@@ -445,9 +466,18 @@ export class ZmkKeymapTab {
             toast('Not a JSON file', true);
             return;
         }
+        await this.applyKeymapData(data);
+    }
+
+    /** Core applier for export-shaped keymap JSON — used by Import… and by
+     * the offline-preview auto-sync. Behavior display names are the
+     * cross-device identity (ids shift across builds and differ between the
+     * offline sim and real firmware); ids are only a same-build fallback.
+     * quiet suppresses the success toast (the auto-sync has its own). */
+    async applyKeymapData(data, { quiet = false } = {}) {
         if (data?.kind !== 'flask-zmk-keymap' || !Array.isArray(data.layers)) {
             toast('Not a flask ZMK keymap export', true);
-            return;
+            return null;
         }
         const behaviors = zmkBehaviors();
         const byName = new Map();
@@ -456,7 +486,7 @@ export class ZmkKeymapTab {
             ?? (behaviors.has(fb.behaviorId) ? fb.behaviorId : null);
 
         const layerCount = Math.min(data.layers.length, this.keymap.layers.length);
-        let wrote = 0, skipped = 0, renamed = 0;
+        let wrote = 0, skipped = 0, renamed = 0, stopped = false;
         try {
             for (let li = 0; li < layerCount; li++) {
                 const src = data.layers[li];
@@ -487,8 +517,9 @@ export class ZmkKeymapTab {
                 }
             }
         } catch (e) {
-            if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
+            if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return null; }
             toast(`Import stopped: ${e.message} (${wrote} keys applied so far)`, true);
+            stopped = true;
         }
         if (wrote || renamed) this._setUnsaved(true);
         this._setContextFromCurrent();
@@ -496,8 +527,11 @@ export class ZmkKeymapTab {
         this.render();
         const layerNote = data.layers.length !== this.keymap.layers.length
             ? ` — file has ${data.layers.length} layers, device ${this.keymap.layers.length}` : '';
-        toast(`Import: ${wrote} keys written, ${renamed} renamed`
-            + `${skipped ? `, ${skipped} skipped (unknown behavior)` : ''}${layerNote}. Save to persist.`);
+        if (!quiet) {
+            toast(`Import: ${wrote} keys written, ${renamed} renamed`
+                + `${skipped ? `, ${skipped} skipped (unknown behavior)` : ''}${layerNote}. Save to persist.`);
+        }
+        return { wrote, renamed, skipped, stopped };
     }
 
     async renameLayer(newName) {

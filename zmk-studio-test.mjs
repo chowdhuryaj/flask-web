@@ -426,4 +426,62 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq((await studio.getKeymap()).layers[9].name, 'spare4', 'discard restores the saved structure');
 }
 
+// ---- offline keymap auto-sync queue (zmk-offline.js) ----
+{
+    const { createZmkTemplate, OfflineStudioClient, zmkPendingCount,
+            zmkClearDirty, zmkApplyPendingKeymap } = await import('./zmk-offline.js');
+
+    const ws = createZmkTemplate('imprint');
+    const studio = new OfflineStudioClient(ws);
+    eq(ws.zmk.pendingKeymap, null, 'template starts with no queued keymap');
+
+    await studio.setLayerBinding(0, 5, { behaviorId: 1, param1: 0x70005, param2: 0 });
+    eq(zmkPendingCount(ws), 0, 'unsaved keymap edit does not queue');
+    await studio.saveChanges();
+    eq(zmkPendingCount(ws), 1, 'offline Save queues the keymap');
+    eq(ws.zmk.pendingKeymap.kind, 'flask-zmk-keymap', 'queued keymap is export-shaped');
+    eq(ws.zmk.pendingKeymap.layers.length, 10, 'queued keymap carries all layers');
+    eq(typeof ws.zmk.pendingKeymap.layers[0].bindings[5].behavior, 'string',
+        'queued bindings carry behavior display names');
+
+    // Consume path: success clears the queue…
+    const app = { zmkQueuedWs: ws };
+    const res = await zmkApplyPendingKeymap(app, async (data) =>
+        ({ wrote: data.layers.length, renamed: 0, skipped: 0, stopped: false }));
+    eq(res.wrote, 10, 'applier receives the queued data');
+    eq(ws.zmk.pendingKeymap, null, 'successful apply clears the queue');
+    eq(app.zmkQueuedWs, null, 'successful apply clears the stash');
+
+    // …a stopped/locked apply leaves it queued for the next connect.
+    await studio.saveChanges();
+    app.zmkQueuedWs = ws;
+    await zmkApplyPendingKeymap(app, async () =>
+        ({ wrote: 1, renamed: 0, skipped: 0, stopped: true }));
+    eq(zmkPendingCount(ws), 1, 'stopped apply keeps the keymap queued');
+    await zmkApplyPendingKeymap(app, async () => null);
+    eq(zmkPendingCount(ws), 1, 'locked apply keeps the keymap queued');
+
+    zmkClearDirty(ws);
+    eq(zmkPendingCount(ws), 0, 'zmkClearDirty drops the queued keymap');
+}
+
+// ---- RGB painter LED → key geometry mapping (zmk-rgb-tab.js) ----
+{
+    const { ledKeyOrder } = await import('./zmk-rgb-tab.js');
+    // Two halves of 2 keys each, right half offset in x; thumb-cluster-style
+    // stragglers keep position order within their half.
+    const keys = [
+        { pos: 0, x: 0, y: 0, w: 1, h: 1 }, { pos: 1, x: 1, y: 0, w: 1, h: 1 },
+        { pos: 2, x: 10, y: 0, w: 1, h: 1 }, { pos: 3, x: 11, y: 0, w: 1, h: 1 },
+        { pos: 4, x: 2, y: 3, w: 1, h: 1 },  // left thumb
+        { pos: 5, x: 9, y: 3, w: 1, h: 1 },  // right thumb
+    ];
+    const order = ledKeyOrder(keys, 6);
+    eq(order.map((k) => k.pos).join(','), '0,1,4,2,3,5',
+        'central LEDs walk the left half in position order, then the right');
+    eq(ledKeyOrder([], 4).length, 0, 'no geometry = no mapping (grid fallback)');
+    const short = ledKeyOrder(keys.slice(0, 2), 6);
+    eq(short.filter(Boolean).length, 2, 'LEDs past the key list stay unmapped');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

@@ -265,6 +265,7 @@ export function createZmkTemplate(family) {
         zmk: {
             keymap,
             keymapSaved: structuredClone(keymap),
+            pendingKeymap: null, // export-shaped snapshot queued for real connect
             removed: [],        // removed layers waiting for restore
             nextLayerId: layers.length,
             unsaved: false,
@@ -283,13 +284,22 @@ export function normalizeZmkWorkspace(ws) {
     ws.zmkDirty ??= { combo: {}, macroStep: {} };
     ws.zmkDirty.combo ??= {};
     ws.zmkDirty.macroStep ??= {};
+    if (ws.zmk) ws.zmk.pendingKeymap ??= null;
     return ws;
 }
 
 export function zmkPendingCount(ws) {
     const d = ws.zmkDirty;
     if (!d) return 0;
-    return Object.keys(d.combo).length + Object.keys(d.macroStep).length;
+    return Object.keys(d.combo).length + Object.keys(d.macroStep).length
+        + (ws.zmk?.pendingKeymap ? 1 : 0);
+}
+
+/** Drop everything ZMK-shaped queued for replay (the banner's Discard). */
+export function zmkClearDirty(ws) {
+    ws.zmkDirty = { combo: {}, macroStep: {} };
+    if (ws.zmk) ws.zmk.pendingKeymap = null;
+    saveWorkspace(ws);
 }
 
 // ---------------------------------------------------------------------------
@@ -466,6 +476,27 @@ export class OfflineStudioClient extends EventTarget {
 
     async saveChanges() {
         this.ws.zmk.keymapSaved = structuredClone(this.ws.zmk.keymap);
+        // Queue the saved keymap for the next real connect (the "latest
+        // saved keymap wins" auto-sync, same idea as the QMK .vil replay).
+        // Export shape: behavior display names are the cross-device
+        // identity — the real firmware's ids differ from the sim's, and
+        // the keymap tab's import applier resolves names against the
+        // device's own behavior list.
+        this.ws.zmk.pendingKeymap = {
+            kind: 'flask-zmk-keymap',
+            version: 1,
+            device: 'Cyboard Imprint (ZMK) preview',
+            exported: new Date().toISOString(),
+            layers: this.ws.zmk.keymapSaved.layers.map((l) => ({
+                name: l.name,
+                bindings: l.bindings.map((b) => ({
+                    behavior: BEHAVIORS.get(b.behaviorId)?.displayName ?? null,
+                    behaviorId: b.behaviorId,
+                    param1: b.param1,
+                    param2: b.param2,
+                })),
+            })),
+        };
         this._persist(false);
     }
 
@@ -576,6 +607,28 @@ export async function zmkSyncExtras(app, ws) {
     }
     if (touched) { try { await app.flask.save(CH.macros); } catch { /* keep */ } }
 
+    // A queued keymap can't apply here — Studio RPC needs its own serial
+    // connect (user gesture) + physical unlock. Stash the workspace; the
+    // keymap tab applies it when it reaches 'ready' on a real device.
+    app.zmkQueuedWs = ws.zmk?.pendingKeymap ? ws : null;
+
     saveWorkspace(ws);
     return { applied, failures: fail };
+}
+
+/** Consume the queued offline keymap once a real Studio session is ready:
+ * run the tab's applier, clear the queue, persist. Returns the applier's
+ * result or null when nothing was queued. */
+export async function zmkApplyPendingKeymap(app, apply) {
+    const ws = app.zmkQueuedWs;
+    const data = ws?.zmk?.pendingKeymap;
+    if (!data) return null;
+    const res = await apply(data);
+    // Locked (null) or stopped-partway applies stay queued for the next
+    // connect — the applier diff-skips, so a retry only rewrites the rest.
+    if (!res || res.stopped) return res;
+    ws.zmk.pendingKeymap = null;
+    app.zmkQueuedWs = null;
+    saveWorkspace(ws);
+    return res;
 }
