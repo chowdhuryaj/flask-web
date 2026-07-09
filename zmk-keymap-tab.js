@@ -44,6 +44,7 @@ export class ZmkKeymapTab {
         this.unsaved = false;
         this.keyPressId = null;
         this.renaming = false;
+        this.removedLayers = [];    // session undo stack for remove-layer
 
         // Rebind client events to THIS instance (abort the previous one's).
         activeTabAbort?.abort();
@@ -309,6 +310,7 @@ export class ZmkKeymapTab {
             await this.client.discardChanges();
             this.keymap = await this.client.getKeymap();
             if (this.layer >= this.keymap.layers.length) this.layer = 0;
+            this.removedLayers = [];    // structure reverted device-side
             this._setContextFromCurrent();
             this._publishToApp();   // discard re-fetched: new arrays, republish
             this._setUnsaved(false);
@@ -318,6 +320,88 @@ export class ZmkKeymapTab {
             if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
             toast(`Discard failed: ${e.message}`, true);
         }
+    }
+
+    // ---- layer structure ops ----
+
+    _layerOpError(e, what) {
+        if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
+        toast(`${what} failed: ${e.message}`, true);
+    }
+
+    _afterLayerStructureChange() {
+        this.selected = null;
+        this._setUnsaved(true);     // optimistic; the notification confirms
+        this._setContextFromCurrent();
+        this._publishToApp();
+        this.render();
+    }
+
+    async addLayerOp() {
+        try {
+            const { index, layer } = await this.client.addLayer();
+            if (layer && index >= 0) {
+                this.keymap.layers.splice(index, 0, layer);
+                this.keymap.availableLayers = Math.max(0, (this.keymap.availableLayers ?? 1) - 1);
+                this.layer = index;
+            } else {
+                this.keymap = await this.client.getKeymap();    // defensive resync
+                this.layer = this.keymap.layers.length - 1;
+            }
+            this._afterLayerStructureChange();
+            toast('Layer added');
+        } catch (e) { this._layerOpError(e, 'Add layer'); }
+    }
+
+    async removeLayerOp() {
+        if (this.keymap.layers.length <= 1) { toast('Cannot remove the last layer', true); return; }
+        const idx = this.layer;
+        const gone = this.currentLayer;
+        try {
+            await this.client.removeLayer(idx);
+            this.keymap.layers.splice(idx, 1);
+            this.keymap.availableLayers = (this.keymap.availableLayers ?? 0) + 1;
+            this.removedLayers.push({ id: gone.id, name: gone.name || `Layer ${idx}`, atIndex: idx });
+            this.layer = Math.min(idx, this.keymap.layers.length - 1);
+            this._afterLayerStructureChange();
+            toast(`Removed "${gone.name || idx}" — slot freed for Add layer`);
+        } catch (e) { this._layerOpError(e, 'Remove layer'); }
+    }
+
+    async restoreLayerOp() {
+        const item = this.removedLayers[this.removedLayers.length - 1];
+        if (!item) return;
+        const at = Math.min(item.atIndex, this.keymap.layers.length);
+        try {
+            const layer = await this.client.restoreLayer(item.id, at);
+            this.removedLayers.pop();
+            if (layer) {
+                this.keymap.layers.splice(at, 0, layer);
+                this.keymap.availableLayers = Math.max(0, (this.keymap.availableLayers ?? 1) - 1);
+            } else {
+                this.keymap = await this.client.getKeymap();    // defensive resync
+            }
+            this.layer = Math.min(at, this.keymap.layers.length - 1);
+            this._afterLayerStructureChange();
+            toast(`Restored "${item.name}"`);
+        } catch (e) { this._layerOpError(e, 'Restore layer'); }
+    }
+
+    async moveLayerOp(delta) {
+        const from = this.layer;
+        const to = from + delta;
+        if (to < 0 || to >= this.keymap.layers.length) return;
+        try {
+            const km = await this.client.moveLayer(from, to);
+            if (km) {
+                this.keymap = km;   // device supplied the post-move truth
+            } else {
+                const [l] = this.keymap.layers.splice(from, 1);
+                this.keymap.layers.splice(to, 0, l);
+            }
+            this.layer = to;
+            this._afterLayerStructureChange();
+        } catch (e) { this._layerOpError(e, 'Move layer'); }
     }
 
     // ---- keymap file export / import ----
@@ -558,19 +642,61 @@ export class ZmkKeymapTab {
             title: i === this.layer && !readOnly ? 'Click again to rename' : null,
         }));
         this.strip.replaceChildren(...buttons);
-        if (this.renaming && !readOnly) {
-            const input = el('input', {
-                type: 'text', value: this.currentLayer.name,
-                maxlength: this.keymap.maxLayerNameLength || 20, size: 10,
-            });
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') this.renameLayer(input.value);
-                if (e.key === 'Escape') { this.renaming = false; this.render(); }
-            });
-            input.addEventListener('blur', () => this.renameLayer(input.value));
-            this.strip.append(input);
-            queueMicrotask(() => { input.focus(); input.select(); });
+        if (!readOnly) this.strip.append(...this._stripOps());
+        if (this.renaming && !readOnly) this._appendRenameInput();
+    }
+
+    /** Layer structure controls, appended to the strip: move ◀▶, remove −,
+     * add ＋ (needs a freed slot), restore ↩ (session undo of remove). */
+    _stripOps() {
+        const avail = this.keymap.availableLayers ?? 0;
+        const ops = [
+            el('button', {
+                text: '◀', title: 'Move this layer left (lower priority)',
+                disabled: this.layer === 0,
+                onclick: () => this.moveLayerOp(-1),
+            }),
+            el('button', {
+                text: '▶', title: 'Move this layer right (higher priority)',
+                disabled: this.layer >= this.keymap.layers.length - 1,
+                onclick: () => this.moveLayerOp(1),
+            }),
+            el('button', {
+                text: '−', title: 'Remove this layer (frees a slot; undo with ↩)',
+                disabled: this.keymap.layers.length <= 1,
+                onclick: () => this.removeLayerOp(),
+            }),
+            el('button', {
+                text: '＋',
+                title: avail > 0
+                    ? `Add a layer (${avail} free slot${avail === 1 ? '' : 's'})`
+                    : 'No free slots — remove a layer first (total capacity is compiled into the firmware)',
+                disabled: avail === 0,
+                onclick: () => this.addLayerOp(),
+            }),
+        ];
+        if (this.removedLayers.length) {
+            const last = this.removedLayers[this.removedLayers.length - 1];
+            ops.push(el('button', {
+                text: '↩', title: `Restore removed layer "${last.name}"`,
+                onclick: () => this.restoreLayerOp(),
+            }));
         }
+        return ops;
+    }
+
+    _appendRenameInput() {
+        const input = el('input', {
+            type: 'text', value: this.currentLayer.name,
+            maxlength: this.keymap.maxLayerNameLength || 20, size: 10,
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.renameLayer(input.value);
+            if (e.key === 'Escape') { this.renaming = false; this.render(); }
+        });
+        input.addEventListener('blur', () => this.renameLayer(input.value));
+        this.strip.append(input);
+        queueMicrotask(() => { input.focus(); input.select(); });
     }
 
     renderBoard(readOnly = false) {

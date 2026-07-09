@@ -215,6 +215,10 @@ const KM_CHECK_UNSAVED = 3;
 const KM_SAVE_CHANGES = 4;
 const KM_DISCARD_CHANGES = 5;
 const KM_GET_PHYSICAL_LAYOUTS = 6;
+const KM_MOVE_LAYER = 8;        // MoveLayerRequest{start_index=1,dest_index=2}
+const KM_ADD_LAYER = 9;         // bool
+const KM_REMOVE_LAYER = 10;     // RemoveLayerRequest{layer_index=1}
+const KM_RESTORE_LAYER = 11;    // RestoreLayerRequest{layer_id=1,at_index=2}
 const KM_SET_LAYER_PROPS = 12;
 // keymap.Notification
 const KM_NOTIF_UNSAVED = 1;
@@ -223,6 +227,10 @@ export const SET_BINDING_ERROR_NAMES = ['OK', 'INVALID_LOCATION', 'INVALID_BEHAV
     'INVALID_PARAMETERS'];
 export const SAVE_ERROR_NAMES = ['OK', 'GENERIC', 'NOT_SUPPORTED', 'NO_SPACE'];
 export const SET_LAYER_PROPS_ERROR_NAMES = ['OK', 'GENERIC', 'INVALID_ID'];
+export const MOVE_LAYER_ERROR_NAMES = ['OK', 'GENERIC', 'INVALID_LAYER', 'INVALID_DESTINATION'];
+export const ADD_LAYER_ERROR_NAMES = ['OK', 'GENERIC', 'NO_SPACE'];
+export const REMOVE_LAYER_ERROR_NAMES = ['OK', 'GENERIC', 'INVALID_INDEX'];
+export const RESTORE_LAYER_ERROR_NAMES = ['OK', 'GENERIC', 'INVALID_ID', 'INVALID_INDEX'];
 
 // behaviors.Request/Response
 const BHV_LIST_ALL = 1;
@@ -257,22 +265,58 @@ export function decodeBinding(bytes) {
     };
 }
 
+export function decodeLayer(bytes) {
+    const lf = readFields(bytes);
+    return {
+        id: varintOf(lf, 1),
+        name: stringOf(lf, 2),
+        bindings: lf.filter((b) => b.field === 3 && b.wire === 2)
+            .map((b) => decodeBinding(b.bytes)),
+    };
+}
+
 export function decodeKeymap(bytes) {
     const f = readFields(bytes);
-    const layers = f.filter((x) => x.field === 1 && x.wire === 2).map((x) => {
-        const lf = readFields(x.bytes);
-        return {
-            id: varintOf(lf, 1),
-            name: stringOf(lf, 2),
-            bindings: lf.filter((b) => b.field === 3 && b.wire === 2)
-                .map((b) => decodeBinding(b.bytes)),
-        };
-    });
     return {
-        layers,
+        layers: f.filter((x) => x.field === 1 && x.wire === 2)
+            .map((x) => decodeLayer(x.bytes)),
         availableLayers: varintOf(f, 2),
         maxLayerNameLength: varintOf(f, 3),
     };
+}
+
+// Layer-op responses share one shape: oneof result { ok = 1; err(enum) = 2 }.
+// err is 0/absent on the ok arm; ok payload varies per op.
+
+export function decodeMoveLayerResponse(bytes) {
+    const f = readFields(bytes);
+    const err = varintOf(f, 2, 0);
+    const ok = bytesOf(f, 1);
+    // ok arm carries the FULL post-move Keymap — callers should adopt it.
+    return { err, keymap: !err && ok ? decodeKeymap(ok) : null };
+}
+
+export function decodeAddLayerResponse(bytes) {
+    const f = readFields(bytes);
+    const err = varintOf(f, 2, 0);
+    if (err) return { err, index: -1, layer: null };
+    const ok = bytesOf(f, 1);
+    if (!ok) return { err: 0, index: -1, layer: null };
+    const of = readFields(ok);      // AddLayerResponseDetails{index=1, layer=2}
+    const lb = bytesOf(of, 2);
+    return { err: 0, index: varintOf(of, 1), layer: lb ? decodeLayer(lb) : null };
+}
+
+export function decodeRemoveLayerResponse(bytes) {
+    // ok arm is an empty message — only the error matters.
+    return { err: varintOf(readFields(bytes), 2, 0) };
+}
+
+export function decodeRestoreLayerResponse(bytes) {
+    const f = readFields(bytes);
+    const err = varintOf(f, 2, 0);
+    const ok = bytesOf(f, 1);       // ok arm = the restored Layer
+    return { err, layer: !err && ok ? decodeLayer(ok) : null };
 }
 
 /** KeyPhysicalAttrs are sint32 CENTI-units on the wire — ÷100 here so the
@@ -628,6 +672,61 @@ export class StudioClient extends EventTarget {
             throw new StudioError('remote',
                 SET_LAYER_PROPS_ERROR_NAMES[code] ?? `set-layer-props error ${code}`, code);
         }
+    }
+
+    // ---- layer structure ops (all live-applied; Save persists) ----
+
+    _layerOpThrow(code, names, what) {
+        if (code !== 0) {
+            throw new StudioError('remote', `${what}: ${names[code] ?? `error ${code}`}`, code);
+        }
+    }
+
+    /** Returns the full post-move Keymap when the device supplies it (adopt
+     * it wholesale), else null (caller re-fetches or splices locally). */
+    async moveLayer(startIndex, destIndex) {
+        const inner = fBytes(KM_MOVE_LAYER, [
+            ...fVarint(1, startIndex),
+            ...fVarint(2, destIndex),
+        ]);
+        const r = await this._rpc(SUB_KEYMAP, inner);
+        const b = r.noResponse ? null : bytesOf(r.fields, KM_MOVE_LAYER);
+        if (!b) return null;
+        const { err, keymap } = decodeMoveLayerResponse(b);
+        this._layerOpThrow(err, MOVE_LAYER_ERROR_NAMES, 'Move layer');
+        return keymap?.layers?.length ? keymap : null;
+    }
+
+    /** Returns {index, layer|null}. Only succeeds when the device has free
+     * slots (available_layers > 0 — freed by remove_layer). */
+    async addLayer() {
+        const r = await this._rpc(SUB_KEYMAP, fVarint(KM_ADD_LAYER, 1, true));
+        const b = r.noResponse ? null : bytesOf(r.fields, KM_ADD_LAYER);
+        if (!b) throw new StudioError('decodeFailed', 'No add-layer result in response');
+        const { err, index, layer } = decodeAddLayerResponse(b);
+        this._layerOpThrow(err, ADD_LAYER_ERROR_NAMES, 'Add layer');
+        return { index, layer };
+    }
+
+    async removeLayer(layerIndex) {
+        const inner = fBytes(KM_REMOVE_LAYER, fVarint(1, layerIndex));
+        const r = await this._rpc(SUB_KEYMAP, inner);
+        const b = r.noResponse ? null : bytesOf(r.fields, KM_REMOVE_LAYER);
+        if (b) this._layerOpThrow(decodeRemoveLayerResponse(b).err, REMOVE_LAYER_ERROR_NAMES, 'Remove layer');
+    }
+
+    /** Restore a previously removed layer (by its stable id) at at_index. */
+    async restoreLayer(layerId, atIndex) {
+        const inner = fBytes(KM_RESTORE_LAYER, [
+            ...fVarint(1, layerId),
+            ...fVarint(2, atIndex),
+        ]);
+        const r = await this._rpc(SUB_KEYMAP, inner);
+        const b = r.noResponse ? null : bytesOf(r.fields, KM_RESTORE_LAYER);
+        if (!b) return null;
+        const { err, layer } = decodeRestoreLayerResponse(b);
+        this._layerOpThrow(err, RESTORE_LAYER_ERROR_NAMES, 'Restore layer');
+        return layer;
     }
 
     async checkUnsavedChanges() {

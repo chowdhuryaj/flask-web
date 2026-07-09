@@ -10,6 +10,8 @@ import {
     fVarint, fBytes, buildRequest,
     encodeBinding, decodeBinding, decodeKeymap, decodePhysicalLayouts,
     decodeBehaviorDetails,
+    decodeLayer, decodeMoveLayerResponse, decodeAddLayerResponse,
+    decodeRemoveLayerResponse, decodeRestoreLayerResponse,
 } from './zmk-studio.js';
 
 let checks = 0;
@@ -192,6 +194,48 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const got = decodeBehaviorDetails(new Uint8Array(msg));
     eq(got.metadata[0].param1[0], { name: 'amount', kind: 'range', min: -5, max: 5 },
         'range descriptor with negative min');
+}
+
+// ---- layer structure ops (Request fields 8-11) ----
+{
+    // shared fixture: Layer{ id: 7, name: "Sym", bindings: [{2,4,0}] }
+    const layerBytes = [
+        ...fVarint(1, 7),
+        ...fBytes(2, [...new TextEncoder().encode('Sym')]),
+        ...fBytes(3, [...fVarint(1, zigzag(2)), ...fVarint(2, 4)]),
+    ];
+    const layerObj = { id: 7, name: 'Sym', bindings: [{ behaviorId: 2, param1: 4, param2: 0 }] };
+    eq(decodeLayer(new Uint8Array(layerBytes)), layerObj, 'layer decode');
+
+    // MoveLayerResponse ok arm = full Keymap
+    const km = [...fBytes(1, layerBytes), ...fVarint(2, 3), ...fVarint(3, 20)];
+    eq(decodeMoveLayerResponse(new Uint8Array(fBytes(1, km))),
+        { err: 0, keymap: { layers: [layerObj], availableLayers: 3, maxLayerNameLength: 20 } },
+        'move-layer ok decode');
+    eq(decodeMoveLayerResponse(new Uint8Array(fVarint(2, 3))),
+        { err: 3, keymap: null }, 'move-layer INVALID_DESTINATION');
+
+    // AddLayerResponse ok arm = AddLayerResponseDetails{index=1, layer=2}
+    const details = [...fVarint(1, 6), ...fBytes(2, layerBytes)];
+    eq(decodeAddLayerResponse(new Uint8Array(fBytes(1, details))),
+        { err: 0, index: 6, layer: layerObj }, 'add-layer ok decode');
+    eq(decodeAddLayerResponse(new Uint8Array(fVarint(2, 2))),
+        { err: 2, index: -1, layer: null }, 'add-layer NO_SPACE');
+
+    // RemoveLayerResponse: ok arm is an empty message
+    eq(decodeRemoveLayerResponse(new Uint8Array(fBytes(1, []))), { err: 0 }, 'remove-layer ok');
+    eq(decodeRemoveLayerResponse(new Uint8Array(fVarint(2, 2))), { err: 2 }, 'remove-layer INVALID_INDEX');
+
+    // RestoreLayerResponse ok arm = the restored Layer
+    eq(decodeRestoreLayerResponse(new Uint8Array(fBytes(1, layerBytes))),
+        { err: 0, layer: layerObj }, 'restore-layer ok decode');
+    eq(decodeRestoreLayerResponse(new Uint8Array(fVarint(2, 1))),
+        { err: 1, layer: null }, 'restore-layer GENERIC');
+
+    // request encodings: move(1→3), remove(0 — zero index still decodes), restore(id 7 at 2)
+    eq([...fVarint(1, 1), ...fVarint(2, 3)], [0x08, 1, 0x10, 3], 'move-layer request bytes');
+    eq(fVarint(1, 0), [], 'remove-layer index 0 omitted (proto3 default)');
+    eq([...fVarint(1, 7), ...fVarint(2, 2)], [0x08, 7, 0x10, 2], 'restore-layer request bytes');
 }
 
 // ---- readFields forward compat: unknown wire 5/1 skipped ----
