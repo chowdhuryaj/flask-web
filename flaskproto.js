@@ -31,6 +31,7 @@ export const CH = {
     numWord: 0x1E, diag: 0x1F, comboLayers: 0x20, rgbMap: 0x21, display: 0x22,
     keyState: 0x23, // ZMK line v5+: pressed-position bitmap (HUD press feed)
     combos: 0x24,   // ZMK line v7+: flask_combos runtime combo slots
+    macros: 0x25,   // ZMK line v8+: flask_macros runtime macro steps
 };
 
 export const V = {
@@ -100,6 +101,12 @@ export const V = {
     // PAYLOAD-ADDRESSED byte frame [slot, pos x4 (0xFF empty), usage u32 BE]
     combosEnabled: 0x01, combosSlotCount: 0x02, combosTimeout: 0x03,
     combosSlot: 0x10,
+    // macros (0x25, ZMK line) — enabled/counts/pacing are u16; state is
+    // live-only (GET = playing slot+1 or 0; SET v>0 plays v-1, 0 stops);
+    // step is a PAYLOAD-ADDRESSED byte frame [slot, step, action, param u32 BE]
+    macrosEnabled: 0x01, macrosSlotCount: 0x02, macrosStepCount: 0x03,
+    macrosTapMs: 0x04, macrosWaitMs: 0x05, macrosState: 0x06,
+    macrosStep: 0x10,
 };
 
 // Slot value-id helpers (append-only wire ids).

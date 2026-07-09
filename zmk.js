@@ -8,7 +8,7 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=4';
+import { CH, V } from './flaskproto.js?v=5';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -41,8 +41,10 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // the flask_rgb map channel 0x21 (per-key per-layer HSV, NLKB16 wire
 // shape — dims are device-sourced via 0x02/0x03); v7 added the
 // flask_combos runtime-combo channel 0x24 (32 slots x 4 positions +
-// encoded usage output, global timeout).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 7 };
+// encoded usage output, global timeout); v8 added the flask_macros
+// runtime-macro channel 0x25 (16 slots x 16 tap/press/release/wait
+// steps, global tap/wait pacing, live play/stop).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 8 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -105,6 +107,10 @@ export function zmkCapabilities(family, version) {
         // tab (zmk-combos-tab.js). QMK devices never set this: their
         // combos are Vial dynamic entries behind caps.vial.
         combos: flask && v >= 7,
+        // flask_macros runtime macros (0x25, v8) — the ZMK-line Macros
+        // tab (zmk-macros-tab.js). QMK macros are Vial dynamic macros
+        // behind caps.vial; this flag is ZMK-only.
+        macros: flask && v >= 8,
         display: false,
         displayWidgets: false,
         bigDisplay: false,

@@ -7,16 +7,16 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=4';
-import { renderKeyboardSVG } from './keymap-tab.js?v=4';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=4';
-import { ZMK_VIDPID } from './zmk.js?v=4';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=4';
+import { el, toast, card } from './ui.js?v=5';
+import { renderKeyboardSVG } from './keymap-tab.js?v=5';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=5';
+import { ZMK_VIDPID } from './zmk.js?v=5';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=5';
 import {
     consumerUsages, kpParam, cpParam, usageFromName,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe,
-} from './zmk-keycodes.js?v=4';
+} from './zmk-keycodes.js?v=5';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so

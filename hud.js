@@ -4,9 +4,9 @@
 // HUDWindow.swift (poll cadences preserved: ~15 Hz layer/matrix, OLED
 // mirror every 4th tick).
 
-import { el } from './ui.js?v=4';
-import { CH, V, NLKB } from './flaskproto.js?v=4';
-import { renderKeyboardSVG } from './keymap-tab.js?v=4';
+import { el } from './ui.js?v=5';
+import { CH, V, NLKB } from './flaskproto.js?v=5';
+import { renderKeyboardSVG } from './keymap-tab.js?v=5';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;

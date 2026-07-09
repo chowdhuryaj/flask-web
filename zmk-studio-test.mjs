@@ -328,4 +328,46 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(COMBO_POS_NONE, 0xFF, 'combo empty position pinned');
 }
 
+// ---- flask_macros step codec (channel 0x25 payload frames) ----
+{
+    const { MACRO_ACTION, decodeMacroStep, encodeMacroStep,
+            macroIsEmpty, macroLiveSteps } = await import('./zmk-macros-codec.js');
+
+    // encode: [slot, step, action, param u32 BE]
+    eq(encodeMacroStep(2, 5, { action: MACRO_ACTION.tap, param: 0x02070004 }),
+        [2, 5, 1, 0x02, 0x07, 0x00, 0x04],
+        'macro encode tap step (LS(A))');
+    eq(encodeMacroStep(0, 0, { action: MACRO_ACTION.wait, param: 1500 }),
+        [0, 0, 4, 0x00, 0x00, 0x05, 0xDC],
+        'macro encode wait step (1500 ms)');
+    eq(encodeMacroStep(15, 15, { action: MACRO_ACTION.press, param: 0xFFFFFFFF }),
+        [15, 15, 2, 0xFF, 0xFF, 0xFF, 0xFF],
+        'macro encode press, unsigned u32 survives');
+    eq(encodeMacroStep(1, 2, { action: 9, param: 0x70004 }),
+        [1, 2, 0, 0, 0, 0, 0],
+        'macro encode normalizes unknown action to empty (param zeroed)');
+    eq(encodeMacroStep(1, 2, { action: MACRO_ACTION.empty, param: 0x70004 }),
+        [1, 2, 0, 0, 0, 0, 0],
+        'macro encode zeroes param on empty');
+
+    // decode: reassembles u32 unsigned
+    eq(decodeMacroStep([2, 5, 1, 0x02, 0x07, 0x00, 0x04]),
+        { slot: 2, step: 5, action: 1, param: 0x02070004 },
+        'macro decode round-trip');
+    eq(decodeMacroStep(new Uint8Array([0, 1, 3, 0x80, 0x07, 0x00, 0x04])).param,
+        0x80070004, 'macro decode keeps bit 31 unsigned');
+
+    // live-prefix rule mirrors the firmware (playback stops at first empty)
+    const steps = [
+        { action: MACRO_ACTION.tap, param: 0x70004 },
+        { action: MACRO_ACTION.wait, param: 100 },
+        { action: MACRO_ACTION.empty, param: 0 },
+        { action: MACRO_ACTION.tap, param: 0x70005 }, // dead — behind the empty
+    ];
+    eq(macroLiveSteps(steps).length, 2, 'live steps stop at first empty');
+    eq(macroIsEmpty(steps), false, 'macro with a live first step is not empty');
+    eq(macroIsEmpty([{ action: MACRO_ACTION.empty, param: 0 }]), true, 'empty first step = empty macro');
+    eq(macroIsEmpty([]), true, 'no steps = empty macro');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

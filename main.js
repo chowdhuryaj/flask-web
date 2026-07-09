@@ -2,34 +2,35 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast } from './ui.js?v=4';
-import { FlaskHID } from './webhid.js?v=4';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=4';
+import { el, toast } from './ui.js?v=5';
+import { FlaskHID } from './webhid.js?v=5';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=5';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState } from './zmk.js?v=4';
-import { VialClient } from './vialclient.js?v=4';
-import { parseDefinition } from './vialdef.js?v=4';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=4';
-import { capabilities } from './caps.js?v=4';
-import { setDeviceCustomKeys } from './keycodes.js?v=4';
-import { KeymapTab } from './keymap-tab.js?v=4';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=4';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=4';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=4';
-import { MouseTab } from './mouse-tab.js?v=4';
-import { TypingTab } from './typing-tab.js?v=4';
-import { SettingsTab } from './settings-tab.js?v=4';
-import { HUD } from './hud.js?v=4';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=4';
+         zmkReadKeyState } from './zmk.js?v=5';
+import { VialClient } from './vialclient.js?v=5';
+import { parseDefinition } from './vialdef.js?v=5';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=5';
+import { capabilities } from './caps.js?v=5';
+import { setDeviceCustomKeys } from './keycodes.js?v=5';
+import { KeymapTab } from './keymap-tab.js?v=5';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=5';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=5';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=5';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=5';
+import { MouseTab } from './mouse-tab.js?v=5';
+import { TypingTab } from './typing-tab.js?v=5';
+import { SettingsTab } from './settings-tab.js?v=5';
+import { HUD } from './hud.js?v=5';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=5';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot } from './offline.js?v=4';
-import { MacrosTab } from './macros-tab.js?v=4';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=4';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=4';
-import { RgbTab } from './rgb-tab.js?v=4';
-import { DisplayTab } from './display-tab.js?v=4';
-import { exportVil, importVil, downloadText } from './vil.js?v=4';
+         maybeSyncOffline, captureSnapshot } from './offline.js?v=5';
+import { MacrosTab } from './macros-tab.js?v=5';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=5';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=5';
+import { RgbTab } from './rgb-tab.js?v=5';
+import { DisplayTab } from './display-tab.js?v=5';
+import { exportVil, importVil, downloadText } from './vil.js?v=5';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -346,9 +347,11 @@ function buildTabs() {
         TABS.push({ id: 'rgb', label: 'RGB',
             ctor: isZmkFamily(app.family) ? ZmkRgbTab : RgbTab });
     }
-    // ZMK-line only: caps.combos comes from zmkCapabilities (v7+). QMK
-    // combos are Vial dynamic entries and ride caps.vial above.
+    // ZMK-line only: caps.combos/caps.macros come from zmkCapabilities
+    // (v7+/v8+). QMK combos and macros are Vial dynamic entries and ride
+    // caps.vial above.
     if (app.caps.combos) TABS.push({ id: 'zmk-combos', label: 'Combos', ctor: ZmkCombosTab });
+    if (app.caps.macros) TABS.push({ id: 'zmk-macros', label: 'Macros', ctor: ZmkMacrosTab });
     if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
     if (app.caps.vial) TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
 

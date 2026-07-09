@@ -17,17 +17,17 @@
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=4';
-import { CH, V } from './flaskproto.js?v=4';
-import { renderKeyboardSVG } from './keymap-tab.js?v=4';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=5';
+import { CH, V } from './flaskproto.js?v=5';
+import { renderKeyboardSVG } from './keymap-tab.js?v=5';
 import {
     keyboardUsages, consumerUsages, kpParam, cpParam,
     usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=4';
+} from './zmk-keycodes.js?v=5';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS,
     decodeComboSlot, encodeComboSlot, comboSlotIsEmpty,
-} from './zmk-combos-codec.js?v=4';
+} from './zmk-combos-codec.js?v=5';
 
 const MODS = [
     { bit: 0x01, glyph: '⌃', label: 'Ctrl' },
@@ -35,6 +35,84 @@ const MODS = [
     { bit: 0x04, glyph: '⌥', label: 'Alt' },
     { bit: 0x08, glyph: '⌘', label: 'GUI' },
 ];
+
+/** Modal usage picker (keycode + implicit modifiers → encoded u32). Shared
+ * by the ZMK Combos and Macros tabs — onApply(usage) fires on Apply. */
+export function pickUsage(title, currentUsage, onApply) {
+    let mods = (currentUsage >>> 24) & 0xFF;
+    const baseOf = (u) => u & 0xFFFFFF;
+    let base = baseOf(currentUsage);
+
+    const apply = () => {
+        onApply(base ? (((mods << 24) | base) >>> 0) : 0);
+        back.remove();
+    };
+
+    const preview = el('span', {
+        class: 'code',
+        style: 'font-size:1.1em; padding:4px 10px; min-width:60px; text-align:center',
+    });
+    const refreshPreview = () => {
+        const u = base ? (((mods << 24) | base) >>> 0) : 0;
+        preview.textContent = u ? usageCap(u) : '—';
+        preview.title = u ? usageLabel(u) : 'no key picked';
+    };
+
+    const modBtns = MODS.map((m) => {
+        const btn = el('button', {
+            class: 'btn small' + ((mods & m.bit) ? ' primary' : ''),
+            text: `${m.glyph} ${m.label}`,
+            title: `left ${m.label} held with the key`,
+            onclick: () => {
+                mods ^= m.bit;
+                btn.classList.toggle('primary', !!(mods & m.bit));
+                refreshPreview();
+            },
+        });
+        return btn;
+    });
+
+    const chipsWrap = el('div', {
+        style: 'display:flex; flex-wrap:wrap; gap:4px; max-height:260px; overflow-y:auto; margin-top:8px',
+    });
+    const buildChips = (filter = '') => {
+        const q = filter.trim().toLowerCase();
+        const match = (k) => !q || k.label.toLowerCase().includes(q)
+            || k.cap.toLowerCase().includes(q);
+        const chip = (k, toParam) => el('button', {
+            class: 'btn small' + (baseOf(toParam(k.code)) === base ? ' primary' : ''),
+            text: k.cap, title: k.label,
+            onclick: () => { base = baseOf(toParam(k.code)); refreshPreview(); buildChips(search.value); },
+        });
+        chipsWrap.replaceChildren(
+            ...keyboardUsages.filter(match).map((k) => chip(k, kpParam)),
+            ...consumerUsages.filter(match).map((k) => chip(k, cpParam)));
+    };
+    const search = el('input', {
+        type: 'text', placeholder: 'Search keys… (name or cap)',
+        style: 'width:100%',
+        oninput: () => {
+            const hit = usageFromName(search.value);
+            if (hit != null) { base = baseOf(hit); refreshPreview(); }
+            buildChips(search.value);
+        },
+    });
+
+    const body = el('div', {},
+        el('div', { class: 'row' },
+            el('span', { class: 'lbl', text: 'Key' }),
+            el('span', { style: 'flex:1' }), preview),
+        el('div', { style: 'display:flex; gap:6px; margin:8px 0' }, ...modBtns),
+        search, chipsWrap);
+
+    const back = modal(title, body, [
+        el('button', { class: 'btn small', text: 'Cancel', onclick: () => back.remove() }),
+        el('button', { class: 'btn small primary', text: 'Apply', onclick: apply }),
+    ]);
+    refreshPreview();
+    buildChips();
+    return back;
+}
 
 export class ZmkCombosTab {
     constructor(app) {
@@ -90,83 +168,13 @@ export class ZmkCombosTab {
         this.writeSlot(i);
     }
 
-    // ---- output picker (usage + modifiers) ----
+    // ---- output picker (usage + modifiers; shared modal above) ----
 
     pickOutput(i) {
-        const s = this.slots[i];
-        let mods = (s.usage >>> 24) & 0xFF;
-        const baseOf = (u) => u & 0xFFFFFF;
-        let base = baseOf(s.usage);
-
-        const apply = () => {
-            this.slots[i].usage = base ? (((mods << 24) | base) >>> 0) : 0;
-            back.remove();
+        pickUsage(`Combo ${i} output`, this.slots[i].usage, (usage) => {
+            this.slots[i].usage = usage;
             this.writeSlot(i);
-        };
-
-        const preview = el('span', {
-            class: 'code',
-            style: 'font-size:1.1em; padding:4px 10px; min-width:60px; text-align:center',
         });
-        const refreshPreview = () => {
-            const u = base ? (((mods << 24) | base) >>> 0) : 0;
-            preview.textContent = u ? usageCap(u) : '—';
-            preview.title = u ? usageLabel(u) : 'no output picked';
-        };
-
-        const modBtns = MODS.map((m) => {
-            const btn = el('button', {
-                class: 'btn small' + ((mods & m.bit) ? ' primary' : ''),
-                text: `${m.glyph} ${m.label}`,
-                title: `left ${m.label} held with the output`,
-                onclick: () => {
-                    mods ^= m.bit;
-                    btn.classList.toggle('primary', !!(mods & m.bit));
-                    refreshPreview();
-                },
-            });
-            return btn;
-        });
-
-        const chipsWrap = el('div', {
-            style: 'display:flex; flex-wrap:wrap; gap:4px; max-height:260px; overflow-y:auto; margin-top:8px',
-        });
-        const buildChips = (filter = '') => {
-            const q = filter.trim().toLowerCase();
-            const match = (k) => !q || k.label.toLowerCase().includes(q)
-                || k.cap.toLowerCase().includes(q);
-            const chip = (k, toParam) => el('button', {
-                class: 'btn small' + (baseOf(toParam(k.code)) === base ? ' primary' : ''),
-                text: k.cap, title: k.label,
-                onclick: () => { base = baseOf(toParam(k.code)); refreshPreview(); buildChips(search.value); },
-            });
-            chipsWrap.replaceChildren(
-                ...keyboardUsages.filter(match).map((k) => chip(k, kpParam)),
-                ...consumerUsages.filter(match).map((k) => chip(k, cpParam)));
-        };
-        const search = el('input', {
-            type: 'text', placeholder: 'Search keys… (name or cap)',
-            style: 'width:100%',
-            oninput: () => {
-                const hit = usageFromName(search.value);
-                if (hit != null) { base = baseOf(hit); refreshPreview(); }
-                buildChips(search.value);
-            },
-        });
-
-        const body = el('div', {},
-            el('div', { class: 'row' },
-                el('span', { class: 'lbl', text: 'Output' }),
-                el('span', { style: 'flex:1' }), preview),
-            el('div', { style: 'display:flex; gap:6px; margin:8px 0' }, ...modBtns),
-            search, chipsWrap);
-
-        const back = modal(`Combo ${i} output`, body, [
-            el('button', { class: 'btn small', text: 'Cancel', onclick: () => back.remove() }),
-            el('button', { class: 'btn small primary', text: 'Apply', onclick: apply }),
-        ]);
-        refreshPreview();
-        buildChips();
     }
 
     // ---- position selection ----

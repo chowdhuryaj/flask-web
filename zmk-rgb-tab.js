@@ -10,9 +10,9 @@
 // is how the physical mapping gets confirmed — paint one LED at a time
 // and watch which key lights.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=4';
-import { CH, V } from './flaskproto.js?v=4';
-import { hsvCss } from './rgb-tab.js?v=4';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=5';
+import { CH, V } from './flaskproto.js?v=5';
+import { hsvCss } from './rgb-tab.js?v=5';
 
 export class ZmkRgbTab {
     constructor(app) {
