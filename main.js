@@ -15,6 +15,7 @@ import { setDeviceCustomKeys } from './keycodes.js?v=4';
 import { KeymapTab } from './keymap-tab.js?v=4';
 import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=4';
 import { ZmkRgbTab } from './zmk-rgb-tab.js?v=4';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=4';
 import { MouseTab } from './mouse-tab.js?v=4';
 import { TypingTab } from './typing-tab.js?v=4';
 import { SettingsTab } from './settings-tab.js?v=4';
@@ -345,6 +346,9 @@ function buildTabs() {
         TABS.push({ id: 'rgb', label: 'RGB',
             ctor: isZmkFamily(app.family) ? ZmkRgbTab : RgbTab });
     }
+    // ZMK-line only: caps.combos comes from zmkCapabilities (v7+). QMK
+    // combos are Vial dynamic entries and ride caps.vial above.
+    if (app.caps.combos) TABS.push({ id: 'zmk-combos', label: 'Combos', ctor: ZmkCombosTab });
     if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
     if (app.caps.vial) TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
 

@@ -291,4 +291,41 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(bindingHover({ behaviorId: 2, param1: 3, param2: 0 }).split('\n')[0], 'Momentary Layer(Fn)', 'hover head');
 }
 
+// ---- flask_combos slot codec (channel 0x24 payload frames) ----
+{
+    const { COMBO_POS_NONE, COMBO_MAX_KEYS, decodeComboSlot, encodeComboSlot,
+            comboSlotIsEmpty } = await import('./zmk-combos-codec.js');
+
+    // encode: pads to 4 positions, usage big-endian
+    eq(encodeComboSlot(3, { positions: [12, 40], usage: 0x02070004 }),
+        [3, 12, 40, 0xFF, 0xFF, 0x02, 0x07, 0x00, 0x04],
+        'combo encode 2-key slot (LS(A))');
+    eq(encodeComboSlot(0, { positions: [], usage: 0 }),
+        [0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0],
+        'combo encode empty slot');
+    eq(encodeComboSlot(31, { positions: [1, 2, 3, 4], usage: 0xFFFFFFFF }),
+        [31, 1, 2, 3, 4, 0xFF, 0xFF, 0xFF, 0xFF],
+        'combo encode full slot, unsigned u32 survives');
+    eq(encodeComboSlot(5, { positions: [9, 8, 7, 6, 5], usage: 0x70004 }),
+        [5, 9, 8, 7, 6, 0x00, 0x07, 0x00, 0x04],
+        'combo encode drops positions beyond 4');
+
+    // decode: strips 0xFF, reassembles u32 unsigned
+    eq(decodeComboSlot([3, 12, 40, 0xFF, 0xFF, 0x02, 0x07, 0x00, 0x04]),
+        { slot: 3, positions: [12, 40], usage: 0x02070004 },
+        'combo decode round-trip');
+    eq(decodeComboSlot([7, 0xFF, 0xFF, 0xFF, 0xFF, 0x80, 0x07, 0x00, 0x04]).usage,
+        0x80070004, 'combo decode keeps bit 31 unsigned');
+    eq(decodeComboSlot(new Uint8Array([1, 2, 0xFF, 3, 0xFF, 0, 7, 0, 4])),
+        { slot: 1, positions: [2, 3], usage: 0x70004 },
+        'combo decode sparse positions + Uint8Array payload');
+
+    // live-slot rule mirrors the firmware
+    eq(comboSlotIsEmpty({ positions: [1, 2], usage: 0 }), true, 'no output = empty');
+    eq(comboSlotIsEmpty({ positions: [1], usage: 0x70004 }), true, '1 key = empty');
+    eq(comboSlotIsEmpty({ positions: [1, 2], usage: 0x70004 }), false, '2 keys + output = live');
+    eq(COMBO_MAX_KEYS, 4, 'combo max keys pinned');
+    eq(COMBO_POS_NONE, 0xFF, 'combo empty position pinned');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

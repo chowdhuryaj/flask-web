@@ -18,6 +18,6 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    port = 8137
+    port = int(os.environ.get('PORT', 8137))
     print(f'Serving flask-web at http://localhost:{port}/ (Ctrl-C to stop)')
     http.server.ThreadingHTTPServer(('127.0.0.1', port), NoCacheHandler).serve_forever()

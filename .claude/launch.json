@@ -4,8 +4,10 @@
     {
       "name": "flask-web",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["serve.py"],
-      "port": 8137
+      "runtimeArgs": [
+        "serve.py"
+      ],
+      "autoPort": true
     }
   ]
 }

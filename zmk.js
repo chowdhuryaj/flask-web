@@ -39,8 +39,10 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // (AS_DEADZONE/AS_RANGE 0x03/0x04 answer unhandled — stepped-only); v5
 // added the key-state channel 0x23 (HUD live press highlight); v6 added
 // the flask_rgb map channel 0x21 (per-key per-layer HSV, NLKB16 wire
-// shape — dims are device-sourced via 0x02/0x03).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 6 };
+// shape — dims are device-sourced via 0x02/0x03); v7 added the
+// flask_combos runtime-combo channel 0x24 (32 slots x 4 positions +
+// encoded usage output, global timeout).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 7 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -99,6 +101,10 @@ export function zmkCapabilities(family, version) {
         // flask_rgb per-key per-layer map (0x21, v6) — rendered by the
         // ZMK-line painter (zmk-rgb-tab.js), not the NLKB16 RgbTab.
         rgbMap: flask && v >= 6,
+        // flask_combos runtime combos (0x24, v7) — the ZMK-line Combos
+        // tab (zmk-combos-tab.js). QMK devices never set this: their
+        // combos are Vial dynamic entries behind caps.vial.
+        combos: flask && v >= 7,
         display: false,
         displayWidgets: false,
         bigDisplay: false,

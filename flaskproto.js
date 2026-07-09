@@ -30,6 +30,7 @@ export const CH = {
     autoscroll: 0x1A, autoMouse: 0x1B, wheelChords: 0x1C, os: 0x1D,
     numWord: 0x1E, diag: 0x1F, comboLayers: 0x20, rgbMap: 0x21, display: 0x22,
     keyState: 0x23, // ZMK line v5+: pressed-position bitmap (HUD press feed)
+    combos: 0x24,   // ZMK line v7+: flask_combos runtime combo slots
 };
 
 export const V = {
@@ -95,6 +96,10 @@ export const V = {
     // key state (0x23) — PAYLOAD-ADDRESSED byte frame (getBytes):
     // payload byte N/8 bit N%8 = key position N pressed. Read-only.
     keyStateBitmap: 0x01,
+    // combos (0x24, ZMK line) — enabled/count/timeout are u16; slot is a
+    // PAYLOAD-ADDRESSED byte frame [slot, pos x4 (0xFF empty), usage u32 BE]
+    combosEnabled: 0x01, combosSlotCount: 0x02, combosTimeout: 0x03,
+    combosSlot: 0x10,
 };
 
 // Slot value-id helpers (append-only wire ids).
