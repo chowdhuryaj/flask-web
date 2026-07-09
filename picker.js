@@ -96,16 +96,25 @@ export function buildPicker({ layerCount, onPick }) {
         });
         const layerSel = el('select', {},
             ...Array.from({ length: Math.min(layerCount, 16) }, (_, i) => el('option', { value: i, text: `L${i}` })));
+        // Toggle chips, not checkboxes — same visual as the ZMK combos tab's
+        // modifier buttons (GUI controls pass).
+        let modState = 0;
         const modChecks = MODS.map((m) => {
-            const cb = el('input', { type: 'checkbox' });
-            return { m, cb, node: el('label', {}, cb, ` ${m.label}`) };
+            const node = el('button', {
+                class: 'btn small', text: m.label, title: `hold ${m.label} with the tap key`,
+                onclick: () => {
+                    modState ^= m.bit;
+                    node.classList.toggle('primary', !!(modState & m.bit));
+                },
+            });
+            return { m, node };
         });
-        const modBits = () => modChecks.reduce((acc, { m, cb }) => acc | (cb.checked ? m.bit : 0), 0);
+        const modBits = () => modState;
         // Guard with feedback — the old silent `baseKc && …` short-circuits
         // made a missing tap key / unchecked mods look like a dead button.
         const need = (wantKc, wantMods) => {
             if (wantKc && !baseKc) { toast('Type the tap key first (e.g. A)', true); return false; }
-            if (wantMods && !modBits()) { toast('Check at least one modifier first', true); return false; }
+            if (wantMods && !modBits()) { toast('Toggle at least one modifier first', true); return false; }
             return true;
         };
         return el('div', { class: 'composer' },

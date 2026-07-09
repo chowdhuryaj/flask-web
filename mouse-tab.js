@@ -189,9 +189,10 @@ export class MouseTab {
                 sliderRow({ label: 'Threshold (counts)', min: 0, max: 60, step: 1,
                     value: await g(CH.autoMouse, V.amThreshold),
                     onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }),
-                sliderRow({ label: 'Target layer', min: 0, max: this.app.layerCount - 1, step: 1,
-                    value: await g(CH.autoMouse, V.amLayer),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amLayer, v) }),
+                selectRow({ label: 'Target layer', value: await g(CH.autoMouse, V.amLayer),
+                    options: Array.from({ length: this.app.layerCount }, (_, i) =>
+                        ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` })),
+                    onChange: (v) => flask.setU16(CH.autoMouse, V.amLayer, Number(v)) }),
                 saveBar(() => flask.save(CH.autoMouse)));
             cardsRow.append(am);
         }

@@ -874,10 +874,15 @@ export function buildZmkPicker({ keyPressId, onPick }) {
                     editors.push(input);
                     readers.push(() => usageFromName(input.value));
                 } else if (range) {
+                    // Bounded param from behavior metadata → slider + live value
+                    // (GUI controls pass: no bare number boxes for bounded ints).
+                    const val = el('span', { class: 'val', text: String(Math.max(0, range.min)) });
                     const input = el('input', {
-                        type: 'number', min: range.min, max: range.max, value: Math.max(0, range.min), size: 6,
+                        type: 'range', min: range.min, max: range.max, value: Math.max(0, range.min),
+                        title: `${range.min}–${range.max}`,
                     });
-                    editors.push(input);
+                    input.addEventListener('input', () => { val.textContent = input.value; });
+                    editors.push(input, val);
                     readers.push(() => Number(input.value) | 0);
                 } else {
                     const input = el('input', { type: 'number', value: 0, size: 6 });

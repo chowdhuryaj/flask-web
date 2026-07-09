@@ -104,9 +104,10 @@ export class TypingTab {
                 sliderRow({ label: 'Idle timeout (ms)', hint: '0 = never', min: 0, max: 30000, step: 500,
                     value: await g(CH.numWord, V.nwTimeout),
                     onChange: (v) => flask.setU16(CH.numWord, V.nwTimeout, v) }),
-                sliderRow({ label: 'Target layer', min: 0, max: 15, step: 1,
-                    value: await g(CH.numWord, V.nwLayer),
-                    onChange: (v) => flask.setU16(CH.numWord, V.nwLayer, v) }),
+                selectRow({ label: 'Target layer', value: await g(CH.numWord, V.nwLayer),
+                    options: Array.from({ length: this.app.layerCount || 16 }, (_, i) =>
+                        ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` })),
+                    onChange: (v) => flask.setU16(CH.numWord, V.nwLayer, Number(v)) }),
                 saveBar(() => flask.save(CH.numWord))));
         }
 
