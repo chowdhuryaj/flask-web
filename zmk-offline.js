@@ -139,6 +139,11 @@ function buildBehaviorCatalog() {
     add('Swapper', nil);
     add('Num Word', layer());
     add('Leader Key', nil);
+    // Smart one-shot/hold round (2026-07-10): hold-tap wrapping sticky —
+    // same two-param shape Studio reports for Mod-Tap / Layer-Tap.
+    add('Smart Mod', usage('Hold (mod)'), usage('Tap'));
+    add('Smart Layer', layer(), usage('Tap'));
+    add('Sticky Mod (smart)', usage('Key'));
     return catalog;
 }
 

@@ -197,6 +197,12 @@ const BEHAVIOR_ABBREV = new Map([
     ['Soft Off', 'Off'],
     ['RGB Underglow', 'RGB'],
     ['Backlight', 'BL'],
+    // Imprint smart one-shot/hold round (2026-07-10). Explicit entries:
+    // the initials fallback would give Smart Layer 'SL' — colliding with
+    // Sticky Layer — and 'Sticky Mod (smart)' the unreadable 'SM('.
+    ['Smart Mod', 'SM'],
+    ['Smart Layer', 'SmL'],
+    ['Sticky Mod (smart)', 'SkM'],
 ]);
 
 function abbrevName(displayName) {

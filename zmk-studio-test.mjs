@@ -290,6 +290,11 @@ eq(zigzag(1), 2, 'zigzag(1)');
             param1: [{ name: 'layer', kind: 'layer_id' }],
             param2: [{ name: 'key', kind: 'hid_usage', keyboardMax: 0xFF, consumerMax: 0x3FF }] }] }],
         [4, { id: 4, displayName: 'Transparent', metadata: [] }],
+        [5, { id: 5, displayName: 'Smart Layer', metadata: [{
+            param1: [{ name: 'layer', kind: 'layer_id' }],
+            param2: [{ name: 'key', kind: 'hid_usage', keyboardMax: 0xFF, consumerMax: 0x3FF }] }] }],
+        [6, { id: 6, displayName: 'Sticky Layer', metadata: [{
+            param1: [{ name: 'layer', kind: 'layer_id' }], param2: [] }] }],
     ]);
     setZmkContext({ behaviors, layers: [{ id: 0, name: 'Base' }, { id: 3, name: 'Fn' }] });
 
@@ -298,6 +303,10 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(bindingCap({ behaviorId: 3, param1: 0, param2: kpParam(0x2C) }), 'LT·Base·Spc', 'lt cap layer+key');
     eq(bindingCap({ behaviorId: 4, param1: 0, param2: 0 }), '▽', 'transparent glyph');
     eq(bindingCap({ behaviorId: 99, param1: 0, param2: 0 }), '#99', 'unknown behavior renders id');
+    // Smart one-shot/hold abbrevs: explicit entries keep Smart Layer off
+    // Sticky Layer's 'SL'.
+    eq(bindingCap({ behaviorId: 5, param1: 3, param2: kpParam(0x2C) }), 'SmL·Fn·Spc', 'smart layer cap distinct');
+    eq(bindingCap({ behaviorId: 6, param1: 3, param2: 0 }), 'SL·Fn', 'sticky layer keeps SL');
     eq(bindingHover({ behaviorId: 2, param1: 3, param2: 0 }).split('\n')[0], 'Momentary Layer(Fn)', 'hover head');
 }
 
