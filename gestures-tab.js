@@ -3,9 +3,9 @@
 // Both slot families fire via tap_code16 in firmware — basic keycodes and
 // C()/S()/A()/G() combos only; no macros, layer keys, or QK_KB customs.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=8';
-import { kcCell, makePickerHost } from './picker.js?v=8';
-import { CH, V, slot, GESTURE_DIRS, GESTURE_SETS, WC_BUTTONS } from './flaskproto.js?v=8';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=9';
+import { kcCell, makePickerHost } from './picker.js?v=9';
+import { CH, V, slot, GESTURE_DIRS, GESTURE_SETS, WC_BUTTONS } from './flaskproto.js?v=9';
 
 const TAPPABLE = (kc) => kc > 0 && kc <= 0x1FFF; // basic + QK_MODS range
 const TAP_NOTE = 'Gesture/chord slots fire via tap_code16 — basic keys + modifier combos only';

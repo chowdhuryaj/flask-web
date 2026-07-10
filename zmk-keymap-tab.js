@@ -7,18 +7,18 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=8';
-import { renderKeyboardSVG } from './keymap-tab.js?v=8';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=8';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=8';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=8';
-import { ZMK_VIDPID } from './zmk.js?v=8';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=8';
+import { el, toast, card } from './ui.js?v=9';
+import { renderKeyboardSVG } from './keymap-tab.js?v=9';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=9';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=9';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=9';
+import { ZMK_VIDPID } from './zmk.js?v=9';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=9';
 import {
-    consumerUsages, kpParam, cpParam, usageFromName,
+    consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe,
-} from './zmk-keycodes.js?v=8';
+} from './zmk-keycodes.js?v=9';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -670,9 +670,19 @@ export class ZmkKeymapTab {
             file.value = '';
             if (f) this.importKeymap(f);
         });
+        // Type-to-assign: while armed, physical keypresses assign to the
+        // selected key (and auto-advance) instead of reaching the browser —
+        // preventDefault at window capture phase keeps ⌘S/⌘W/Tab etc from
+        // firing. Esc disarms. Modifier-only presses assign the bare mod;
+        // mod+key assigns the modified usage (ZMK implicit-mod bits).
+        const capture = el('button', { class: 'btn small', text: '⌨ Type-to-assign' });
+        capture.addEventListener('click', () => this._setCapture(!this._captureOn, capture));
+        this._captureBtn = capture;
+
         const bar = el('div', { class: 'savebar', style: 'margin: 0 0 10px' },
             save, discard, note,
             el('span', { style: 'flex:1' }),
+            capture,
             el('button', {
                 class: 'btn small', text: 'Export…',
                 title: 'Download the current keymap (incl. unsaved edits) as a JSON file',
@@ -692,6 +702,62 @@ export class ZmkKeymapTab {
         };
         this._updateSaveBar();
         return bar;
+    }
+
+    _setCapture(on, btn = this._captureBtn) {
+        if (this._captureHandler) {
+            window.removeEventListener('keydown', this._captureHandler, true);
+            this._captureHandler = null;
+        }
+        if (this._captureUpHandler) {
+            window.removeEventListener('keyup', this._captureUpHandler, true);
+            this._captureUpHandler = null;
+        }
+        this._captureOn = on;
+        if (btn) {
+            btn.classList.toggle('primary', on);
+            btn.textContent = on ? '⌨ Capturing… (Esc stops)' : '⌨ Type-to-assign';
+        }
+        if (!on) return;
+        if (this.keyPressId == null) {
+            toast('This firmware exposes no Key Press behavior', true);
+            this._setCapture(false, btn);
+            return;
+        }
+        let modPending = null; // mod pressed, waiting: solo release = bare mod
+        this._captureHandler = (e) => {
+            // Auto-disarm if the user navigated away — never swallow keys
+            // while another tab is showing.
+            if (!this.root.closest('.panel.active')) { this._setCapture(false); return; }
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.repeat) return;
+            if (e.key === 'Escape') { this._setCapture(false); return; }
+            const param = eventToUsageParam(e);
+            if (param == null) return;
+            if ((param & 0xFFFF) >= 0xE0) {
+                // Modifier down: don't assign yet — it may be a chord prefix
+                // (⌃ on the way to ⌃C). Solo release assigns the bare mod.
+                modPending = { code: e.code, param };
+                return;
+            }
+            modPending = null; // consumed as a chord
+            if (this.selected == null) { toast('Click a key on the board first'); return; }
+            this.assign({ behaviorId: this.keyPressId, param1: param, param2: 0 });
+        };
+        this._captureUpHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (modPending && e.code === modPending.code) {
+                if (this.selected != null) {
+                    this.assign({ behaviorId: this.keyPressId, param1: modPending.param, param2: 0 });
+                }
+                modPending = null;
+            }
+        };
+        window.addEventListener('keydown', this._captureHandler, true);
+        window.addEventListener('keyup', this._captureUpHandler, true);
+        toast('Type-to-assign armed — press keys to fill the selected position; Esc stops');
     }
 
     renderStrip(readOnly = false) {

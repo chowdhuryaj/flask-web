@@ -255,8 +255,18 @@ eq(zigzag(1), 2, 'zigzag(1)');
 {
     const {
         kpParam, cpParam, usageParts, usageCap, usageFromName,
-        setZmkContext, bindingCap, bindingHover,
+        setZmkContext, bindingCap, bindingHover, eventToUsageParam,
     } = await import('./zmk-keycodes.js?v=4');
+
+    // type-to-assign capture: KeyboardEvent.code → usage param
+    eq(eventToUsageParam({ code: 'KeyA' }), 0x00070004, 'eventToUsage KeyA');
+    eq(eventToUsageParam({ code: 'Digit0' }), 0x00070027, 'eventToUsage Digit0');
+    eq(eventToUsageParam({ code: 'F13' }), 0x00070068, 'eventToUsage F13');
+    eq(eventToUsageParam({ code: 'Numpad5' }), 0x0007005D, 'eventToUsage Numpad5');
+    eq(eventToUsageParam({ code: 'KeyC', ctrlKey: true }), 0x01070006, 'eventToUsage ⌃C chord');
+    eq(eventToUsageParam({ code: 'KeyC', ctrlKey: true, shiftKey: true }), 0x03070006, 'eventToUsage ⌃⇧C');
+    eq(eventToUsageParam({ code: 'ShiftLeft', shiftKey: true }), 0x000700E1, 'bare modifier assigns unmodified');
+    eq(eventToUsageParam({ code: 'MediaWeirdKey' }), null, 'unknown code → null');
 
     eq(kpParam(0x04), 0x00070004, 'kpParam(A)');
     eq(cpParam(0xE9), 0x000C00E9, 'cpParam(Vol+)');

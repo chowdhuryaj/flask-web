@@ -17,17 +17,17 @@
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=8';
-import { CH, V } from './flaskproto.js?v=8';
-import { renderKeyboardSVG } from './keymap-tab.js?v=8';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=9';
+import { CH, V } from './flaskproto.js?v=9';
+import { renderKeyboardSVG } from './keymap-tab.js?v=9';
 import {
     keyboardUsages, consumerUsages, kpParam, cpParam,
     usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=8';
+} from './zmk-keycodes.js?v=9';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS,
     decodeComboSlot, encodeComboSlot, comboSlotIsEmpty,
-} from './zmk-combos-codec.js?v=8';
+} from './zmk-combos-codec.js?v=9';
 
 const MODS = [
     { bit: 0x01, glyph: '⌃', label: 'Ctrl' },

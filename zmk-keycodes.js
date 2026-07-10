@@ -8,7 +8,7 @@
 // vocabulary is HID usages: param = (page << 16) | id, with implicit
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=8';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=9';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;
@@ -64,6 +64,51 @@ function modGlyphs(mods) {
 }
 
 const hexU = (v, w = 4) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(w, '0');
+
+// KeyboardEvent.code → HID keyboard-page usage id (HUT 1.5 §10), for the
+// keymap editor's type-to-assign capture. Physical-position codes, layout
+// independent — exactly what a keymap wants.
+const EVENT_CODE_TO_USAGE = (() => {
+    const m = new Map();
+    for (let i = 0; i < 26; i++) m.set(`Key${String.fromCharCode(65 + i)}`, 0x04 + i);
+    for (let i = 1; i <= 9; i++) m.set(`Digit${i}`, 0x1D + i);
+    m.set('Digit0', 0x27);
+    const rest = {
+        Enter: 0x28, Escape: 0x29, Backspace: 0x2A, Tab: 0x2B, Space: 0x2C,
+        Minus: 0x2D, Equal: 0x2E, BracketLeft: 0x2F, BracketRight: 0x30,
+        Backslash: 0x31, Semicolon: 0x33, Quote: 0x34, Backquote: 0x35,
+        Comma: 0x36, Period: 0x37, Slash: 0x38, CapsLock: 0x39,
+        PrintScreen: 0x46, ScrollLock: 0x47, Pause: 0x48,
+        Insert: 0x49, Home: 0x4A, PageUp: 0x4B, Delete: 0x4C, End: 0x4D, PageDown: 0x4E,
+        ArrowRight: 0x4F, ArrowLeft: 0x50, ArrowDown: 0x51, ArrowUp: 0x52,
+        NumLock: 0x53, NumpadDivide: 0x54, NumpadMultiply: 0x55,
+        NumpadSubtract: 0x56, NumpadAdd: 0x57, NumpadEnter: 0x58, NumpadDecimal: 0x63,
+        IntlBackslash: 0x64, ContextMenu: 0x65, IntlRo: 0x87, IntlYen: 0x89,
+        ControlLeft: 0xE0, ShiftLeft: 0xE1, AltLeft: 0xE2, MetaLeft: 0xE3,
+        ControlRight: 0xE4, ShiftRight: 0xE5, AltRight: 0xE6, MetaRight: 0xE7,
+    };
+    for (const [k, v] of Object.entries(rest)) m.set(k, v);
+    for (let i = 1; i <= 12; i++) m.set(`F${i}`, 0x39 + i);
+    for (let i = 13; i <= 24; i++) m.set(`F${i}`, 0x68 + (i - 13));
+    for (let i = 1; i <= 9; i++) m.set(`Numpad${i}`, 0x58 + i);
+    m.set('Numpad0', 0x62);
+    return m;
+})();
+
+/** KeyboardEvent → usage param for type-to-assign, or null when the physical
+ * key has no HID equivalent. Held modifiers ride the implicit-mod bits UNLESS
+ * the captured key is itself a modifier (assign the bare mod key then). */
+export function eventToUsageParam(e) {
+    const id = EVENT_CODE_TO_USAGE.get(e.code);
+    if (id == null) return null;
+    if (id >= 0xE0) return kpParam(id); // bare modifier key
+    let mods = 0;
+    if (e.ctrlKey) mods |= 0x01;
+    if (e.shiftKey) mods |= 0x02;
+    if (e.altKey) mods |= 0x04;
+    if (e.metaKey) mods |= 0x08;
+    return ((mods << 24) | kpParam(id)) >>> 0;
+}
 
 /** Short keycap text for a usage param. Unknowns render as page:id hex —
  * readable, never a crash. */

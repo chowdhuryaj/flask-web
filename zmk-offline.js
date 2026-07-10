@@ -19,15 +19,15 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=8';
-import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=8';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=8';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=8';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=8';
-import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=8';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=8';
+import { CH, V } from './flaskproto.js?v=9';
+import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=9';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=9';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=9';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=9';
+import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=9';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=9';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=8';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=9';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 

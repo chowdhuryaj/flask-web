@@ -4,9 +4,9 @@
 // HUDWindow.swift (poll cadences preserved: ~15 Hz layer/matrix, OLED
 // mirror every 4th tick).
 
-import { el } from './ui.js?v=8';
-import { CH, V, NLKB } from './flaskproto.js?v=8';
-import { renderKeyboardSVG } from './keymap-tab.js?v=8';
+import { el } from './ui.js?v=9';
+import { CH, V, NLKB } from './flaskproto.js?v=9';
+import { renderKeyboardSVG } from './keymap-tab.js?v=9';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;
@@ -141,8 +141,25 @@ export class HUD {
                 // concept, polled whenever the device offers it.
                 this._applyPressed(await app.readKeyState());
             }
+            const tick = this._tick++;
+            // Live-action chips at ~4 Hz (every 4th tick, cheap GETs):
+            // autoscroll level (0x1A/0x05 signed; QMK + ZMK share the id)
+            // and flask_macros playback (0x25/0x06, ZMK line).
+            if ((tick % 4) === 1 && (app.caps.autoscroll || app.caps.macros)) {
+                const status = {};
+                if (app.caps.autoscroll) {
+                    status.autoscroll = await app.flask.getI16(CH.autoscroll, V.asState);
+                }
+                if (app.caps.macros) {
+                    status.macro = await app.flask.getU16(CH.macros, V.macrosState);
+                }
+                if (JSON.stringify(status) !== JSON.stringify(this._liveStatus)) {
+                    this._liveStatus = status;
+                    this.renderStatus();
+                }
+            }
             // NLKB16 OLED mirror at ~4 Hz (every 4th tick).
-            if (app.caps.displayMirror && (this._tick++ % 4) === 0) {
+            if (app.caps.displayMirror && (tick % 4) === 0) {
                 const lines = [];
                 for (let line = 0; line < NLKB.bigLines; line++) {
                     const r = await app.flask.getBytes(CH.display, V.dispLine, [line]);
@@ -182,6 +199,7 @@ export class HUD {
         this.stripEl = el('div', { class: 'layer-strip' });
         this.boardEl = el('div', { class: 'kb-wrap' });
         this.oledEl = el('div', { class: 'mono', style: 'margin-top:4px' });
+        this.statusEl = el('div', { style: 'display:flex; gap:6px; margin-top:2px; min-height:0' });
         this.lockEl = el('button', { class: 'btn small' });
         this.hintEl = el('span', { class: 'hint' });
         this.lockEl.addEventListener('click', () => this.app.onHudLockClick?.());
@@ -191,7 +209,24 @@ export class HUD {
                 el('span', { style: 'flex:1' }),
                 this.lockEl,
                 el('button', { class: 'btn small', text: '✕', onclick: () => this.close() })),
-            this.stripEl, this.boardEl, this.oledEl, this.hintEl);
+            this.stripEl, this.boardEl, this.oledEl, this.statusEl, this.hintEl);
+    }
+
+    /** Live-action chips: what the firmware is DOING right now (autoscroll
+     * level, macro playback). Empty div when idle. */
+    renderStatus() {
+        const s = this._liveStatus ?? {};
+        const chips = [];
+        if (s.autoscroll) {
+            const dir = s.autoscroll > 0 ? '▼' : '▲';
+            chips.push(el('span', { class: 'pill',
+                text: `${dir} autoscroll ${Math.abs(s.autoscroll)}` }));
+        }
+        if (s.macro) {
+            chips.push(el('span', { class: 'pill',
+                text: `▶ macro ${s.macro - 1} playing` }));
+        }
+        this.statusEl.replaceChildren(...chips);
     }
 
     render() {

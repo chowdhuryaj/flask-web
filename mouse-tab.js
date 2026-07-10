@@ -3,11 +3,53 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=8';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=9';
 import { CH, V, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
-         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=8';
+         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=9';
 
 const pct = (v) => (v / 100).toFixed(2);
+
+/**
+ * Live acceleration-curve plot. Draws the firmware's exact sigmoid —
+ * factor(v) = 1 − (1−m) / (1 + e^(k·(v−s)))^(g/k), params wire÷100
+ * (input_processor_flask_accel.c / QMK pd_accel.c) — over the pointer
+ * velocity range the sensor produces (counts/ms after CPI normalization).
+ * Returns an <svg> with .update(patch) so the sliders repaint it live.
+ */
+export function accelCurve(initial) {
+    const W = 300, H = 120, PAD = 26;
+    const VMAX = 8; // counts/ms after 1000/cpi normalization — flick territory
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.style.cssText = 'width:100%; max-width:340px; display:block';
+
+    const p = { ...initial };
+    const draw = () => {
+        const k = p.takeoff / 100, g = p.growth / 100, s = p.offset / 100, m = p.limit / 100;
+        const factor = (v) => {
+            const base = 1 + Math.exp(Math.min(k * (v - s), 80)); // overflow guard
+            return 1 - (1 - m) / Math.pow(base, k > 0 ? g / k : 0);
+        };
+        const x = (v) => PAD + (v / VMAX) * (W - PAD - 6);
+        const y = (f) => H - 16 - (f / 1.05) * (H - 26);
+        let d = '';
+        for (let i = 0; i <= 100; i++) {
+            const v = (i / 100) * VMAX;
+            d += `${i ? 'L' : 'M'}${x(v).toFixed(1)},${y(factor(v)).toFixed(1)}`;
+        }
+        svg.innerHTML = `
+            <line x1="${PAD}" y1="${y(0)}" x2="${W - 6}" y2="${y(0)}" stroke="currentColor" stroke-opacity="0.25"/>
+            <line x1="${PAD}" y1="${y(0)}" x2="${PAD}" y2="${y(1)}" stroke="currentColor" stroke-opacity="0.25"/>
+            <line x1="${PAD}" y1="${y(1)}" x2="${W - 6}" y2="${y(1)}" stroke="currentColor" stroke-opacity="0.18" stroke-dasharray="3 3"/>
+            <text x="${PAD - 4}" y="${y(1) + 3}" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.6">1.0</text>
+            <text x="${PAD - 4}" y="${y(0) + 3}" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.6">0</text>
+            <text x="${(PAD + W) / 2}" y="${H - 4}" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.6">pointer speed →</text>
+            <path d="${d}" fill="none" stroke="var(--accent, #4a9eff)" stroke-width="1.8"/>`;
+    };
+    draw();
+    svg.update = (patch) => { Object.assign(p, patch); draw(); };
+    return svg;
+}
 
 export class MouseTab {
     constructor(app) {
@@ -24,21 +66,35 @@ export class MouseTab {
 
         // ---- acceleration ----
         if (caps.accel) {
+        const curveInit = {
+            takeoff: await g(CH.accel, V.accelTakeoff),
+            growth: await g(CH.accel, V.accelGrowth),
+            offset: await flask.getI16(CH.accel, V.accelOffset),
+            limit: await g(CH.accel, V.accelLimit),
+        };
+        const curve = accelCurve(curveInit);
+        // Slider writes repaint the curve with the firmware's clamp echo.
+        const wr = (key, write) => async (v) => {
+            const echoed = await write(v);
+            curve.update({ [key]: echoed ?? v });
+            return echoed;
+        };
         const accel = card('Acceleration', 'sigmoid curve (drashna pd_accel)',
             toggleRow({ label: 'Enabled', value: await g(CH.accel, V.accelEnabled),
                 onChange: (v) => flask.setU16(CH.accel, V.accelEnabled, v ? 1 : 0) }),
+            curve,
             sliderRow({ label: 'Takeoff', hint: 'curve steepness', min: 50, max: 1000, step: 5,
-                value: await g(CH.accel, V.accelTakeoff), format: pct,
-                onChange: (v) => flask.setU16(CH.accel, V.accelTakeoff, v) }),
+                value: curveInit.takeoff, format: pct,
+                onChange: wr('takeoff', (v) => flask.setU16(CH.accel, V.accelTakeoff, v)) }),
             sliderRow({ label: 'Growth rate', min: 0, max: 200, step: 1,
-                value: await g(CH.accel, V.accelGrowth), format: pct,
-                onChange: (v) => flask.setU16(CH.accel, V.accelGrowth, v) }),
+                value: curveInit.growth, format: pct,
+                onChange: wr('growth', (v) => flask.setU16(CH.accel, V.accelGrowth, v)) }),
             sliderRow({ label: 'Offset', hint: 'signed midpoint shift', min: -1000, max: 1000, step: 10,
-                value: await flask.getI16(CH.accel, V.accelOffset), format: pct,
-                onChange: (v) => flask.setI16(CH.accel, V.accelOffset, v) }),
+                value: curveInit.offset, format: pct,
+                onChange: wr('offset', (v) => flask.setI16(CH.accel, V.accelOffset, v)) }),
             sliderRow({ label: 'Limit', hint: 'max multiplier', min: 0, max: 100, step: 1,
-                value: await g(CH.accel, V.accelLimit), format: pct,
-                onChange: (v) => flask.setU16(CH.accel, V.accelLimit, v) }),
+                value: curveInit.limit, format: pct,
+                onChange: wr('limit', (v) => flask.setU16(CH.accel, V.accelLimit, v)) }),
             saveBar(() => flask.save(CH.accel)));
         cardsRow.append(accel);
         }
