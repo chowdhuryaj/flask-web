@@ -8,7 +8,7 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=7';
+import { CH, V } from './flaskproto.js?v=8';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -46,8 +46,11 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // pacing, live play/stop); v9 (parity round) added flask_accel 0x10 (QMK
 // wire shape), flask_scrollsnap 0x26, the rgbmap effect engine values
 // 0x04-0x08, and the combos keys-per-slot RO value 0x04 (capacities are
-// Kconfig now — slot/step/keys counts are always device-sourced).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 9 };
+// Kconfig now — slot/step/keys counts are always device-sourced); v10
+// added flask_leader 0x19 (runtime position sequences, slot frame 0x50)
+// and flask_gestures 0x11 (runtime sets, QMK-shared ratchet/active-set
+// ids, slot frame 0x50) — both fire typed outputs (usage tap/macro slot).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 10 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -91,7 +94,11 @@ export function zmkCapabilities(family, version) {
         dragWindow: false,
         dragInvertX: false,
         dragRescue: false,
-        gestures: false,    // keymap-level (kot149/zmk-mouse-gesture)
+        // flask_gestures runtime sets (0x11, v10) — the ZMK-line Gestures
+        // tab (zmk-gestures-tab.js; QMK families' cap routes their own tab).
+        gestures: flask && v >= 10,
+        // flask_leader runtime sequences (0x19, v10) — ZMK-line Leader tab.
+        leader: flask && v >= 10,
         wiggle: false,
         autoMouse: false,   // keymap-level (zip_temp_layer)
         wheelChords: false,

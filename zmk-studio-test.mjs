@@ -391,7 +391,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 9, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, 10, 'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
@@ -491,6 +491,71 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const back = decodeComboSlot(wide, 8);
     eq(back.positions.join(','), '10,20,30', 'v9 round-trip positions');
     eq(back.usage, 0x70004, 'v9 round-trip usage');
+}
+
+// ---- typed-output codecs: leader + gestures (zmk-output-codec.js) ----
+{
+    const { encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty,
+            encodeGestureSlot, decodeGestureSlot, OUTPUT_ACTION } =
+        await import('./zmk-output-codec.js');
+
+    const lf = encodeLeaderSlot(2, { positions: [13, 14], action: 1, param: 0x70004 }, 8);
+    eq(lf.length, 14, 'leader frame = seq + 8 pos + action + u32');
+    const lb = decodeLeaderSlot(lf, 8);
+    eq(lb.positions.join(','), '13,14', 'leader round-trip preserves ORDER');
+    eq(lb.action, 1, 'leader round-trip action');
+    eq(lb.param, 0x70004, 'leader round-trip param');
+    // Sequences are the leading prefix: a hole ends the decode.
+    const holed = decodeLeaderSlot([0, 5, 0xFF, 9, ...new Array(11).fill(0xFF)], 8);
+    eq(holed.positions.join(','), '5', 'leader decode stops at the first empty');
+    eq(leaderSlotIsEmpty({ positions: [3], action: OUTPUT_ACTION.none }), true,
+        'no output = empty sequence');
+    eq(leaderSlotIsEmpty({ positions: [3], action: OUTPUT_ACTION.macro, param: 2 }), false,
+        'macro output = live sequence');
+
+    const gf = encodeGestureSlot(3, 6, { action: 2, param: 5 });
+    eq(gf.length, 7, 'gesture frame = set + dir + action + u32');
+    const gb = decodeGestureSlot(gf);
+    eq([gb.set, gb.dir, gb.action, gb.param].join(','), '3,6,2,5', 'gesture round-trip');
+}
+
+// ---- v10 sim: leader + gesture channels ----
+{
+    const { createZmkTemplate, ZmkOfflineFlask, zmkPendingCount, zmkClearDirty } =
+        await import('./zmk-offline.js');
+    const { CH, V } = await import('./flaskproto.js');
+    const { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot } =
+        await import('./zmk-output-codec.js');
+
+    const ws = createZmkTemplate('imprint');
+    eq(ws.protocolVersion, 10, 'template speaks v10');
+    const flask = new ZmkOfflineFlask(ws);
+    eq(await flask.getU16(CH.leader, V.leaderSlotCount), 16, 'sim leader slots');
+    eq(await flask.getU16(CH.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
+    eq(await flask.getU16(CH.leader, V.leaderTimeout), 1000, 'sim leader timeout default');
+    eq(await flask.getU16(CH.gestures, V.gesturesSetCount), 8, 'sim gesture sets');
+    eq(await flask.getU16(CH.gestures, V.gesturesRatchetStep), 150, 'sim ratchet default');
+
+    // Firmware-seeded defaults: set 0 East = Right Arrow (0x7004F).
+    const east = decodeGestureSlot(await flask.getBytes(CH.gestures, V.gesturesSlot, [0, 0]));
+    eq(east.action, 1, 'set 0 East seeds a usage output');
+    eq(east.param, 0x7004F, 'set 0 East = Right Arrow');
+    // Set 3 West = ^⇧Tab (mods 0x03 << 24 | 0x7002B).
+    const w3 = decodeGestureSlot(await flask.getBytes(CH.gestures, V.gesturesSlot, [3, 4]));
+    eq(w3.param >>> 0, ((0x03 << 24) | 0x7002B) >>> 0, 'set 3 West = Ctrl-Shift-Tab');
+
+    // Writes journal + normalize + echo.
+    const le = await flask.setBytes(CH.leader, V.leaderSlot,
+        encodeLeaderSlot(0, { positions: [12, 200, 13], action: 9, param: 7 }, 8));
+    const lb = decodeLeaderSlot(le, 8);
+    eq(lb.positions.join(','), '12,13', 'sim drops off-board leader positions');
+    eq(lb.action, 0, 'sim normalizes unknown leader action to none');
+    const ge = await flask.setBytes(CH.gestures, V.gesturesSlot,
+        encodeGestureSlot(1, 1, { action: 2, param: 4 }));
+    eq(decodeGestureSlot(ge).param, 4, 'sim gesture write echoes');
+    eq(zmkPendingCount(ws), 2, 'leader + gesture edits journal');
+    zmkClearDirty(ws);
+    eq(zmkPendingCount(ws), 0, 'clear drops v10 extras too');
 }
 
 // ---- RGB painter LED → key geometry mapping (zmk-rgb-tab.js) ----

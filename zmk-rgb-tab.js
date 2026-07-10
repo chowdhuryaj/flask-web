@@ -15,10 +15,10 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=7';
-import { CH, V } from './flaskproto.js?v=7';
-import { hsvCss } from './rgb-tab.js?v=7';
-import { renderKeyboardSVG } from './keymap-tab.js?v=7';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=8';
+import { CH, V } from './flaskproto.js?v=8';
+import { hsvCss } from './rgb-tab.js?v=8';
+import { renderKeyboardSVG } from './keymap-tab.js?v=8';
 
 /**
  * LED index → key mapping over the physical layout: the central (left) half

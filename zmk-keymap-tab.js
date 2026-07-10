@@ -7,17 +7,17 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=7';
-import { renderKeyboardSVG } from './keymap-tab.js?v=7';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=7';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=7';
-import { ZMK_VIDPID } from './zmk.js?v=7';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=7';
+import { el, toast, card } from './ui.js?v=8';
+import { renderKeyboardSVG } from './keymap-tab.js?v=8';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=8';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=8';
+import { ZMK_VIDPID } from './zmk.js?v=8';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=8';
 import {
     consumerUsages, kpParam, cpParam, usageFromName,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe,
-} from './zmk-keycodes.js?v=7';
+} from './zmk-keycodes.js?v=8';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so

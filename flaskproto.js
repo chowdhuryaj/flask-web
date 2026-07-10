@@ -43,8 +43,12 @@ export const V = {
     // accel (x100-scaled floats on the wire; offset is SIGNED)
     accelEnabled: 0x01, accelTakeoff: 0x02, accelGrowth: 0x03,
     accelOffset: 0x04, accelLimit: 0x05,
-    // gestures
+    // gestures — 0x01/0x02 shared with QMK; 0x03/0x04/0x50 are ZMK-line
+    // v10 additions (flask_gestures: typed-output slot frames at 0x50,
+    // clear of the QMK families' u16 slot table 0x10-0x4F)
     gesturesRatchetStep: 0x01, gesturesActiveSet: 0x02,
+    gesturesEnabled: 0x03, gesturesSetCount: 0x04,
+    gesturesSlot: 0x50,
     // wiggle
     wiggleInterval: 0x01, wiggleCooldown: 0x02, wiggleThreshold: 0x03,
     wiggleEnabled: 0x04, wiggleAction: 0x05, wiggleSet: 0x06, wiggleSource: 0x07,
@@ -66,8 +70,12 @@ export const V = {
     selectWordMac: 0x01,
     // sentence case
     sentenceCaseEnabled: 0x01,
-    // leader
-    leaderTimeout: 0x01, // NLKB16 fw v5+: live timeout ms, clamped 100..2000
+    // leader — 0x01 shared with QMK (NLKB16 fw v5+: live timeout ms);
+    // 0x02-0x04/0x50 are ZMK-line v10 additions (flask_leader: typed-output
+    // sequence frames at 0x50, clear of QMK's u16 slot table 0x10-0x4D)
+    leaderTimeout: 0x01,
+    leaderSlotCount: 0x02, leaderKeys: 0x03, leaderEnabled: 0x04,
+    leaderSlot: 0x50,
     // autoscroll
     asInverted: 0x01, asSpeedScale: 0x02, asDeadzone: 0x03, asRange: 0x04,
     asState: 0x05,     // live: GET signed level / ±100 jogging; SET force-stops

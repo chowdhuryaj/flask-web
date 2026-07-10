@@ -19,13 +19,15 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=7';
-import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=7';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=7';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=7';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=7';
-import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=7';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=7';
+import { CH, V } from './flaskproto.js?v=8';
+import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=8';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=8';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=8';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=8';
+import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=8';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=8';
+import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=8';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -33,13 +35,38 @@ const IMPRINT = {
     positions: 70,
     rgbLayers: 10,
     rgbLeds: 70,
-    // v9 Kconfig defaults (capacities are device-sourced on real hardware;
-    // these seed the sim's RO count answers).
+    // v9/v10 Kconfig defaults (capacities are device-sourced on real
+    // hardware; these seed the sim's RO count answers).
     comboSlots: 64,
     comboKeys: 8,
     macroSlots: 32,
     macroSteps: 32,
+    leaderSlots: 16,
+    leaderKeys: 8,
+    gestureSets: 8,
 };
+
+// Firmware-seeded default gesture sets (input_processor_flask_gestures.c
+// gesture_set_defaults): E SE S SW W NW N NE. kb page 0x07, consumer 0x0C;
+// mods bits 24-31 (LCTL 0x01, LSFT 0x02).
+const KB = (id) => ((0x07 << 16) | id) >>> 0;
+const CONS = (id) => ((0x0C << 16) | id) >>> 0;
+const CTL = (u) => ((0x01 << 24) | u) >>> 0;
+const CTLSFT = (u) => ((0x03 << 24) | u) >>> 0;
+const GU = (param) => ({ action: 1, param });
+const GN = () => ({ action: 0, param: 0 });
+const GESTURE_SET_DEFAULTS = [
+    [GU(KB(0x4F)), GN(), GU(KB(0x51)), GN(), GU(KB(0x50)), GN(), GU(KB(0x52)), GN()],
+    [GU(KB(0x4C)), GN(), GU(KB(0x28)), GN(), GU(KB(0x2A)), GN(), GU(KB(0x29)), GN()],
+    [GU(CONS(0xB5)), GN(), GU(CONS(0xEA)), GN(), GU(CONS(0xB6)), GN(), GU(CONS(0xE9)), GN()],
+    [GU(CTL(KB(0x2B))), GN(), GU(KB(0x2C)), GN(), GU(CTLSFT(KB(0x2B))), GN(), GU(KB(0x2B)), GN()],
+];
+
+function defaultGestureSets() {
+    return Array.from({ length: IMPRINT.gestureSets }, (_, s) =>
+        Array.from({ length: 8 }, (_, d) =>
+            GESTURE_SET_DEFAULTS[s]?.[d] ? { ...GESTURE_SET_DEFAULTS[s][d] } : GN()));
+}
 
 // 70 key positions, transform order (Cyboard-ZMK config/info.json — the
 // same file the real imprint_physical_layout was generated from).
@@ -260,6 +287,12 @@ function seedImprintTunables(tun) {
     seed(CH.rgbMap, V.rgbmapEffectHue, 0);
     seed(CH.rgbMap, V.rgbmapEffectSat, 255);
     seed(CH.rgbMap, V.rgbmapEffectVal, 120);
+    // v10: leader + gestures firmware defaults
+    seed(CH.leader, V.leaderEnabled, 1);
+    seed(CH.leader, V.leaderTimeout, 1000);
+    seed(CH.gestures, V.gesturesEnabled, 1);
+    seed(CH.gestures, V.gesturesRatchetStep, 150);
+    seed(CH.gestures, V.gesturesActiveSet, 0);
 }
 
 export function createZmkTemplate(family) {
@@ -305,16 +338,21 @@ export function createZmkTemplate(family) {
                 Array.from({ length: IMPRINT.macroSteps }, () => ({ action: MACRO_ACTION.empty, param: 0 }))),
             rgb: Array.from({ length: IMPRINT.rgbLayers }, () =>
                 Array.from({ length: IMPRINT.rgbLeds }, () => [0, 0, 0])),
+            leader: Array.from({ length: IMPRINT.leaderSlots },
+                () => ({ positions: [], action: 0, param: 0 })),
+            gestures: defaultGestureSets(),
         },
-        zmkDirty: { combo: {}, macroStep: {} },
+        zmkDirty: { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {} },
     };
 }
 
 /** Older stored ZMK workspaces: fill fields added later (append-only). */
 export function normalizeZmkWorkspace(ws) {
-    ws.zmkDirty ??= { combo: {}, macroStep: {} };
+    ws.zmkDirty ??= { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {} };
     ws.zmkDirty.combo ??= {};
     ws.zmkDirty.macroStep ??= {};
+    ws.zmkDirty.leaderSlot ??= {};
+    ws.zmkDirty.gestureSlot ??= {};
     if (ws.zmk) {
         ws.zmk.pendingKeymap ??= null;
         // The preview tracks the app's expected protocol — a stored older
@@ -338,6 +376,17 @@ export function normalizeZmkWorkspace(ws) {
                 slot.push({ action: MACRO_ACTION.empty, param: 0 });
             }
         }
+        // v10: leader + gesture tables (gestures seed the firmware defaults
+        // — the device ships sets 0-3 populated).
+        ws.zmk.leader ??= Array.from({ length: IMPRINT.leaderSlots },
+            () => ({ positions: [], action: 0, param: 0 }));
+        while (ws.zmk.leader.length < IMPRINT.leaderSlots) {
+            ws.zmk.leader.push({ positions: [], action: 0, param: 0 });
+        }
+        ws.zmk.gestures ??= defaultGestureSets();
+        while (ws.zmk.gestures.length < IMPRINT.gestureSets) {
+            ws.zmk.gestures.push(Array.from({ length: 8 }, () => ({ action: 0, param: 0 })));
+        }
     }
     return ws;
 }
@@ -346,12 +395,14 @@ export function zmkPendingCount(ws) {
     const d = ws.zmkDirty;
     if (!d) return 0;
     return Object.keys(d.combo).length + Object.keys(d.macroStep).length
+        + Object.keys(d.leaderSlot ?? {}).length
+        + Object.keys(d.gestureSlot ?? {}).length
         + (ws.zmk?.pendingKeymap ? 1 : 0);
 }
 
 /** Drop everything ZMK-shaped queued for replay (the banner's Discard). */
 export function zmkClearDirty(ws) {
-    ws.zmkDirty = { combo: {}, macroStep: {} };
+    ws.zmkDirty = { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {} };
     if (ws.zmk) ws.zmk.pendingKeymap = null;
     saveWorkspace(ws);
 }
@@ -379,6 +430,9 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.macros && id === V.macrosSlotCount) return this.ws.zmk.macros.length;
         if (ch === CH.macros && id === V.macrosStepCount) return this.ws.zmk.macros[0].length;
         if (ch === CH.macros && id === V.macrosState) return 0; // never "playing"
+        if (ch === CH.leader && id === V.leaderSlotCount) return this.ws.zmk.leader.length;
+        if (ch === CH.leader && id === V.leaderKeys) return IMPRINT.leaderKeys;
+        if (ch === CH.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
         return super.getU16(ch, id);
     }
 
@@ -409,6 +463,16 @@ export class ZmkOfflineFlask extends OfflineFlask {
             const [m, s] = payload;
             const step = zmk.macros[m]?.[s] ?? { action: MACRO_ACTION.empty, param: 0 };
             return encodeMacroStep(m, s, step);
+        }
+        if (ch === CH.leader && id === V.leaderSlot) {
+            const seq = payload[0] ?? 0;
+            const s = zmk.leader[seq] ?? { positions: [], action: 0, param: 0 };
+            return encodeLeaderSlot(seq, s, IMPRINT.leaderKeys);
+        }
+        if (ch === CH.gestures && id === V.gesturesSlot) {
+            const [set, dir] = payload;
+            const o = zmk.gestures[set]?.[dir] ?? { action: 0, param: 0 };
+            return encodeGestureSlot(set, dir, o);
         }
         return new Array(29).fill(0);
     }
@@ -456,6 +520,29 @@ export class ZmkOfflineFlask extends OfflineFlask {
             this.ws.zmkDirty.macroStep[`${step.slot},${step.step}`] = true;
             saveWorkspace(this.ws);
             return encodeMacroStep(step.slot, step.step, norm);
+        }
+        if (ch === CH.leader && id === V.leaderSlot) {
+            const d = decodeLeaderSlot(payload, IMPRINT.leaderKeys);
+            if (!zmk.leader[d.seq]) return payload;
+            // Firmware normalization: valid board positions, leading prefix,
+            // unknown actions empty.
+            const positions = d.positions
+                .filter((p) => p >= 0 && p < IMPRINT.positions)
+                .slice(0, IMPRINT.leaderKeys);
+            const action = d.action > 2 ? 0 : d.action;
+            zmk.leader[d.seq] = { positions, action, param: action ? d.param : 0 };
+            this.ws.zmkDirty.leaderSlot[d.seq] = true;
+            saveWorkspace(this.ws);
+            return encodeLeaderSlot(d.seq, zmk.leader[d.seq], IMPRINT.leaderKeys);
+        }
+        if (ch === CH.gestures && id === V.gesturesSlot) {
+            const d = decodeGestureSlot(payload);
+            if (!zmk.gestures[d.set] || d.dir > 7) return payload;
+            const action = d.action > 2 ? 0 : d.action;
+            zmk.gestures[d.set][d.dir] = { action, param: action ? d.param : 0 };
+            this.ws.zmkDirty.gestureSlot[`${d.set},${d.dir}`] = true;
+            saveWorkspace(this.ws);
+            return encodeGestureSlot(d.set, d.dir, zmk.gestures[d.set][d.dir]);
         }
         return payload;
     }
@@ -669,6 +756,29 @@ export async function zmkSyncExtras(app, ws) {
         } catch (e) { fail.push(`macro ${key}: ${e.message}`); }
     }
     if (touched) { try { await app.flask.save(CH.macros); } catch { /* keep */ } }
+
+    touched = false;
+    for (const seq of Object.keys(ws.zmkDirty.leaderSlot)) {
+        try {
+            await app.flask.setBytes(CH.leader, V.leaderSlot,
+                encodeLeaderSlot(Number(seq), ws.zmk.leader[seq], IMPRINT.leaderKeys));
+            delete ws.zmkDirty.leaderSlot[seq];
+            applied++; touched = true;
+        } catch (e) { fail.push(`leader ${seq}: ${e.message}`); }
+    }
+    if (touched) { try { await app.flask.save(CH.leader); } catch { /* keep */ } }
+
+    touched = false;
+    for (const key of Object.keys(ws.zmkDirty.gestureSlot)) {
+        const [set, dir] = key.split(',').map(Number);
+        try {
+            await app.flask.setBytes(CH.gestures, V.gesturesSlot,
+                encodeGestureSlot(set, dir, ws.zmk.gestures[set][dir]));
+            delete ws.zmkDirty.gestureSlot[key];
+            applied++; touched = true;
+        } catch (e) { fail.push(`gesture ${key}: ${e.message}`); }
+    }
+    if (touched) { try { await app.flask.save(CH.gestures); } catch { /* keep */ } }
 
     // A queued keymap can't apply here — Studio RPC needs its own serial
     // connect (user gesture) + physical unlock. Stash the workspace; the
