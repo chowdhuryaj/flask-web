@@ -11,6 +11,7 @@ import { el, toast, card } from './ui.js?v=8';
 import { renderKeyboardSVG } from './keymap-tab.js?v=8';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=8';
 import { zmkApplyPendingKeymap } from './zmk-offline.js?v=8';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=8';
 import { ZMK_VIDPID } from './zmk.js?v=8';
 import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=8';
 import {
@@ -434,11 +435,11 @@ export class ZmkKeymapTab {
 
     // ---- keymap file export / import ----
 
-    exportKeymap() {
+    async exportKeymap() {
         const behaviors = zmkBehaviors();
         const data = {
             kind: 'flask-zmk-keymap',
-            version: 1,
+            version: 2,
             device: this.deviceName,
             exported: new Date().toISOString(),
             layers: this.keymap.layers.map((l) => ({
@@ -453,6 +454,17 @@ export class ZmkKeymapTab {
                 })),
             })),
         };
+        // v2: full-device backup — tunables + RGB map/effect + every runtime
+        // slot table ride along (the ZMK .vil equivalent; a re-flash wipes
+        // the settings partition, this file restores it).
+        if (this.app?.flask && this.app?.caps?.flask) {
+            try {
+                toast('Reading module state…');
+                data.flask = await exportFlaskState(this.app);
+            } catch (e) {
+                toast(`Module state skipped: ${e.message}`, true);
+            }
+        }
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = el('a', {
             href: URL.createObjectURL(blob),
@@ -460,7 +472,7 @@ export class ZmkKeymapTab {
         });
         a.click();
         URL.revokeObjectURL(a.href);
-        toast('Keymap exported');
+        toast(data.flask ? 'Keymap + module state exported' : 'Keymap exported');
     }
 
     async importKeymap(file) {
@@ -472,6 +484,20 @@ export class ZmkKeymapTab {
             return;
         }
         await this.applyKeymapData(data);
+        // v2 files carry module state (tunables/RGB/slot tables) — apply it
+        // through the Flask channels + SAVE. Auto-sync's queued keymaps never
+        // carry this section (module edits ride their own journals).
+        if (data?.flask && this.app?.flask && this.app?.caps?.flask) {
+            try {
+                toast('Applying module state…');
+                const { applied, failures } = await applyFlaskState(this.app, data.flask);
+                toast(failures.length
+                    ? `Module state: ${applied} writes, ${failures.length} sections failed (${failures[0]})`
+                    : `Module state restored: ${applied} writes, saved`, failures.length > 0);
+            } catch (e) {
+                toast(`Module state failed: ${e.message}`, true);
+            }
+        }
     }
 
     /** Core applier for export-shaped keymap JSON — used by Import… and by

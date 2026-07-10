@@ -558,6 +558,53 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(zmkPendingCount(ws), 0, 'clear drops v10 extras too');
 }
 
+// ---- full-device export/import round trip (zmk-export.js) ----
+{
+    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js');
+    const { zmkCapabilities } = await import('./zmk.js');
+    const { exportFlaskState, applyFlaskState } = await import('./zmk-export.js');
+    const { CH, V } = await import('./flaskproto.js');
+    const { encodeComboSlot } = await import('./zmk-combos-codec.js');
+    const { encodeLeaderSlot } = await import('./zmk-output-codec.js');
+
+    const mkApp = () => {
+        const ws = createZmkTemplate('imprint');
+        return { ws, flask: new ZmkOfflineFlask(ws),
+            caps: zmkCapabilities('imprint', ws.protocolVersion),
+            protocolVersion: ws.protocolVersion };
+    };
+
+    // Device A: make it distinctive.
+    const a = mkApp();
+    await a.flask.setU16(CH.scrollSnap, V.snapThreshold, 80);
+    await a.flask.setBytes(CH.rgbMap, V.rgbmapLed, [1, 7, 10, 20, 30]);
+    await a.flask.setBytes(CH.combos, V.combosSlot,
+        encodeComboSlot(5, { positions: [10, 11], usage: 0x70005 }, 8));
+    await a.flask.setBytes(CH.leader, V.leaderSlot,
+        encodeLeaderSlot(3, { positions: [12, 13], action: 2, param: 4 }, 8));
+    await a.flask.setU16(CH.gestures, V.gesturesActiveSet, 2);
+
+    const state = await exportFlaskState(a);
+    eq(state.scrollSnap.threshold, 80, 'export carries snap threshold');
+    eq(state.rgb.map[1][7].join(','), '10,20,30', 'export carries the RGB map');
+    eq(state.combos.slots[5].usage, 0x70005, 'export carries combo slots');
+    eq(state.leader.slots[3].action, 2, 'export carries leader slots');
+    eq(state.gestures.activeSet, 2, 'export carries the active gesture set');
+    eq(state.gestures.sets[0][0].param, 0x7004F, 'export carries seeded gesture sets');
+
+    // Device B (fresh): import restores everything.
+    const b = mkApp();
+    const { applied, failures } = await applyFlaskState(b, state);
+    eq(failures.length, 0, 'import applies with no failures');
+    eq(applied > 700, true, 'import writes the full surface (map + slots + knobs)');
+    eq(await b.flask.getU16(CH.scrollSnap, V.snapThreshold), 80, 'import restored snap');
+    const led = await b.flask.getBytes(CH.rgbMap, V.rgbmapLed, [1, 7]);
+    eq([led[2], led[3], led[4]].join(','), '10,20,30', 'import restored the RGB map');
+    eq(await b.flask.getU16(CH.gestures, V.gesturesActiveSet), 2, 'import restored active set');
+    const b5 = await b.flask.getBytes(CH.combos, V.combosSlot, [5]);
+    eq(b5[1], 10, 'import restored combo positions');
+}
+
 // ---- RGB painter LED → key geometry mapping (zmk-rgb-tab.js) ----
 {
     const { ledKeyOrder } = await import('./zmk-rgb-tab.js');
