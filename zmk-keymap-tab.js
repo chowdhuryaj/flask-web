@@ -191,10 +191,15 @@ export class ZmkKeymapTab {
     async _applyQueuedOfflineKeymap() {
         if (this.app?.zmkStudioSim || !this.app?.zmkQueuedWs) return;
         try {
-            const res = await zmkApplyPendingKeymap(this.app,
-                (data) => this.applyKeymapData(data, { quiet: true }));
+            // Save INSIDE the consume callback: the queue only clears after
+            // apply AND persist both landed — a saveChanges throw leaves it
+            // queued (so "still queued" below is never a lie).
+            const res = await zmkApplyPendingKeymap(this.app, async (data) => {
+                const r = await this.applyKeymapData(data, { quiet: true });
+                if (r && !r.stopped && (r.wrote || r.renamed)) await this.saveChanges();
+                return r;
+            });
             if (!res || res.stopped) return;    // locked/partial: stays queued, applier toasted
-            if (res.wrote || res.renamed) await this.saveChanges();
             toast(`Offline keymap applied: ${res.wrote} keys, ${res.renamed} renamed — saved to keyboard`);
         } catch (e) {
             toast(`Offline keymap sync failed: ${e.message} — still queued`, true);

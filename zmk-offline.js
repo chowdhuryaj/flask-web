@@ -134,6 +134,8 @@ function buildBehaviorCatalog() {
     add('Flask Autoscroll', constants([['Up', 0], ['Down', 1], ['Stop', 2]]));
     add('Flask RGB', constants([['Toggle', 0], ['On', 1], ['Off', 2]]));
     add('Flask Macro', range('Macro slot', 0, IMPRINT.macroSlots - 1));
+    add('Flask Leader', nil);
+    add('Flask Gesture', range('Gesture set (255 = active)', 0, 255));
     add('Swapper', nil);
     add('Num Word', layer());
     add('Leader Key', nil);
@@ -211,7 +213,7 @@ function buildDefaultLayers() {
 
     const mouse = [
         ...trRow(12), ...trRow(12),
-        ...row(TR(), MO(4), NO(), MB(2), MB(1), MB(3),
+        ...row(TR(), MO(4), bind(B['Flask Gesture'], 255), MB(2), MB(1), MB(3),
             MB(3), MB(1), MB(2), TR(), TR(), TR()),
         ...trRow(12), ...trRow(10), ...trRow(6), ...trRow(6),
     ];
