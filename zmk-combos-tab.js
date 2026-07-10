@@ -2,7 +2,7 @@
 // UI copies nickcoutsos/keymap-editor's combos mode: one card per combo
 // with the output binding as a keycap tile on the left and a mini board on
 // the right with the combo's key positions highlighted; click keys on the
-// mini board to toggle membership (up to 4), click the tile to pick the
+// mini board to toggle membership (device keys-per-slot), click the tile to pick the
 // output. "Add New Combo" takes the first free slot; trash empties it.
 //
 // Differences from Coutsos (compile-time .keymap editing) by design:
@@ -17,17 +17,17 @@
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=6';
-import { CH, V } from './flaskproto.js?v=6';
-import { renderKeyboardSVG } from './keymap-tab.js?v=6';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=7';
+import { CH, V } from './flaskproto.js?v=7';
+import { renderKeyboardSVG } from './keymap-tab.js?v=7';
 import {
     keyboardUsages, consumerUsages, kpParam, cpParam,
     usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=6';
+} from './zmk-keycodes.js?v=7';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS,
     decodeComboSlot, encodeComboSlot, comboSlotIsEmpty,
-} from './zmk-combos-codec.js?v=6';
+} from './zmk-combos-codec.js?v=7';
 
 const MODS = [
     { bit: 0x01, glyph: '⌃', label: 'Ctrl' },
@@ -126,10 +126,14 @@ export class ZmkCombosTab {
         this.enabled = await flask.getU16(CH.combos, V.combosEnabled);
         this.slotCount = await flask.getU16(CH.combos, V.combosSlotCount);
         this.timeout = await flask.getU16(CH.combos, V.combosTimeout);
+        // Keys per slot sizes the wire frame — RO value on v9+; v7/v8
+        // firmware answers unhandled (0) and is fixed at 4.
+        this.maxKeys = (this.app.caps?.combosKeys
+            && await flask.getU16(CH.combos, V.combosKeys)) || COMBO_MAX_KEYS;
         this.slots = [];
         for (let i = 0; i < this.slotCount; i++) {
             const r = await flask.getBytes(CH.combos, V.combosSlot, [i]);
-            this.slots.push(decodeComboSlot(r));
+            this.slots.push(decodeComboSlot(r, this.maxKeys));
         }
         this.render();
     }
@@ -137,8 +141,8 @@ export class ZmkCombosTab {
     async writeSlot(i) {
         try {
             const r = await this.app.flask.setBytes(CH.combos, V.combosSlot,
-                encodeComboSlot(i, this.slots[i]));
-            this.slots[i] = decodeComboSlot(r); // adopt the echo (normalized)
+                encodeComboSlot(i, this.slots[i], this.maxKeys));
+            this.slots[i] = decodeComboSlot(r, this.maxKeys); // adopt the echo (normalized)
         } catch (e) {
             toast(`Combo write failed: ${e.message}`, true);
         }
@@ -163,8 +167,8 @@ export class ZmkCombosTab {
         const s = this.slots[i];
         const at = s.positions.indexOf(pos);
         if (at >= 0) s.positions.splice(at, 1);
-        else if (s.positions.length < COMBO_MAX_KEYS) s.positions.push(pos);
-        else { toast(`Combos take up to ${COMBO_MAX_KEYS} keys`, true); return; }
+        else if (s.positions.length < this.maxKeys) s.positions.push(pos);
+        else { toast(`Combos take up to ${this.maxKeys} keys`, true); return; }
         this.writeSlot(i);
     }
 

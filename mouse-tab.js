@@ -3,9 +3,9 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=6';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=7';
 import { CH, V, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
-         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=6';
+         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=7';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -96,6 +96,36 @@ export class MouseTab {
                 value: await g(CH.smoothing, V.smoothingTimeout),
                 onChange: (v) => flask.setU16(CH.smoothing, V.smoothingTimeout, v) }),
             saveBar(() => flask.save(CH.smoothing))));
+        }
+
+        // ---- scroll axis snap/lock ----
+        // ZMK line v9+ (flask_scrollsnap, channel 0x26): snaps slightly
+        // diagonal ball rolls onto the dominant scroll axis and can lock
+        // that axis. Caps-driven like every card here — QMK families never
+        // set caps.scrollSnap (no QMK equivalent channel).
+        if (caps.scrollSnap) {
+        cardsRow.append(card('Scroll snap', 'axis snap + lock on the scroll ball',
+            toggleRow({ label: 'Enabled', value: await g(CH.scrollSnap, V.snapEnabled),
+                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapEnabled, v ? 1 : 0) }),
+            sliderRow({ label: 'Snap strength', hint: '% of motion an axis needs to win — lower snaps sooner',
+                min: 50, max: 99, step: 1, value: await g(CH.scrollSnap, V.snapThreshold),
+                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapThreshold, v) }),
+            sliderRow({ label: 'Decision window', hint: 'wheel events sampled before deciding',
+                min: 1, max: 32, step: 1, value: await g(CH.scrollSnap, V.snapSamples),
+                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapSamples, v) }),
+            sliderRow({ label: 'Instant-snap motion', hint: '0 = always wait for the window',
+                min: 0, max: 200, step: 5, value: await g(CH.scrollSnap, V.snapImmediate),
+                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapImmediate, v) }),
+            sliderRow({ label: 'Axis lock (ms)', hint: 'hold the winning axis this long; 0 = off',
+                min: 0, max: 2000, step: 50, value: await g(CH.scrollSnap, V.snapLockMs),
+                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapLockMs, v) }),
+            sliderRow({ label: 'Axis lock (events)', hint: 'or for this many events; 0 = off',
+                min: 0, max: 100, step: 1, value: await g(CH.scrollSnap, V.snapLockEvents),
+                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapLockEvents, v) }),
+            sliderRow({ label: 'Idle reset (ms)', hint: 'pause that clears window + lock; 0 = off',
+                min: 0, max: 2000, step: 50, value: await g(CH.scrollSnap, V.snapIdleReset),
+                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapIdleReset, v) }),
+            saveBar(() => flask.save(CH.scrollSnap))));
         }
 
         // ---- drag scroll ----

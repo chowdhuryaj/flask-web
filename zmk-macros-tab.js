@@ -15,14 +15,14 @@
 // Playback stops at the first empty step, so the editor keeps live steps
 // compacted: deleting a row shifts the tail up and rewrites the suffix.
 
-import { el, card, sliderRow, toggleRow, saveBar, toast } from './ui.js?v=6';
-import { CH, V } from './flaskproto.js?v=6';
-import { usageCap, usageLabel } from './zmk-keycodes.js?v=6';
-import { pickUsage } from './zmk-combos-tab.js?v=6';
+import { el, card, sliderRow, toggleRow, saveBar, toast } from './ui.js?v=7';
+import { CH, V } from './flaskproto.js?v=7';
+import { usageCap, usageLabel } from './zmk-keycodes.js?v=7';
+import { pickUsage } from './zmk-combos-tab.js?v=7';
 import {
     MACRO_ACTION, MACRO_ACTION_LABELS,
     decodeMacroStep, encodeMacroStep, macroIsEmpty, macroLiveSteps,
-} from './zmk-macros-codec.js?v=6';
+} from './zmk-macros-codec.js?v=7';
 
 export class ZmkMacrosTab {
     constructor(app) {

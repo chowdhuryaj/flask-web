@@ -19,13 +19,13 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=6';
-import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=6';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=6';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=6';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=6';
-import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=6';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=6';
+import { CH, V } from './flaskproto.js?v=7';
+import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=7';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=7';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=7';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=7';
+import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=7';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=7';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -33,9 +33,12 @@ const IMPRINT = {
     positions: 70,
     rgbLayers: 10,
     rgbLeds: 70,
-    comboSlots: 32,
-    macroSlots: 16,
-    macroSteps: 16,
+    // v9 Kconfig defaults (capacities are device-sourced on real hardware;
+    // these seed the sim's RO count answers).
+    comboSlots: 64,
+    comboKeys: 8,
+    macroSlots: 32,
+    macroSteps: 32,
 };
 
 // 70 key positions, transform order (Cyboard-ZMK config/info.json — the
@@ -222,15 +225,11 @@ function buildDefaultLayers() {
 // ---------------------------------------------------------------------------
 // Template workspace
 
-export function createZmkTemplate(family) {
-    if (family !== 'imprint') throw new Error(`no ZMK template for family "${family}"`);
-    const layers = buildDefaultLayers();
-    const keymap = { layers, availableLayers: 0, maxLayerNameLength: 20 };
-    const version = ZMK_EXPECTED_PROTOCOL[family];
-
-    // Firmware defaults, so the tuning cards open with real values.
-    const tun = {};
-    const seed = (ch, id, val) => { tun[`${ch}:${id}`] = { op: 'u16', val }; };
+/** Firmware-default tunable values, set-if-absent so a stored older
+ * workspace picks up ids added by later protocol versions without
+ * clobbering the user's saved values. */
+function seedImprintTunables(tun) {
+    const seed = (ch, id, val) => { tun[`${ch}:${id}`] ??= { op: 'u16', val }; };
     seed(CH.autoscroll, V.asInverted, 0);
     seed(CH.autoscroll, V.asSpeedScale, 100);
     seed(CH.autoscroll, V.asStopOnKey, 1);
@@ -240,6 +239,38 @@ export function createZmkTemplate(family) {
     seed(CH.macros, V.macrosEnabled, 1);
     seed(CH.macros, V.macrosTapMs, 30);
     seed(CH.macros, V.macrosWaitMs, 15);
+    // v9: accel (flask_accel firmware defaults — boots disabled, drashna
+    // curve params x100; offset is SIGNED but the default is positive)
+    seed(CH.accel, V.accelEnabled, 0);
+    seed(CH.accel, V.accelTakeoff, 200);
+    seed(CH.accel, V.accelGrowth, 25);
+    seed(CH.accel, V.accelOffset, 220);
+    seed(CH.accel, V.accelLimit, 20);
+    // v9: scroll snap (flask_scrollsnap DT defaults)
+    seed(CH.scrollSnap, V.snapEnabled, 1);
+    seed(CH.scrollSnap, V.snapThreshold, 63);
+    seed(CH.scrollSnap, V.snapSamples, 8);
+    seed(CH.scrollSnap, V.snapImmediate, 25);
+    seed(CH.scrollSnap, V.snapLockMs, 250);
+    seed(CH.scrollSnap, V.snapLockEvents, 0);
+    seed(CH.scrollSnap, V.snapIdleReset, 300);
+    // v9: rgb effect engine (firmware boot state — off, mid speed, teal-ish)
+    seed(CH.rgbMap, V.rgbmapEffect, 0);
+    seed(CH.rgbMap, V.rgbmapEffectSpeed, 128);
+    seed(CH.rgbMap, V.rgbmapEffectHue, 0);
+    seed(CH.rgbMap, V.rgbmapEffectSat, 255);
+    seed(CH.rgbMap, V.rgbmapEffectVal, 120);
+}
+
+export function createZmkTemplate(family) {
+    if (family !== 'imprint') throw new Error(`no ZMK template for family "${family}"`);
+    const layers = buildDefaultLayers();
+    const keymap = { layers, availableLayers: 0, maxLayerNameLength: 20 };
+    const version = ZMK_EXPECTED_PROTOCOL[family];
+
+    // Firmware defaults, so the tuning cards open with real values.
+    const tun = {};
+    seedImprintTunables(tun);
 
     return {
         v: 1, key: family, family,
@@ -284,7 +315,30 @@ export function normalizeZmkWorkspace(ws) {
     ws.zmkDirty ??= { combo: {}, macroStep: {} };
     ws.zmkDirty.combo ??= {};
     ws.zmkDirty.macroStep ??= {};
-    if (ws.zmk) ws.zmk.pendingKeymap ??= null;
+    if (ws.zmk) {
+        ws.zmk.pendingKeymap ??= null;
+        // The preview tracks the app's expected protocol — a stored older
+        // workspace "gets a firmware update" on load: version bumps and
+        // newly-added tunable ids seed their firmware defaults (existing
+        // saved values untouched).
+        const expected = ZMK_EXPECTED_PROTOCOL[ws.family] ?? ws.protocolVersion;
+        if ((ws.protocolVersion ?? 0) < expected) ws.protocolVersion = expected;
+        ws.tunables ??= {};
+        seedImprintTunables(ws.tunables);
+        // v9 capacity bumps: pad stored pre-v9 workspaces up to the new
+        // slot/step counts (append-only — existing content untouched).
+        while (ws.zmk.combos.length < IMPRINT.comboSlots) {
+            ws.zmk.combos.push({ positions: [], usage: 0 });
+        }
+        while (ws.zmk.macros.length < IMPRINT.macroSlots) {
+            ws.zmk.macros.push([]);
+        }
+        for (const slot of ws.zmk.macros) {
+            while (slot.length < IMPRINT.macroSteps) {
+                slot.push({ action: MACRO_ACTION.empty, param: 0 });
+            }
+        }
+    }
     return ws;
 }
 
@@ -321,6 +375,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
         if (ch === CH.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
         if (ch === CH.combos && id === V.combosSlotCount) return this.ws.zmk.combos.length;
+        if (ch === CH.combos && id === V.combosKeys) return IMPRINT.comboKeys;
         if (ch === CH.macros && id === V.macrosSlotCount) return this.ws.zmk.macros.length;
         if (ch === CH.macros && id === V.macrosStepCount) return this.ws.zmk.macros[0].length;
         if (ch === CH.macros && id === V.macrosState) return 0; // never "playing"
@@ -348,7 +403,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.combos && id === V.combosSlot) {
             const slot = payload[0] ?? 0;
             const s = zmk.combos[slot] ?? { positions: [], usage: 0 };
-            return encodeComboSlot(slot, s);
+            return encodeComboSlot(slot, s, IMPRINT.comboKeys);
         }
         if (ch === CH.macros && id === V.macrosStep) {
             const [m, s] = payload;
@@ -381,17 +436,17 @@ export class ZmkOfflineFlask extends OfflineFlask {
             return payload;
         }
         if (ch === CH.combos && id === V.combosSlot) {
-            const decoded = decodeComboSlot(payload);
+            const decoded = decodeComboSlot(payload, IMPRINT.comboKeys);
             const slot = decoded.slot;
             if (!zmk.combos[slot]) return payload;
             // Firmware normalization: positions must exist on the board.
             const positions = decoded.positions
                 .filter((p) => p >= 0 && p < IMPRINT.positions)
-                .slice(0, COMBO_MAX_KEYS);
+                .slice(0, IMPRINT.comboKeys);
             zmk.combos[slot] = { positions, usage: decoded.usage };
             this.ws.zmkDirty.combo[slot] = true;
             saveWorkspace(this.ws);
-            return encodeComboSlot(slot, zmk.combos[slot]);
+            return encodeComboSlot(slot, zmk.combos[slot], IMPRINT.comboKeys);
         }
         if (ch === CH.macros && id === V.macrosStep) {
             const step = decodeMacroStep(payload);
@@ -585,10 +640,18 @@ export async function zmkSyncExtras(app, ws) {
     let applied = 0;
     let touched = false;
 
+    // Slot frame is sized by the DEVICE's keys-per-slot (v9 RO value;
+    // pre-v9 firmware is fixed at the codec default of 4).
+    let comboKeys = COMBO_MAX_KEYS;
+    if (Object.keys(ws.zmkDirty.combo).length && app.caps?.combosKeys) {
+        try { comboKeys = await app.flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS; }
+        catch { /* keep default */ }
+    }
+
     for (const slot of Object.keys(ws.zmkDirty.combo)) {
         try {
             await app.flask.setBytes(CH.combos, V.combosSlot,
-                encodeComboSlot(Number(slot), ws.zmk.combos[slot]));
+                encodeComboSlot(Number(slot), ws.zmk.combos[slot], comboKeys));
             delete ws.zmkDirty.combo[slot];
             applied++; touched = true;
         } catch (e) { fail.push(`combo ${slot}: ${e.message}`); }

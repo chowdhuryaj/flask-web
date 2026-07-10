@@ -8,7 +8,7 @@
 // vocabulary is HID usages: param = (page << 16) | id, with implicit
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=6';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=7';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;

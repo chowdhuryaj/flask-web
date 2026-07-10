@@ -32,6 +32,7 @@ export const CH = {
     keyState: 0x23, // ZMK line v5+: pressed-position bitmap (HUD press feed)
     combos: 0x24,   // ZMK line v7+: flask_combos runtime combo slots
     macros: 0x25,   // ZMK line v8+: flask_macros runtime macro steps
+    scrollSnap: 0x26, // ZMK line v9+: flask_scrollsnap axis snap/lock
 };
 
 export const V = {
@@ -84,8 +85,12 @@ export const V = {
     // combo layer masks
     clCount: 0x01,
     // RGB map (0x21) — enabled/layers/leds are u16; led/bulk/fill are
-    // PAYLOAD-ADDRESSED byte frames (getBytes/setBytes, never u16 helpers)
+    // PAYLOAD-ADDRESSED byte frames (getBytes/setBytes, never u16 helpers).
+    // 0x04-0x08: ZMK-line effect engine (v9) — whole-strip animation
+    // underneath the painted map (painted keys overlay the effect).
     rgbmapEnabled: 0x01, rgbmapLayers: 0x02, rgbmapLeds: 0x03,
+    rgbmapEffect: 0x04, rgbmapEffectSpeed: 0x05,
+    rgbmapEffectHue: 0x06, rgbmapEffectSat: 0x07, rgbmapEffectVal: 0x08,
     rgbmapLed: 0x10, rgbmapBulk: 0x11, rgbmapFill: 0x12,
     // display (0x22)
     dispHoldMs: 0x01, dispActive: 0x02, dispPushAge: 0x03,
@@ -97,9 +102,11 @@ export const V = {
     // key state (0x23) — PAYLOAD-ADDRESSED byte frame (getBytes):
     // payload byte N/8 bit N%8 = key position N pressed. Read-only.
     keyStateBitmap: 0x01,
-    // combos (0x24, ZMK line) — enabled/count/timeout are u16; slot is a
-    // PAYLOAD-ADDRESSED byte frame [slot, pos x4 (0xFF empty), usage u32 BE]
+    // combos (0x24, ZMK line) — enabled/count/timeout/keys are u16; slot is
+    // a PAYLOAD-ADDRESSED byte frame [slot, pos x KEYS (0xFF empty), usage
+    // u32 BE]. KEYS = combosKeys on v9+ (RO), 4 on v7/v8 firmware.
     combosEnabled: 0x01, combosSlotCount: 0x02, combosTimeout: 0x03,
+    combosKeys: 0x04,
     combosSlot: 0x10,
     // macros (0x25, ZMK line) — enabled/counts/pacing are u16; state is
     // live-only (GET = playing slot+1 or 0; SET v>0 plays v-1, 0 stops);
@@ -107,6 +114,10 @@ export const V = {
     macrosEnabled: 0x01, macrosSlotCount: 0x02, macrosStepCount: 0x03,
     macrosTapMs: 0x04, macrosWaitMs: 0x05, macrosState: 0x06,
     macrosStep: 0x10,
+    // scroll snap (0x26, ZMK line v9) — all u16
+    snapEnabled: 0x01, snapThreshold: 0x02, snapSamples: 0x03,
+    snapImmediate: 0x04, snapLockMs: 0x05, snapLockEvents: 0x06,
+    snapIdleReset: 0x07,
 };
 
 // Slot value-id helpers (append-only wire ids).

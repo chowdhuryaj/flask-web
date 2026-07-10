@@ -2,37 +2,37 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast } from './ui.js?v=6';
-import { FlaskHID } from './webhid.js?v=6';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=6';
+import { el, toast } from './ui.js?v=7';
+import { FlaskHID } from './webhid.js?v=7';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=7';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState } from './zmk.js?v=6';
-import { VialClient } from './vialclient.js?v=6';
-import { parseDefinition } from './vialdef.js?v=6';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=6';
-import { capabilities } from './caps.js?v=6';
-import { setDeviceCustomKeys } from './keycodes.js?v=6';
-import { KeymapTab } from './keymap-tab.js?v=6';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=6';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=6';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=6';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=6';
-import { MouseTab } from './mouse-tab.js?v=6';
-import { TypingTab } from './typing-tab.js?v=6';
-import { SettingsTab } from './settings-tab.js?v=6';
-import { HUD } from './hud.js?v=6';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=6';
+         zmkReadKeyState } from './zmk.js?v=7';
+import { VialClient } from './vialclient.js?v=7';
+import { parseDefinition } from './vialdef.js?v=7';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=7';
+import { capabilities } from './caps.js?v=7';
+import { setDeviceCustomKeys } from './keycodes.js?v=7';
+import { KeymapTab } from './keymap-tab.js?v=7';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=7';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=7';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=7';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=7';
+import { MouseTab } from './mouse-tab.js?v=7';
+import { TypingTab } from './typing-tab.js?v=7';
+import { SettingsTab } from './settings-tab.js?v=7';
+import { HUD } from './hud.js?v=7';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=7';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=6';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=7';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=6';
-import { MacrosTab } from './macros-tab.js?v=6';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=6';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=6';
-import { RgbTab } from './rgb-tab.js?v=6';
-import { DisplayTab } from './display-tab.js?v=6';
-import { exportVil, importVil, downloadText } from './vil.js?v=6';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=7';
+import { MacrosTab } from './macros-tab.js?v=7';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=7';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=7';
+import { RgbTab } from './rgb-tab.js?v=7';
+import { DisplayTab } from './display-tab.js?v=7';
+import { exportVil, importVil, downloadText } from './vil.js?v=7';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 

@@ -15,10 +15,10 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=6';
-import { CH, V } from './flaskproto.js?v=6';
-import { hsvCss } from './rgb-tab.js?v=6';
-import { renderKeyboardSVG } from './keymap-tab.js?v=6';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=7';
+import { CH, V } from './flaskproto.js?v=7';
+import { hsvCss } from './rgb-tab.js?v=7';
+import { renderKeyboardSVG } from './keymap-tab.js?v=7';
 
 /**
  * LED index → key mapping over the physical layout: the central (left) half
@@ -58,6 +58,15 @@ export class ZmkRgbTab {
         this.enabled = await flask.getU16(CH.rgbMap, V.rgbmapEnabled);
         this.layerCount = await flask.getU16(CH.rgbMap, V.rgbmapLayers);
         this.ledCount = await flask.getU16(CH.rgbMap, V.rgbmapLeds);
+        if (this.app.caps?.rgbEffects) {
+            this.effect = await flask.getU16(CH.rgbMap, V.rgbmapEffect);
+            this.effectSpeed = await flask.getU16(CH.rgbMap, V.rgbmapEffectSpeed);
+            this.effectHsv = [
+                await flask.getU16(CH.rgbMap, V.rgbmapEffectHue),
+                await flask.getU16(CH.rgbMap, V.rgbmapEffectSat),
+                await flask.getU16(CH.rgbMap, V.rgbmapEffectVal),
+            ];
+        }
         await this.loadLayer();
         this.render();
     }
@@ -98,6 +107,43 @@ export class ZmkRgbTab {
 
     layerName(i) {
         return this.app.profile?.layerNames?.[i] ?? `Layer ${i}`;
+    }
+
+    /** Whole-strip effect engine (flask_rgb v9): runs UNDER the painted map
+     * — painted keys overlay it, the same layering the NLKB16 card
+     * describes. One card, all live; Save rides the map's savebar (same
+     * channel). */
+    effectsCard() {
+        const { flask } = this.app;
+        const hsvSlider = (label, idx, vid) => sliderRow({
+            label, min: 0, max: 255, step: 1, value: this.effectHsv[idx],
+            onChange: async (v) => {
+                this.effectHsv[idx] = await flask.setU16(CH.rgbMap, vid, v);
+                return this.effectHsv[idx];
+            },
+        });
+
+        return card('Effect engine', 'whole-strip animations — painted keys above overlay these',
+            selectRow({
+                label: 'Effect', value: this.effect,
+                options: EFFECT_NAMES.map((label, value) => ({ value, label })),
+                onChange: async (v) => {
+                    this.effect = await flask.setU16(CH.rgbMap, V.rgbmapEffect, Number(v));
+                    this.render();
+                },
+            }),
+            sliderRow({
+                label: 'Speed', min: 1, max: 255, step: 1, value: this.effectSpeed,
+                onChange: async (v) => {
+                    this.effectSpeed = await flask.setU16(CH.rgbMap, V.rgbmapEffectSpeed, v);
+                    return this.effectSpeed;
+                },
+            }),
+            hsvSlider('Hue', 0, V.rgbmapEffectHue),
+            hsvSlider('Saturation', 1, V.rgbmapEffectSat),
+            hsvSlider('Value', 2, V.rgbmapEffectVal),
+            el('div', { class: 'note faint',
+                text: 'Hue only shapes Solid and Breathe; Spectrum and Swirl cycle it. Save on the map card persists effect settings too (same channel).' }));
     }
 
     swatch(led) {
@@ -232,5 +278,8 @@ export class ZmkRgbTab {
                 'Live edits reach both halves over the split link; Save persists on the central.'));
 
         this.root.replaceChildren(painter);
+        if (this.app.caps?.rgbEffects) this.root.append(this.effectsCard());
     }
 }
+
+const EFFECT_NAMES = ['Off', 'Solid', 'Breathe', 'Spectrum', 'Swirl'];

@@ -8,7 +8,7 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=6';
+import { CH, V } from './flaskproto.js?v=7';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -40,11 +40,14 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // added the key-state channel 0x23 (HUD live press highlight); v6 added
 // the flask_rgb map channel 0x21 (per-key per-layer HSV, NLKB16 wire
 // shape — dims are device-sourced via 0x02/0x03); v7 added the
-// flask_combos runtime-combo channel 0x24 (32 slots x 4 positions +
-// encoded usage output, global timeout); v8 added the flask_macros
-// runtime-macro channel 0x25 (16 slots x 16 tap/press/release/wait
-// steps, global tap/wait pacing, live play/stop).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 8 };
+// flask_combos runtime-combo channel 0x24 (runtime slots + encoded usage
+// output, global timeout); v8 added the flask_macros runtime-macro
+// channel 0x25 (typed tap/press/release/wait steps, global tap/wait
+// pacing, live play/stop); v9 (parity round) added flask_accel 0x10 (QMK
+// wire shape), flask_scrollsnap 0x26, the rgbmap effect engine values
+// 0x04-0x08, and the combos keys-per-slot RO value 0x04 (capacities are
+// Kconfig now — slot/step/keys counts are always device-sourced).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 9 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -74,8 +77,13 @@ export function zmkCapabilities(family, version) {
         // the studio-rpc-usb-uart snippet (the tab feature-probes and
         // explains if absent).
         zmkStudio: true,
-        mouse: flask,       // Mouse tuning tab (autoscroll)
-        accel: false,
+        mouse: flask,       // Mouse tuning tab (autoscroll + v9 accel/snap)
+        // flask_accel (0x10, v9): the QMK pd_accel sigmoid ported — same
+        // wire shape, so the shared Acceleration card drives it unchanged.
+        accel: flask && v >= 9,
+        // flask_scrollsnap (0x26, v9): runtime axis snap/lock on the
+        // scroll ball (ZMK-line only channel).
+        scrollSnap: flask && v >= 9,
         dpi: false,
         smoothing: false,
         drag: false,        // stock ZMK scroll chain (flask_scroll dropped, v3)
@@ -107,6 +115,12 @@ export function zmkCapabilities(family, version) {
         // tab (zmk-combos-tab.js). QMK devices never set this: their
         // combos are Vial dynamic entries behind caps.vial.
         combos: flask && v >= 7,
+        // v9: keys-per-slot RO value (0x04) sizes the slot frame; v7/v8
+        // firmware is fixed at the codec's 4-key default.
+        combosKeys: flask && v >= 9,
+        // flask_rgb effect engine (0x21 values 0x04-0x08, v9) — the
+        // whole-strip animations under the painted map.
+        rgbEffects: flask && v >= 9,
         // flask_macros runtime macros (0x25, v8) — the ZMK-line Macros
         // tab (zmk-macros-tab.js). QMK macros are Vial dynamic macros
         // behind caps.vial; this flag is ZMK-only.

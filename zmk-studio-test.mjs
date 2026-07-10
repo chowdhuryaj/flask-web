@@ -391,18 +391,27 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 8, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, 9, 'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
-    eq(await flask.getU16(CH.macros, V.macrosSlotCount), 16, 'sim macro slots');
+    eq(await flask.getU16(CH.macros, V.macrosSlotCount), 32, 'sim macro slots (v9 Kconfig default)');
+    eq(await flask.getU16(CH.macros, V.macrosStepCount), 32, 'sim macro steps (v9 Kconfig default)');
+    eq(await flask.getU16(CH.combos, V.combosSlotCount), 64, 'sim combo slots (v9 Kconfig default)');
+    eq(await flask.getU16(CH.combos, V.combosKeys), 8, 'sim advertises keys-per-slot (v9)');
     eq(await flask.getU16(CH.combos, V.combosTimeout), 50, 'sim seeds combo timeout default');
     eq(await flask.getU16(CH.autoscroll, V.asSpeedScale), 100, 'sim seeds autoscroll scale');
+    // v9 seeds: accel boots disabled with drashna defaults; snap enabled.
+    eq(await flask.getU16(CH.accel, V.accelEnabled), 0, 'sim accel boots disabled');
+    eq(await flask.getU16(CH.accel, V.accelTakeoff), 200, 'sim accel takeoff default');
+    eq(await flask.getU16(CH.scrollSnap, V.snapEnabled), 1, 'sim snap boots enabled');
+    eq(await flask.getU16(CH.scrollSnap, V.snapThreshold), 63, 'sim snap threshold default');
+    eq(await flask.getU16(CH.rgbMap, V.rgbmapEffect), 0, 'sim rgb effect boots off');
 
-    // Combo slot write round-trip + journal.
-    const echo = await flask.setBytes(CH.combos, V.combosSlot,
-        [2, 10, 20, 0xFF, 0xFF, 0x00, 0x07, 0x00, 0x04]);
-    eq([...echo], [2, 10, 20, 0xFF, 0xFF, 0x00, 0x07, 0x00, 0x04], 'sim combo slot echoes');
+    // Combo slot write round-trip + journal (8-position v9 frame).
+    const comboFrame = [2, 10, 20, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x07, 0x00, 0x04];
+    const echo = await flask.setBytes(CH.combos, V.combosSlot, comboFrame);
+    eq([...echo], comboFrame, 'sim combo slot echoes (8-pos frame)');
     eq(zmkPendingCount(ws), 1, 'combo edit journals');
 
     // Macro step write normalizes unknown actions like the firmware.
@@ -463,6 +472,25 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
     zmkClearDirty(ws);
     eq(zmkPendingCount(ws), 0, 'zmkClearDirty drops the queued keymap');
+}
+
+// ---- combos codec: keys-per-slot sized frames (zmk-combos-codec.js) ----
+{
+    const { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } =
+        await import('./zmk-combos-codec.js');
+
+    // Default (v7/v8) stays byte-compatible with the old 4-pos frame.
+    eq(COMBO_MAX_KEYS, 4, 'codec default stays at the v7/v8 wire shape');
+    const legacy = encodeComboSlot(3, { positions: [10, 20], usage: 0x70004 });
+    eq(legacy.length, 9, 'default frame is 9 bytes');
+    eq(decodeComboSlot(legacy).usage, 0x70004, 'default round-trip usage');
+
+    // v9: 8-pos frame, usage shifts after the position block.
+    const wide = encodeComboSlot(3, { positions: [10, 20, 30], usage: 0x70004 }, 8);
+    eq(wide.length, 13, 'v9 frame is 13 bytes');
+    const back = decodeComboSlot(wide, 8);
+    eq(back.positions.join(','), '10,20,30', 'v9 round-trip positions');
+    eq(back.usage, 0x70004, 'v9 round-trip usage');
 }
 
 // ---- RGB painter LED → key geometry mapping (zmk-rgb-tab.js) ----
