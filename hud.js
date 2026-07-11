@@ -256,10 +256,15 @@ export class HUD {
             pressed: this.pressed,
             // Mirror the flask_rgb painted map (ZMK line; published by the
             // RGB tab). Pressed keys keep the press highlight — an inline
-            // fill would override the .pressed class.
+            // fill would override the .pressed class. Hardened: a tint
+            // throw must never take the whole HUD render down (a dead
+            // render reads as "HUD frozen" on the bench).
             fillFor: app.zmkRgbTint
-                ? (key) => (this.pressed.has(`${key.row},${key.col}`)
-                    ? null : app.zmkRgbTint(this.shownLayer, key))
+                ? (key) => {
+                    if (this.pressed.has(`${key.row},${key.col}`)) return null;
+                    try { return app.zmkRgbTint(this.shownLayer, key); }
+                    catch { return null; }
+                }
                 : undefined,
             scale: 0.62,
         }));

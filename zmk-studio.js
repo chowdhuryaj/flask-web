@@ -216,7 +216,7 @@ const KM_SAVE_CHANGES = 4;
 const KM_DISCARD_CHANGES = 5;
 const KM_GET_PHYSICAL_LAYOUTS = 6;
 const KM_MOVE_LAYER = 8;        // MoveLayerRequest{start_index=1,dest_index=2}
-const KM_ADD_LAYER = 9;         // bool
+const KM_ADD_LAYER = 9;         // AddLayerRequest — EMPTY MESSAGE, not bool
 const KM_REMOVE_LAYER = 10;     // RemoveLayerRequest{layer_index=1}
 const KM_RESTORE_LAYER = 11;    // RestoreLayerRequest{layer_id=1,at_index=2}
 const KM_SET_LAYER_PROPS = 12;
@@ -700,7 +700,11 @@ export class StudioClient extends EventTarget {
     /** Returns {index, layer|null}. Only succeeds when the device has free
      * slots (available_layers > 0 — freed by remove_layer). */
     async addLayer() {
-        const r = await this._rpc(SUB_KEYMAP, fVarint(KM_ADD_LAYER, 1, true));
+        // AddLayerRequest is an EMPTY MESSAGE (wire type 2), not a bool like
+        // get_keymap/save_changes — encoding it as a varint made real
+        // firmware reject the request while the wire-less offline sim passed
+        // (bench 2026-07-11: "adding layers does not work").
+        const r = await this._rpc(SUB_KEYMAP, fBytes(KM_ADD_LAYER, []));
         const b = r.noResponse ? null : bytesOf(r.fields, KM_ADD_LAYER);
         if (!b) throw new StudioError('decodeFailed', 'No add-layer result in response');
         const { err, index, layer } = decodeAddLayerResponse(b);

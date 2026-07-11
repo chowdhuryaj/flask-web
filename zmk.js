@@ -168,6 +168,30 @@ export function zmkProfile(family) {
     };
 }
 
+/** Crash forensics (meta 0x04, RO): the boot reset-cause bits via Zephyr
+ * hwinfo, latched by the firmware at init. Called once per connect; logs
+ * always, toasts only when the bits say FAULT (software reset alone is
+ * normal after a reflash/reset command). Best-effort — older firmware
+ * answers unhandled. Returns the raw bits or null. */
+export async function zmkReportResetCause(flask, toast) {
+    try {
+        const bits = await flask.getU16(CH.meta, V.metaResetCause);
+        const names = [];
+        if (bits & 0x0001) names.push('pin');
+        if (bits & 0x0002) names.push('software');
+        if (bits & 0x0004) names.push('brownout');
+        if (bits & 0x0008) names.push('power-on');
+        if (bits & 0x0010) names.push('WATCHDOG');
+        if (bits & 0x0020) names.push('debug');
+        if (bits & 0x0100) names.push('CPU LOCKUP');
+        console.info(`ZMK boot reset cause: 0x${bits.toString(16)} (${names.join(', ') || 'none'})`);
+        if (bits & 0x0110) { // watchdog or lockup = a real crash happened
+            toast?.(`⚠ Last boot followed a FAULT reset (${names.join(', ')}) — the previous session crashed`, true);
+        }
+        return bits;
+    } catch { return null; }
+}
+
 /** Confirm the family from meta 0x03 — the stock ZMK VID/PID is shared by
  * every ZMK board, so the candidate from zmkFamilyCandidate() is a guess
  * until the device names itself. Pre-family firmware keeps the guess. */

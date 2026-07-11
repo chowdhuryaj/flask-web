@@ -138,12 +138,15 @@ export class ZmkCombosTab {
         this.render();
     }
 
-    async writeSlot(i) {
+    async writeSlot(i, before = null) {
         try {
             const r = await this.app.flask.setBytes(CH.combos, V.combosSlot,
                 encodeComboSlot(i, this.slots[i], this.maxKeys));
             this.slots[i] = decodeComboSlot(r, this.maxKeys); // adopt the echo (normalized)
         } catch (e) {
+            // Revert the optimistic local edit — keeping it made the UI lie
+            // about what the device holds (bench 2026-07-11, timeouts).
+            if (before) this.slots[i] = before;
             toast(`Combo write failed: ${e.message}`, true);
         }
         this.render();
@@ -165,19 +168,21 @@ export class ZmkCombosTab {
 
     togglePosition(i, pos) {
         const s = this.slots[i];
+        const before = { ...s, positions: [...s.positions] };
         const at = s.positions.indexOf(pos);
         if (at >= 0) s.positions.splice(at, 1);
         else if (s.positions.length < this.maxKeys) s.positions.push(pos);
         else { toast(`Combos take up to ${this.maxKeys} keys`, true); return; }
-        this.writeSlot(i);
+        this.writeSlot(i, before);
     }
 
     // ---- output picker (usage + modifiers; shared modal above) ----
 
     pickOutput(i) {
         pickUsage(`Combo ${i} output`, this.slots[i].usage, (usage) => {
+            const before = { ...this.slots[i], positions: [...this.slots[i].positions] };
             this.slots[i].usage = usage;
-            this.writeSlot(i);
+            this.writeSlot(i, before);
         });
     }
 

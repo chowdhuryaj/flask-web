@@ -811,7 +811,10 @@ export class ZmkKeymapTab {
         if (this.removedLayers.length) {
             const last = this.removedLayers[this.removedLayers.length - 1];
             ops.push(el('button', {
-                text: '↩', title: `Restore removed layer "${last.name}"`,
+                // Labelled, not just a glyph — "can't find how to restore
+                // layers" (bench 2026-07-11).
+                text: `↩ Restore "${last.name}"`,
+                title: `Bring back removed layer "${last.name}"`,
                 onclick: () => this.restoreLayerOp(),
             }));
         }
@@ -885,12 +888,19 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         return p1.some((x) => x.kind === 'layer_id');
     });
 
+    // Flask Macro slots as first-class picker chips (AJ's ask, bench
+    // 2026-07-11): "Macros" category assigns &fmac <slot> in one click.
+    // The slot count rides the behavior's own range metadata.
+    const macroBehavior = byName('Flask Macro');
+    const macroRange = macroBehavior?.metadata?.[0]?.param1?.find((x) => x.kind === 'range');
+
     function renderCats() {
         const chips = [];
         if (keyPressId != null) {
             chips.push(...USAGE_CATEGORIES.map((c) => ({ id: c.id, label: c.label })));
         }
         if (layerBehaviors.length) chips.push({ id: 'layers', label: 'Layers' });
+        if (macroBehavior && macroRange) chips.push({ id: 'macros', label: 'Macros' });
         chips.push({ id: 'behaviors', label: 'Behaviors' });
         cats.replaceChildren(...chips.map((c) => el('button', {
             class: c.id === category ? 'active' : '',
@@ -932,6 +942,7 @@ export function buildZmkPicker({ keyPressId, onPick }) {
             return;
         }
         if (category === 'layers') { renderLayerComposer(); return; }
+        if (category === 'macros') { renderMacroChips(); return; }
         if (category === 'behaviors') { renderBehaviorComposer(); return; }
         const cat = USAGE_CATEGORIES.find((c) => c.id === category);
         if (!cat) return;
@@ -973,6 +984,18 @@ export function buildZmkPicker({ keyPressId, onPick }) {
             }
         }
         codes.append(el('div', { class: 'composer' }, ...rows));
+    }
+
+    function renderMacroChips() {
+        const max = Math.min(macroRange.max, 63);
+        codes.append(el('div', { class: 'note faint',
+            text: 'Play a runtime macro slot (edit the slots in the Macros tab).' }));
+        for (let slot = macroRange.min; slot <= max; slot++) {
+            codes.append(el('button', {
+                class: 'code', title: `Play runtime macro slot ${slot} (&fmac ${slot})`,
+                onclick: () => onPick({ behaviorId: macroBehavior.id, param1: slot, param2: 0 }),
+            }, `M${slot}`, el('span', { class: 'full', text: `Macro ${slot}` })));
+        }
     }
 
     function renderBehaviorComposer() {

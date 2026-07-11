@@ -442,6 +442,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         }
         if (ch === CH.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
         if (ch === CH.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
+        if (ch === CH.rgbMap && id === V.rgbmapSplitLink) return 1; // sim halves always linked
         if (ch === CH.combos && id === V.combosSlotCount) return this.ws.zmk.combos.length;
         if (ch === CH.combos && id === V.combosKeys) return IMPRINT.comboKeys;
         if (ch === CH.macros && id === V.macrosSlotCount) return this.ws.zmk.macros.length;

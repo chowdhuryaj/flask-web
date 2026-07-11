@@ -6,7 +6,7 @@ import { el, toast } from './ui.js?v=10';
 import { FlaskHID } from './webhid.js?v=10';
 import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=10';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState } from './zmk.js?v=10';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=10';
 import { VialClient } from './vialclient.js?v=10';
 import { parseDefinition } from './vialdef.js?v=10';
 import { buildProfile, familyOf, familyLabel } from './profiles.js?v=10';
@@ -191,6 +191,8 @@ async function loadZmkDevice(device) {
     // HUD press highlight rides the key-state bitmap instead of the Vial
     // matrix read (hud.js polls this generically when caps.keyState).
     app.readKeyState = app.caps.keyState ? () => zmkReadKeyState(app.flask) : null;
+    // Crash forensics: log the boot reset cause; toast on fault bits.
+    zmkReportResetCause(app.flask, toast);
 
     // Offline preview queue → device (tunables + RGB ride the shared
     // journal; combo slots + macro steps are ZMK-shaped extras).

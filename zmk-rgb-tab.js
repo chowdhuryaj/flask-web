@@ -15,22 +15,43 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=10';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=10';
 import { CH, V } from './flaskproto.js?v=10';
 import { hsvCss } from './rgb-tab.js?v=10';
 import { renderKeyboardSVG } from './keymap-tab.js?v=10';
 
 /**
- * LED index → key mapping over the physical layout: the central (left) half
- * owns LEDs [0, ledCount/2), the peripheral (right) the rest. Halves are
- * split at the geometry's x midpoint; within a half, LED order is assumed to
- * follow key-position order until the bench paint-sweep says otherwise (fix
- * the ordering HERE if the sweep disagrees — the wire is index-addressed
- * either way). Returns an array where entry i = the key lit by LED i (or
- * undefined for LEDs beyond the mapped keys).
+ * LED index → key mapping over the physical layout.
+ *
+ * A WIZARD-MEASURED map wins when one is stored (the "Map LEDs → keys"
+ * flow below — bench 2026-07-11 proved the guessed order wrong on real
+ * hardware: LED 0 lit key 17). Entry = keymap position per wire LED
+ * (null = LED with no visible key, e.g. underglow).
+ *
+ * Fallback guess: the central (left) half owns LEDs [0, ledCount/2), the
+ * peripheral (right) the rest; halves split at the geometry's x midpoint;
+ * within a half, LED order follows key-position order. Returns an array
+ * where entry i = the key lit by LED i (or undefined).
  */
+const LEDMAP_STORE = 'flask-zmk-ledmap-imprint';
+
+export function storedLedMap() {
+    try { return JSON.parse(localStorage.getItem(LEDMAP_STORE)) ?? null; }
+    catch { return null; }
+}
+
+export function saveLedMap(order) {
+    if (order == null) localStorage.removeItem(LEDMAP_STORE);
+    else localStorage.setItem(LEDMAP_STORE, JSON.stringify(order));
+}
+
 export function ledKeyOrder(keys, ledCount) {
     if (!keys?.length) return [];
+    const custom = storedLedMap();
+    if (custom?.length === ledCount) {
+        const byPos = new Map(keys.map((k) => [k.pos, k]));
+        return custom.map((p) => (p == null ? undefined : byPos.get(p)));
+    }
     const xs = keys.map((k) => k.x + k.w / 2);
     const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
     const half = (pred) => keys.filter(pred).sort((a, b) => a.pos - b.pos);
@@ -67,11 +88,19 @@ export class ZmkRgbTab {
                 await flask.getU16(CH.rgbMap, V.rgbmapEffectVal),
             ];
         }
+        // Split-link diagnosis (0x09, RO): has the central discovered the
+        // peripheral's rgb GATT characteristic? Older firmware answers
+        // unhandled — treat as unknown.
+        try { this.splitLink = await flask.getU16(CH.rgbMap, V.rgbmapSplitLink); }
+        catch { this.splitLink = null; }
         this.layerCache = {};
         await this.loadLayer();
         this.render();
         this.publishTint();
-        this.preloadLayers(); // fire-and-forget: fills the HUD tint cache
+        // NO background preload of every layer: 10 layers × 70 LED reads
+        // saturated the HID request queue for ~30 s after connect — starved
+        // the HUD poll and made everything else time out (bench 2026-07-11
+        // "device did not answer in time"). HUD tint covers visited layers.
     }
 
     async loadLayer() {
@@ -87,12 +116,6 @@ export class ZmkRgbTab {
         }
         this.layerCache[layer] = leds;
         return leds;
-    }
-
-    async preloadLayers() {
-        try {
-            for (let l = 0; l < this.layerCount; l++) await this.readLayer(l);
-        } catch { /* transient — HUD tint just stays partial */ }
     }
 
     /** HUD board tint: keymap position → this layer's painted color (null =
@@ -143,6 +166,122 @@ export class ZmkRgbTab {
 
     layerName(i) {
         return this.app.profile?.layerNames?.[i] ?? `Layer ${i}`;
+    }
+
+    // ---- LED→key mapping wizard (the interactive paint sweep) ----
+    //
+    // Lights one wire LED at a time; the user clicks the physical key that
+    // lit (or Skip for LEDs with no visible key — underglow). The measured
+    // order is stored (ledKeyOrder prefers it: painter, HUD tint, everything
+    // follows) and a firmware key-positions snippet is generated for the
+    // reactive overlay's devicetree map.
+
+    async startWizard() {
+        if (!this.app.profile?.keys?.length) {
+            toast('Open the Keymap tab once first — the wizard needs board geometry', true);
+            return;
+        }
+        this.wizard = { led: 0, order: Array(this.ledCount).fill(null), orig: null };
+        await this.lightWizardLed();
+    }
+
+    async lightWizardLed() {
+        const w = this.wizard;
+        w.orig = [...(this.leds[w.led] ?? [0, 0, 0])];
+        try {
+            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, w.led, 0, 0, 255]);
+        } catch (e) {
+            toast(`Couldn't light LED ${w.led}: ${e.message}`, true);
+        }
+        this.render();
+    }
+
+    async restoreWizardLed() {
+        const w = this.wizard;
+        try {
+            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed,
+                [this.layer, w.led, ...(w.orig ?? [0, 0, 0])]);
+        } catch { /* cosmetic — the map cache still holds the original */ }
+    }
+
+    async answerWizard(pos) {
+        const w = this.wizard;
+        w.order[w.led] = pos;
+        await this.restoreWizardLed();
+        if (w.led + 1 >= this.ledCount) { this.finishWizard(); return; }
+        w.led += 1;
+        await this.lightWizardLed();
+    }
+
+    async backWizard() {
+        const w = this.wizard;
+        if (w.led === 0) return;
+        await this.restoreWizardLed();
+        w.led -= 1;
+        w.order[w.led] = null;
+        await this.lightWizardLed();
+    }
+
+    async abortWizard() {
+        await this.restoreWizardLed();
+        this.wizard = null;
+        this.render();
+    }
+
+    finishWizard() {
+        const order = this.wizard.order;
+        this.wizard = null;
+        saveLedMap(order);
+        this._tintKeys = null; // rebuild the HUD tint lookup from the new map
+        const mapped = order.filter((p) => p != null).length;
+        // Firmware key-positions snippet (config/imprint.keymap flask_rgb
+        // node) — entry i = the keymap position LED i lights; 255 = no key.
+        const rows = [];
+        for (let i = 0; i < order.length; i += 12) {
+            rows.push('    ' + order.slice(i, i + 12).map((p) => String(p ?? 255).padStart(3)).join(' '));
+        }
+        const snippet = `key-positions = <\n${rows.join('\n')}\n>;`;
+        const ta = el('textarea', {
+            readonly: true, rows: 10,
+            style: 'width:100%; font-family:monospace; font-size:12px',
+        });
+        ta.value = snippet;
+        const back = modal('LED map saved', el('div', {},
+            el('p', { text: `${mapped} of ${order.length} LEDs mapped to keys. The painter, HUD tint and exports now use the measured order (stored in this browser).` }),
+            el('p', { text: 'Firmware side (leader candidate lighting): paste this over the key-positions block in config/imprint.keymap → flask_rgb.' }),
+            ta), [
+            el('button', { class: 'btn small primary', text: 'Done', onclick: () => back.remove() }),
+        ]);
+        this.render();
+    }
+
+    wizardCard() {
+        const w = this.wizard;
+        const keys = this.app.profile.keys;
+        const mappedPos = new Set(w.order.filter((p) => p != null));
+        const board = renderKeyboardSVG({
+            profile: {
+                keys, encoderKeys: [],
+                labelFor: () => '', hoverFor: () => 'click if this key just lit',
+                keyName: (k) => String(k.pos),
+            },
+            keycodeAt: () => null,
+            pressed: new Set(),
+            fillFor: (k) => (mappedPos.has(k.pos) ? 'rgba(60,180,110,0.45)' : null),
+            onSelect: (sel) => this.answerWizard(sel.col),
+            scale: 0.72,
+        });
+        return card('Map LEDs → keys',
+            'one LED at a time — click the key that lights on the board',
+            el('div', { class: 'row' },
+                el('b', { text: `LED ${w.led} of ${this.ledCount}` }),
+                el('span', { class: 'hint', text: 'is lit WHITE right now — click that key below (green = already mapped)' })),
+            el('div', { style: 'overflow-x:auto' }, board),
+            el('div', { class: 'savebar' },
+                el('button', { class: 'btn small', text: '⏭ Skip (no key lit / underglow)',
+                    onclick: () => this.answerWizard(null) }),
+                el('button', { class: 'btn small', text: '↩ Back', onclick: () => this.backWizard() }),
+                el('button', { class: 'btn small', text: '✕ Abort', onclick: () => this.abortWizard() })));
     }
 
     /** Whole-strip effect engine (flask_rgb v9): runs UNDER the painted map
@@ -257,6 +396,10 @@ export class ZmkRgbTab {
     }
 
     render() {
+        if (this.wizard) {
+            this.root.replaceChildren(this.wizardCard());
+            return;
+        }
         const { flask } = this.app;
         const [h, s, v] = this.brush;
         const preview = el('span', {
@@ -309,7 +452,24 @@ export class ZmkRgbTab {
                             this.render();
                         } catch (e) { toast(`Clear failed: ${e.message}`, true); }
                     },
-                })),
+                }),
+                el('button', {
+                    class: 'btn small', text: '🧭 Map LEDs → keys',
+                    title: 'Interactive paint sweep: measures which physical key each wire LED lights',
+                    onclick: () => this.startWizard(),
+                }),
+                storedLedMap() ? el('button', {
+                    class: 'btn small', text: 'Reset LED map',
+                    title: 'Forget the measured LED→key order (back to the guessed order)',
+                    onclick: () => { saveLedMap(null); this._tintKeys = null; this.render(); },
+                }) : null),
+            el('div', {
+                class: 'note faint',
+                text: this.splitLink == null
+                    ? (storedLedMap() ? 'Using the measured LED→key map.' : 'Using the GUESSED LED→key order — run Map LEDs → keys once on hardware.')
+                    : `Peripheral link: ${this.splitLink ? '✓ connected — right half receives edits' : '✗ NOT connected — right half will stay dark (re-pair the halves, then reload)'}`
+                    + (storedLedMap() ? ' · measured LED map in use.' : ' · GUESSED LED order — run Map LEDs → keys.'),
+            }),
             saveBar(() => flask.save(CH.rgbMap),
                 'Live edits reach both halves over the split link; Save persists on the central.'));
 

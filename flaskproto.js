@@ -41,6 +41,7 @@ export const V = {
     metaProtocolVersion: 0x01,
     metaActiveLayer: 0x02, // v10 RO: highest active layer (HUD feed)
     metaFamily: 0x03,      // ZMK line only: numeric family code (zmk.js ZMK_FAMILY_CODES)
+    metaResetCause: 0x04,  // ZMK line RO: hwinfo reset-cause bits at boot (crash forensics)
     // accel (x100-scaled floats on the wire; offset is SIGNED)
     accelEnabled: 0x01, accelTakeoff: 0x02, accelGrowth: 0x03,
     accelOffset: 0x04, accelLimit: 0x05,
@@ -100,6 +101,7 @@ export const V = {
     rgbmapEnabled: 0x01, rgbmapLayers: 0x02, rgbmapLeds: 0x03,
     rgbmapEffect: 0x04, rgbmapEffectSpeed: 0x05,
     rgbmapEffectHue: 0x06, rgbmapEffectSat: 0x07, rgbmapEffectVal: 0x08,
+    rgbmapSplitLink: 0x09, // ZMK line RO: central found the peripheral's rgb GATT char
     rgbmapLed: 0x10, rgbmapBulk: 0x11, rgbmapFill: 0x12,
     // display (0x22)
     dispHoldMs: 0x01, dispActive: 0x02, dispPushAge: 0x03,
