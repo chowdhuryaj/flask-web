@@ -755,10 +755,18 @@ export function attachZmkOffline(app, ws) {
  * the caller toasts.
  */
 export async function zmkSyncExtras(app, ws) {
+    // Connect-time replay is a write burst — HUD poll backs off until done.
+    app.hid?.pause?.();
+    try { return await zmkSyncExtrasInner(app, ws); }
+    finally { app.hid?.resume?.(); }
+}
+
+async function zmkSyncExtrasInner(app, ws) {
     normalizeZmkWorkspace(ws);
     const fail = [];
     let applied = 0;
     let touched = false;
+
 
     // Slot frame is sized by the DEVICE's keys-per-slot (v9 RO value;
     // pre-v9 firmware is fixed at the codec default of 4).
@@ -771,7 +779,7 @@ export async function zmkSyncExtras(app, ws) {
     for (const slot of Object.keys(ws.zmkDirty.combo)) {
         try {
             await app.flask.setBytes(CH.combos, V.combosSlot,
-                encodeComboSlot(Number(slot), ws.zmk.combos[slot], comboKeys));
+                encodeComboSlot(Number(slot), ws.zmk.combos[slot], comboKeys), 1);
             delete ws.zmkDirty.combo[slot];
             applied++; touched = true;
         } catch (e) { fail.push(`combo ${slot}: ${e.message}`); }
@@ -783,7 +791,7 @@ export async function zmkSyncExtras(app, ws) {
         const [m, s] = key.split(',').map(Number);
         try {
             await app.flask.setBytes(CH.macros, V.macrosStep,
-                encodeMacroStep(m, s, ws.zmk.macros[m][s]));
+                encodeMacroStep(m, s, ws.zmk.macros[m][s]), 2);
             delete ws.zmkDirty.macroStep[key];
             applied++; touched = true;
         } catch (e) { fail.push(`macro ${key}: ${e.message}`); }
@@ -794,7 +802,7 @@ export async function zmkSyncExtras(app, ws) {
     for (const seq of Object.keys(ws.zmkDirty.leaderSlot)) {
         try {
             await app.flask.setBytes(CH.leader, V.leaderSlot,
-                encodeLeaderSlot(Number(seq), ws.zmk.leader[seq], IMPRINT.leaderKeys));
+                encodeLeaderSlot(Number(seq), ws.zmk.leader[seq], IMPRINT.leaderKeys), 1);
             delete ws.zmkDirty.leaderSlot[seq];
             applied++; touched = true;
         } catch (e) { fail.push(`leader ${seq}: ${e.message}`); }
@@ -806,7 +814,7 @@ export async function zmkSyncExtras(app, ws) {
         const [set, dir] = key.split(',').map(Number);
         try {
             await app.flask.setBytes(CH.gestures, V.gesturesSlot,
-                encodeGestureSlot(set, dir, ws.zmk.gestures[set][dir]));
+                encodeGestureSlot(set, dir, ws.zmk.gestures[set][dir]), 2);
             delete ws.zmkDirty.gestureSlot[key];
             applied++; touched = true;
         } catch (e) { fail.push(`gesture ${key}: ${e.message}`); }

@@ -110,9 +110,15 @@ export class ZmkRgbTab {
     async readLayer(layer) {
         if (this.layerCache[layer]) return this.layerCache[layer];
         const leds = [];
-        for (let led = 0; led < this.ledCount; led++) {
-            const r = await this.app.flask.getBytes(CH.rgbMap, V.rgbmapLed, [layer, led]);
-            leds.push([r[2] ?? 0, r[3] ?? 0, r[4] ?? 0]);
+        // HUD poll backs off for the 70-LED read (see combos tab note).
+        this.app.hid?.pause?.();
+        try {
+            for (let led = 0; led < this.ledCount; led++) {
+                const r = await this.app.flask.getBytes(CH.rgbMap, V.rgbmapLed, [layer, led], 2);
+                leds.push([r[2] ?? 0, r[3] ?? 0, r[4] ?? 0]);
+            }
+        } finally {
+            this.app.hid?.resume?.();
         }
         this.layerCache[layer] = leds;
         return leds;
@@ -141,7 +147,7 @@ export class ZmkRgbTab {
     async paint(led) {
         const [h, s, v] = this.brush;
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, led, h, s, v]);
+            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, led, h, s, v], 2);
             this.leds[led] = [h, s, v];
             this.render();
         } catch (e) { toast(`Paint failed: ${e.message}`, true); }
@@ -149,7 +155,7 @@ export class ZmkRgbTab {
 
     async clear(led) {
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, led, 0, 0, 0]);
+            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, led, 0, 0, 0], 2);
             this.leds[led] = [0, 0, 0];
             this.render();
         } catch (e) { toast(`Clear failed: ${e.message}`, true); }
@@ -158,7 +164,7 @@ export class ZmkRgbTab {
     async fill() {
         const [h, s, v] = this.brush;
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, h, s, v]);
+            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, h, s, v], 1);
             this.leds = this.layerCache[this.layer] = this.leds.map(() => [h, s, v]);
             this.render();
         } catch (e) { toast(`Fill failed: ${e.message}`, true); }
@@ -189,7 +195,7 @@ export class ZmkRgbTab {
         const w = this.wizard;
         w.orig = [...(this.leds[w.led] ?? [0, 0, 0])];
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, w.led, 0, 0, 255]);
+            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, w.led, 0, 0, 255], 2);
         } catch (e) {
             toast(`Couldn't light LED ${w.led}: ${e.message}`, true);
         }
@@ -200,7 +206,7 @@ export class ZmkRgbTab {
         const w = this.wizard;
         try {
             await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed,
-                [this.layer, w.led, ...(w.orig ?? [0, 0, 0])]);
+                [this.layer, w.led, ...(w.orig ?? [0, 0, 0])], 2);
         } catch { /* cosmetic — the map cache still holds the original */ }
     }
 
@@ -447,7 +453,7 @@ export class ZmkRgbTab {
                     class: 'btn small', text: 'Clear layer',
                     onclick: async () => {
                         try {
-                            await flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, 0, 0, 0]);
+                            await flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, 0, 0, 0], 1);
                             this.leds = this.layerCache[this.layer] = this.leds.map(() => [0, 0, 0]);
                             this.render();
                         } catch (e) { toast(`Clear failed: ${e.message}`, true); }

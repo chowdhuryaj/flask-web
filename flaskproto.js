@@ -223,9 +223,12 @@ export class FlaskProto {
         if (r[0] !== CMD.save) throw new Error('unhandled');
     }
 
-    /** Payload-addressed GET (RGB map led, display line mirror). Returns frame bytes 3+. */
-    async getBytes(channel, valueID, payload) {
-        const r = await this.hid.request([CMD.get, channel, valueID, ...payload]);
+    /** Payload-addressed GET (RGB map led, display line mirror). Returns
+     * frame bytes 3+. `echoBytes` = how many leading payload bytes the reply
+     * must echo (the frame's address prefix) — pass it for every slot-table
+     * frame so a stale late reply for another slot can't be adopted. */
+    async getBytes(channel, valueID, payload, echoBytes = 0) {
+        const r = await this.hid.request([CMD.get, channel, valueID, ...payload], echoBytes);
         if (r[0] !== CMD.get) throw new Error('unhandled');
         return r.slice(3);
     }
@@ -233,9 +236,9 @@ export class FlaskProto {
     /** Payload-addressed SET (RGB paint/fill, display push, combo/macro
      * slots). Returns the echoed payload — the firmware answers in place
      * with what actually stuck (normalized slots), and the ZMK combo/macro
-     * tabs adopt that echo. */
-    async setBytes(channel, valueID, payload) {
-        const r = await this.hid.request([CMD.set, channel, valueID, ...payload]);
+     * tabs adopt that echo. `echoBytes` as in getBytes. */
+    async setBytes(channel, valueID, payload, echoBytes = 0) {
+        const r = await this.hid.request([CMD.set, channel, valueID, ...payload], echoBytes);
         if (r[0] !== CMD.set) throw new Error('unhandled');
         return r.slice(3);
     }

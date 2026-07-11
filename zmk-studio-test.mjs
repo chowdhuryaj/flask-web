@@ -652,4 +652,65 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(short.filter(Boolean).length, 2, 'LEDs past the key list stay unmapped');
 }
 
+// ---- Studio layer-op wire encodings (zmk-studio.js) ----
+// AddLayerRequest is an EMPTY SUB-MESSAGE (wire type 2), not a bool varint —
+// encoding it like get_keymap made real firmware reject layer adds while the
+// wire-less offline sim passed (bench 2026-07-11). Field 9, length 0.
+eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
+
+// ---- LED→key custom measured map (zmk-rgb-tab.js wizard store) ----
+{
+    const { ledKeyOrder, saveLedMap, storedLedMap } = await import('./zmk-rgb-tab.js');
+    // Node has no localStorage — storedLedMap must fail soft (guess path).
+    eq(storedLedMap(), null, 'no localStorage = no stored map');
+    const store = new Map();
+    globalThis.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => store.set(k, String(v)),
+        removeItem: (k) => store.delete(k),
+    };
+    const keys = [
+        { pos: 0, x: 0, y: 0, w: 1, h: 1 }, { pos: 1, x: 1, y: 0, w: 1, h: 1 },
+        { pos: 2, x: 10, y: 0, w: 1, h: 1 }, { pos: 3, x: 11, y: 0, w: 1, h: 1 },
+    ];
+    // Measured order wins over the geometry guess; null = unmapped (underglow).
+    saveLedMap([2, null, 0, 1]);
+    const order = ledKeyOrder(keys, 4);
+    eq(order.map((k) => k?.pos ?? null), [2, null, 0, 1], 'stored wizard map drives LED order');
+    // Stale map for a different LED count is ignored → geometry guess.
+    eq(ledKeyOrder(keys, 3).map((k) => k?.pos ?? null), [0, 1, 2],
+        'length-mismatched stored map falls back to the guess');
+    saveLedMap(null);
+    eq(storedLedMap(), null, 'cleared map reads back null');
+    delete globalThis.localStorage;
+}
+
+// ---- FlaskHID reply matcher: payload-address echo (webhid.js) ----
+// A LATE reply for slot 3 (after its request timed out) must not satisfy the
+// in-flight slot-4 request — with echoBytes the matcher checks the address
+// prefix, so the stale frame is dropped and the real answer is adopted.
+{
+    const { FlaskHID } = await import('./webhid.js');
+    const hid = new FlaskHID();
+    hid.device = { opened: true, sendReport: async () => {} };
+    const reply = (bytes) => {
+        const buf = new Uint8Array(32);
+        buf.set(bytes);
+        hid._onInputReport({ data: new DataView(buf.buffer) });
+    };
+    const tick = () => new Promise((r) => setImmediate(r));
+    // Combos slot GET [0x08, 0x24, 0x10, slot] with echoBytes 1.
+    const p = hid.request([0x08, 0x24, 0x10, 4], 1);
+    await tick();                               // let the queued send arm _pending
+    reply([0x08, 0x24, 0x10, 3, 13, 14]);      // stale slot-3 frame → dropped
+    reply([0x08, 0x24, 0x10, 4, 21, 22]);      // slot-4 answer → adopted
+    const r = await p;
+    eq(r.slice(3, 6), [4, 21, 22], 'echo matcher drops the stale slot frame');
+    // echoBytes 0 keeps the old semantics: any same-(channel, value) reply.
+    const p0 = hid.request([0x08, 0x24, 0x02], 0);
+    await tick();
+    reply([0x08, 0x24, 0x02, 0, 64]);
+    eq((await p0)[4], 64, 'echoBytes 0 = legacy channel/value match');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

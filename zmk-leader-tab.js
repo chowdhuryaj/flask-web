@@ -78,17 +78,23 @@ export class ZmkLeaderTab {
     }
 
     async load() {
-        const { flask } = this.app;
-        this.enabled = await flask.getU16(CH.leader, V.leaderEnabled);
-        this.timeout = await flask.getU16(CH.leader, V.leaderTimeout);
-        this.slotCount = await flask.getU16(CH.leader, V.leaderSlotCount);
-        this.maxKeys = await flask.getU16(CH.leader, V.leaderKeys) || 8;
-        this.macroSlots = this.app.caps.macros
-            ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
-        this.slots = [];
-        for (let i = 0; i < this.slotCount; i++) {
-            const r = await flask.getBytes(CH.leader, V.leaderSlot, [i]);
-            this.slots.push(decodeLeaderSlot(r, this.maxKeys));
+        const { flask, hid } = this.app;
+        // HUD poll backs off for the bulk slot read (see combos tab note).
+        hid?.pause?.();
+        try {
+            this.enabled = await flask.getU16(CH.leader, V.leaderEnabled);
+            this.timeout = await flask.getU16(CH.leader, V.leaderTimeout);
+            this.slotCount = await flask.getU16(CH.leader, V.leaderSlotCount);
+            this.maxKeys = await flask.getU16(CH.leader, V.leaderKeys) || 8;
+            this.macroSlots = this.app.caps.macros
+                ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
+            this.slots = [];
+            for (let i = 0; i < this.slotCount; i++) {
+                const r = await flask.getBytes(CH.leader, V.leaderSlot, [i], 1);
+                this.slots.push(decodeLeaderSlot(r, this.maxKeys));
+            }
+        } finally {
+            hid?.resume?.();
         }
         this.render();
     }
@@ -96,7 +102,7 @@ export class ZmkLeaderTab {
     async writeSlot(i) {
         try {
             const r = await this.app.flask.setBytes(CH.leader, V.leaderSlot,
-                encodeLeaderSlot(i, this.slots[i], this.maxKeys));
+                encodeLeaderSlot(i, this.slots[i], this.maxKeys), 1);
             this.slots[i] = decodeLeaderSlot(r, this.maxKeys);
         } catch (e) {
             toast(`Leader write failed: ${e.message}`, true);

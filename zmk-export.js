@@ -18,6 +18,14 @@ import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlo
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
 export async function exportFlaskState(app) {
+    // HUD poll backs off for the whole bulk read (hundreds of frames on a
+    // 10-layer RGB map) — see the combos tab note.
+    app.hid?.pause?.();
+    try { return await exportFlaskStateInner(app); }
+    finally { app.hid?.resume?.(); }
+}
+
+async function exportFlaskStateInner(app) {
     const { flask, caps } = app;
     const g = (ch, id) => flask.getU16(ch, id);
     const out = { protocol: app.protocolVersion };
@@ -59,7 +67,7 @@ export async function exportFlaskState(app) {
         for (let l = 0; l < layers; l++) {
             const row = [];
             for (let led = 0; led < leds; led++) {
-                const r = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [l, led]);
+                const r = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [l, led], 2);
                 row.push([r[2] ?? 0, r[3] ?? 0, r[4] ?? 0]);
             }
             map.push(row);
@@ -81,7 +89,7 @@ export async function exportFlaskState(app) {
             ? (await g(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         const slots = [];
         for (let i = 0; i < count; i++) {
-            const r = await flask.getBytes(CH.combos, V.combosSlot, [i]);
+            const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
             const { positions, usage } = decodeComboSlot(r, keys);
             slots.push({ positions, usage });
         }
@@ -98,7 +106,7 @@ export async function exportFlaskState(app) {
         for (let m = 0; m < count; m++) {
             const slot = [];
             for (let s = 0; s < steps; s++) {
-                const r = await flask.getBytes(CH.macros, V.macrosStep, [m, s]);
+                const r = await flask.getBytes(CH.macros, V.macrosStep, [m, s], 2);
                 const d = decodeMacroStep(r);
                 if (d.action === 0) break;      // steps end at the first empty
                 slot.push({ action: d.action, param: d.param });
@@ -117,7 +125,7 @@ export async function exportFlaskState(app) {
         const keys = await g(CH.leader, V.leaderKeys) || 8;
         const slots = [];
         for (let i = 0; i < count; i++) {
-            const r = await flask.getBytes(CH.leader, V.leaderSlot, [i]);
+            const r = await flask.getBytes(CH.leader, V.leaderSlot, [i], 1);
             const d = decodeLeaderSlot(r, keys);
             slots.push({ positions: d.positions, action: d.action, param: d.param });
         }
@@ -133,7 +141,7 @@ export async function exportFlaskState(app) {
         for (let s = 0; s < setCount; s++) {
             const dirs = [];
             for (let d = 0; d < 8; d++) {
-                const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [s, d]);
+                const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [s, d], 2);
                 const o = decodeGestureSlot(r);
                 dirs.push({ action: o.action, param: o.param });
             }
@@ -153,11 +161,19 @@ export async function exportFlaskState(app) {
  * everything the device's caps accept, SAVE each touched channel. Returns
  * { applied, failures } — a failure skips that section, the rest land. */
 export async function applyFlaskState(app, data) {
+    // Bulk write-through: HUD backs off until every section + SAVE landed.
+    app.hid?.pause?.();
+    try { return await applyFlaskStateInner(app, data); }
+    finally { app.hid?.resume?.(); }
+}
+
+async function applyFlaskStateInner(app, data) {
     const { flask, caps } = app;
     let applied = 0;
     const failures = [];
     const saves = [];
     const setU = async (ch, id, v) => { await flask.setU16(ch, id, v); applied++; };
+
 
     const section = async (name, cond, fn, ch) => {
         if (!cond || !data[name]) return;
@@ -203,7 +219,7 @@ export async function applyFlaskState(app, data) {
         for (let l = 0; l < Math.min(layers, s.map?.length ?? 0); l++) {
             for (let led = 0; led < Math.min(leds, s.map[l].length); led++) {
                 const [h, sa, v] = s.map[l][led];
-                await flask.setBytes(CH.rgbMap, V.rgbmapLed, [l, led, h, sa, v]);
+                await flask.setBytes(CH.rgbMap, V.rgbmapLed, [l, led, h, sa, v], 2);
                 applied++;
             }
         }
@@ -223,7 +239,7 @@ export async function applyFlaskState(app, data) {
         const keys = caps.combosKeys
             ? (await flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
-            await flask.setBytes(CH.combos, V.combosSlot, encodeComboSlot(i, s.slots[i], keys));
+            await flask.setBytes(CH.combos, V.combosSlot, encodeComboSlot(i, s.slots[i], keys), 1);
             applied++;
         }
         if (s.enabled != null) await setU(CH.combos, V.combosEnabled, s.enabled);
@@ -238,7 +254,7 @@ export async function applyFlaskState(app, data) {
             for (let st = 0; st < stepCap; st++) {
                 const step = slot[st] ?? { action: 0, param: 0 };
                 await flask.setBytes(CH.macros, V.macrosStep,
-                    encodeMacroStep(m, st, step));
+                    encodeMacroStep(m, st, step), 2);
                 applied++;
                 if (!slot[st]) break;   // wrote the terminating empty — done
             }
@@ -253,7 +269,7 @@ export async function applyFlaskState(app, data) {
         const keys = await flask.getU16(CH.leader, V.leaderKeys) || 8;
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
             await flask.setBytes(CH.leader, V.leaderSlot,
-                encodeLeaderSlot(i, s.slots[i], keys));
+                encodeLeaderSlot(i, s.slots[i], keys), 1);
             applied++;
         }
         if (s.enabled != null) await setU(CH.leader, V.leaderEnabled, s.enabled);
@@ -265,7 +281,7 @@ export async function applyFlaskState(app, data) {
         for (let st = 0; st < Math.min(setCount, s.sets?.length ?? 0); st++) {
             for (let d = 0; d < Math.min(8, s.sets[st].length); d++) {
                 await flask.setBytes(CH.gestures, V.gesturesSlot,
-                    encodeGestureSlot(st, d, s.sets[st][d]));
+                    encodeGestureSlot(st, d, s.sets[st][d]), 2);
                 applied++;
             }
         }

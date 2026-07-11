@@ -32,26 +32,32 @@ export class ZmkMacrosTab {
     }
 
     async load() {
-        const { flask } = this.app;
-        this.enabled = await flask.getU16(CH.macros, V.macrosEnabled);
-        this.slotCount = await flask.getU16(CH.macros, V.macrosSlotCount);
-        this.stepCount = await flask.getU16(CH.macros, V.macrosStepCount);
-        this.tapMs = await flask.getU16(CH.macros, V.macrosTapMs);
-        this.waitMs = await flask.getU16(CH.macros, V.macrosWaitMs);
-        this.steps = [];
-        for (let m = 0; m < this.slotCount; m++) {
-            const slot = [];
-            // Playback stops at the first empty step — so can the reads.
-            for (let s = 0; s < this.stepCount; s++) {
-                const r = await flask.getBytes(CH.macros, V.macrosStep, [m, s]);
-                const step = decodeMacroStep(r);
-                slot.push({ action: step.action, param: step.param });
-                if (step.action === MACRO_ACTION.empty) break;
+        const { flask, hid } = this.app;
+        // HUD poll backs off for the bulk step read (see combos tab note).
+        hid?.pause?.();
+        try {
+            this.enabled = await flask.getU16(CH.macros, V.macrosEnabled);
+            this.slotCount = await flask.getU16(CH.macros, V.macrosSlotCount);
+            this.stepCount = await flask.getU16(CH.macros, V.macrosStepCount);
+            this.tapMs = await flask.getU16(CH.macros, V.macrosTapMs);
+            this.waitMs = await flask.getU16(CH.macros, V.macrosWaitMs);
+            this.steps = [];
+            for (let m = 0; m < this.slotCount; m++) {
+                const slot = [];
+                // Playback stops at the first empty step — so can the reads.
+                for (let s = 0; s < this.stepCount; s++) {
+                    const r = await flask.getBytes(CH.macros, V.macrosStep, [m, s], 2);
+                    const step = decodeMacroStep(r);
+                    slot.push({ action: step.action, param: step.param });
+                    if (step.action === MACRO_ACTION.empty) break;
+                }
+                while (slot.length < this.stepCount) {
+                    slot.push({ action: MACRO_ACTION.empty, param: 0 });
+                }
+                this.steps.push(slot);
             }
-            while (slot.length < this.stepCount) {
-                slot.push({ action: MACRO_ACTION.empty, param: 0 });
-            }
-            this.steps.push(slot);
+        } finally {
+            hid?.resume?.();
         }
         this.render();
     }
@@ -59,7 +65,7 @@ export class ZmkMacrosTab {
     async writeStep(m, s) {
         try {
             const r = await this.app.flask.setBytes(CH.macros, V.macrosStep,
-                encodeMacroStep(m, s, this.steps[m][s]));
+                encodeMacroStep(m, s, this.steps[m][s]), 2);
             const step = decodeMacroStep(r); // adopt the echo (normalized)
             this.steps[m][s] = { action: step.action, param: step.param };
         } catch (e) {

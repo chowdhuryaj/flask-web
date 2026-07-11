@@ -39,18 +39,24 @@ export class ZmkGesturesTab {
     }
 
     async loadSet() {
-        const { flask } = this.app;
-        this.outputs = [];
-        for (let dir = 0; dir < 8; dir++) {
-            const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [this.set, dir]);
-            this.outputs.push(decodeGestureSlot(r));
+        const { flask, hid } = this.app;
+        // HUD poll backs off for the 8-direction read (see combos tab note).
+        hid?.pause?.();
+        try {
+            this.outputs = [];
+            for (let dir = 0; dir < 8; dir++) {
+                const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [this.set, dir], 2);
+                this.outputs.push(decodeGestureSlot(r));
+            }
+        } finally {
+            hid?.resume?.();
         }
     }
 
     async writeDir(dir) {
         try {
             const r = await this.app.flask.setBytes(CH.gestures, V.gesturesSlot,
-                encodeGestureSlot(this.set, dir, this.outputs[dir]));
+                encodeGestureSlot(this.set, dir, this.outputs[dir]), 2);
             this.outputs[dir] = decodeGestureSlot(r);
         } catch (e) {
             toast(`Gesture write failed: ${e.message}`, true);

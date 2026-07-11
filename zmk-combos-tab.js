@@ -122,18 +122,26 @@ export class ZmkCombosTab {
     }
 
     async load() {
-        const { flask } = this.app;
-        this.enabled = await flask.getU16(CH.combos, V.combosEnabled);
-        this.slotCount = await flask.getU16(CH.combos, V.combosSlotCount);
-        this.timeout = await flask.getU16(CH.combos, V.combosTimeout);
-        // Keys per slot sizes the wire frame — RO value on v9+; v7/v8
-        // firmware answers unhandled (0) and is fixed at 4.
-        this.maxKeys = (this.app.caps?.combosKeys
-            && await flask.getU16(CH.combos, V.combosKeys)) || COMBO_MAX_KEYS;
-        this.slots = [];
-        for (let i = 0; i < this.slotCount; i++) {
-            const r = await flask.getBytes(CH.combos, V.combosSlot, [i]);
-            this.slots.push(decodeComboSlot(r, this.maxKeys));
+        const { flask, hid } = this.app;
+        // Back the HUD poll off for the whole bulk read (64 slot frames) —
+        // interleaved polling stretches the burst and multiplies timeout
+        // exposure (bench 2026-07-11 congestion round).
+        hid?.pause?.();
+        try {
+            this.enabled = await flask.getU16(CH.combos, V.combosEnabled);
+            this.slotCount = await flask.getU16(CH.combos, V.combosSlotCount);
+            this.timeout = await flask.getU16(CH.combos, V.combosTimeout);
+            // Keys per slot sizes the wire frame — RO value on v9+; v7/v8
+            // firmware answers unhandled (0) and is fixed at 4.
+            this.maxKeys = (this.app.caps?.combosKeys
+                && await flask.getU16(CH.combos, V.combosKeys)) || COMBO_MAX_KEYS;
+            this.slots = [];
+            for (let i = 0; i < this.slotCount; i++) {
+                const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
+                this.slots.push(decodeComboSlot(r, this.maxKeys));
+            }
+        } finally {
+            hid?.resume?.();
         }
         this.render();
     }
@@ -141,7 +149,7 @@ export class ZmkCombosTab {
     async writeSlot(i, before = null) {
         try {
             const r = await this.app.flask.setBytes(CH.combos, V.combosSlot,
-                encodeComboSlot(i, this.slots[i], this.maxKeys));
+                encodeComboSlot(i, this.slots[i], this.maxKeys), 1);
             this.slots[i] = decodeComboSlot(r, this.maxKeys); // adopt the echo (normalized)
         } catch (e) {
             // Revert the optimistic local edit — keeping it made the UI lie

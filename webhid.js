@@ -158,12 +158,20 @@ export class FlaskHID extends EventTarget {
         return this._sendOnce(prefix, matches);
     }
 
-    /** Tuning frame: response matched on echoed (channel, value_id). */
-    request(prefix) {
+    /** Tuning frame: response matched on echoed (channel, value_id).
+     * `echoBytes` extends the match into the payload — the first N payload
+     * bytes must echo the request (Flask payload-addressed frames echo
+     * their address prefix: combo/leader slot, macro step, RGB layer+led).
+     * Without it a LATE reply for slot 3 (after its request timed out)
+     * satisfies the in-flight slot-4 request — same (channel, value) — and
+     * every table read after that is shifted by one. */
+    request(prefix, echoBytes = 0) {
         const channel = prefix[1] ?? 0;
         const valueID = prefix[2] ?? 0;
+        const echo = prefix.slice(3, 3 + echoBytes);
         return this._enqueue(() =>
-            this._send(prefix, (r) => r[1] === channel && r[2] === valueID));
+            this._send(prefix, (r) => r[1] === channel && r[2] === valueID
+                && echo.every((b, i) => r[3 + i] === b)));
     }
 
     /**
