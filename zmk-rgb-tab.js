@@ -15,10 +15,10 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=9';
-import { CH, V } from './flaskproto.js?v=9';
-import { hsvCss } from './rgb-tab.js?v=9';
-import { renderKeyboardSVG } from './keymap-tab.js?v=9';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=10';
+import { CH, V } from './flaskproto.js?v=10';
+import { hsvCss } from './rgb-tab.js?v=10';
+import { renderKeyboardSVG } from './keymap-tab.js?v=10';
 
 /**
  * LED index → key mapping over the physical layout: the central (left) half
@@ -67,16 +67,52 @@ export class ZmkRgbTab {
                 await flask.getU16(CH.rgbMap, V.rgbmapEffectVal),
             ];
         }
+        this.layerCache = {};
         await this.loadLayer();
         this.render();
+        this.publishTint();
+        this.preloadLayers(); // fire-and-forget: fills the HUD tint cache
     }
 
     async loadLayer() {
-        this.leds = [];
+        this.leds = await this.readLayer(this.layer);
+    }
+
+    async readLayer(layer) {
+        if (this.layerCache[layer]) return this.layerCache[layer];
+        const leds = [];
         for (let led = 0; led < this.ledCount; led++) {
-            const r = await this.app.flask.getBytes(CH.rgbMap, V.rgbmapLed, [this.layer, led]);
-            this.leds.push([r[2] ?? 0, r[3] ?? 0, r[4] ?? 0]);
+            const r = await this.app.flask.getBytes(CH.rgbMap, V.rgbmapLed, [layer, led]);
+            leds.push([r[2] ?? 0, r[3] ?? 0, r[4] ?? 0]);
         }
+        this.layerCache[layer] = leds;
+        return leds;
+    }
+
+    async preloadLayers() {
+        try {
+            for (let l = 0; l < this.layerCount; l++) await this.readLayer(l);
+        } catch { /* transient — HUD tint just stays partial */ }
+    }
+
+    /** HUD board tint: keymap position → this layer's painted color (null =
+     * unpainted). Published on app so the HUD can mirror the physical board
+     * (bench 2026-07-11: "configurator map updates, the HUD does not"). */
+    publishTint() {
+        this.app.zmkRgbTint = (layer, key) => {
+            const leds = this.layerCache?.[layer];
+            const keys = this.app.profile?.keys;
+            if (!leds || !keys?.length) return null;
+            if (this._tintKeys !== keys) {
+                this._tintKeys = keys;
+                this._posToLed = new Map();
+                ledKeyOrder(keys, this.ledCount).forEach((k, led) => {
+                    if (k) this._posToLed.set(k.col, led);
+                });
+            }
+            const [h, s, v] = leds[this._posToLed.get(key.col)] ?? [0, 0, 0];
+            return v ? hsvCss(h, s, v) : null;
+        };
     }
 
     async paint(led) {
@@ -100,7 +136,7 @@ export class ZmkRgbTab {
         const [h, s, v] = this.brush;
         try {
             await this.app.flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, h, s, v]);
-            this.leds = this.leds.map(() => [h, s, v]);
+            this.leds = this.layerCache[this.layer] = this.leds.map(() => [h, s, v]);
             this.render();
         } catch (e) { toast(`Fill failed: ${e.message}`, true); }
     }
@@ -269,7 +305,7 @@ export class ZmkRgbTab {
                     onclick: async () => {
                         try {
                             await flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, 0, 0, 0]);
-                            this.leds = this.leds.map(() => [0, 0, 0]);
+                            this.leds = this.layerCache[this.layer] = this.leds.map(() => [0, 0, 0]);
                             this.render();
                         } catch (e) { toast(`Clear failed: ${e.message}`, true); }
                     },

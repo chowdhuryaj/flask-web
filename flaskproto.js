@@ -33,6 +33,7 @@ export const CH = {
     combos: 0x24,   // ZMK line v7+: flask_combos runtime combo slots
     macros: 0x25,   // ZMK line v8+: flask_macros runtime macro steps
     scrollSnap: 0x26, // ZMK line v9+: flask_scrollsnap axis snap/lock
+    ballSwap: 0x27, // ZMK line v11+: flask_ballswap trackball role swap
 };
 
 export const V = {
@@ -126,6 +127,10 @@ export const V = {
     snapEnabled: 0x01, snapThreshold: 0x02, snapSamples: 0x03,
     snapImmediate: 0x04, snapLockMs: 0x05, snapLockEvents: 0x06,
     snapIdleReset: 0x07,
+    // ball swap (0x27, ZMK line v11) — u16. swapped = persisted base state
+    // (SET applies live; SAVE or the &bswap 0 key persists); effective is
+    // RO = base XOR momentary &bswap 1 holds.
+    bswapSwapped: 0x01, bswapEffective: 0x02,
 };
 
 // Slot value-id helpers (append-only wire ids).

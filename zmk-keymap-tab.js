@@ -7,18 +7,18 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=9';
-import { renderKeyboardSVG } from './keymap-tab.js?v=9';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=9';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=9';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=9';
-import { ZMK_VIDPID } from './zmk.js?v=9';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=9';
+import { el, toast, card } from './ui.js?v=10';
+import { renderKeyboardSVG } from './keymap-tab.js?v=10';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=10';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=10';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=10';
+import { ZMK_VIDPID } from './zmk.js?v=10';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=10';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe,
-} from './zmk-keycodes.js?v=9';
+} from './zmk-keycodes.js?v=10';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -950,10 +950,14 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         for (const d of layerBehaviors) {
             const p2 = d.metadata?.[0]?.param2 ?? [];
             const wantsKey = p2.some((x) => x.kind === 'hid_usage');
+            // smart_layer shape: the layer goes in BOTH params (hold =
+            // sticky layer, tap = toggle).
+            const wantsLayer2 = p2.some((x) => x.kind === 'layer_id');
             if (!wantsKey) {
                 rows.push(el('button', {
                     class: 'code', title: d.displayName,
-                    onclick: () => onPick({ behaviorId: d.id, param1: Number(sel.value), param2: 0 }),
+                    onclick: () => onPick({ behaviorId: d.id, param1: Number(sel.value),
+                        param2: wantsLayer2 ? Number(sel.value) : 0 }),
                 }, d.displayName));
             } else {
                 // &lt-style: layer + tap key.
@@ -983,6 +987,18 @@ export function buildZmkPicker({ keyPressId, onPick }) {
 
         function buildParamEditors() {
             const d = behaviors.get(Number(bhvSel.value));
+            // Layer-in-BOTH-params shape (smart_layer: hold = sticky layer,
+            // tap = toggle — the hold-tap needs the layer twice): one picker
+            // fills both params. Shape-driven, not name-driven.
+            const p1descs = d?.metadata?.[0]?.param1 ?? [];
+            const p2descs = d?.metadata?.[0]?.param2 ?? [];
+            if (p1descs.some((x) => x.kind === 'layer_id')
+                && p2descs.some((x) => x.kind === 'layer_id')) {
+                const sel = layerSelect();
+                paramsBox.replaceChildren(el('label', { text: 'Layer:' }), sel);
+                readParams = () => [Number(sel.value), Number(sel.value)];
+                return;
+            }
             const editors = [];
             const readers = [];
             for (const which of ['param1', 'param2']) {

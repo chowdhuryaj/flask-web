@@ -8,7 +8,7 @@
 // vocabulary is HID usages: param = (page << 16) | id, with implicit
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=9';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=10';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;
@@ -203,6 +203,10 @@ const BEHAVIOR_ABBREV = new Map([
     ['Smart Mod', 'SM'],
     ['Smart Layer', 'SmL'],
     ['Sticky Mod (smart)', 'SkM'],
+    ['Sticky Layer (smart)', 'SkL'],
+    // Ball swap round (2026-07-11): the initials fallback would give the
+    // unfortunate 'BS'.
+    ['Ball Swap', 'BSw'],
 ]);
 
 function abbrevName(displayName) {
@@ -249,8 +253,13 @@ export function bindingCap(binding) {
     const p2 = paramDescs(details, 'param2');
     const parts = [];
     if (abbrev) parts.push(abbrev);
+    // Layer-in-BOTH-params shape (smart_layer): the same layer twice is one
+    // fact — cap it once.
+    const bothLayers = p1.some((d) => d.kind === 'layer_id')
+        && p2.some((d) => d.kind === 'layer_id')
+        && binding.param1 === binding.param2;
     if (paramUsed(p1)) parts.push(paramCap(p1, binding.param1));
-    if (paramUsed(p2)) parts.push(paramCap(p2, binding.param2));
+    if (paramUsed(p2) && !bothLayers) parts.push(paramCap(p2, binding.param2));
     if (!parts.length) return abbrev || details.displayName.slice(0, 5) || ' ';
     return parts.join('·');
 }

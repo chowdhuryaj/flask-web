@@ -8,7 +8,7 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=9';
+import { CH, V } from './flaskproto.js?v=10';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -49,8 +49,10 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // Kconfig now — slot/step/keys counts are always device-sourced); v10
 // added flask_leader 0x19 (runtime position sequences, slot frame 0x50)
 // and flask_gestures 0x11 (runtime sets, QMK-shared ratchet/active-set
-// ids, slot frame 0x50) — both fire typed outputs (usage tap/macro slot).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 10 };
+// ids, slot frame 0x50) — both fire typed outputs (usage tap/macro slot);
+// v11 added flask_ballswap 0x27 (trackball role swap — swapped 0x01 RW,
+// effective 0x02 RO; the &bswap 0 key toggles + persists).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 11 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -87,6 +89,9 @@ export function zmkCapabilities(family, version) {
         // flask_scrollsnap (0x26, v9): runtime axis snap/lock on the
         // scroll ball (ZMK-line only channel).
         scrollSnap: flask && v >= 9,
+        // flask_ballswap (0x27, v11): live trackball role swap — toggle
+        // persists (survives reflash), momentary key swaps while held.
+        ballSwap: flask && v >= 11,
         dpi: false,
         smoothing: false,
         drag: false,        // stock ZMK scroll chain (flask_scroll dropped, v3)

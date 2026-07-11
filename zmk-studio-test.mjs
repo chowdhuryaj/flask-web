@@ -292,7 +292,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
         [4, { id: 4, displayName: 'Transparent', metadata: [] }],
         [5, { id: 5, displayName: 'Smart Layer', metadata: [{
             param1: [{ name: 'layer', kind: 'layer_id' }],
-            param2: [{ name: 'key', kind: 'hid_usage', keyboardMax: 0xFF, consumerMax: 0x3FF }] }] }],
+            param2: [{ name: 'layer', kind: 'layer_id' }] }] }],
         [6, { id: 6, displayName: 'Sticky Layer', metadata: [{
             param1: [{ name: 'layer', kind: 'layer_id' }], param2: [] }] }],
     ]);
@@ -304,8 +304,10 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(bindingCap({ behaviorId: 4, param1: 0, param2: 0 }), '▽', 'transparent glyph');
     eq(bindingCap({ behaviorId: 99, param1: 0, param2: 0 }), '#99', 'unknown behavior renders id');
     // Smart one-shot/hold abbrevs: explicit entries keep Smart Layer off
-    // Sticky Layer's 'SL'.
-    eq(bindingCap({ behaviorId: 5, param1: 3, param2: kpParam(0x2C) }), 'SmL·Fn·Spc', 'smart layer cap distinct');
+    // Sticky Layer's 'SL'. Since the 2026-07-11 rework the layer rides in
+    // BOTH params (hold = sticky, tap = toggle) — the cap collapses the
+    // duplicate to one layer name.
+    eq(bindingCap({ behaviorId: 5, param1: 3, param2: 3 }), 'SmL·Fn', 'smart layer cap collapses layer+layer');
     eq(bindingCap({ behaviorId: 6, param1: 3, param2: 0 }), 'SL·Fn', 'sticky layer keeps SL');
     eq(bindingHover({ behaviorId: 2, param1: 3, param2: 0 }).split('\n')[0], 'Momentary Layer(Fn)', 'hover head');
 }
@@ -410,7 +412,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 10, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, 11, 'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
@@ -547,7 +549,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
         await import('./zmk-output-codec.js');
 
     const ws = createZmkTemplate('imprint');
-    eq(ws.protocolVersion, 10, 'template speaks v10');
+    eq(ws.protocolVersion, 11, 'template speaks v11');
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.leader, V.leaderSlotCount), 16, 'sim leader slots');
     eq(await flask.getU16(CH.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
@@ -573,6 +575,13 @@ eq(zigzag(1), 2, 'zigzag(1)');
         encodeGestureSlot(1, 1, { action: 2, param: 4 }));
     eq(decodeGestureSlot(ge).param, 4, 'sim gesture write echoes');
     eq(zmkPendingCount(ws), 2, 'leader + gesture edits journal');
+
+    // ---- v11: ball swap channel (0x27) ----
+    eq(await flask.getU16(CH.ballSwap, V.bswapSwapped), 0, 'sim boots unswapped');
+    eq(await flask.getU16(CH.ballSwap, V.bswapEffective), 0, 'sim effective mirrors base');
+    eq(await flask.setU16(CH.ballSwap, V.bswapSwapped, 1), 1, 'sim swap set echoes');
+    eq(await flask.getU16(CH.ballSwap, V.bswapEffective), 1, 'sim effective follows the base');
+    eq(await flask.setU16(CH.ballSwap, V.bswapSwapped, 0), 0, 'sim swap clears');
     zmkClearDirty(ws);
     eq(zmkPendingCount(ws), 0, 'clear drops v10 extras too');
 }

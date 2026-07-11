@@ -9,11 +9,11 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=9';
-import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } from './zmk-combos-codec.js?v=9';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=9';
+import { CH, V } from './flaskproto.js?v=10';
+import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } from './zmk-combos-codec.js?v=10';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=10';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=9';
+    from './zmk-output-codec.js?v=10';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -48,6 +48,9 @@ export async function exportFlaskState(app) {
             lockEvents: await g(CH.scrollSnap, V.snapLockEvents),
             idleReset: await g(CH.scrollSnap, V.snapIdleReset),
         };
+    }
+    if (caps.ballSwap) {
+        out.ballSwap = { swapped: await g(CH.ballSwap, V.bswapSwapped) };
     }
     if (caps.rgbMap) {
         const layers = await g(CH.rgbMap, V.rgbmapLayers);
@@ -189,6 +192,10 @@ export async function applyFlaskState(app, data) {
             if (s[k] != null) await setU(CH.scrollSnap, id, s[k]);
         }
     }, CH.scrollSnap);
+
+    await section('ballSwap', caps.ballSwap, async (s) => {
+        if (s.swapped != null) await setU(CH.ballSwap, V.bswapSwapped, s.swapped);
+    }, CH.ballSwap);
 
     await section('rgb', caps.rgbMap, async (s) => {
         const layers = await flask.getU16(CH.rgbMap, V.rgbmapLayers);

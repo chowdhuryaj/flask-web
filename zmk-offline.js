@@ -19,15 +19,15 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=9';
-import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=9';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=9';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=9';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=9';
-import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=9';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=9';
+import { CH, V } from './flaskproto.js?v=10';
+import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=10';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=10';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=10';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=10';
+import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=10';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=10';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=9';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=10';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -140,10 +140,16 @@ function buildBehaviorCatalog() {
     add('Num Word', layer());
     add('Leader Key', nil);
     // Smart one-shot/hold round (2026-07-10): hold-tap wrapping sticky —
-    // same two-param shape Studio reports for Mod-Tap / Layer-Tap.
+    // Smart Mod keeps the Mod-Tap shape; Smart Layer is layer-in-BOTH-params
+    // since the 2026-07-11 rework (hold = sticky layer, tap = toggle — the
+    // composer renders one picker for the layer+layer shape).
     add('Smart Mod', usage('Hold (mod)'), usage('Tap'));
-    add('Smart Layer', layer(), usage('Tap'));
+    add('Smart Layer', layer(), layer());
     add('Sticky Mod (smart)', usage('Key'));
+    add('Sticky Layer (smart)', layer());
+    // Ball swap round (2026-07-11, proto v11).
+    add('Ball Swap', constants([['Toggle (saved)', 0], ['While held', 1]]));
+    add('External Power', constants([['Off', 0], ['On', 1], ['Toggle', 2]]));
     return catalog;
 }
 
@@ -179,7 +185,7 @@ function buildDefaultLayers() {
             KP('H'), KP('J'), KP('K'), KP('L'), KP('Semicolon'), KP('Quote')),
         ...row(TR(), KP('Z'), KP('X'), KP('C'), KP('V'), KP('B'),
             KP('N'), KP('M'), KP('Comma'), KP('Dot'), KP('Slash'), TR()),
-        ...row(TR(), KP('F20'), KP('F11'), KP('F12'), KP('Grave'),
+        ...row(bind(B['Studio Unlock']), KP('F20'), KP('F11'), KP('F12'), KP('Grave'),
             KP('Down'), KP('Up'), KP('Left'), KP('Right'), TR()),
         ...row(MT('Left GUI', 'H'), MT('Left Shift', 'Space'), MB(1),
             MB(1), MT('Right Shift', 'Space'), MT('Right GUI', 'L')),
@@ -195,8 +201,8 @@ function buildDefaultLayers() {
             TR(), bind(B['Key Repeat']), KP('Tab'), KP('Up'), KP('Tab'), TR()),
         ...row(TR(), KP('Volume Down'), KP('Left'), KP('Down'), KP('Right'), bind(B['Leader Key']),
             bind(B['Caps Word']), KP('Enter'), KP('Left'), KP('Down'), KP('Right'), KP('Escape')),
-        ...row(TR(), KP('Mute'), KP('Play/Pause'), KP('Rewind'), KP('Fast Forward'), TR(),
-            TR(), bind(B['Flask RGB'], 1), bind(B['Flask RGB'], 2), bind(B['Flask RGB'], 0), TR(), TR()),
+        ...row(TR(), KP('Mute'), KP('Play/Pause'), KP('Rewind'), KP('Fast Forward'), bind(B['Ball Swap'], 0),
+            bind(B['Ball Swap'], 1), bind(B['Flask RGB'], 1), bind(B['Flask RGB'], 2), bind(B['Flask RGB'], 0), bind(B['External Power'], 2), TR()),
         ...trRow(10),
         ...row(TR(), bind(B.Bluetooth, 3, 0), bind(B.Bluetooth, 3, 1),
             bind(B['Output Selection'], 0), bind(B.Reset), bind(B.Bluetooth, 0)),
@@ -300,6 +306,10 @@ function seedImprintTunables(tun) {
     seed(CH.gestures, V.gesturesEnabled, 1);
     seed(CH.gestures, V.gesturesRatchetStep, 150);
     seed(CH.gestures, V.gesturesActiveSet, 0);
+
+    // v11: ball swap (boots unswapped; effective is live-only — see the
+    // ZmkOfflineFlask getU16 special case).
+    seed(CH.ballSwap, V.bswapSwapped, 0);
 }
 
 export function createZmkTemplate(family) {
@@ -440,6 +450,11 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.leader && id === V.leaderSlotCount) return this.ws.zmk.leader.length;
         if (ch === CH.leader && id === V.leaderKeys) return IMPRINT.leaderKeys;
         if (ch === CH.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
+        // Ball swap "effective" is live-only (base XOR momentary holds) —
+        // the sim has no held keys, so it always equals the base state.
+        if (ch === CH.ballSwap && id === V.bswapEffective) {
+            return super.getU16(ch, V.bswapSwapped);
+        }
         return super.getU16(ch, id);
     }
 

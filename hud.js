@@ -4,9 +4,9 @@
 // HUDWindow.swift (poll cadences preserved: ~15 Hz layer/matrix, OLED
 // mirror every 4th tick).
 
-import { el } from './ui.js?v=9';
-import { CH, V, NLKB } from './flaskproto.js?v=9';
-import { renderKeyboardSVG } from './keymap-tab.js?v=9';
+import { el } from './ui.js?v=10';
+import { CH, V, NLKB } from './flaskproto.js?v=10';
+import { renderKeyboardSVG } from './keymap-tab.js?v=10';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;
@@ -145,13 +145,16 @@ export class HUD {
             // Live-action chips at ~4 Hz (every 4th tick, cheap GETs):
             // autoscroll level (0x1A/0x05 signed; QMK + ZMK share the id)
             // and flask_macros playback (0x25/0x06, ZMK line).
-            if ((tick % 4) === 1 && (app.caps.autoscroll || app.caps.macros)) {
+            if ((tick % 4) === 1 && (app.caps.autoscroll || app.caps.macros || app.caps.ballSwap)) {
                 const status = {};
                 if (app.caps.autoscroll) {
                     status.autoscroll = await app.flask.getI16(CH.autoscroll, V.asState);
                 }
                 if (app.caps.macros) {
                     status.macro = await app.flask.getU16(CH.macros, V.macrosState);
+                }
+                if (app.caps.ballSwap) {
+                    status.bswap = await app.flask.getU16(CH.ballSwap, V.bswapEffective);
                 }
                 if (JSON.stringify(status) !== JSON.stringify(this._liveStatus)) {
                     this._liveStatus = status;
@@ -226,6 +229,10 @@ export class HUD {
             chips.push(el('span', { class: 'pill',
                 text: `▶ macro ${s.macro - 1} playing` }));
         }
+        if (s.bswap) {
+            chips.push(el('span', { class: 'pill',
+                text: '🖲 balls swapped' }));
+        }
         this.statusEl.replaceChildren(...chips);
     }
 
@@ -247,6 +254,13 @@ export class HUD {
             keycodeAt: (row, col) => app.keymap?.[this.shownLayer]?.[row]?.[col] ?? 0,
             encoderAt: null,
             pressed: this.pressed,
+            // Mirror the flask_rgb painted map (ZMK line; published by the
+            // RGB tab). Pressed keys keep the press highlight — an inline
+            // fill would override the .pressed class.
+            fillFor: app.zmkRgbTint
+                ? (key) => (this.pressed.has(`${key.row},${key.col}`)
+                    ? null : app.zmkRgbTint(this.shownLayer, key))
+                : undefined,
             scale: 0.62,
         }));
         // Pressed-key display rides the Vial matrix-state read — devices

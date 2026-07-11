@@ -3,9 +3,9 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=9';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=10';
 import { CH, V, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
-         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=9';
+         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=10';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -182,6 +182,34 @@ export class MouseTab {
                 min: 0, max: 2000, step: 50, value: await g(CH.scrollSnap, V.snapIdleReset),
                 onChange: (v) => flask.setU16(CH.scrollSnap, V.snapIdleReset, v) }),
             saveBar(() => flask.save(CH.scrollSnap))));
+        }
+
+        // ---- trackball role swap ----
+        // ZMK line v11+ (flask_ballswap, channel 0x27): swaps the two balls'
+        // roles live (cursor <-> scroll). Caps-driven like every card here —
+        // QMK families never set caps.ballSwap. The toggle writes the base
+        // state and persists it immediately (same as the &bswap 0 key —
+        // survives power cycle and reflash); &bswap 1 swaps while held and
+        // shows up in the read-only "right now" line.
+        if (caps.ballSwap) {
+        const bswapNow = el('div', { class: 'hint' });
+        const refreshBswapNow = async () => {
+            const eff = await g(CH.ballSwap, V.bswapEffective);
+            bswapNow.textContent = eff
+                ? 'Right now: SWAPPED (right = scroll, left = cursor)'
+                : 'Right now: normal (right = cursor, left = scroll)';
+        };
+        await refreshBswapNow();
+        cardsRow.append(card('Ball swap', 'trackball role swap (cursor ↔ scroll)',
+            toggleRow({ label: 'Swap ball roles', value: await g(CH.ballSwap, V.bswapSwapped),
+                onChange: async (v) => {
+                    await flask.setU16(CH.ballSwap, V.bswapSwapped, v ? 1 : 0);
+                    await flask.save(CH.ballSwap); // key parity: toggles persist
+                    refreshBswapNow();
+                } }),
+            bswapNow,
+            el('div', { class: 'hint',
+                text: 'Keys: assign “Ball Swap” in the Keymap tab — mode 0 toggles (saved), mode 1 swaps while held. Defaults live on Control 41/42.' })));
         }
 
         // ---- drag scroll ----
