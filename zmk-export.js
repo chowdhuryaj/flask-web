@@ -10,6 +10,7 @@
 // importing v10 into v9 skips leader/gestures.
 
 import { CH, V } from './flaskproto.js?v=11';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=11';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } from './zmk-combos-codec.js?v=11';
 import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=11';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
@@ -154,6 +155,10 @@ async function exportFlaskStateInner(app) {
             sets,
         };
     }
+    // Client-side slot names (combo/macro renames) — the firmware has no
+    // name storage, so the backup carries them alongside the device state.
+    const names = zmkAllSlotNames(app.profile?.family ?? 'imprint');
+    if (Object.keys(names).length) out.slotNames = names;
     return out;
 }
 
@@ -289,6 +294,11 @@ async function applyFlaskStateInner(app, data) {
         if (s.ratchetStep != null) await setU(CH.gestures, V.gesturesRatchetStep, s.ratchetStep);
         if (s.activeSet != null) await setU(CH.gestures, V.gesturesActiveSet, s.activeSet);
     }, CH.gestures);
+
+    if (data.slotNames) {
+        zmkApplySlotNames(app.profile?.family ?? 'imprint', data.slotNames);
+        applied++;
+    }
 
     for (const ch of saves) {
         try { await flask.save(ch); } catch (e) { failures.push(`save 0x${ch.toString(16)}: ${e.message}`); }

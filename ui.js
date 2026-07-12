@@ -57,6 +57,36 @@ export function modal(title, body, buttons) {
     return back;
 }
 
+/** Inline-renameable label: click to edit, commits EXACTLY once on
+ * Enter/blur, Escape cancels. The commit-once guard is load-bearing:
+ * Enter's re-render detaches the input, whose blur re-fires the commit
+ * mid-render (the bench-3 layer-rename toast). `placeholder` is the
+ * default label; committing an empty value means "clear the custom name". */
+export function renameLabel({ text, placeholder, title = 'click to rename', onCommit }) {
+    const b = el('b', { text, title, style: 'cursor: text' });
+    b.addEventListener('click', () => {
+        const input = el('input', {
+            type: 'text', placeholder,
+            value: text === placeholder ? '' : text,
+        });
+        let committed = false;
+        const commit = () => {
+            if (committed) return;
+            committed = true;
+            onCommit(input.value.trim());
+        };
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') commit();
+            else if (e.key === 'Escape') { committed = true; input.replaceWith(b); }
+        });
+        input.addEventListener('blur', commit);
+        b.replaceWith(input);
+        input.focus();
+        input.select();
+    });
+    return b;
+}
+
 // ---------- tuning widgets ----------
 
 /**

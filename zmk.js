@@ -204,3 +204,32 @@ export async function confirmZmkFamily(flask, candidate) {
     } catch { /* keep candidate */ }
     return candidate;
 }
+
+// ---------------------------------------------------------------------------
+// Client-side slot names (bench 5 ask: rename combos/macros). The firmware
+// stores no names — these live per-family in localStorage and ride the v2
+// full-device export so they follow backups.
+
+const slotNamesKey = (family) => `flask-zmk-slotnames-${family}`;
+
+export function zmkAllSlotNames(family) {
+    try { return JSON.parse(localStorage.getItem(slotNamesKey(family)) || '{}'); }
+    catch { return {}; }
+}
+
+export function zmkSlotName(family, kind, idx) {
+    return zmkAllSlotNames(family)?.[kind]?.[idx] || '';
+}
+
+export function zmkSetSlotName(family, kind, idx, name) {
+    const all = zmkAllSlotNames(family);
+    const table = all[kind] ?? {};
+    if (name) table[idx] = name; else delete table[idx];
+    all[kind] = table;
+    try { localStorage.setItem(slotNamesKey(family), JSON.stringify(all)); } catch { /* storage full */ }
+}
+
+export function zmkApplySlotNames(family, names) {
+    if (!names || typeof names !== 'object') return;
+    try { localStorage.setItem(slotNamesKey(family), JSON.stringify(names)); } catch { /* storage full */ }
+}

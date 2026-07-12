@@ -219,7 +219,13 @@ export class FlaskProto {
     }
 
     async save(channel) {
-        const r = await this.hid.request([CMD.save, channel, 0]);
+        // Saves run flash writes device-side and the echo arrives only when
+        // they land — a mass slot delete can legitimately take seconds
+        // (bench 5: the 500 ms timeout fired, the RETRY then bounced off
+        // the firmware's one-save-in-flight guard and echoed unhandled).
+        // Wait patiently, never retry a save.
+        const r = await this.hid.request([CMD.save, channel, 0], 0,
+            { timeoutMs: 6000, retries: 0 });
         if (r[0] !== CMD.save) throw new Error('unhandled');
     }
 

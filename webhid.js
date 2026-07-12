@@ -11,9 +11,17 @@ export const USAGE_PAGE = 0xFF60;
 export const USAGE = 0x61;
 export const REPORT_SIZE = 32;
 
-// Key-state channel (flaskproto CH.keyState) — the HUD polls it ~15 Hz, so
-// the diagnostics ring counts those instead of listing them.
-const CH_KEYSTATE = 0x23;
+// The HUD's poll family — key-state + meta active-layer at ~15 Hz, status
+// chips (autoscroll level / macro playing / ballswap effective) at ~4 Hz.
+// The diagnostics ring COUNTS these instead of listing them, or the
+// 600-entry ring holds under a minute of session (bench 5's report was
+// wall-to-wall meta-layer GETs). GET frames only — SETs always list.
+const POLL_VALUES = { 0x23: null, 0x00: 0x02, 0x1a: 0x05, 0x25: 0x06, 0x27: 0x02 };
+function isPollFrame(bytes) {
+    if (bytes[0] !== 0x08) return false;
+    const v = POLL_VALUES[bytes[1]];
+    return v === null || v === bytes[2];
+}
 
 export class HIDError extends Error {
     constructor(kind, msg) { super(msg || kind); this.kind = kind; }
@@ -101,7 +109,7 @@ export class FlaskHID extends EventTarget {
         clearTimeout(this._pending.timer);
         const p = this._pending;
         this._pending = null;
-        if (bytes[1] === CH_KEYSTATE) diag.pollOk(); else diag.rxOk();
+        if (isPollFrame(bytes)) diag.pollOk(); else diag.rxOk();
         p.resolve(Array.from(bytes));
     }
 
@@ -123,7 +131,7 @@ export class FlaskHID extends EventTarget {
         return run;
     }
 
-    _sendOnce(prefix, matches) {
+    _sendOnce(prefix, matches, timeoutMs = 500) {
         return new Promise((resolve, reject) => {
             if (!this.device?.opened) {
                 reject(new HIDError('notConnected', 'Device not connected'));
@@ -131,7 +139,7 @@ export class FlaskHID extends EventTarget {
             }
             const report = new Uint8Array(REPORT_SIZE);
             report.set(prefix.slice(0, REPORT_SIZE));
-            const isPoll = report[1] === CH_KEYSTATE;
+            const isPoll = isPollFrame(report);
             if (!isPoll) diag.log('tx', diagHex(report, 10));
             this._pending = {
                 matches, resolve, reject,
@@ -139,10 +147,10 @@ export class FlaskHID extends EventTarget {
                     if (this._pending) {
                         const p = this._pending;
                         this._pending = null;
-                        diag.timeout((isPoll ? 'key-state poll ' : '') + diagHex(report, 10));
+                        diag.timeout((isPoll ? 'status poll ' : '') + diagHex(report, 10));
                         p.reject(new HIDError('timeout', 'Device did not answer in time'));
                     }
-                }, 500),
+                }, timeoutMs),
             };
             this.device.sendReport(0, report).catch(async (e) => {
                 diag.log('write-failed', `${e.message} — tearing the connection down`);
@@ -170,16 +178,16 @@ export class FlaskHID extends EventTarget {
     // fix's core: while nothing is pending, _onInputReport drops stray
     // reports, so the gap absorbs a late answer before it can desync the
     // stream.
-    async _send(prefix, matches) {
-        for (let attempt = 0; attempt < 2; attempt++) {
+    async _send(prefix, matches, { timeoutMs = 500, retries = 2 } = {}) {
+        for (let attempt = 0; attempt < retries; attempt++) {
             try {
-                return await this._sendOnce(prefix, matches);
+                return await this._sendOnce(prefix, matches, timeoutMs);
             } catch (e) {
                 if (e.kind !== 'timeout') throw e;
                 await new Promise((r) => setTimeout(r, 250)); // drain window
             }
         }
-        return this._sendOnce(prefix, matches);
+        return this._sendOnce(prefix, matches, timeoutMs);
     }
 
     /** Tuning frame: response matched on echoed (channel, value_id).
@@ -189,13 +197,13 @@ export class FlaskHID extends EventTarget {
      * Without it a LATE reply for slot 3 (after its request timed out)
      * satisfies the in-flight slot-4 request — same (channel, value) — and
      * every table read after that is shifted by one. */
-    request(prefix, echoBytes = 0) {
+    request(prefix, echoBytes = 0, opts = undefined) {
         const channel = prefix[1] ?? 0;
         const valueID = prefix[2] ?? 0;
         const echo = prefix.slice(3, 3 + echoBytes);
         return this._enqueue(() =>
             this._send(prefix, (r) => r[1] === channel && r[2] === valueID
-                && echo.every((b, i) => r[3 + i] === b)));
+                && echo.every((b, i) => r[3 + i] === b), opts));
     }
 
     /**

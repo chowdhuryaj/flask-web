@@ -741,4 +741,25 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq((await p0)[4], 64, 'echoBytes 0 = legacy channel/value match');
 }
 
+// ---- client-side slot names (zmk.js — bench-5 rename ask) ----
+{
+    // The LED-map block above deletes the shared shim (it asserts the
+    // no-localStorage path) — install a fresh one for this block.
+    globalThis.localStorage = {
+        _m: new Map(),
+        getItem(k) { return this._m.get(k) ?? null; },
+        setItem(k, v) { this._m.set(k, String(v)); },
+        removeItem(k) { this._m.delete(k); },
+    };
+    const { zmkSlotName, zmkSetSlotName, zmkAllSlotNames, zmkApplySlotNames } =
+        await import('./zmk.js');
+    zmkSetSlotName('imprint', 'combos', 3, 'copy-pair');
+    eq(zmkSlotName('imprint', 'combos', 3), 'copy-pair', 'slot name round-trips');
+    zmkSetSlotName('imprint', 'combos', 3, '');
+    eq(zmkSlotName('imprint', 'combos', 3), '', 'empty commit clears the name');
+    zmkApplySlotNames('imprint', { macros: { 0: 'hello' } });
+    eq(zmkAllSlotNames('imprint').macros[0], 'hello', 'import applies the whole table');
+    delete globalThis.localStorage;
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

@@ -17,7 +17,8 @@
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=11';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=11';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=11';
 import { CH, V } from './flaskproto.js?v=11';
 import { renderKeyboardSVG } from './keymap-tab.js?v=11';
 import {
@@ -259,9 +260,15 @@ export class ZmkCombosTab {
             onclick: () => this.pickOutput(i),
         }, s.usage ? usageCap(s.usage) : 'output…');
 
+        const fam = this.app.profile?.family ?? 'imprint';
+        const customName = zmkSlotName(fam, 'combos', i);
         return el('div', { class: 'card', style: live ? '' : 'opacity:0.75' },
             el('div', { class: 'row' },
-                el('span', { class: 'lbl' }, el('b', { text: `Combo ${i}` }),
+                el('span', { class: 'lbl' }, renameLabel({
+                    text: customName || `Combo ${i}`,
+                    placeholder: `Combo ${i}`,
+                    onCommit: (v) => { zmkSetSlotName(fam, 'combos', i, v); this.render(); },
+                }),
                     el('span', {
                         class: 'hint',
                         text: live ? `${s.positions.length} keys → ${usageLabel(s.usage)}`

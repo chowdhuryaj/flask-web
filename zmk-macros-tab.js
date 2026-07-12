@@ -15,7 +15,8 @@
 // Playback stops at the first empty step, so the editor keeps live steps
 // compacted: deleting a row shifts the tail up and rewrites the suffix.
 
-import { el, card, sliderRow, toggleRow, saveBar, toast } from './ui.js?v=11';
+import { el, card, sliderRow, toggleRow, saveBar, toast, renameLabel } from './ui.js?v=11';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=11';
 import { CH, V } from './flaskproto.js?v=11';
 import { usageCap, usageLabel } from './zmk-keycodes.js?v=11';
 import { pickUsage } from './zmk-combos-tab.js?v=11';
@@ -186,9 +187,15 @@ export class ZmkMacrosTab {
 
     macroCard(m) {
         const live = macroLiveSteps(this.steps[m]);
+        const fam = this.app.profile?.family ?? 'imprint';
+        const customName = zmkSlotName(fam, 'macros', m);
         return el('div', { class: 'card', style: live.length ? '' : 'opacity:0.75' },
             el('div', { class: 'row' },
-                el('span', { class: 'lbl' }, el('b', { text: `Macro ${m}` }),
+                el('span', { class: 'lbl' }, renameLabel({
+                    text: customName || `Macro ${m}`,
+                    placeholder: `Macro ${m}`,
+                    onCommit: (v) => { zmkSetSlotName(fam, 'macros', m, v); this.render(); },
+                }),
                     el('span', {
                         class: 'hint',
                         text: live.length

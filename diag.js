@@ -37,7 +37,8 @@ class Diag extends EventTarget {
         this.dispatchEvent(new Event('log'));
     }
 
-    /** A key-state poll answered — the liveness heartbeat. */
+    /** A status poll answered (key-state / meta-layer / HUD chips) — the
+     * liveness heartbeat. */
     pollOk() {
         this.polls.ok++;
         this.polls.lastAt = Date.now();
@@ -86,7 +87,7 @@ class Diag extends EventTarget {
         const head = [
             `Flask diagnostics — ${new Date().toISOString()}`,
             navigator.userAgent,
-            `key-state polls answered: ${this.polls.ok}`
+            `status polls answered: ${this.polls.ok}`
                 + (this.polls.lastAt
                     ? `, last ${((Date.now() - this.polls.lastAt) / 1000).toFixed(1)} s ago` : ''),
             this.deadSince

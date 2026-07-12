@@ -187,8 +187,24 @@ export class ZmkRgbTab {
             toast('Open the Keymap tab once first — the wizard needs board geometry', true);
             return;
         }
-        this.wizard = { led: 0, order: Array(this.ledCount).fill(null), orig: null };
+        this.wizard = { led: 0, order: Array(this.ledCount).fill(null), orig: null,
+            effectWas: this.effect };
+        // A running effect animates the WHOLE strip — the wizard's single
+        // white LED disappears into it ("mapping stopped working", bench 5:
+        // the sweep worked with the effect off, then an effect got saved and
+        // the next run was unusable). Force Off for the sweep; finish/abort
+        // restores.
+        if (this.effect) {
+            try { this.effect = await this.app.flask.setU16(CH.rgbMap, V.rgbmapEffect, 0); }
+            catch { /* effect card still shows the truth on next load */ }
+        }
         await this.lightWizardLed();
+    }
+
+    async _restoreWizardEffect(effectWas) {
+        if (!effectWas) return;
+        try { this.effect = await this.app.flask.setU16(CH.rgbMap, V.rgbmapEffect, effectWas); }
+        catch { /* cosmetic */ }
     }
 
     async lightWizardLed() {
@@ -230,13 +246,16 @@ export class ZmkRgbTab {
 
     async abortWizard() {
         await this.restoreWizardLed();
+        const { effectWas } = this.wizard;
         this.wizard = null;
+        await this._restoreWizardEffect(effectWas);
         this.render();
     }
 
     finishWizard() {
-        const order = this.wizard.order;
+        const { order, effectWas } = this.wizard;
         this.wizard = null;
+        this._restoreWizardEffect(effectWas);
         saveLedMap(order);
         this._tintKeys = null; // rebuild the HUD tint lookup from the new map
         const mapped = order.filter((p) => p != null).length;
