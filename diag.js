@@ -29,6 +29,7 @@ class Diag extends EventTarget {
         this.polls = { ok: 0, lastAt: 0 };
         this.deadSince = null;
         this._timeouts = [];
+        this.lats = new Map(); // channel → { n, sum, max } (ms)
     }
 
     log(kind, detail = '') {
@@ -47,6 +48,16 @@ class Diag extends EventTarget {
 
     /** Any non-poll reply answered. */
     rxOk() { this._alive(); }
+
+    /** Per-channel latency accumulator (request → matched reply, ms). */
+    lat(channel, ms) {
+        const key = channel ?? 0;
+        const s = this.lats.get(key) ?? { n: 0, sum: 0, max: 0 };
+        s.n++;
+        s.sum += ms;
+        if (ms > s.max) s.max = ms;
+        this.lats.set(key, s);
+    }
 
     _alive() {
         this._timeouts.length = 0;
@@ -93,8 +104,15 @@ class Diag extends EventTarget {
             this.deadSince
                 ? `DEVICE UNRESPONSIVE since ${new Date(this.deadSince).toISOString()}`
                 : 'device answering',
-            '',
         ];
+        if (this.lats.size) {
+            head.push('latency by channel (avg / max ms over n replies):');
+            for (const [ch, s] of [...this.lats.entries()].sort((a, b) => a[0] - b[0])) {
+                head.push(`  ch 0x${ch.toString(16).padStart(2, '0')}: `
+                    + `${(s.sum / s.n).toFixed(1)} / ${s.max.toFixed(1)} over ${s.n}`);
+            }
+        }
+        head.push('');
         const lines = this.events.map((e) =>
             `[+${((e.t - this.t0) / 1000).toFixed(3).padStart(10)}] ${e.kind}${e.detail ? ' ' + e.detail : ''}`);
         return head.concat(lines).join('\n');

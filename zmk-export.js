@@ -11,7 +11,9 @@
 
 import { CH, V } from './flaskproto.js?v=11';
 import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=11';
-import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } from './zmk-combos-codec.js?v=11';
+import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
+         encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
+         comboTypedToLegacy } from './zmk-combos-codec.js?v=11';
 import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=11';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
     from './zmk-output-codec.js?v=11';
@@ -90,9 +92,18 @@ async function exportFlaskStateInner(app) {
             ? (await g(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         const slots = [];
         for (let i = 0; i < count; i++) {
-            const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
-            const { positions, usage } = decodeComboSlot(r, keys);
-            slots.push({ positions, usage });
+            // v12: slots are TYPED in the file (behavior outputs survive a
+            // backup); pre-v12 exports keep the legacy {positions, usage}.
+            if (caps.combosTyped) {
+                const r = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
+                const { positions, action, behaviorId, param1, param2 } =
+                    decodeComboSlotV2(r, keys);
+                slots.push({ positions, action, behaviorId, param1, param2 });
+            } else {
+                const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
+                const { positions, usage } = decodeComboSlot(r, keys);
+                slots.push({ positions, usage });
+            }
         }
         out.combos = {
             enabled: await g(CH.combos, V.combosEnabled),
@@ -244,7 +255,17 @@ async function applyFlaskStateInner(app, data) {
         const keys = caps.combosKeys
             ? (await flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
-            await flask.setBytes(CH.combos, V.combosSlot, encodeComboSlot(i, s.slots[i], keys), 1);
+            // File slots may be legacy {usage} or typed (v12 exports);
+            // device may be either too — bridge both directions.
+            const typed = s.slots[i].action != null
+                ? s.slots[i] : comboSlotToTyped(s.slots[i]);
+            if (caps.combosTyped) {
+                await flask.setBytes(CH.combos, V.combosSlotV2,
+                    encodeComboSlotV2(i, typed, keys), 1);
+            } else {
+                await flask.setBytes(CH.combos, V.combosSlot,
+                    encodeComboSlot(i, comboTypedToLegacy(typed), keys), 1);
+            }
             applied++;
         }
         if (s.enabled != null) await setU(CH.combos, V.combosEnabled, s.enabled);

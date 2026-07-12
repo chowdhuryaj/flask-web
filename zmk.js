@@ -52,8 +52,13 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // and flask_gestures 0x11 (runtime sets, QMK-shared ratchet/active-set
 // ids, slot frame 0x50) — both fire typed outputs (usage tap/macro slot);
 // v11 added flask_ballswap 0x27 (trackball role swap — swapped 0x01 RW,
-// effective 0x02 RO; the &bswap 0 key toggles + persists).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 11 };
+// effective 0x02 RO; the &bswap 0 key toggles + persists); v12 added typed
+// combo outputs (combos slot v2 0x11 — usage-hold / play-macro / invoke a
+// BEHAVIOR by Studio local id with two params: tap-holds, layer keys) and
+// the runtime LED order (rgbmap 0x0A — the wizard's measured LED→position
+// map lives on the device; the reactive overlay follows it, no keymap
+// edit + reflash needed).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 12 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -131,6 +136,12 @@ export function zmkCapabilities(family, version) {
         // v9: keys-per-slot RO value (0x04) sizes the slot frame; v7/v8
         // firmware is fixed at the codec's 4-key default.
         combosKeys: flask && v >= 9,
+        // v12: typed combo outputs (slot v2 0x11) — usage-hold / macro /
+        // behavior invocation. Pre-v12 firmware keeps the usage-only slot.
+        combosTyped: flask && v >= 12,
+        // v12: runtime LED→position order (rgbmap 0x0A) — the wizard
+        // pushes the measured map to the device.
+        rgbLedOrder: flask && v >= 12,
         // flask_rgb effect engine (0x21 values 0x04-0x08, v9) — the
         // whole-strip animations under the painted map.
         rgbEffects: flask && v >= 9,

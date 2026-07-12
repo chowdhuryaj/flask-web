@@ -140,9 +140,15 @@ export class FlaskHID extends EventTarget {
             const report = new Uint8Array(REPORT_SIZE);
             report.set(prefix.slice(0, REPORT_SIZE));
             const isPoll = isPollFrame(report);
+            const t0 = performance.now();
             if (!isPoll) diag.log('tx', diagHex(report, 10));
             this._pending = {
-                matches, resolve, reject,
+                matches,
+                resolve: (bytes) => {
+                    diag.lat(report[1], performance.now() - t0);
+                    resolve(bytes);
+                },
+                reject,
                 timer: setTimeout(() => {
                     if (this._pending) {
                         const p = this._pending;

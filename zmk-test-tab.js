@@ -14,6 +14,9 @@
 
 import { el, card, toast } from './ui.js?v=11';
 import { CH, V } from './flaskproto.js?v=11';
+import { diag } from './diag.js?v=11';
+import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION }
+    from './zmk-combos-codec.js?v=11';
 
 const now = () => performance.now();
 
@@ -27,8 +30,154 @@ export class ZmkTestTab {
     }
 
     async load() {
-        this.root.replaceChildren(el('div', { class: 'cards-row' },
-            this.typingCard(), this.tapHoldCard(), this.comboCard(), this.mouseCard()));
+        this.root.replaceChildren(
+            this.selfTestCard(),
+            el('div', { class: 'cards-row' },
+                this.typingCard(), this.tapHoldCard(), this.comboCard(), this.mouseCard()));
+    }
+
+    // ---- device self-test ----------------------------------------------
+    //
+    // Automated probe pass so a bench round starts from "the protocol
+    // provably works" instead of manual spot checks (bench 5 ask). Probes
+    // are read-only or write-verify-RESTORE; nothing is saved to flash.
+
+    selfTestCard() {
+        const out = el('pre', {
+            style: 'font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto;'
+                + ' user-select:text; margin:0',
+        });
+        const btn = el('button', { class: 'btn primary', text: '🧪 Run device self-test' });
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            out.textContent = 'running…';
+            try {
+                const lines = await this.runSelfTest();
+                out.textContent = lines.join('\n');
+                const bad = lines.filter((l) => l.startsWith('✗')).length;
+                diag.log('self-test', `${lines.length - bad - 1} ok, ${bad} failed`);
+                toast(bad ? `Self-test: ${bad} probe${bad === 1 ? '' : 's'} FAILED` : 'Self-test clean', !!bad);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+        return card('Device self-test',
+            'probes every advertised channel — read, write-verify-restore, latency; nothing is saved',
+            el('div', { class: 'savebar' }, btn,
+                el('button', {
+                    class: 'btn', text: 'Copy result',
+                    onclick: () => navigator.clipboard?.writeText(out.textContent)
+                        .then(() => toast('Copied'), () => toast('Copy failed', true)),
+                })),
+            out);
+    }
+
+    async runSelfTest() {
+        const { flask, caps, hid } = this.app;
+        const lines = [];
+        const probe = async (name, fn) => {
+            try {
+                const detail = await fn();
+                lines.push(`✓ ${name}${detail ? ` — ${detail}` : ''}`);
+            } catch (e) {
+                lines.push(`✗ ${name} — ${e.message}`);
+            }
+        };
+        // u16 write-verify-restore: SET a new value, GET must agree, SET back.
+        const flipU16 = async (ch, id, alt) => {
+            const orig = await flask.getU16(ch, id);
+            const want = orig === alt ? (alt ? 0 : 1) : alt;
+            await flask.setU16(ch, id, want);
+            const got = await flask.getU16(ch, id);
+            await flask.setU16(ch, id, orig);
+            if (got !== want) throw new Error(`wrote ${want}, device reports ${got}`);
+            return `${orig}→${want}→${orig}`;
+        };
+
+        hid?.pause?.();
+        const t0 = performance.now();
+        try {
+            await probe('meta: protocol version', async () =>
+                `v${await flask.getU16(CH.meta, V.metaProtocolVersion)}`);
+            await probe('meta: family id', async () =>
+                `${await flask.getU16(CH.meta, V.metaFamily)}`);
+            await probe('meta: active layer', async () =>
+                `${await flask.getU16(CH.meta, V.metaActiveLayer)}`);
+
+            if (caps.combos) {
+                // The flag-verify that would have caught "combos fire while
+                // off" being a stale wire: the DEVICE must report the flip.
+                await probe('combos: enabled flag round-trip', () =>
+                    flipU16(CH.combos, V.combosEnabled, 0));
+                await probe('combos: last-slot write/read/restore', async () => {
+                    const count = await flask.getU16(CH.combos, V.combosSlotCount);
+                    const keys = caps.combosKeys
+                        ? (await flask.getU16(CH.combos, V.combosKeys) || 4) : 4;
+                    const i = count - 1;
+                    if (caps.combosTyped) {
+                        const orig = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
+                        const test = encodeComboSlotV2(i, {
+                            positions: [0, 1], action: COMBO_ACTION.usage, param1: 0x70004,
+                        }, keys);
+                        const echo = await flask.setBytes(CH.combos, V.combosSlotV2, test, 1);
+                        const back = decodeComboSlotV2(echo, keys);
+                        await flask.setBytes(CH.combos, V.combosSlotV2, [i, ...orig.slice(1)], 1);
+                        if (back.action !== COMBO_ACTION.usage || back.param1 !== 0x70004) {
+                            throw new Error('echo mismatch');
+                        }
+                        return `slot ${i} (typed)`;
+                    }
+                    const orig = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
+                    const echo = await flask.setBytes(CH.combos, V.combosSlot,
+                        [i, 0, 1, ...new Array(keys - 2).fill(0xFF), 0x00, 0x07, 0x00, 0x04], 1);
+                    await flask.setBytes(CH.combos, V.combosSlot, [i, ...orig.slice(1)], 1);
+                    if (echo[keys + 4] !== 0x04) throw new Error('echo mismatch');
+                    return `slot ${i} (legacy)`;
+                });
+            }
+            if (caps.macros) {
+                await probe('macros: enabled flag round-trip', () =>
+                    flipU16(CH.macros, V.macrosEnabled, 0));
+            }
+            if (caps.leader) {
+                await probe('leader: enabled flag round-trip', () =>
+                    flipU16(CH.leader, V.leaderEnabled, 0));
+            }
+            if (caps.autoscroll) {
+                await probe('autoscroll: inverted flag round-trip', () =>
+                    flipU16(CH.autoscroll, V.asInverted, 1));
+            }
+            if (caps.rgbMap) {
+                await probe('rgb: led write/read/restore', async () => {
+                    const orig = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [0, 0], 2);
+                    await flask.setBytes(CH.rgbMap, V.rgbmapLed, [0, 0, 1, 2, 3], 2);
+                    const back = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [0, 0], 2);
+                    await flask.setBytes(CH.rgbMap, V.rgbmapLed, [0, 0, ...orig.slice(2, 5)], 2);
+                    if (back[2] !== 1 || back[3] !== 2 || back[4] !== 3) {
+                        throw new Error(`read back ${back.slice(2, 5)}`);
+                    }
+                    return 'led 0 @ layer 0';
+                });
+            }
+            if (caps.rgbLedOrder) {
+                await probe('rgb: LED-order chunk round-trip', async () => {
+                    const orig = await flask.getBytes(CH.rgbMap, V.rgbmapLedOrder, [0, 4], 2);
+                    const echo = await flask.setBytes(CH.rgbMap, V.rgbmapLedOrder,
+                        [0, 4, ...orig.slice(2, 6)], 2);
+                    if (echo.length < 6) throw new Error('short echo');
+                    return `first 4 = ${orig.slice(2, 6).join(',')}`;
+                });
+            }
+            if (caps.ballSwap) {
+                await probe('ballswap: effective readable', async () =>
+                    `${await flask.getU16(CH.ballSwap, V.bswapEffective)}`);
+            }
+        } finally {
+            hid?.resume?.();
+        }
+        lines.push(`— ${lines.length} probes in ${((performance.now() - t0) / 1000).toFixed(1)} s; `
+            + 'details + latency in 🐞');
+        return lines;
     }
 
     /** Focus-capture surface: keys pressed while focused are measured and

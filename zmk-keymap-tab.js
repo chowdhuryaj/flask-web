@@ -17,8 +17,12 @@ import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
-    bindingCap, bindingHover, bindingDescribe,
+    bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
 } from './zmk-keycodes.js?v=11';
+// Circular with zmk-combos-tab (it imports buildZmkPicker for behavior
+// combo outputs) — safe: both sides export hoisted function declarations
+// and neither calls the other at module-eval time.
+import { pickUsage } from './zmk-combos-tab.js?v=11';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -982,16 +986,23 @@ export function buildZmkPicker({ keyPressId, onPick }) {
                         param2: wantsLayer2 ? Number(sel.value) : 0 }),
                 }, d.displayName));
             } else {
-                // &lt-style: layer + tap key.
-                const kcInput = el('input', { type: 'text', placeholder: 'tap key, e.g. A', size: 10 });
+                // &lt-style: layer + tap key, via the keycap picker.
+                let tapUsage = 0;
+                const tapBtn = el('button', { class: 'code', text: 'tap key…' });
+                tapBtn.addEventListener('click', () => {
+                    pickUsage(`${d.displayName} — tap key`, tapUsage, (u) => {
+                        tapUsage = u >>> 0;
+                        tapBtn.textContent = tapUsage ? usageCap(tapUsage) : 'tap key…';
+                        tapBtn.title = tapUsage ? usageLabel(tapUsage) : '';
+                    });
+                });
                 rows.push(el('button', {
                     class: 'code', title: `${d.displayName}: hold for the layer, tap for the key`,
                     onclick: () => {
-                        const usage = usageFromName(kcInput.value);
-                        if (usage == null) { toast('Type a tap key first (e.g. A)', true); return; }
-                        onPick({ behaviorId: d.id, param1: Number(sel.value), param2: usage });
+                        if (!tapUsage) { toast('Pick a tap key first', true); return; }
+                        onPick({ behaviorId: d.id, param1: Number(sel.value), param2: tapUsage });
                     },
-                }, d.displayName), kcInput);
+                }, d.displayName), tapBtn);
             }
         }
         codes.append(el('div', { class: 'composer' }, ...rows));
@@ -1060,9 +1071,23 @@ export function buildZmkPicker({ keyPressId, onPick }) {
                     editors.push(sel);
                     readers.push(() => Number(sel.value));
                 } else if (hid) {
-                    const input = el('input', { type: 'text', placeholder: descs[0]?.name || 'key, e.g. A', size: 10 });
-                    editors.push(input);
-                    readers.push(() => usageFromName(input.value));
+                    // Keycap picker popup — no more manual key-name typing
+                    // (bench 5: tap-hold hold/tap params were bare text
+                    // boxes). The picker carries implicit modifiers, so a
+                    // Mod-Tap hold can be ⇧/⌃/⌥/⌘ directly.
+                    let usage = 0;
+                    const idle = `${hid.name || which}…`;
+                    const btn = el('button', { class: 'code', text: idle });
+                    btn.addEventListener('click', () => {
+                        pickUsage(`${d?.displayName ?? 'Behavior'} — ${hid.name || which}`,
+                            usage, (u) => {
+                                usage = u >>> 0;
+                                btn.textContent = usage ? usageCap(usage) : idle;
+                                btn.title = usage ? usageLabel(usage) : '';
+                            });
+                    });
+                    editors.push(btn);
+                    readers.push(() => (usage || null));
                 } else if (range) {
                     // Bounded param from behavior metadata → slider + live value
                     // (GUI controls pass: no bare number boxes for bounded ints).

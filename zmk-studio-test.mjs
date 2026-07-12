@@ -412,7 +412,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 11, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, 12, 'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
@@ -577,7 +577,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
         await import('./zmk-output-codec.js');
 
     const ws = createZmkTemplate('imprint');
-    eq(ws.protocolVersion, 11, 'template speaks v11');
+    eq(ws.protocolVersion, 12, 'template speaks v12');
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.leader, V.leaderSlotCount), 16, 'sim leader slots');
     eq(await flask.getU16(CH.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
@@ -643,7 +643,8 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const state = await exportFlaskState(a);
     eq(state.scrollSnap.threshold, 80, 'export carries snap threshold');
     eq(state.rgb.map[1][7].join(','), '10,20,30', 'export carries the RGB map');
-    eq(state.combos.slots[5].usage, 0x70005, 'export carries combo slots');
+    eq(state.combos.slots[5].action, 1, 'export carries typed combo slots (v12)');
+    eq(state.combos.slots[5].param1, 0x70005, 'export carries the combo usage as param1');
     eq(state.leader.slots[3].action, 2, 'export carries leader slots');
     eq(state.gestures.activeSet, 2, 'export carries the active gesture set');
     eq(state.gestures.sets[0][0].param, 0x7004F, 'export carries seeded gesture sets');
@@ -759,6 +760,44 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(zmkSlotName('imprint', 'combos', 3), '', 'empty commit clears the name');
     zmkApplySlotNames('imprint', { macros: { 0: 'hello' } });
     eq(zmkAllSlotNames('imprint').macros[0], 'hello', 'import applies the whole table');
+    delete globalThis.localStorage;
+}
+
+// ---- v12: typed combo slots + runtime LED order ----
+{
+    globalThis.localStorage = {
+        _m: new Map(),
+        getItem(k) { return this._m.get(k) ?? null; },
+        setItem(k, v) { this._m.set(k, String(v)); },
+        removeItem(k) { this._m.delete(k); },
+    };
+    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js');
+    const { CH, V } = await import('./flaskproto.js');
+    const { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION } =
+        await import('./zmk-combos-codec.js');
+
+    const t = { positions: [3, 9], action: COMBO_ACTION.behavior,
+        behaviorId: 0xBEEF, param1: 0x02070004, param2: 7 };
+    const enc = encodeComboSlotV2(5, t, 8);
+    eq(enc.length, 1 + 8 + 11, 'v2 frame length (8-key device)');
+    eq(decodeComboSlotV2(enc, 8), { slot: 5, ...t }, 'v2 codec round trip');
+
+    const ws = createZmkTemplate('imprint');
+    const flask = new ZmkOfflineFlask(ws);
+    const echo = await flask.setBytes(CH.combos, V.combosSlotV2, encodeComboSlotV2(2, t, 8));
+    eq(decodeComboSlotV2(echo, 8).action, COMBO_ACTION.behavior, 'sim stores behavior action');
+    const legacy = await flask.getBytes(CH.combos, V.combosSlot, [2], 1);
+    eq((legacy[9] | legacy[10] | legacy[11] | legacy[12]) >>> 0, 0,
+        'legacy view reports usage 0 for a behavior slot');
+    await flask.setBytes(CH.combos, V.combosSlot,
+        [3, 1, 2, 255, 255, 255, 255, 255, 255, 0x00, 0x07, 0x00, 0x04]);
+    const typed = decodeComboSlotV2(await flask.getBytes(CH.combos, V.combosSlotV2, [3], 1), 8);
+    eq(typed.action, COMBO_ACTION.usage, 'legacy write lands as a usage action');
+    eq(typed.param1, 0x70004, 'legacy usage carried into param1');
+
+    await flask.setBytes(CH.rgbMap, V.rgbmapLedOrder, [10, 4, 60, 61, 62, 255]);
+    eq([...await flask.getBytes(CH.rgbMap, V.rgbmapLedOrder, [10, 4], 2)],
+        [10, 4, 60, 61, 62, 255], 'ledOrder chunk round trip');
     delete globalThis.localStorage;
 }
 

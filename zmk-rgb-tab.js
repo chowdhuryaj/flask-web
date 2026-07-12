@@ -259,8 +259,23 @@ export class ZmkRgbTab {
         saveLedMap(order);
         this._tintKeys = null; // rebuild the HUD tint lookup from the new map
         const mapped = order.filter((p) => p != null).length;
-        // Firmware key-positions snippet (config/imprint.keymap flask_rgb
-        // node) — entry i = the keymap position LED i lights; 255 = no key.
+        if (this.app.caps?.rgbLedOrder) {
+            // v12: the measured order lives ON THE DEVICE — the reactive
+            // overlay (leader candidate lighting) follows it immediately,
+            // no keymap edit or reflash. Save persists it.
+            this._pushLedOrder(order).then((ok) => {
+                const back = modal('LED map saved', el('div', {},
+                    el('p', { text: `${mapped} of ${order.length} LEDs mapped to keys. The painter, HUD tint and exports use the measured order.` }),
+                    el('p', { text: ok
+                        ? 'Pushed to the device too — leader candidate lighting follows it now. Hit Save (RGB) to persist across power cycles.'
+                        : 'Device push FAILED — the browser map is saved; retry the wizard or check the connection.' })), [
+                    el('button', { class: 'btn small primary', text: 'Done', onclick: () => back.remove() }),
+                ]);
+            });
+            this.render();
+            return;
+        }
+        // Pre-v12 firmware: emit the devicetree snippet instead.
         const rows = [];
         for (let i = 0; i < order.length; i += 12) {
             rows.push('    ' + order.slice(i, i + 12).map((p) => String(p ?? 255).padStart(3)).join(' '));
@@ -278,6 +293,27 @@ export class ZmkRgbTab {
             el('button', { class: 'btn small primary', text: 'Done', onclick: () => back.remove() }),
         ]);
         this.render();
+    }
+
+    /** Push a measured LED→position order to the device in chunked
+     * RGBMAP_LEDORDER frames (v12). 255 = no key under that LED. */
+    async _pushLedOrder(order) {
+        const { flask, hid } = this.app;
+        const CHUNK = 24;
+        hid?.pause?.();
+        try {
+            for (let start = 0; start < order.length; start += CHUNK) {
+                const part = order.slice(start, start + CHUNK).map((p) => p ?? 0xFF);
+                await flask.setBytes(CH.rgbMap, V.rgbmapLedOrder,
+                    [start, part.length, ...part], 2);
+            }
+            return true;
+        } catch (e) {
+            toast(`LED order push failed: ${e.message}`, true);
+            return false;
+        } finally {
+            hid?.resume?.();
+        }
     }
 
     wizardCard() {

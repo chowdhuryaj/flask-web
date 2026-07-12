@@ -43,3 +43,62 @@ export function encodeComboSlot(slot, { positions = [], usage = 0 }, maxKeys = C
 export function comboSlotIsEmpty({ positions = [], usage = 0 }) {
     return usage === 0 || positions.length < 2;
 }
+
+// ---------------------------------------------------------------------------
+// v12 typed slots (COMBOS_SLOT_V2 0x11): the output is typed — hold a
+// usage, play a flask_macros slot, or invoke any Studio-addressable
+// behavior by local id with two params (tap-holds, layer keys). Wire:
+//   [slot, pos0 … pos(K-1), action, bid_hi, bid_lo, p1 u32 BE, p2 u32 BE]
+
+export const COMBO_ACTION = { none: 0, usage: 1, macro: 2, behavior: 3 };
+
+/** Reply payload → { slot, positions, action, behaviorId, param1, param2 }. */
+export function decodeComboSlotV2(bytes, maxKeys = COMBO_MAX_KEYS) {
+    const positions = [];
+    for (let k = 0; k < maxKeys; k++) {
+        const p = bytes[1 + k];
+        if (p !== COMBO_POS_NONE && p != null) positions.push(p);
+    }
+    const a = 1 + maxKeys;
+    const u32 = (o) =>
+        (((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0);
+    return {
+        slot: bytes[0],
+        positions,
+        action: bytes[a] ?? 0,
+        behaviorId: (((bytes[a + 1] ?? 0) << 8) | (bytes[a + 2] ?? 0)) >>> 0,
+        param1: u32(a + 3),
+        param2: u32(a + 7),
+    };
+}
+
+/** Typed slot → SET payload. */
+export function encodeComboSlotV2(slot,
+    { positions = [], action = 0, behaviorId = 0, param1 = 0, param2 = 0 },
+    maxKeys = COMBO_MAX_KEYS) {
+    const pos = Array.from({ length: maxKeys },
+        (_, k) => positions[k] ?? COMBO_POS_NONE);
+    param1 = param1 >>> 0;
+    param2 = param2 >>> 0;
+    return [slot & 0xFF, ...pos, action & 0xFF,
+        (behaviorId >>> 8) & 0xFF, behaviorId & 0xFF,
+        (param1 >>> 24) & 0xFF, (param1 >>> 16) & 0xFF, (param1 >>> 8) & 0xFF, param1 & 0xFF,
+        (param2 >>> 24) & 0xFF, (param2 >>> 16) & 0xFF, (param2 >>> 8) & 0xFF, param2 & 0xFF];
+}
+
+export function comboSlotV2IsEmpty({ positions = [], action = 0 }) {
+    return action === COMBO_ACTION.none || positions.length < 2;
+}
+
+/** Legacy {usage} slot ↔ typed slot bridges (v11 firmware / old exports). */
+export function comboSlotToTyped({ slot, positions = [], usage = 0 }) {
+    return {
+        slot, positions,
+        action: usage ? COMBO_ACTION.usage : COMBO_ACTION.none,
+        behaviorId: 0, param1: usage >>> 0, param2: 0,
+    };
+}
+
+export function comboTypedToLegacy({ slot, positions = [], action = 0, param1 = 0 }) {
+    return { slot, positions, usage: action === COMBO_ACTION.usage ? param1 >>> 0 : 0 };
+}

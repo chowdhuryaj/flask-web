@@ -102,6 +102,9 @@ export const V = {
     rgbmapEffect: 0x04, rgbmapEffectSpeed: 0x05,
     rgbmapEffectHue: 0x06, rgbmapEffectSat: 0x07, rgbmapEffectVal: 0x08,
     rgbmapSplitLink: 0x09, // ZMK line RO: central found the peripheral's rgb GATT char
+    // v12: chunked runtime LED→keymap-position table [start, count, pos...]
+    // (0xFF = no key / underglow) — the wizard's measured order, on-device.
+    rgbmapLedOrder: 0x0A,
     rgbmapLed: 0x10, rgbmapBulk: 0x11, rgbmapFill: 0x12,
     // display (0x22)
     dispHoldMs: 0x01, dispActive: 0x02, dispPushAge: 0x03,
@@ -119,6 +122,10 @@ export const V = {
     combosEnabled: 0x01, combosSlotCount: 0x02, combosTimeout: 0x03,
     combosKeys: 0x04,
     combosSlot: 0x10,
+    // v12 typed slot: [slot, pos x KEYS, action, behavior_id u16 BE,
+    // param1 u32 BE, param2 u32 BE] — action 0 none / 1 usage-hold /
+    // 2 play-macro / 3 invoke-behavior (Studio local id + two params).
+    combosSlotV2: 0x11,
     // macros (0x25, ZMK line) — enabled/counts/pacing are u16; state is
     // live-only (GET = playing slot+1 or 0; SET v>0 plays v-1, 0 stops);
     // step is a PAYLOAD-ADDRESSED byte frame [slot, step, action, param u32 BE]

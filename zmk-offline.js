@@ -24,7 +24,9 @@ import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk
 import { OfflineFlask, saveWorkspace } from './offline.js?v=11';
 import { LOCK_UNLOCKED } from './zmk-studio.js?v=11';
 import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=11';
-import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=11';
+import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
+         COMBO_ACTION, decodeComboSlotV2, encodeComboSlotV2,
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=11';
 import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=11';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
          encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=11';
@@ -360,7 +362,8 @@ export function createZmkTemplate(family) {
             removed: [],        // removed layers waiting for restore
             nextLayerId: layers.length,
             unsaved: false,
-            combos: Array.from({ length: IMPRINT.comboSlots }, () => ({ positions: [], usage: 0 })),
+            combos: Array.from({ length: IMPRINT.comboSlots }, () =>
+                ({ positions: [], action: COMBO_ACTION.none, behaviorId: 0, param1: 0, param2: 0 })),
             macros: Array.from({ length: IMPRINT.macroSlots }, () =>
                 Array.from({ length: IMPRINT.macroSteps }, () => ({ action: MACRO_ACTION.empty, param: 0 }))),
             rgb: Array.from({ length: IMPRINT.rgbLayers }, () =>
@@ -368,6 +371,8 @@ export function createZmkTemplate(family) {
             leader: Array.from({ length: IMPRINT.leaderSlots },
                 () => ({ positions: [], action: 0, param: 0 })),
             gestures: defaultGestureSets(),
+            // v12 runtime LED order (LED index → keymap position).
+            ledOrder: Array.from({ length: IMPRINT.rgbLeds }, (_, i) => i),
         },
         zmkDirty: { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {} },
     };
@@ -392,9 +397,15 @@ export function normalizeZmkWorkspace(ws) {
         seedImprintTunables(ws.tunables);
         // v9 capacity bumps: pad stored pre-v9 workspaces up to the new
         // slot/step counts (append-only — existing content untouched).
+        // v12: stored usage-only combos migrate to the typed shape
+        // (mirrors the firmware's settings migration).
+        ws.zmk.combos = ws.zmk.combos.map((c) =>
+            c.action != null ? c : comboSlotToTyped(c));
         while (ws.zmk.combos.length < IMPRINT.comboSlots) {
-            ws.zmk.combos.push({ positions: [], usage: 0 });
+            ws.zmk.combos.push({ positions: [], action: COMBO_ACTION.none,
+                behaviorId: 0, param1: 0, param2: 0 });
         }
+        ws.zmk.ledOrder ??= Array.from({ length: IMPRINT.rgbLeds }, (_, i) => i);
         while (ws.zmk.macros.length < IMPRINT.macroSlots) {
             ws.zmk.macros.push([]);
         }
@@ -499,8 +510,21 @@ export class ZmkOfflineFlask extends OfflineFlask {
         }
         if (ch === CH.combos && id === V.combosSlot) {
             const slot = payload[0] ?? 0;
-            const s = zmk.combos[slot] ?? { positions: [], usage: 0 };
-            return encodeComboSlot(slot, s, IMPRINT.comboKeys);
+            const s = zmk.combos[slot] ?? comboSlotToTyped({ positions: [], usage: 0 });
+            return encodeComboSlot(slot, comboTypedToLegacy(s), IMPRINT.comboKeys);
+        }
+        if (ch === CH.combos && id === V.combosSlotV2) {
+            const slot = payload[0] ?? 0;
+            const s = zmk.combos[slot]
+                ?? { positions: [], action: COMBO_ACTION.none, behaviorId: 0, param1: 0, param2: 0 };
+            return encodeComboSlotV2(slot, s, IMPRINT.comboKeys);
+        }
+        if (ch === CH.rgbMap && id === V.rgbmapLedOrder) {
+            const [start, count] = payload;
+            if (start >= zmk.ledOrder.length || start + count > zmk.ledOrder.length) {
+                throw new Error('unhandled');
+            }
+            return [start, count, ...zmk.ledOrder.slice(start, start + count)];
         }
         if (ch === CH.macros && id === V.macrosStep) {
             const [m, s] = payload;
@@ -550,10 +574,41 @@ export class ZmkOfflineFlask extends OfflineFlask {
             const positions = decoded.positions
                 .filter((p) => p >= 0 && p < IMPRINT.positions)
                 .slice(0, IMPRINT.comboKeys);
-            zmk.combos[slot] = { positions, usage: decoded.usage };
+            zmk.combos[slot] = comboSlotToTyped({ slot, positions, usage: decoded.usage });
             this.ws.zmkDirty.combo[slot] = true;
             saveWorkspace(this.ws);
-            return encodeComboSlot(slot, zmk.combos[slot], IMPRINT.comboKeys);
+            return encodeComboSlot(slot, comboTypedToLegacy(zmk.combos[slot]), IMPRINT.comboKeys);
+        }
+        if (ch === CH.combos && id === V.combosSlotV2) {
+            const d = decodeComboSlotV2(payload, IMPRINT.comboKeys);
+            if (!zmk.combos[d.slot]) return payload;
+            const positions = d.positions
+                .filter((p) => p >= 0 && p < IMPRINT.positions)
+                .slice(0, IMPRINT.comboKeys);
+            // Firmware normalization (flask_combos_slot_set): bad action
+            // → none; usage without a usage → none; non-behavior slots
+            // zero the behavior id / param2.
+            let { action, behaviorId, param1, param2 } = d;
+            if (action > COMBO_ACTION.behavior) action = COMBO_ACTION.none;
+            if (action === COMBO_ACTION.usage && param1 === 0) action = COMBO_ACTION.none;
+            if (action === COMBO_ACTION.none) { behaviorId = 0; param1 = 0; param2 = 0; }
+            if (action !== COMBO_ACTION.behavior) {
+                behaviorId = 0;
+                if (action !== COMBO_ACTION.none) param2 = 0;
+            }
+            zmk.combos[d.slot] = { positions, action, behaviorId, param1, param2 };
+            this.ws.zmkDirty.combo[d.slot] = true;
+            saveWorkspace(this.ws);
+            return encodeComboSlotV2(d.slot, zmk.combos[d.slot], IMPRINT.comboKeys);
+        }
+        if (ch === CH.rgbMap && id === V.rgbmapLedOrder) {
+            const [start, count, ...pos] = payload;
+            if (start >= zmk.ledOrder.length || start + count > zmk.ledOrder.length) {
+                throw new Error('unhandled');
+            }
+            for (let i = 0; i < count; i++) zmk.ledOrder[start + i] = pos[i] ?? 0xFF;
+            saveWorkspace(this.ws);
+            return payload;
         }
         if (ch === CH.macros && id === V.macrosStep) {
             const step = decodeMacroStep(payload);
@@ -804,8 +859,16 @@ async function zmkSyncExtrasInner(app, ws) {
 
     for (const slot of Object.keys(ws.zmkDirty.combo)) {
         try {
-            await app.flask.setBytes(CH.combos, V.combosSlot,
-                encodeComboSlot(Number(slot), ws.zmk.combos[slot], comboKeys), 1);
+            // v12 firmware takes the typed frame (behavior outputs survive);
+            // older firmware gets the legacy usage-only view.
+            if (app.caps?.combosTyped) {
+                await app.flask.setBytes(CH.combos, V.combosSlotV2,
+                    encodeComboSlotV2(Number(slot), ws.zmk.combos[slot], comboKeys), 1);
+            } else {
+                await app.flask.setBytes(CH.combos, V.combosSlot,
+                    encodeComboSlot(Number(slot), comboTypedToLegacy(ws.zmk.combos[slot]),
+                        comboKeys), 1);
+            }
             delete ws.zmkDirty.combo[slot];
             applied++; touched = true;
         } catch (e) { fail.push(`combo ${slot}: ${e.message}`); }

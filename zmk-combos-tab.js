@@ -26,9 +26,13 @@ import {
     usageCap, usageLabel, usageFromName,
 } from './zmk-keycodes.js?v=11';
 import {
-    COMBO_POS_NONE, COMBO_MAX_KEYS,
-    decodeComboSlot, encodeComboSlot, comboSlotIsEmpty,
+    COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION,
+    decodeComboSlot, encodeComboSlot,
+    decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
+    comboSlotToTyped, comboTypedToLegacy,
 } from './zmk-combos-codec.js?v=11';
+import { zmkBehaviors } from './zmk-keycodes.js?v=11';
+import { buildZmkPicker } from './zmk-keymap-tab.js?v=11';
 
 const MODS = [
     { bit: 0x01, glyph: '⌃', label: 'Ctrl' },
@@ -136,10 +140,21 @@ export class ZmkCombosTab {
             // firmware answers unhandled (0) and is fixed at 4.
             this.maxKeys = (this.app.caps?.combosKeys
                 && await flask.getU16(CH.combos, V.combosKeys)) || COMBO_MAX_KEYS;
+            // v12 firmware speaks typed slots (usage-hold / macro /
+            // behavior); older firmware keeps the usage-only frame, bridged
+            // into the same typed shape so the tab has ONE internal model.
+            this.typed = !!this.app.caps?.combosTyped;
+            this.macroSlots = (this.typed && this.app.caps?.macros)
+                ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
-                const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
-                this.slots.push(decodeComboSlot(r, this.maxKeys));
+                if (this.typed) {
+                    const r = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
+                    this.slots.push(decodeComboSlotV2(r, this.maxKeys));
+                } else {
+                    const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
+                    this.slots.push(comboSlotToTyped(decodeComboSlot(r, this.maxKeys)));
+                }
             }
         } finally {
             hid?.resume?.();
@@ -149,9 +164,15 @@ export class ZmkCombosTab {
 
     async writeSlot(i, before = null) {
         try {
-            const r = await this.app.flask.setBytes(CH.combos, V.combosSlot,
-                encodeComboSlot(i, this.slots[i], this.maxKeys), 1);
-            this.slots[i] = decodeComboSlot(r, this.maxKeys); // adopt the echo (normalized)
+            if (this.typed) {
+                const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV2,
+                    encodeComboSlotV2(i, this.slots[i], this.maxKeys), 1);
+                this.slots[i] = decodeComboSlotV2(r, this.maxKeys); // adopt the echo
+            } else {
+                const r = await this.app.flask.setBytes(CH.combos, V.combosSlot,
+                    encodeComboSlot(i, comboTypedToLegacy(this.slots[i]), this.maxKeys), 1);
+                this.slots[i] = comboSlotToTyped(decodeComboSlot(r, this.maxKeys));
+            }
         } catch (e) {
             // Revert the optimistic local edit — keeping it made the UI lie
             // about what the device holds (bench 2026-07-11, timeouts).
@@ -163,20 +184,25 @@ export class ZmkCombosTab {
 
     addCombo() {
         const i = this.slots.findIndex((s, idx) =>
-            comboSlotIsEmpty(s) && !this.drafts.has(idx));
+            comboSlotV2IsEmpty(s) && !this.drafts.has(idx));
         if (i < 0) { toast(`All ${this.slotCount} combo slots are in use`, true); return; }
         // An EMPTY slot can still carry position junk: firmware that boots
         // its table zero-filled reads back as pos 0 × maxKeys (bench
         // 2026-07-12 — every draft started with 6-8 phantom position-0
         // entries that each took a click to remove). A draft always starts
         // from a clean slate; the first write persists the real content.
-        this.slots[i] = { slot: i, positions: [], usage: 0 };
+        this.slots[i] = this.emptySlot(i);
         this.drafts.add(i);
         this.render();
     }
 
+    emptySlot(i) {
+        return { slot: i, positions: [], action: COMBO_ACTION.none,
+            behaviorId: 0, param1: 0, param2: 0 };
+    }
+
     async clearSlot(i) {
-        this.slots[i] = { slot: i, positions: [], usage: 0 };
+        this.slots[i] = this.emptySlot(i);
         this.drafts.delete(i);
         await this.writeSlot(i);
     }
@@ -191,14 +217,99 @@ export class ZmkCombosTab {
         this.writeSlot(i, before);
     }
 
-    // ---- output picker (usage + modifiers; shared modal above) ----
+    // ---- output picker ----
+
+    /** Describe a typed output for the tile / hint. */
+    outputDesc(s, { cap = false } = {}) {
+        switch (s.action) {
+        case COMBO_ACTION.usage:
+            return cap ? usageCap(s.param1) : usageLabel(s.param1);
+        case COMBO_ACTION.macro:
+            return cap ? `M${s.param1}` : `Macro ${s.param1}`;
+        case COMBO_ACTION.behavior: {
+            const d = zmkBehaviors().get(s.behaviorId);
+            const name = d?.displayName || `behavior #${s.behaviorId}`;
+            const params = [s.param1, s.param2].filter((p) => p !== 0);
+            return cap ? name.split(' ').map((w) => w[0]).join('').slice(0, 4)
+                : `${name}${params.length ? ' (' + params.join(', ') + ')' : ''}`;
+        }
+        default:
+            return '';
+        }
+    }
+
+    _applyOutput(i, patch) {
+        const before = { ...this.slots[i], positions: [...this.slots[i].positions] };
+        Object.assign(this.slots[i], {
+            action: COMBO_ACTION.none, behaviorId: 0, param1: 0, param2: 0,
+        }, patch);
+        this.writeSlot(i, before);
+    }
 
     pickOutput(i) {
-        pickUsage(`Combo ${i} output`, this.slots[i].usage, (usage) => {
-            const before = { ...this.slots[i], positions: [...this.slots[i].positions] };
-            this.slots[i].usage = usage;
-            this.writeSlot(i, before);
-        });
+        const s = this.slots[i];
+        if (!this.typed) {
+            // pre-v12 firmware: usage-only, straight to the keycode picker
+            pickUsage(`Combo ${i} output`, s.action === COMBO_ACTION.usage ? s.param1 : 0,
+                (usage) => this._applyOutput(i,
+                    usage ? { action: COMBO_ACTION.usage, param1: usage } : {}));
+            return;
+        }
+        // v12 typed output: keycode / macro / any Studio behavior (tap-hold,
+        // layer key…) — the behavior list needs the Keymap tab's catalog.
+        const behaviors = zmkBehaviors();
+        const macroSlots = this.macroSlots ?? 0;
+        const rows = [
+            el('button', {
+                class: 'btn small primary', text: '⌨ Keycode…',
+                onclick: () => {
+                    back.remove();
+                    pickUsage(`Combo ${i} output`,
+                        s.action === COMBO_ACTION.usage ? s.param1 : 0,
+                        (usage) => this._applyOutput(i,
+                            usage ? { action: COMBO_ACTION.usage, param1: usage } : {}));
+                },
+            }),
+        ];
+        if (macroSlots > 0) {
+            const sel = el('select', {}, ...Array.from({ length: macroSlots }, (_, m) =>
+                el('option', {
+                    value: m, text: `Macro ${m}`,
+                    selected: s.action === COMBO_ACTION.macro && s.param1 === m,
+                })));
+            rows.push(el('div', { style: 'display:flex; gap:6px; align-items:center' },
+                el('button', {
+                    class: 'btn small', text: '▶ Play macro',
+                    onclick: () => {
+                        back.remove();
+                        this._applyOutput(i, { action: COMBO_ACTION.macro, param1: Number(sel.value) });
+                    },
+                }), sel));
+        }
+        if (behaviors.size) {
+            rows.push(el('div', { class: 'note faint', style: 'margin-top:6px',
+                text: 'Or any behavior — tap-holds and layer keys work; the combo behaves like a key at its first position:' }));
+            rows.push(buildZmkPicker({
+                keyPressId: null,
+                onPick: (b) => {
+                    back.remove();
+                    this._applyOutput(i, {
+                        action: COMBO_ACTION.behavior, behaviorId: b.behaviorId,
+                        param1: b.param1 >>> 0, param2: b.param2 >>> 0,
+                    });
+                },
+            }));
+        } else {
+            rows.push(el('div', { class: 'note faint',
+                text: 'Behavior outputs need the device behavior catalog — open the Keymap tab once first.' }));
+        }
+        rows.push(el('button', {
+            class: 'btn small', text: '∅ Clear output',
+            onclick: () => { back.remove(); this._applyOutput(i, {}); },
+        }));
+        const back = modal(`Combo ${i} output`, el('div', {
+            style: 'display:flex; flex-direction:column; gap:8px',
+        }, ...rows), []);
     }
 
     // ---- position selection ----
@@ -252,13 +363,14 @@ export class ZmkCombosTab {
 
     comboCard(i) {
         const s = this.slots[i];
-        const live = !comboSlotIsEmpty(s);
+        const live = !comboSlotV2IsEmpty(s);
+        const hasOut = s.action !== COMBO_ACTION.none;
         const tile = el('button', {
             class: 'code',
             style: 'min-width:72px; min-height:44px; font-size:1.05em',
-            title: s.usage ? usageLabel(s.usage) : 'pick the combo output',
+            title: hasOut ? this.outputDesc(s) : 'pick the combo output',
             onclick: () => this.pickOutput(i),
-        }, s.usage ? usageCap(s.usage) : 'output…');
+        }, hasOut ? this.outputDesc(s, { cap: true }) : 'output…');
 
         const fam = this.app.profile?.family ?? 'imprint';
         const customName = zmkSlotName(fam, 'combos', i);
@@ -271,7 +383,7 @@ export class ZmkCombosTab {
                 }),
                     el('span', {
                         class: 'hint',
-                        text: live ? `${s.positions.length} keys → ${usageLabel(s.usage)}`
+                        text: live ? `${s.positions.length} keys → ${this.outputDesc(s)}`
                             : 'incomplete — needs ≥ 2 keys and an output',
                     })),
                 el('span', { style: 'flex:1' }),
@@ -297,15 +409,17 @@ export class ZmkCombosTab {
             .map((s, i) => i)
             .filter((i) => {
                 const s = this.slots[i];
-                return s.positions.length > 0 || s.usage !== 0 || this.drafts.has(i);
+                return s.positions.length > 0 || s.action !== COMBO_ACTION.none
+                    || this.drafts.has(i);
             });
-        const used = this.slots.filter((s) => !comboSlotIsEmpty(s)).length;
+        const used = this.slots.filter((s) => !comboSlotV2IsEmpty(s)).length;
 
         const controls = card('Runtime combos',
             'press keys together, get a keycode — live-editable, unlike ZMK\'s devicetree combos',
             toggleRow({
                 label: 'Combos enabled',
-                hint: 'master switch; slots stay stored while off',
+                hint: 'master switch for RUNTIME combos (slots stay stored) — the '
+                    + 'firmware\'s compiled devicetree combos have no off switch',
                 value: this.enabled,
                 onChange: async (val) => {
                     this.enabled = await flask.setU16(CH.combos, V.combosEnabled, val ? 1 : 0);
