@@ -161,7 +161,9 @@ async function start() {
     if (process.env.FLASK_DESKTOP_SMOKE) {
         win.webContents.on('did-finish-load', async () => {
             const probe = await win.webContents.executeJavaScript(
-                'JSON.stringify({hid: "hid" in navigator, serial: "serial" in navigator, title: document.title})');
+                'JSON.stringify({hid: "hid" in navigator, serial: "serial" in navigator,'
+                + ' electronUA: navigator.userAgent.includes("Electron"),'   // HUD skips Document PiP on this
+                + ' title: document.title})');
             console.log(`FLASK_DESKTOP_SMOKE ${url} ${probe}`);
             app.quit();
         });
