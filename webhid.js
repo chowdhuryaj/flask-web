@@ -132,8 +132,19 @@ export class FlaskHID extends EventTarget {
                     }
                 }, 500),
             };
-            this.device.sendReport(0, report).catch((e) => {
+            this.device.sendReport(0, report).catch(async (e) => {
                 this._rejectPending(new HIDError('writeFailed', `HID write failed: ${e.message}`));
+                // A failed WRITE means the OS handle is dead — this happens
+                // when the keyboard re-enumerates (power cycle) and the
+                // embedder never delivered a disconnect event, leaving a
+                // stale device that still claims .opened (bench 2026-07-12:
+                // every op after a power cycle failed forever). Tear the
+                // connection down so the reconnect logic can take over.
+                const dev = this.device;
+                this._handleDisconnect();
+                if (dev?.opened) {
+                    try { await dev.close(); } catch { /* already gone */ }
+                }
             });
         });
     }

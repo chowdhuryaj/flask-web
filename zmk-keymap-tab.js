@@ -799,25 +799,26 @@ export class ZmkKeymapTab {
                 disabled: this.keymap.layers.length <= 1,
                 onclick: () => this.removeLayerOp(),
             }),
-            el('button', {
-                text: '＋',
-                title: avail > 0
-                    ? `Add a layer (${avail} free slot${avail === 1 ? '' : 's'})`
-                    : 'No free slots — remove a layer first (total capacity is compiled into the firmware)',
-                disabled: avail === 0,
-                onclick: () => this.addLayerOp(),
-            }),
         ];
         if (this.removedLayers.length) {
             const last = this.removedLayers[this.removedLayers.length - 1];
             ops.push(el('button', {
-                // Labelled, not just a glyph — "can't find how to restore
-                // layers" (bench 2026-07-11).
+                // Labelled, not just a glyph, and placed right after the −
+                // that created it — "still don't see a Restore button"
+                // (bench 2026-07-11, again 2026-07-12).
                 text: `↩ Restore "${last.name}"`,
                 title: `Bring back removed layer "${last.name}"`,
                 onclick: () => this.restoreLayerOp(),
             }));
         }
+        ops.push(el('button', {
+            text: '＋',
+            title: avail > 0
+                ? `Add a layer (${avail} free slot${avail === 1 ? '' : 's'})`
+                : 'No free slots — remove a layer first (total capacity is compiled into the firmware)',
+            disabled: avail === 0,
+            onclick: () => this.addLayerOp(),
+        }));
         return ops;
     }
 
@@ -826,11 +827,21 @@ export class ZmkKeymapTab {
             type: 'text', value: this.currentLayer.name,
             maxlength: this.keymap.maxLayerNameLength || 20, size: 10,
         });
+        // Commit exactly once: Enter's render() detaches the input, which
+        // fires ITS blur mid-render — the second renameLayer re-entered
+        // render and blew up replaceChildren ("node is no longer a child",
+        // bench 2026-07-12). Escape marks committed so its blur is a no-op.
+        let committed = false;
+        const commit = () => {
+            if (committed) return;
+            committed = true;
+            this.renameLayer(input.value);
+        };
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') this.renameLayer(input.value);
-            if (e.key === 'Escape') { this.renaming = false; this.render(); }
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { committed = true; this.renaming = false; this.render(); }
         });
-        input.addEventListener('blur', () => this.renameLayer(input.value));
+        input.addEventListener('blur', commit);
         this.strip.append(input);
         queueMicrotask(() => { input.focus(); input.select(); });
     }

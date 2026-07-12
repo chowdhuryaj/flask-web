@@ -100,22 +100,43 @@ const TABS = [];
 
 // ---------- connect / load ----------
 
+let connecting = false; // re-entrancy guard: events + the reconnect poll race
+
 async function connectFlow(device) {
-    if (app.offline) exitOffline(); // restore the real clients first
+    if (connecting) return;
+    connecting = true;
     try {
-        await app.hid.open(device);
-    } catch (e) {
-        toast(`Open failed: ${e.message}`, true);
-        return;
+        if (app.offline) exitOffline(); // restore the real clients first
+        try {
+            await app.hid.open(device);
+        } catch (e) {
+            toast(`Open failed: ${e.message}`, true);
+            return;
+        }
+        $('status-text').textContent = 'Loading…';
+        try {
+            await loadDevice(device);
+        } catch (e) {
+            console.error(e);
+            toast(`Load failed: ${e.message}`, true);
+            $('status-text').textContent = 'Load failed';
+        }
+    } finally {
+        connecting = false;
     }
-    $('status-text').textContent = 'Loading…';
-    try {
-        await loadDevice(device);
-    } catch (e) {
-        console.error(e);
-        toast(`Load failed: ${e.message}`, true);
-        $('status-text').textContent = 'Load failed';
-    }
+}
+
+/** Reconnect target: the remembered device, or (while editing offline) any
+ * device of the workspace's family — shared by the hotplug event and the
+ * poll below. */
+function reconnectCandidate(devices) {
+    const last = localStorage.getItem('flask-last-device');
+    return devices.find((d) => {
+        const key = `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}`;
+        const offlineMatch = app.offline
+            && familyOf(d.vendorId, d.productId) === app.offlineWs?.family;
+        return last === key || offlineMatch;
+    });
 }
 
 async function loadDevice(device) {
@@ -526,16 +547,33 @@ function init() {
         // the one we were using (or nothing is connected). While editing
         // offline, a plug-in of the SAME family also connects — that's the
         // moment the queued changes apply.
-        if (app.hid.connected) return;
-        const last = localStorage.getItem('flask-last-device');
-        const key = `${e.detail.vendorId.toString(16).padStart(4, '0')}:${e.detail.productId.toString(16).padStart(4, '0')}`;
-        const offlineMatch = app.offline
-            && familyOf(e.detail.vendorId, e.detail.productId) === app.offlineWs?.family;
-        if (last === key || offlineMatch) {
+        if (app.hid.connected || connecting) return;
+        if (reconnectCandidate([e.detail])) {
             toast('Reconnecting…');
             await connectFlow(e.detail);
         }
     });
+
+    // Event-independent reconnect: an unclean re-enumeration (keyboard
+    // power cycle) can eat the disconnect/connect events entirely — some
+    // embedders (Electron) also deliver them unreliably — so poll the
+    // granted list while nothing is connected and reattach to the
+    // remembered device (bench 2026-07-12: after a power cycle every HID
+    // op failed until a manual reconnect nobody asked for). A failed
+    // attempt backs off 30 s so a broken device can't toast-spam.
+    let lastAutoAttempt = 0;
+    setInterval(async () => {
+        if (app.hid.connected || connecting || !FlaskHID.supported()) return;
+        if (Date.now() - lastAutoAttempt < 30000) return;
+        try {
+            const match = reconnectCandidate(await FlaskHID.grantedDevices());
+            if (match) {
+                lastAutoAttempt = Date.now();
+                toast('Reconnecting…');
+                await connectFlow(match);
+            }
+        } catch { /* next tick retries */ }
+    }, 2500);
 
     // Theme + zoom.
     const themeSel = $('theme-sel');

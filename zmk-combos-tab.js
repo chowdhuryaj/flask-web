@@ -164,6 +164,12 @@ export class ZmkCombosTab {
         const i = this.slots.findIndex((s, idx) =>
             comboSlotIsEmpty(s) && !this.drafts.has(idx));
         if (i < 0) { toast(`All ${this.slotCount} combo slots are in use`, true); return; }
+        // An EMPTY slot can still carry position junk: firmware that boots
+        // its table zero-filled reads back as pos 0 × maxKeys (bench
+        // 2026-07-12 — every draft started with 6-8 phantom position-0
+        // entries that each took a click to remove). A draft always starts
+        // from a clean slate; the first write persists the real content.
+        this.slots[i] = { slot: i, positions: [], usage: 0 };
         this.drafts.add(i);
         this.render();
     }

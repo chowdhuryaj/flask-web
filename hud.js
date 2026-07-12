@@ -31,9 +31,24 @@ export class HUD {
         if (this.open) { this.close(); return; }
         this.open = true;
         this.rootEl = this._buildRoot();
-        if ('documentPictureInPicture' in window) {
+        // Document PiP needs real browser UI. Electron exposes the global
+        // but requestWindow never settles — the await hung forever and the
+        // HUD "did not even open" (bench 2026-07-12) — so skip it there and
+        // race a timeout everywhere else; the in-page overlay is the
+        // fallback either way.
+        const pipUsable = 'documentPictureInPicture' in window
+            && !navigator.userAgent.includes('Electron');
+        if (pipUsable) {
             try {
-                this.win = await documentPictureInPicture.requestWindow({ width: 460, height: 300 });
+                const req = documentPictureInPicture.requestWindow({ width: 460, height: 300 });
+                this.win = await Promise.race([
+                    req,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('PiP timeout')), 1500)),
+                ]);
+                // If the request settles late after the timeout won, close
+                // the stray window instead of leaking it.
+                req.then((w) => { if (this.win !== w) { try { w.close(); } catch { /* gone */ } } },
+                    () => {});
                 // One linked stylesheet → one clone (styles.css is deliberately the only sheet).
                 for (const sheet of document.styleSheets) {
                     if (sheet.href) {
