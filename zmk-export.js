@@ -9,11 +9,11 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=10';
-import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } from './zmk-combos-codec.js?v=10';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=10';
+import { CH, V } from './flaskproto.js?v=11';
+import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } from './zmk-combos-codec.js?v=11';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=11';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=10';
+    from './zmk-output-codec.js?v=11';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */

@@ -154,6 +154,39 @@ async function start() {
         title: 'Flask',
         backgroundColor: '#1a1a1a',
     });
+
+    // The HUD opens `window.open('about:blank', 'flask-hud', …)` here
+    // (Document PiP's requestWindow never settles under Electron). Style
+    // that popup into what Chrome's PiP window gives for free: frameless,
+    // always-on-top, resizable, out of the Dock/taskbar. Size/position come
+    // from the renderer's window features (it persists the last frame).
+    win.webContents.setWindowOpenHandler(({ frameName }) => {
+        if (frameName === 'flask-hud') {
+            return {
+                action: 'allow',
+                overrideBrowserWindowOptions: {
+                    frame: false,
+                    alwaysOnTop: true,
+                    resizable: true,
+                    minimizable: false,
+                    maximizable: false,
+                    fullscreenable: false,
+                    skipTaskbar: true,
+                    title: 'Flask HUD',
+                    backgroundColor: '#1a1a1a',
+                },
+            };
+        }
+        return { action: 'allow' };
+    });
+    win.webContents.on('did-create-window', (child, details) => {
+        if (details.frameName !== 'flask-hud') return;
+        // Float above fullscreen apps and follow across Spaces — the two
+        // Chrome-PiP behaviors a plain alwaysOnTop flag doesn't cover.
+        child.setAlwaysOnTop(true, 'floating');
+        child.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    });
+
     win.loadURL(url);
 
     // Smoke mode (FLASK_DESKTOP_SMOKE=1): prove the page loads with the
@@ -162,10 +195,23 @@ async function start() {
         win.webContents.on('did-finish-load', async () => {
             const probe = await win.webContents.executeJavaScript(
                 'JSON.stringify({hid: "hid" in navigator, serial: "serial" in navigator,'
-                + ' electronUA: navigator.userAgent.includes("Electron"),'   // HUD skips Document PiP on this
+                + ' electronUA: navigator.userAgent.includes("Electron"),'   // HUD opens a popup on this
                 + ' title: document.title})');
-            console.log(`FLASK_DESKTOP_SMOKE ${url} ${probe}`);
-            app.quit();
+            // Prove the HUD window path: open the named popup the HUD uses
+            // and confirm the window-open handler styled it always-on-top.
+            const hudOpened = await win.webContents.executeJavaScript(
+                '!!window.open("about:blank", "flask-hud", "popup,width=120,height=90")');
+            setTimeout(() => {
+                const hud = BrowserWindow.getAllWindows().find((w) => w !== win);
+                const hudProbe = JSON.stringify({
+                    opened: hudOpened,
+                    window: !!hud,
+                    alwaysOnTop: hud ? hud.isAlwaysOnTop() : false,
+                });
+                console.log(`FLASK_DESKTOP_SMOKE ${url} ${probe}`);
+                console.log(`FLASK_DESKTOP_SMOKE hud ${hudProbe}`);
+                app.quit();
+            }, 400);
         });
         setTimeout(() => { console.error('FLASK_DESKTOP_SMOKE timeout'); app.exit(1); }, 20000);
     }

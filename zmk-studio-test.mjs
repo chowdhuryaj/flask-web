@@ -454,6 +454,34 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(moved.layers.length, 10, 'move returns the full keymap');
     await studio.discardChanges();
     eq((await studio.getKeymap()).layers[9].name, 'spare4', 'discard restores the saved structure');
+
+    // Metadata-less behavior (urob leader mirror, bench 5): listed by the
+    // device, but assignment is rejected like real firmware — validate_binding
+    // returns -ENODEV → INVALID_PARAMETERS, params zero or not.
+    const ids = await studio.listAllBehaviors();
+    const details = [];
+    for (const id of ids) details.push(await studio.getBehaviorDetails(id));
+    const nameless = details.find((d) => !d.displayName);
+    eq(!!nameless, true, 'sim lists a metadata-less behavior (urob leader mirror)');
+    let namelessErr = null;
+    try {
+        await studio.setLayerBinding(0, 14, { behaviorId: nameless.id, param1: 0, param2: 0 });
+    } catch (e) { namelessErr = e.message; }
+    eq(namelessErr, 'INVALID_PARAMETERS', 'sim rejects assigning the metadata-less behavior');
+    // A named 0-param behavior accepts (0,0) but rejects junk in an unused
+    // param slot (check_params_match_metadata: empty descriptors want 0).
+    const fled = details.find((d) => d.displayName === 'Flask Leader');
+    await studio.setLayerBinding(0, 14, { behaviorId: fled.id, param1: 0, param2: 0 });
+    eq(ws.zmk.keymap.layers[0].bindings[14].behaviorId, fled.id, 'fled (0,0) assigns clean');
+    let junkErr = null;
+    try {
+        await studio.setLayerBinding(0, 14, { behaviorId: fled.id, param1: 7, param2: 0 });
+    } catch (e) { junkErr = e.message; }
+    eq(junkErr, 'INVALID_PARAMETERS', 'nonzero param on a 0-param behavior is rejected');
+    // The composer's assignability rule: display name present.
+    eq(details.filter((d) => d.displayName).length, details.length - 1,
+        'exactly the nameless behavior is composer-hidden');
+    await studio.discardChanges();
 }
 
 // ---- offline keymap auto-sync queue (zmk-offline.js) ----

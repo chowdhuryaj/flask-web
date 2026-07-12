@@ -7,18 +7,18 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=10';
-import { renderKeyboardSVG } from './keymap-tab.js?v=10';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=10';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=10';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=10';
-import { ZMK_VIDPID } from './zmk.js?v=10';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=10';
+import { el, toast, card } from './ui.js?v=11';
+import { renderKeyboardSVG } from './keymap-tab.js?v=11';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=11';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=11';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=11';
+import { ZMK_VIDPID } from './zmk.js?v=11';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=11';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe,
-} from './zmk-keycodes.js?v=10';
+} from './zmk-keycodes.js?v=11';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -1010,9 +1010,16 @@ export function buildZmkPicker({ keyPressId, onPick }) {
     }
 
     function renderBehaviorComposer() {
-        // Universal fallback: every device behavior, params driven by its
-        // metadata descriptors — zero curation needed.
-        const list = [...behaviors.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
+        // Universal fallback: every ASSIGNABLE device behavior, params driven
+        // by its metadata descriptors — zero curation needed. Behaviors with
+        // no display name ship no Studio metadata (urob's &leader) and the
+        // firmware rejects assigning them with INVALID PARAMETERS no matter
+        // the params — worse, the blank name sorted FIRST and became the
+        // dropdown's default selection (bench 5's "leader still fails").
+        const all = [...behaviors.values()];
+        const list = all.filter((d) => d.displayName)
+            .sort((a, b) => a.displayName.localeCompare(b.displayName));
+        const hidden = all.length - list.length;
         const bhvSel = el('select', {}, ...list.map((d) =>
             el('option', { value: d.id, text: d.displayName })));
         const paramsBox = el('span', {});
@@ -1086,6 +1093,10 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         });
         codes.append(el('div', { class: 'composer' },
             el('label', { text: 'Behavior:' }), bhvSel, paramsBox, assign));
+        if (hidden > 0) {
+            codes.append(el('div', { class: 'note faint',
+                text: `${hidden} firmware behavior${hidden === 1 ? '' : 's'} hidden — no Studio metadata, the firmware refuses to assign them.` }));
+        }
     }
 
     root.append(cats, search, codes);

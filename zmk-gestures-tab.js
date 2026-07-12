@@ -4,11 +4,11 @@
 // directions. Sets are live-switchable (the QMK set model, back after the
 // kot149 stroke-count emulation); each set edits as a compass grid.
 
-import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=10';
-import { CH, V } from './flaskproto.js?v=10';
-import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=10';
+import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=11';
+import { CH, V } from './flaskproto.js?v=11';
+import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=11';
 import { OUTPUT_ACTION, GESTURE_DIR_LABELS, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=10';
+    from './zmk-output-codec.js?v=11';
 
 // Compass placement: direction index (E SE S SW W NW N NE) → grid cell.
 // 3x3 grid, center = the legend.

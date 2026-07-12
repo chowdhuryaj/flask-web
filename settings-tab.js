@@ -3,8 +3,8 @@
 // immediately in firmware (qmk_settings_set → eeprom); no save bar.
 // Port of AdeptCompanion QMKSettingsView.swift.
 
-import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=10';
-import { QMK_SETTINGS } from './vialproto.js?v=10';
+import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=11';
+import { QMK_SETTINGS } from './vialproto.js?v=11';
 
 export class SettingsTab {
     constructor(app) {

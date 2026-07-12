@@ -4,7 +4,7 @@
 // Byte layouts cite quantum/via.c and quantum/vial.c.
 
 import { VIA, VIAL, VIA_KB_VALUE, DYNAMIC_OP, BUFFER_CHUNK,
-         TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=10';
+         TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=11';
 
 export class VialClient {
     constructor(hid) { this.hid = hid; }

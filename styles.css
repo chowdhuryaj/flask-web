@@ -346,6 +346,14 @@ main { padding: 16px; max-width: 1200px; margin: 0 auto; }
 body.hud-pip { background: transparent; }
 body.hud-pip .hud { border-radius: 0; min-height: 100vh; }
 
+/* Electron HUD popup is frameless: the whole surface drags the window,
+ * interactive controls opt back out so they stay clickable. */
+body.hud-electron { -webkit-app-region: drag; }
+body.hud-electron button,
+body.hud-electron select,
+body.hud-electron input,
+body.hud-electron a { -webkit-app-region: no-drag; }
+
 /* ---------- misc ---------- */
 
 .toast {

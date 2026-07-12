@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flask — Vial configurator</title>
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚗️</text></svg>">
   <!-- Classic script (not a module): UMD root detection needs a real `this`.
        Exposes window['xz-decompress'].XzReadableStream — used by vialdef.js. -->
-  <script src="vendor/xz-decompress.js?v=10"></script>
+  <script src="vendor/xz-decompress.js?v=11"></script>
 </head>
 <body>
   <header>
@@ -17,6 +17,7 @@
     <span class="pill warn" id="proto-warn" style="display:none"></span>
     <span class="spacer"></span>
     <button class="btn" id="hud-btn" style="display:none">HUD</button>
+    <button class="btn" id="diag-btn" title="Black-box diagnostics — transport + Studio event log, exportable">🐞</button>
     <button class="btn" id="lock-btn" style="display:none"></button>
     <button class="btn" id="vil-save" style="display:none" title="Save the whole layout (keymap, entries, macros, tunings) as a Vial-compatible .vil file">Save .vil</button>
     <button class="btn" id="vil-load" style="display:none" title="Apply a .vil file — works offline too (queues for the next connect)">Load .vil</button>
@@ -60,6 +61,6 @@
     <div id="panels"></div>
   </main>
 
-  <script type="module" src="main.js?v=10"></script>
+  <script type="module" src="main.js?v=11"></script>
 </body>
 </html>

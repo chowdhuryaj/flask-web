@@ -5,9 +5,15 @@
 // Swift `.busy` throw replaced by a FIFO promise chain so any caller
 // (tabs, HUD poll) can fire and ordering is preserved.
 
+import { diag, diagHex } from './diag.js?v=11';
+
 export const USAGE_PAGE = 0xFF60;
 export const USAGE = 0x61;
 export const REPORT_SIZE = 32;
+
+// Key-state channel (flaskproto CH.keyState) — the HUD polls it ~15 Hz, so
+// the diagnostics ring counts those instead of listing them.
+const CH_KEYSTATE = 0x23;
 
 export class HIDError extends Error {
     constructor(kind, msg) { super(msg || kind); this.kind = kind; }
@@ -59,6 +65,7 @@ export class FlaskHID extends EventTarget {
         dev.oninputreport = (e) => this._onInputReport(e);
         localStorage.setItem('flask-last-device',
             `${dev.vendorId.toString(16).padStart(4, '0')}:${dev.productId.toString(16).padStart(4, '0')}`);
+        diag.log('hid-open', `${dev.vendorId.toString(16)}:${dev.productId.toString(16)} ${dev.productName ?? ''}`);
         this.dispatchEvent(new Event('connect'));
     }
 
@@ -71,6 +78,7 @@ export class FlaskHID extends EventTarget {
 
     _handleDisconnect() {
         this.device = null;
+        diag.log('hid-disconnect', 'device gone (event, or dead handle after a failed write)');
         this._rejectPending(new HIDError('notConnected', 'Device disconnected'));
         this.dispatchEvent(new Event('disconnect'));
     }
@@ -93,6 +101,7 @@ export class FlaskHID extends EventTarget {
         clearTimeout(this._pending.timer);
         const p = this._pending;
         this._pending = null;
+        if (bytes[1] === CH_KEYSTATE) diag.pollOk(); else diag.rxOk();
         p.resolve(Array.from(bytes));
     }
 
@@ -122,17 +131,21 @@ export class FlaskHID extends EventTarget {
             }
             const report = new Uint8Array(REPORT_SIZE);
             report.set(prefix.slice(0, REPORT_SIZE));
+            const isPoll = report[1] === CH_KEYSTATE;
+            if (!isPoll) diag.log('tx', diagHex(report, 10));
             this._pending = {
                 matches, resolve, reject,
                 timer: setTimeout(() => {
                     if (this._pending) {
                         const p = this._pending;
                         this._pending = null;
+                        diag.timeout((isPoll ? 'key-state poll ' : '') + diagHex(report, 10));
                         p.reject(new HIDError('timeout', 'Device did not answer in time'));
                     }
                 }, 500),
             };
             this.device.sendReport(0, report).catch(async (e) => {
+                diag.log('write-failed', `${e.message} — tearing the connection down`);
                 this._rejectPending(new HIDError('writeFailed', `HID write failed: ${e.message}`));
                 // A failed WRITE means the OS handle is dead — this happens
                 // when the keyboard re-enumerates (power cycle) and the

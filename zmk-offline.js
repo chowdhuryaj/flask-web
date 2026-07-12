@@ -19,15 +19,15 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=10';
-import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=10';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=10';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=10';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=10';
-import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=10';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=10';
+import { CH, V } from './flaskproto.js?v=11';
+import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=11';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=11';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=11';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=11';
+import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE } from './zmk-combos-codec.js?v=11';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=11';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=10';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=11';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -138,7 +138,17 @@ function buildBehaviorCatalog() {
     add('Flask Gesture', range('Gesture set (255 = active)', 0, 255));
     add('Swapper', nil);
     add('Num Word', layer());
-    add('Leader Key', nil);
+    // urob's compiled &leader ships NO behavior-metadata: the real device
+    // lists it with an EMPTY display name and no metadata sets, and
+    // set_layer_binding rejects it with INVALID_PARAMETERS no matter the
+    // params (validate_binding -ENODEV). Mirror that exactly — the old
+    // `add('Leader Key', nil)` seeded a named, assignable version and
+    // masked the blank-default-option trap for two benches.
+    {
+        const id = nextId++;
+        catalog.set(id, { id, displayName: '', metadata: [] });
+        B['(urob leader, metadata-less)'] = id;
+    }
     // Smart one-shot/hold round (2026-07-10): hold-tap wrapping sticky —
     // Smart Mod keeps the Mod-Tap shape; Smart Layer is layer-in-BOTH-params
     // since the 2026-07-11 rework (hold = sticky layer, tap = toggle — the
@@ -633,11 +643,27 @@ export class OfflineStudioClient extends EventTarget {
         if (!layer || keyPosition < 0 || keyPosition >= layer.bindings.length) {
             throw new Error('invalid location');
         }
-        if (!BEHAVIORS.has(binding.behaviorId)) throw new Error('invalid behavior');
+        const d = BEHAVIORS.get(binding.behaviorId);
+        if (!d) throw new Error('INVALID_BEHAVIOR');
+        // Firmware-faithful validation (zmk_behavior_validate_binding):
+        // a behavior with no metadata at all is rejected outright
+        // (-ENODEV → INVALID_PARAMETERS), and an unused param slot only
+        // accepts 0. The sim used to accept anything here — which is how
+        // the metadata-less urob leader looked assignable for two benches.
+        const p1 = (binding.param1 ?? 0) >>> 0;
+        const p2 = (binding.param2 ?? 0) >>> 0;
+        if (!d.metadata.length) {
+            if (!d.displayName || p1 !== 0 || p2 !== 0) throw new Error('INVALID_PARAMETERS');
+        } else {
+            const set = d.metadata[0];
+            if ((!set.param1.length && p1 !== 0) || (!set.param2.length && p2 !== 0)) {
+                throw new Error('INVALID_PARAMETERS');
+            }
+        }
         layer.bindings[keyPosition] = {
             behaviorId: binding.behaviorId,
-            param1: (binding.param1 ?? 0) >>> 0,
-            param2: (binding.param2 ?? 0) >>> 0,
+            param1: p1,
+            param2: p2,
         };
         this._persist(true);
     }

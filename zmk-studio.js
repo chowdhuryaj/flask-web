@@ -10,9 +10,12 @@
 // protocol — compatibility = proto3 unknown-field skipping + the device
 // answering RPC_NOT_FOUND for requests it lacks.
 //
-// This file has zero imports and only touches `navigator` inside methods,
-// so the codec half is importable under plain `node` for the test vectors
+// This file's only import is diag.js (node-safe: globals touched inside
+// methods/try) and it only touches `navigator` inside methods, so the codec
+// half stays importable under plain `node` for the test vectors
 // (zmk-studio-test.mjs).
+
+import { diag } from './diag.js?v=11';
 
 // ---------------------------------------------------------------------------
 // Framing: SOF/ESC/EOF byte-stuffing (framing.ts equivalent).
@@ -462,6 +465,7 @@ export class StudioClient extends EventTarget {
         this._writer = port.writable.getWriter();
         this._reader = port.readable.getReader();
         navigator.serial.addEventListener('disconnect', this._onSerialDisconnect);
+        diag.log('studio-open', 'serial port opened');
         this._readLoop();   // intentionally un-awaited
     }
 
@@ -487,6 +491,7 @@ export class StudioClient extends EventTarget {
     _handleDisconnect() {
         if (!this.port) return;
         const wasClean = this._closing;
+        diag.log('studio-disconnect', wasClean ? 'clean close' : 'port dropped');
         this._teardown().finally(() => {
             if (!wasClean) this.dispatchEvent(new CustomEvent('disconnect'));
         });
@@ -648,6 +653,11 @@ export class StudioClient extends EventTarget {
     }
 
     async setLayerBinding(layerId, keyPosition, binding) {
+        // Every assignment goes through the diagnostics ring — the exact
+        // id/params the wire carried is the evidence that settles any
+        // INVALID_PARAMETERS report (bench 5: "leader still fails").
+        const summary = `layer=${layerId} pos=${keyPosition} bhv=${binding.behaviorId}`
+            + ` p1=${(binding.param1 ?? 0) >>> 0} p2=${(binding.param2 ?? 0) >>> 0}`;
         const inner = fBytes(KM_SET_LAYER_BINDING, [
             ...fVarint(1, layerId),
             ...fVarint(2, keyPosition),
@@ -656,9 +666,11 @@ export class StudioClient extends EventTarget {
         const r = await this._rpc(SUB_KEYMAP, inner);
         const code = r.noResponse ? 0 : varintOf(r.fields, KM_SET_LAYER_BINDING, 0);
         if (code !== 0) {
-            throw new StudioError('remote',
-                SET_BINDING_ERROR_NAMES[code] ?? `set-binding error ${code}`, code);
+            const name = SET_BINDING_ERROR_NAMES[code] ?? `set-binding error ${code}`;
+            diag.log('studio-assign-REJECTED', `${summary} → ${name}`);
+            throw new StudioError('remote', name, code);
         }
+        diag.log('studio-assign', summary);
     }
 
     async setLayerProps(layerId, name) {

@@ -17,17 +17,17 @@
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=10';
-import { CH, V } from './flaskproto.js?v=10';
-import { renderKeyboardSVG } from './keymap-tab.js?v=10';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast } from './ui.js?v=11';
+import { CH, V } from './flaskproto.js?v=11';
+import { renderKeyboardSVG } from './keymap-tab.js?v=11';
 import {
     keyboardUsages, consumerUsages, kpParam, cpParam,
     usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=10';
+} from './zmk-keycodes.js?v=11';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS,
     decodeComboSlot, encodeComboSlot, comboSlotIsEmpty,
-} from './zmk-combos-codec.js?v=10';
+} from './zmk-combos-codec.js?v=11';
 
 const MODS = [
     { bit: 0x01, glyph: '⌃', label: 'Ctrl' },
@@ -280,9 +280,18 @@ export class ZmkCombosTab {
 
     render() {
         const { flask } = this.app;
+        // Visible = any slot with CONTENT (or an open draft) — not just
+        // "live" slots. comboSlotIsEmpty is the firmware's fire rule
+        // (usage + ≥2 keys), so filtering on it alone made a combo VANISH
+        // the moment you unchecked one key mid-edit (bench 5: "combos
+        // delete themselves") — the 1-key slot was still on the device,
+        // just unreachable. The card already renders the incomplete state.
         const visible = this.slots
             .map((s, i) => i)
-            .filter((i) => !comboSlotIsEmpty(this.slots[i]) || this.drafts.has(i));
+            .filter((i) => {
+                const s = this.slots[i];
+                return s.positions.length > 0 || s.usage !== 0 || this.drafts.has(i);
+            });
         const used = this.slots.filter((s) => !comboSlotIsEmpty(s)).length;
 
         const controls = card('Runtime combos',

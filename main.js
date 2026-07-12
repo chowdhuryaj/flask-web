@@ -2,40 +2,41 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast } from './ui.js?v=10';
-import { FlaskHID } from './webhid.js?v=10';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=10';
+import { el, toast, modal } from './ui.js?v=11';
+import { diag } from './diag.js?v=11';
+import { FlaskHID } from './webhid.js?v=11';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=11';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=10';
-import { VialClient } from './vialclient.js?v=10';
-import { parseDefinition } from './vialdef.js?v=10';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=10';
-import { capabilities } from './caps.js?v=10';
-import { setDeviceCustomKeys } from './keycodes.js?v=10';
-import { KeymapTab } from './keymap-tab.js?v=10';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=10';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=10';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=10';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=10';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=10';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=10';
-import { ZmkTestTab } from './zmk-test-tab.js?v=10';
-import { MouseTab } from './mouse-tab.js?v=10';
-import { TypingTab } from './typing-tab.js?v=10';
-import { SettingsTab } from './settings-tab.js?v=10';
-import { HUD } from './hud.js?v=10';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=10';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=11';
+import { VialClient } from './vialclient.js?v=11';
+import { parseDefinition } from './vialdef.js?v=11';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=11';
+import { capabilities } from './caps.js?v=11';
+import { setDeviceCustomKeys } from './keycodes.js?v=11';
+import { KeymapTab } from './keymap-tab.js?v=11';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=11';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=11';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=11';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=11';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=11';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=11';
+import { ZmkTestTab } from './zmk-test-tab.js?v=11';
+import { MouseTab } from './mouse-tab.js?v=11';
+import { TypingTab } from './typing-tab.js?v=11';
+import { SettingsTab } from './settings-tab.js?v=11';
+import { HUD } from './hud.js?v=11';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=11';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=10';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=11';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=10';
-import { MacrosTab } from './macros-tab.js?v=10';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=10';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=10';
-import { RgbTab } from './rgb-tab.js?v=10';
-import { DisplayTab } from './display-tab.js?v=10';
-import { exportVil, importVil, downloadText } from './vil.js?v=10';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=11';
+import { MacrosTab } from './macros-tab.js?v=11';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=11';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=11';
+import { RgbTab } from './rgb-tab.js?v=11';
+import { DisplayTab } from './display-tab.js?v=11';
+import { exportVil, importVil, downloadText } from './vil.js?v=11';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -495,6 +496,49 @@ function init() {
     $('connect-btn').addEventListener('click', connectClick);
     $('landing-connect').addEventListener('click', connectClick);
     $('hud-btn').addEventListener('click', () => app.hud.toggle());
+    // Black-box diagnostics: live transport/Studio event log + export —
+    // the no-reflash crash-capture path (bench 5 ask). The ring runs
+    // unconditionally from page load; this is just the window onto it.
+    app.diag = diag;
+    $('diag-btn').addEventListener('click', () => {
+        const pre = el('pre', {
+            style: 'max-height:55vh; overflow:auto; font-size:11px; white-space:pre-wrap;'
+                + ' user-select:text; margin:0',
+            text: diag.report(),
+        });
+        const refresh = () => { pre.textContent = diag.report(); pre.scrollTop = pre.scrollHeight; };
+        diag.addEventListener('log', refresh);
+        const prev = diag.previousSnapshot();
+        const back = modal('Diagnostics', el('div', {},
+            el('div', { class: 'note faint',
+                text: 'Everything the app observed: HID frames, timeouts, write failures,'
+                    + ' reconnects, Studio assignments, boot reset-cause. Key-state polls are'
+                    + ' counted, not listed. If the board dies, the moment + last exchange are'
+                    + ' in here — snapshot auto-saves on death.' }),
+            pre), [
+            el('button', {
+                class: 'btn primary', text: 'Copy report',
+                onclick: () => navigator.clipboard.writeText(diag.report())
+                    .then(() => toast('Diagnostics copied'), () => toast('Copy failed', true)),
+            }),
+            el('button', {
+                class: 'btn', text: 'Download',
+                onclick: () => downloadText(
+                    `flask-diag-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`,
+                    diag.report()),
+            }),
+            ...(prev ? [el('button', {
+                class: 'btn', text: 'Copy previous snapshot',
+                title: 'The report auto-saved the last time the device went unresponsive',
+                onclick: () => navigator.clipboard.writeText(prev)
+                    .then(() => toast('Previous snapshot copied'), () => toast('Copy failed', true)),
+            })] : []),
+        ]);
+        back.addEventListener('click', (e) => {
+            if (e.target === back) diag.removeEventListener('log', refresh);
+        });
+        refresh();
+    });
     $('vil-save').addEventListener('click', async () => {
         try {
             toast('Reading layout…');
@@ -549,6 +593,7 @@ function init() {
         // moment the queued changes apply.
         if (app.hid.connected || connecting) return;
         if (reconnectCandidate([e.detail])) {
+            diag.log('reconnect', 'replug event — reattaching');
             toast('Reconnecting…');
             await connectFlow(e.detail);
         }
@@ -569,6 +614,7 @@ function init() {
             const match = reconnectCandidate(await FlaskHID.grantedDevices());
             if (match) {
                 lastAutoAttempt = Date.now();
+                diag.log('reconnect', 'granted-list poll reattach (no hotplug events seen)');
                 toast('Reconnecting…');
                 await connectFlow(match);
             }

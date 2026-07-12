@@ -8,7 +8,8 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=10';
+import { CH, V } from './flaskproto.js?v=11';
+import { diag } from './diag.js?v=11';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -185,6 +186,7 @@ export async function zmkReportResetCause(flask, toast) {
         if (bits & 0x0020) names.push('debug');
         if (bits & 0x0100) names.push('CPU LOCKUP');
         console.info(`ZMK boot reset cause: 0x${bits.toString(16)} (${names.join(', ') || 'none'})`);
+        diag.log('reset-cause', `0x${bits.toString(16)} (${names.join(', ') || 'none'})`);
         if (bits & 0x0110) { // watchdog or lockup = a real crash happened
             toast?.(`⚠ Last boot followed a FAULT reset (${names.join(', ')}) — the previous session crashed`, true);
         }

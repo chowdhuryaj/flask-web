@@ -4,9 +4,9 @@
 // HUDWindow.swift (poll cadences preserved: ~15 Hz layer/matrix, OLED
 // mirror every 4th tick).
 
-import { el } from './ui.js?v=10';
-import { CH, V, NLKB } from './flaskproto.js?v=10';
-import { renderKeyboardSVG } from './keymap-tab.js?v=10';
+import { el } from './ui.js?v=11';
+import { CH, V, NLKB } from './flaskproto.js?v=11';
+import { renderKeyboardSVG } from './keymap-tab.js?v=11';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;
@@ -33,12 +33,30 @@ export class HUD {
         this.rootEl = this._buildRoot();
         // Document PiP needs real browser UI. Electron exposes the global
         // but requestWindow never settles — the await hung forever and the
-        // HUD "did not even open" (bench 2026-07-12) — so skip it there and
-        // race a timeout everywhere else; the in-page overlay is the
-        // fallback either way.
-        const pipUsable = 'documentPictureInPicture' in window
-            && !navigator.userAgent.includes('Electron');
-        if (pipUsable) {
+        // HUD "did not even open" (bench 2026-07-12). There the HUD opens a
+        // plain named popup instead; desktop/main.js's window-open handler
+        // styles it frameless + always-on-top + resizable (the Chrome-PiP
+        // feel, bench 5 ask). The in-page overlay stays the last fallback.
+        if (navigator.userAgent.includes('Electron')) {
+            try {
+                const saved = JSON.parse(localStorage.getItem('flask-hud-window-frame') || 'null');
+                const feats = `popup,width=${saved?.w ?? 460},height=${saved?.h ?? 300}`
+                    + (saved ? `,left=${saved.x},top=${saved.y}` : '');
+                const w = window.open('about:blank', 'flask-hud', feats);
+                if (w) {
+                    this.win = w;
+                    this._electronWin = true;
+                    this._dressWindow(w);
+                    w.document.title = 'Flask HUD';
+                    // Frameless window: the whole HUD is the drag handle,
+                    // controls opt out (app-region CSS in styles.css).
+                    w.document.body.classList.add('hud-electron');
+                }
+            } catch {
+                this.win = null;
+                this._electronWin = false;
+            }
+        } else if ('documentPictureInPicture' in window) {
             try {
                 const req = documentPictureInPicture.requestWindow({ width: 460, height: 300 });
                 this.win = await Promise.race([
@@ -49,23 +67,7 @@ export class HUD {
                 // the stray window instead of leaking it.
                 req.then((w) => { if (this.win !== w) { try { w.close(); } catch { /* gone */ } } },
                     () => {});
-                // One linked stylesheet → one clone (styles.css is deliberately the only sheet).
-                for (const sheet of document.styleSheets) {
-                    if (sheet.href) {
-                        const link = this.win.document.createElement('link');
-                        link.rel = 'stylesheet';
-                        link.href = sheet.href;
-                        this.win.document.head.append(link);
-                    } else if (sheet.ownerNode) {
-                        this.win.document.head.append(sheet.ownerNode.cloneNode(true));
-                    }
-                }
-                // Mirror any theme vars pinned on the main document root.
-                this.win.document.documentElement.style.cssText =
-                    document.documentElement.style.cssText;
-                this.win.document.body.className = 'hud-pip';
-                this.win.document.body.append(this.rootEl);
-                this.win.addEventListener('pagehide', () => { if (this.open) this.close(); });
+                this._dressWindow(this.win);
             } catch {
                 this.win = null;
             }
@@ -75,12 +77,45 @@ export class HUD {
         this.render();
     }
 
+    /** Clone the app's styles + theme into a bare window (PiP or Electron
+     * popup) and move the HUD root in. */
+    _dressWindow(win) {
+        // One linked stylesheet → one clone (styles.css is deliberately the only sheet).
+        for (const sheet of document.styleSheets) {
+            if (sheet.href) {
+                const link = win.document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = sheet.href;
+                win.document.head.append(link);
+            } else if (sheet.ownerNode) {
+                win.document.head.append(sheet.ownerNode.cloneNode(true));
+            }
+        }
+        // Mirror any theme vars pinned on the main document root.
+        win.document.documentElement.style.cssText =
+            document.documentElement.style.cssText;
+        win.document.body.className = 'hud-pip';
+        win.document.body.append(this.rootEl);
+        win.addEventListener('pagehide', () => { if (this.open) this.close(); });
+    }
+
     close() {
         this.open = false;
         clearInterval(this._timer);
         this._timer = null;
+        // Electron popup: remember where AJ put it (window features on the
+        // next open — Electron persists nothing itself).
+        if (this._electronWin && this.win && !this.win.closed) {
+            try {
+                localStorage.setItem('flask-hud-window-frame', JSON.stringify({
+                    x: this.win.screenX, y: this.win.screenY,
+                    w: this.win.outerWidth, h: this.win.outerHeight,
+                }));
+            } catch { /* frame save is best-effort */ }
+        }
         try { this.win?.close(); } catch { /* already closed */ }
         this.win = null;
+        this._electronWin = false;
         this.overlay?.remove();
         this.overlay = null;
     }

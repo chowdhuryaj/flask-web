@@ -12,8 +12,8 @@
 //   - Mouse + scroll tester: pointer speed/peak, buttons, wheel notches and
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
-import { el, card, toast } from './ui.js?v=10';
-import { CH, V } from './flaskproto.js?v=10';
+import { el, card, toast } from './ui.js?v=11';
+import { CH, V } from './flaskproto.js?v=11';
 
 const now = () => performance.now();
 
