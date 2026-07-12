@@ -211,8 +211,16 @@ export class ZmkLeaderTab {
 
     render() {
         const { flask } = this.app;
+        // Content-based visibility, not the fire rule — filtering on
+        // leaderSlotIsEmpty (output + ≥1 position) made a sequence VANISH
+        // mid-edit when its positions were cleared before a new output was
+        // picked (same class as the bench-5 combos "delete themselves").
         const visible = this.slots.map((s, i) => i)
-            .filter((i) => !leaderSlotIsEmpty(this.slots[i]) || this.drafts.has(i));
+            .filter((i) => {
+                const s = this.slots[i];
+                return s.positions.length > 0 || s.action !== OUTPUT_ACTION.none
+                    || this.drafts.has(i);
+            });
         const used = this.slots.filter((s) => !leaderSlotIsEmpty(s)).length;
 
         const controls = card('Runtime leader',
