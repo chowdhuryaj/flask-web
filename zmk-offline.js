@@ -19,17 +19,18 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=11';
-import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities } from './zmk.js?v=11';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=11';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=11';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=11';
+import { CH, V } from './flaskproto.js?v=12';
+import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities,
+         ZMK_TRACKBALLS } from './zmk.js?v=12';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=12';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=12';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=12';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, decodeComboSlotV2, encodeComboSlotV2,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=11';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=11';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=12';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=12';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=11';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=12';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -211,7 +212,13 @@ function buildDefaultLayers() {
             bind(B.Swapper), bind(B['Num Word'], 5), KP('Tab')),
         ...row(TR(), KP('Volume Up'), KP('Home'), KP('Up'), KP('End'), TR(),
             TR(), bind(B['Key Repeat']), KP('Tab'), KP('Up'), KP('Tab'), TR()),
-        ...row(TR(), KP('Volume Down'), KP('Left'), KP('Down'), KP('Right'), bind(B['Leader Key']),
+        // The real Control layer holds urob's compiled &leader here — the
+        // METADATA-LESS behavior (empty display name). The old
+        // `bind(B['Leader Key'])` referenced a catalog entry deleted in the
+        // bench-5 round and produced behaviorId undefined (renders as
+        // "#undefined", never assignable) — sim-faithful is the nameless id.
+        ...row(TR(), KP('Volume Down'), KP('Left'), KP('Down'), KP('Right'),
+            bind(B['(urob leader, metadata-less)']),
             bind(B['Caps Word']), KP('Enter'), KP('Left'), KP('Down'), KP('Right'), KP('Escape')),
         ...row(TR(), KP('Mute'), KP('Play/Pause'), KP('Rewind'), KP('Fast Forward'), bind(B['Ball Swap'], 0),
             bind(B['Ball Swap'], 1), bind(B['Flask RGB'], 1), bind(B['Flask RGB'], 2), bind(B['Flask RGB'], 0), bind(B['External Power'], 2), TR()),
@@ -322,6 +329,15 @@ function seedImprintTunables(tun) {
     // v11: ball swap (boots unswapped; effective is live-only — see the
     // ZmkOfflineFlask getU16 special case).
     seed(CH.ballSwap, V.bswapSwapped, 0);
+
+    // v13: auto-mouse (flask_automouse firmware defaults — the keymap
+    // node: enabled, 750 ms, threshold 0 = any motion, Mouse layer 3,
+    // extend on non-transparent keys).
+    seed(CH.autoMouse, V.amEnabled, 1);
+    seed(CH.autoMouse, V.amTimeout, 750);
+    seed(CH.autoMouse, V.amThreshold, 0);
+    seed(CH.autoMouse, V.amLayer, 3);
+    seed(CH.autoMouse, V.amExtend, 1);
 }
 
 export function createZmkTemplate(family) {
@@ -351,6 +367,7 @@ export function createZmkTemplate(family) {
             encoderKeys: [], encoderPushKeys: {}, displayTile: null,
             customKeycodes: [],
             layerNames: layers.map((l) => l.name),
+            decorations: ZMK_TRACKBALLS[family] ?? [],
         },
         keymap: null,           // QMK field; the ZMK keymap lives under zmk.
         tunables: tun,
@@ -387,6 +404,8 @@ export function normalizeZmkWorkspace(ws) {
     ws.zmkDirty.gestureSlot ??= {};
     if (ws.zmk) {
         ws.zmk.pendingKeymap ??= null;
+        // v13: stored older workspaces gain the trackball decorations.
+        if (ws.profile) ws.profile.decorations ??= ZMK_TRACKBALLS[ws.family] ?? [];
         // The preview tracks the app's expected protocol — a stored older
         // workspace "gets a firmware update" on load: version bumps and
         // newly-added tunable ids seed their firmware defaults (existing

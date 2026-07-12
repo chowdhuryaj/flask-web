@@ -3,9 +3,10 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=11';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=12';
 import { CH, V, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
-         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=11';
+         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=12';
+import { renderKeyboardSVG } from './keymap-tab.js?v=12';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -63,6 +64,32 @@ export class MouseTab {
         const g = (ch, id) => flask.getU16(ch, id);
         const cardsRow = el('div', { class: 'cards-row' });
         this.root.replaceChildren(cardsRow);
+
+        // ---- board preview with the physical trackballs ----
+        // Profile-carried decorations (ZMK line publishes them; QMK
+        // profiles define none, so nothing changes for them). Labels are
+        // live roles — ballswap-aware when the device has that channel.
+        const deco = this.app.profile?.decorations;
+        if (deco?.length && this.app.profile?.keys?.length) {
+            const wrap = el('div', { style: 'overflow-x:auto' });
+            const ballsCard = card('Trackballs', 'live roles on the board', wrap);
+            this.renderBallsPreview = async () => {
+                let swapped = 0;
+                if (caps.ballSwap) {
+                    try { swapped = await g(CH.ballSwap, V.bswapEffective); }
+                    catch { /* pre-v11 firmware */ }
+                }
+                const role = (side) => (side === 'left') === !swapped ? 'scroll' : 'cursor';
+                wrap.replaceChildren(renderKeyboardSVG({
+                    profile: this.app.profile,
+                    scale: 0.5,
+                    keycodeAt: () => null,
+                    decorationLabel: (d) => role(d.side),
+                }));
+            };
+            await this.renderBallsPreview();
+            cardsRow.append(ballsCard);
+        }
 
         // ---- acceleration ----
         if (caps.accel) {
@@ -206,6 +233,7 @@ export class MouseTab {
                     await flask.setU16(CH.ballSwap, V.bswapSwapped, v ? 1 : 0);
                     await flask.save(CH.ballSwap); // key parity: toggles persist
                     refreshBswapNow();
+                    this.renderBallsPreview?.(); // trackball card follows the roles
                 } }),
             bswapNow,
             el('div', { class: 'hint',
@@ -294,15 +322,36 @@ export class MouseTab {
                         ({ value: i, label: t < 0 ? '∞ (never)' : `${t} ms` })),
                     onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, Number(v)),
                 }));
+            } else if (caps.autoMouseLatch) {
+                // ZMK flask_automouse: 0 = LATCH — the layer stays until a
+                // key that is transparent on it is pressed; that key is
+                // swallowed (it only ends auto-mouse, it never types).
+                am.append(sliderRow({
+                    label: 'Timeout',
+                    hint: '0 = stay until a non-mouse key is pressed (that key is swallowed)',
+                    min: 0, max: 5000, step: 50,
+                    value: await g(CH.autoMouse, V.amTimeout),
+                    format: (v) => v === 0 ? 'latch' : `${v} ms`,
+                    onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, v) }));
             } else {
                 am.append(sliderRow({ label: 'Timeout (ms)', min: 100, max: 5000, step: 50,
                     value: await g(CH.autoMouse, V.amTimeout),
                     onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, v) }));
             }
             am.append(
-                sliderRow({ label: 'Threshold (counts)', min: 0, max: 60, step: 1,
+                sliderRow({ label: 'Threshold (counts)',
+                    hint: caps.autoMouseLatch ? 'ball travel before the layer triggers; 0 = any motion' : undefined,
+                    min: 0, max: caps.autoMouseLatch ? 200 : 60, step: 1,
                     value: await g(CH.autoMouse, V.amThreshold),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }),
+                    onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }));
+            if (caps.autoMouseExtend) {
+                am.append(toggleRow({
+                    label: 'Keys extend the timeout',
+                    hint: 'mouse-layer keys (clicks, snipe, gestures) re-arm the timer; typing keys still drop the layer',
+                    value: await g(CH.autoMouse, V.amExtend),
+                    onChange: (v) => flask.setU16(CH.autoMouse, V.amExtend, v ? 1 : 0) }));
+            }
+            am.append(
                 selectRow({ label: 'Target layer', value: await g(CH.autoMouse, V.amLayer),
                     options: Array.from({ length: this.app.layerCount }, (_, i) =>
                         ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` })),

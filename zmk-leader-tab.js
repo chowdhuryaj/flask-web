@@ -7,13 +7,13 @@
 // pickTypedOutput (exported; the Gestures tab shares it) wraps the combos
 // tab's usage picker with the action choice: keycode / macro / none.
 
-import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=11';
-import { CH, V } from './flaskproto.js?v=11';
-import { renderKeyboardSVG } from './keymap-tab.js?v=11';
-import { pickUsage } from './zmk-combos-tab.js?v=11';
-import { usageCap, usageLabel } from './zmk-keycodes.js?v=11';
+import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=12';
+import { CH, V } from './flaskproto.js?v=12';
+import { renderKeyboardSVG } from './keymap-tab.js?v=12';
+import { pickUsage } from './zmk-combos-tab.js?v=12';
+import { usageCap, usageLabel } from './zmk-keycodes.js?v=12';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty }
-    from './zmk-output-codec.js?v=11';
+    from './zmk-output-codec.js?v=12';
 
 /** Label for a typed output. */
 export function outputLabel(o, { cap = false } = {}) {

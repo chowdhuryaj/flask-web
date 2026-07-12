@@ -5,7 +5,7 @@
 // Swift `.busy` throw replaced by a FIFO promise chain so any caller
 // (tabs, HUD poll) can fire and ordering is preserved.
 
-import { diag, diagHex } from './diag.js?v=11';
+import { diag, diagHex } from './diag.js?v=12';
 
 export const USAGE_PAGE = 0xFF60;
 export const USAGE = 0x61;

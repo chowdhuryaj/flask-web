@@ -2,41 +2,41 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=11';
-import { diag } from './diag.js?v=11';
-import { FlaskHID } from './webhid.js?v=11';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=11';
+import { el, toast, modal } from './ui.js?v=12';
+import { diag } from './diag.js?v=12';
+import { FlaskHID } from './webhid.js?v=12';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=12';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=11';
-import { VialClient } from './vialclient.js?v=11';
-import { parseDefinition } from './vialdef.js?v=11';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=11';
-import { capabilities } from './caps.js?v=11';
-import { setDeviceCustomKeys } from './keycodes.js?v=11';
-import { KeymapTab } from './keymap-tab.js?v=11';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=11';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=11';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=11';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=11';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=11';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=11';
-import { ZmkTestTab } from './zmk-test-tab.js?v=11';
-import { MouseTab } from './mouse-tab.js?v=11';
-import { TypingTab } from './typing-tab.js?v=11';
-import { SettingsTab } from './settings-tab.js?v=11';
-import { HUD } from './hud.js?v=11';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=11';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=12';
+import { VialClient } from './vialclient.js?v=12';
+import { parseDefinition } from './vialdef.js?v=12';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=12';
+import { capabilities } from './caps.js?v=12';
+import { setDeviceCustomKeys } from './keycodes.js?v=12';
+import { KeymapTab } from './keymap-tab.js?v=12';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=12';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=12';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=12';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=12';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=12';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=12';
+import { ZmkTestTab } from './zmk-test-tab.js?v=12';
+import { MouseTab } from './mouse-tab.js?v=12';
+import { TypingTab } from './typing-tab.js?v=12';
+import { SettingsTab } from './settings-tab.js?v=12';
+import { HUD } from './hud.js?v=12';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=12';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=11';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=12';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=11';
-import { MacrosTab } from './macros-tab.js?v=11';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=11';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=11';
-import { RgbTab } from './rgb-tab.js?v=11';
-import { DisplayTab } from './display-tab.js?v=11';
-import { exportVil, importVil, downloadText } from './vil.js?v=11';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=12';
+import { MacrosTab } from './macros-tab.js?v=12';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=12';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=12';
+import { RgbTab } from './rgb-tab.js?v=12';
+import { DisplayTab } from './display-tab.js?v=12';
+import { exportVil, importVil, downloadText } from './vil.js?v=12';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 

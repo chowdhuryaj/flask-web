@@ -2,10 +2,10 @@
 // SVG rendering pattern from AlooMapper's renderDiagram; geometry from
 // profiles.js (key units × UNIT px).
 
-import { el, svgEl, toast, card } from './ui.js?v=11';
-import { capLabel, hoverText } from './keycodes.js?v=11';
-import { buildPicker } from './picker.js?v=11';
-import { encoderCount } from './profiles.js?v=11';
+import { el, svgEl, toast, card } from './ui.js?v=12';
+import { capLabel, hoverText } from './keycodes.js?v=12';
+import { buildPicker } from './picker.js?v=12';
+import { encoderCount } from './profiles.js?v=12';
 
 const UNIT = 56;
 const GAP = 3;
@@ -121,6 +121,10 @@ export function renderKeyboardSVG(opts) {
     const unit = UNIT * scale;
     const all = [...profile.keys, ...profile.encoderKeys];
     if (profile.displayTile) all.push(profile.displayTile);
+    // Non-key decorations (ZMK trackballs): {kind:'ball', x, y, r} circles
+    // in the same key-unit space; centered coords, so extent = x+r as w.
+    const decorations = profile.decorations ?? [];
+    for (const d of decorations) all.push({ x: d.x - d.r, y: d.y - d.r, w: d.r * 2, h: d.r * 2 });
     const maxX = Math.max(...all.map((k) => k.x + k.w), 1);
     const maxY = Math.max(...all.map((k) => k.y + k.h), 1);
     const svg = svgEl('svg', {
@@ -189,6 +193,28 @@ export function renderKeyboardSVG(opts) {
             class: 'keyname', x: (t.x + t.w / 2) * unit + 4, y: (t.y + t.h / 2) * unit + 8,
             'text-anchor': 'middle', text: 'OLED',
         }));
+    }
+
+    // Decorations — physical features that aren't keys (the Imprint's two
+    // trackballs). Purely visual; `decorationLabel(d)` (from opts or the
+    // profile) supplies the caption so tabs can show live roles.
+    const decoLabel = opts.decorationLabel ?? profile.decorationLabel ?? (() => '');
+    for (const d of decorations) {
+        const cx = d.x * unit + 4, cy = d.y * unit + 4;
+        const r = d.r * unit - GAP / 2;
+        svg.append(
+            svgEl('circle', {
+                class: 'deco-ball', cx, cy, r,
+                style: 'fill: var(--surface2, #8884); stroke: var(--border2, #8886); stroke-width: 2',
+            }),
+            svgEl('circle', {
+                class: 'deco-ball-hl', cx: cx - r * 0.3, cy: cy - r * 0.35, r: r * 0.28,
+                style: 'fill: var(--border, #fff2); opacity: 0.5',
+            }),
+            svgEl('text', {
+                class: 'keyname', x: cx, y: cy + 4 * scale,
+                'text-anchor': 'middle', text: fitCap(decoLabel(d) || ''),
+            }));
     }
 
     return svg;

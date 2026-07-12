@@ -82,8 +82,11 @@ export const V = {
     asInverted: 0x01, asSpeedScale: 0x02, asDeadzone: 0x03, asRange: 0x04,
     asState: 0x05,     // live: GET signed level / ±100 jogging; SET force-stops
     asStopOnKey: 0x06, // trackballs v11+, NLKB16 v4+
-    // auto-mouse
+    // auto-mouse — 0x01-0x04 shared with QMK; 0x05 is a ZMK-line v13
+    // addition (flask_automouse: timeout 0 = latch until a transparent
+    // key, extend re-arms the timeout on non-transparent keys)
     amEnabled: 0x01, amTimeout: 0x02, amThreshold: 0x03, amLayer: 0x04,
+    amExtend: 0x05,
     // wheel chords
     wcEnabled: 0x01, wcStep: 0x02, wcHoldMs: 0x03,
     // OS shortcuts

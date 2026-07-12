@@ -412,7 +412,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 12, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, 13, 'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
@@ -428,6 +428,15 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(await flask.getU16(CH.scrollSnap, V.snapEnabled), 1, 'sim snap boots enabled');
     eq(await flask.getU16(CH.scrollSnap, V.snapThreshold), 63, 'sim snap threshold default');
     eq(await flask.getU16(CH.rgbMap, V.rgbmapEffect), 0, 'sim rgb effect boots off');
+    // v13 seeds: auto-mouse mirrors the flask_automouse keymap node.
+    eq(await flask.getU16(CH.autoMouse, V.amEnabled), 1, 'sim automouse boots enabled');
+    eq(await flask.getU16(CH.autoMouse, V.amTimeout), 750, 'sim automouse timeout default');
+    eq(await flask.getU16(CH.autoMouse, V.amThreshold), 0, 'sim automouse threshold default');
+    eq(await flask.getU16(CH.autoMouse, V.amLayer), 3, 'sim automouse targets the Mouse layer');
+    eq(await flask.getU16(CH.autoMouse, V.amExtend), 1, 'sim automouse extends on key');
+    eq(await flask.setU16(CH.autoMouse, V.amTimeout, 0), 0, 'sim automouse latch (0) set echoes');
+    eq(await flask.getU16(CH.autoMouse, V.amTimeout), 0, 'sim automouse latch persists');
+    await flask.setU16(CH.autoMouse, V.amTimeout, 750);
 
     // Combo slot write round-trip + journal (8-position v9 frame).
     const comboFrame = [2, 10, 20, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x07, 0x00, 0x04];
@@ -577,7 +586,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
         await import('./zmk-output-codec.js');
 
     const ws = createZmkTemplate('imprint');
-    eq(ws.protocolVersion, 12, 'template speaks v12');
+    eq(ws.protocolVersion, 13, 'template speaks v13');
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.leader, V.leaderSlotCount), 16, 'sim leader slots');
     eq(await flask.getU16(CH.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
@@ -640,8 +649,13 @@ eq(zigzag(1), 2, 'zigzag(1)');
         encodeLeaderSlot(3, { positions: [12, 13], action: 2, param: 4 }, 8));
     await a.flask.setU16(CH.gestures, V.gesturesActiveSet, 2);
 
+    await a.flask.setU16(CH.autoMouse, V.amTimeout, 0);       // latch mode
+    await a.flask.setU16(CH.autoMouse, V.amThreshold, 40);
+
     const state = await exportFlaskState(a);
     eq(state.scrollSnap.threshold, 80, 'export carries snap threshold');
+    eq(state.autoMouse.timeout, 0, 'export carries the automouse latch timeout (v13)');
+    eq(state.autoMouse.threshold, 40, 'export carries the automouse threshold');
     eq(state.rgb.map[1][7].join(','), '10,20,30', 'export carries the RGB map');
     eq(state.combos.slots[5].action, 1, 'export carries typed combo slots (v12)');
     eq(state.combos.slots[5].param1, 0x70005, 'export carries the combo usage as param1');
@@ -658,8 +672,24 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const led = await b.flask.getBytes(CH.rgbMap, V.rgbmapLed, [1, 7]);
     eq([led[2], led[3], led[4]].join(','), '10,20,30', 'import restored the RGB map');
     eq(await b.flask.getU16(CH.gestures, V.gesturesActiveSet), 2, 'import restored active set');
+    eq(await b.flask.getU16(CH.autoMouse, V.amTimeout), 0, 'import restored automouse latch');
+    eq(await b.flask.getU16(CH.autoMouse, V.amThreshold), 40, 'import restored automouse threshold');
     const b5 = await b.flask.getBytes(CH.combos, V.combosSlot, [5]);
     eq(b5[1], 10, 'import restored combo positions');
+}
+
+// ---- v13 caps + profile decorations (zmk.js) ----
+{
+    const { zmkCapabilities, zmkProfile, ZMK_TRACKBALLS } = await import('./zmk.js');
+    const v12 = zmkCapabilities('imprint', 12);
+    const v13 = zmkCapabilities('imprint', 13);
+    eq(v12.autoMouse, false, 'v12 firmware has no automouse channel');
+    eq(v13.autoMouse, true, 'v13 firmware unlocks the automouse card');
+    eq(v13.autoMouseLatch && v13.autoMouseExtend, true, 'v13 unlocks latch + extend semantics');
+    eq(ZMK_TRACKBALLS.imprint.length, 2, 'imprint carries two trackball decorations');
+    const prof = zmkProfile('imprint');
+    eq(prof.decorations.length, 2, 'profile publishes the trackball decorations');
+    eq(prof.decorations.map((d) => d.side).join(','), 'left,right', 'balls tagged by side');
 }
 
 // ---- RGB painter LED → key geometry mapping (zmk-rgb-tab.js) ----

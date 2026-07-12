@@ -12,11 +12,11 @@
 //   - Mouse + scroll tester: pointer speed/peak, buttons, wheel notches and
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
-import { el, card, toast } from './ui.js?v=11';
-import { CH, V } from './flaskproto.js?v=11';
-import { diag } from './diag.js?v=11';
+import { el, card, toast } from './ui.js?v=12';
+import { CH, V } from './flaskproto.js?v=12';
+import { diag } from './diag.js?v=12';
 import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION }
-    from './zmk-combos-codec.js?v=11';
+    from './zmk-combos-codec.js?v=12';
 
 const now = () => performance.now();
 
@@ -171,6 +171,17 @@ export class ZmkTestTab {
             if (caps.ballSwap) {
                 await probe('ballswap: effective readable', async () =>
                     `${await flask.getU16(CH.ballSwap, V.bswapEffective)}`);
+            }
+            if (caps.autoMouse) {
+                await probe('automouse: timeout round-trip', async () => {
+                    const orig = await flask.getU16(CH.autoMouse, V.amTimeout);
+                    const want = orig === 750 ? 800 : 750;
+                    await flask.setU16(CH.autoMouse, V.amTimeout, want);
+                    const got = await flask.getU16(CH.autoMouse, V.amTimeout);
+                    await flask.setU16(CH.autoMouse, V.amTimeout, orig);
+                    if (got !== want) throw new Error(`wrote ${want}, device reports ${got}`);
+                    return `${orig} ms (layer ${await flask.getU16(CH.autoMouse, V.amLayer)})`;
+                });
             }
         } finally {
             hid?.resume?.();

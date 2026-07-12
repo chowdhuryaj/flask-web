@@ -3,12 +3,21 @@
 // typed output fires per ratchet-step of travel in the dominant of 8
 // directions. Sets are live-switchable (the QMK set model, back after the
 // kot149 stroke-count emulation); each set edits as a compass grid.
+//
+// 2026-07-12 round: the Active-set slider became a DROPDOWN listing only
+// sets with at least one configured direction (an empty set as the active
+// set does nothing — offering it was noise); sets are renamable (client-
+// side names, same localStorage + export-v2 story as combo/macro renames);
+// and the board render with the physical trackballs sits above the editor
+// (both balls stroke gestures).
 
-import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=11';
-import { CH, V } from './flaskproto.js?v=11';
-import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=11';
+import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel } from './ui.js?v=12';
+import { CH, V } from './flaskproto.js?v=12';
+import { renderKeyboardSVG } from './keymap-tab.js?v=12';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=12';
+import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=12';
 import { OUTPUT_ACTION, GESTURE_DIR_LABELS, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=11';
+    from './zmk-output-codec.js?v=12';
 
 // Compass placement: direction index (E SE S SW W NW N NE) → grid cell.
 // 3x3 grid, center = the legend.
@@ -16,6 +25,8 @@ const COMPASS = [
     [1, 2], [2, 2], [2, 1], [2, 0], [1, 0], [0, 0], [0, 1], [0, 2],
 ];
 
+// Firmware-seeded defaults for sets 0-3 (Adept lineage) — placeholder
+// names only; a rename overrides them.
 const SET_HINTS = ['arrows', 'editing', 'media', 'tab-nav'];
 
 export class ZmkGesturesTab {
@@ -23,10 +34,11 @@ export class ZmkGesturesTab {
         this.app = app;
         this.root = el('div');
         this.set = 0;
+        this.sets = [];     // [set][dir] typed outputs — all sets, cached
     }
 
     async load() {
-        const { flask } = this.app;
+        const { flask, hid } = this.app;
         this.enabled = await flask.getU16(CH.gestures, V.gesturesEnabled);
         this.ratchet = await flask.getU16(CH.gestures, V.gesturesRatchetStep);
         this.activeSet = await flask.getU16(CH.gestures, V.gesturesActiveSet);
@@ -34,30 +46,37 @@ export class ZmkGesturesTab {
         this.macroSlots = this.app.caps.macros
             ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
         this.set = Math.min(this.set, this.setCount - 1);
-        await this.loadSet();
-        this.render();
-    }
-
-    async loadSet() {
-        const { flask, hid } = this.app;
-        // HUD poll backs off for the 8-direction read (see combos tab note).
+        // All sets up front (setCount × 8 slot frames — same burst size as
+        // the combos tab): blank-set detection for the Active-set dropdown
+        // needs the whole table anyway, and set switching becomes free.
         hid?.pause?.();
         try {
-            this.outputs = [];
-            for (let dir = 0; dir < 8; dir++) {
-                const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [this.set, dir], 2);
-                this.outputs.push(decodeGestureSlot(r));
+            this.sets = [];
+            for (let s = 0; s < this.setCount; s++) {
+                const dirs = [];
+                for (let dir = 0; dir < 8; dir++) {
+                    const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [s, dir], 2);
+                    dirs.push(decodeGestureSlot(r));
+                }
+                this.sets.push(dirs);
             }
         } finally {
             hid?.resume?.();
         }
+        this.render();
+    }
+
+    get outputs() { return this.sets[this.set]; }
+
+    setIsBlank(i) {
+        return !this.sets[i]?.some((o) => o.action !== OUTPUT_ACTION.none);
     }
 
     async writeDir(dir) {
         try {
             const r = await this.app.flask.setBytes(CH.gestures, V.gesturesSlot,
                 encodeGestureSlot(this.set, dir, this.outputs[dir]), 2);
-            this.outputs[dir] = decodeGestureSlot(r);
+            this.sets[this.set][dir] = decodeGestureSlot(r);
         } catch (e) {
             toast(`Gesture write failed: ${e.message}`, true);
         }
@@ -66,7 +85,7 @@ export class ZmkGesturesTab {
 
     pickDir(dir) {
         const o = this.outputs[dir];
-        pickTypedOutput(`Set ${this.set} · ${GESTURE_DIR_LABELS[dir]}`, o, this.macroSlots,
+        pickTypedOutput(`${this.setName(this.set)} · ${GESTURE_DIR_LABELS[dir]}`, o, this.macroSlots,
             (out) => {
                 o.action = out.action;
                 o.param = out.param;
@@ -103,12 +122,39 @@ export class ZmkGesturesTab {
         return grid;
     }
 
+    /** Display name for a set: custom rename → hint → plain index. */
     setName(i) {
+        const custom = zmkSlotName(this.app.profile?.family ?? 'imprint', 'gestureSets', i);
+        if (custom) return custom;
         return `Set ${i}${SET_HINTS[i] ? ` (${SET_HINTS[i]})` : ''}`;
+    }
+
+    /** Board render with the trackballs — a gesture is a ball stroke, so
+     * show where the balls physically sit (both do gestures). */
+    boardCard() {
+        const { profile } = this.app;
+        if (!profile?.decorations?.length || !profile?.keys?.length) return null;
+        return card('Trackballs', 'hold the gesture key and stroke EITHER ball',
+            el('div', { style: 'overflow-x:auto' }, renderKeyboardSVG({
+                profile,
+                scale: 0.42,
+                keycodeAt: () => null,
+                decorationLabel: () => 'gesture',
+            })));
     }
 
     render() {
         const { flask } = this.app;
+        const fam = this.app.profile?.family ?? 'imprint';
+
+        // Active set: only sets that DO something (plus the current value,
+        // even if blank, so the dropdown never lies about device state).
+        const activeOptions = Array.from({ length: this.setCount }, (_, i) => i)
+            .filter((i) => !this.setIsBlank(i) || i === this.activeSet)
+            .map((i) => ({
+                value: i,
+                label: this.setName(i) + (this.setIsBlank(i) ? ' — empty' : ''),
+            }));
 
         const controls = card('Runtime gestures',
             'hold the gesture key, stroke a ball — outputs fire per ratchet step',
@@ -132,13 +178,12 @@ export class ZmkGesturesTab {
             }),
             selectRow({
                 label: 'Active set',
-                hint: 'what a "Flask Gesture 255" key uses',
+                hint: 'what a "Flask Gesture 255" key uses — only configured sets are offered',
                 value: this.activeSet,
-                options: Array.from({ length: this.setCount }, (_, i) =>
-                    ({ value: i, label: this.setName(i) })),
+                options: activeOptions,
                 onChange: async (val) => {
                     this.activeSet = await flask.setU16(CH.gestures, V.gesturesActiveSet, Number(val));
-                    return this.activeSet;
+                    this.render();
                 },
             }),
             el('div', { class: 'savebar' },
@@ -152,19 +197,31 @@ export class ZmkGesturesTab {
                 })));
 
         const editor = card('Edit set',
-            'each direction fires a keycode or plays a macro; empty diagonals fall back to cardinals',
+            'each direction fires a keycode or plays a macro; empty diagonals fall back to cardinals — click the set name to rename',
+            el('div', { class: 'row' },
+                el('span', { class: 'lbl' }, renameLabel({
+                    text: this.setName(this.set),
+                    placeholder: `Set ${this.set}${SET_HINTS[this.set] ? ` (${SET_HINTS[this.set]})` : ''}`,
+                    onCommit: (v) => { zmkSetSlotName(fam, 'gestureSets', this.set, v); this.render(); },
+                }),
+                    el('span', {
+                        class: 'hint',
+                        text: this.setIsBlank(this.set)
+                            ? 'empty — assign a direction to make it selectable as Active'
+                            : (this.set === this.activeSet ? 'active set' : ''),
+                    })),
+                el('span', { style: 'flex:1' })),
             selectRow({
                 label: 'Set', value: this.set,
                 options: Array.from({ length: this.setCount }, (_, i) =>
-                    ({ value: i, label: this.setName(i) })),
+                    ({ value: i, label: this.setName(i) + (this.setIsBlank(i) ? ' — empty' : '') })),
                 onChange: async (val) => {
                     this.set = Number(val);
-                    await this.loadSet();
                     this.render();
                 },
             }),
             this.compass());
 
-        this.root.replaceChildren(controls, editor);
+        this.root.replaceChildren(...[controls, this.boardCard(), editor].filter(Boolean));
     }
 }

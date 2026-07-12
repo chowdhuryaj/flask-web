@@ -8,8 +8,8 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=11';
-import { diag } from './diag.js?v=11';
+import { CH, V } from './flaskproto.js?v=12';
+import { diag } from './diag.js?v=12';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -57,8 +57,10 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // BEHAVIOR by Studio local id with two params: tap-holds, layer keys) and
 // the runtime LED order (rgbmap 0x0A — the wizard's measured LED→position
 // map lives on the device; the reactive overlay follows it, no keymap
-// edit + reflash needed).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 12 };
+// edit + reflash needed); v13 added flask_automouse 0x1B (QMK autoMouse
+// wire shape + extend-on-key 0x05 — replaced zip_temp_layer; timeout 0 =
+// latch until a transparent key, which is swallowed).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 13 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -111,7 +113,12 @@ export function zmkCapabilities(family, version) {
         // flask_leader runtime sequences (0x19, v10) — ZMK-line Leader tab.
         leader: flask && v >= 10,
         wiggle: false,
-        autoMouse: false,   // keymap-level (zip_temp_layer)
+        // flask_automouse (0x1B, v13) — QMK wire shape, so the shared
+        // auto-mouse card drives it; the two extra flags below unlock the
+        // ZMK-only semantics (latch-at-0 timeout, extend-on-key).
+        autoMouse: flask && v >= 13,
+        autoMouseLatch: flask && v >= 13,
+        autoMouseExtend: flask && v >= 13,
         wheelChords: false,
         typing: false,
         osShortcuts: false, // keymap-level (zmk-switch-layout)
@@ -160,6 +167,17 @@ export function zmkCapabilities(family, version) {
     };
 }
 
+// Physical trackball placement (key-units, same space as profile.keys):
+// each ball sits between the half's main block and its thumb cluster.
+// Rendered by renderKeyboardSVG as generic profile decorations — the
+// Mouse/Gestures tabs label them by live role (ballswap-aware).
+export const ZMK_TRACKBALLS = {
+    imprint: [
+        { kind: 'ball', side: 'left', x: 6.55, y: 4.35, r: 1.05 },
+        { kind: 'ball', side: 'right', x: 10.4, y: 4.35, r: 1.05 },
+    ],
+};
+
 /** Editor profile for a ZMK device — no Vial definition to build from, so
  * the editor renders tuning tabs only. */
 export function zmkProfile(family) {
@@ -177,6 +195,7 @@ export function zmkProfile(family) {
         displayTile: null,
         encoderPushKeys: {},
         customKeycodes: [],
+        decorations: ZMK_TRACKBALLS[family] ?? [],
     };
 }
 

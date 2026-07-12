@@ -7,22 +7,22 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=11';
-import { renderKeyboardSVG } from './keymap-tab.js?v=11';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=11';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=11';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=11';
-import { ZMK_VIDPID } from './zmk.js?v=11';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=11';
+import { el, toast, card } from './ui.js?v=12';
+import { renderKeyboardSVG } from './keymap-tab.js?v=12';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=12';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=12';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=12';
+import { ZMK_VIDPID } from './zmk.js?v=12';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=12';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=11';
+} from './zmk-keycodes.js?v=12';
 // Circular with zmk-combos-tab (it imports buildZmkPicker for behavior
-// combo outputs) — safe: both sides export hoisted function declarations
-// and neither calls the other at module-eval time.
-import { pickUsage } from './zmk-combos-tab.js?v=11';
+// combo outputs) — safe: both sides export hoisted declarations and
+// neither calls the other at module-eval time.
+import { pickUsage, MODS } from './zmk-combos-tab.js?v=12';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -886,6 +886,9 @@ export function buildZmkPicker({ keyPressId, onPick }) {
     const behaviors = zmkBehaviors();
     let category = keyPressId != null ? 'basic' : 'behaviors';
     let query = '';
+    // Sticky implicit-modifier chips (Vial parity): while set, every usage
+    // pick wraps in these mods (ZMK LS()/LC()… bits at >= bit 24).
+    let pickMods = 0;
 
     const root = el('div', { class: 'picker' });
     const cats = el('div', { class: 'cats' });
@@ -897,11 +900,20 @@ export function buildZmkPicker({ keyPressId, onPick }) {
     const byName = (name) =>
         [...behaviors.values()].find((d) => d.displayName === name) ?? null;
 
+    const descsOf = (d, which) => d.metadata?.[0]?.[which] ?? [];
+    const hasKind = (d, which, kind) => descsOf(d, which).some((x) => x.kind === kind);
+
     // Layer-parameter behaviors (MO/TO/TG/SL… discovered by metadata shape).
-    const layerBehaviors = [...behaviors.values()].filter((d) => {
-        const p1 = d.metadata?.[0]?.param1 ?? [];
-        return p1.some((x) => x.kind === 'layer_id');
-    });
+    const layerBehaviors = [...behaviors.values()].filter((d) => hasKind(d, 'param1', 'layer_id'));
+
+    // Tap-hold behaviors (Mod-Tap, Smart Mod…) by shape: a hold usage in
+    // param1 AND a tap usage in param2. Mod-Tap sorts first (the plain one).
+    const tapHoldBehaviors = [...behaviors.values()]
+        .filter((d) => d.displayName
+            && hasKind(d, 'param1', 'hid_usage') && hasKind(d, 'param2', 'hid_usage'))
+        .sort((a, b) => (a.displayName.startsWith('Mod-Tap') ? -1 : 1)
+            - (b.displayName.startsWith('Mod-Tap') ? -1 : 1)
+            || a.displayName.localeCompare(b.displayName));
 
     // Flask Macro slots as first-class picker chips (AJ's ask, bench
     // 2026-07-11): "Macros" category assigns &fmac <slot> in one click.
@@ -914,6 +926,9 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         if (keyPressId != null) {
             chips.push(...USAGE_CATEGORIES.map((c) => ({ id: c.id, label: c.label })));
         }
+        if (keyPressId != null && tapHoldBehaviors.length) {
+            chips.push({ id: 'taphold', label: 'Tap-hold' });
+        }
         if (layerBehaviors.length) chips.push({ id: 'layers', label: 'Layers' });
         if (macroBehavior && macroRange) chips.push({ id: 'macros', label: 'Macros' });
         chips.push({ id: 'behaviors', label: 'Behaviors' });
@@ -924,11 +939,35 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         })));
     }
 
+    const withMods = (param) => ((pickMods << 24) | param) >>> 0;
+
     function usageButton(key, toParam) {
         return el('button', {
             class: 'code', title: key.label,
-            onclick: () => onPick({ behaviorId: keyPressId, param1: toParam(key.code), param2: 0 }),
+            onclick: () => onPick({ behaviorId: keyPressId, param1: withMods(toParam(key.code)), param2: 0 }),
         }, key.cap || '·', el('span', { class: 'full', text: key.label }));
+    }
+
+    /** Modifier chip row for the usage categories: toggled mods wrap every
+     * key pick (LS(A) in one click — the Vial checkbox flow). */
+    function modChipsRow() {
+        const row = el('div', {
+            class: 'composer',
+            style: 'display:flex; gap:4px; align-items:center; flex-wrap:wrap',
+        }, el('span', { class: 'note faint', text: 'held with the key:' }));
+        for (const m of MODS) {
+            const btn = el('button', {
+                class: 'btn small' + ((pickMods & m.bit) ? ' primary' : ''),
+                text: `${m.glyph} ${m.label}`,
+                title: `wrap picks in left ${m.label} (ZMK implicit modifier)`,
+                onclick: () => {
+                    pickMods ^= m.bit;
+                    btn.classList.toggle('primary', !!(pickMods & m.bit));
+                },
+            });
+            row.append(btn);
+        }
+        return row;
     }
 
     function specialButtons() {
@@ -949,6 +988,7 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         root.querySelector('.composer')?.remove();
         codes.replaceChildren();
         if (query && keyPressId != null) {
+            codes.append(modChipsRow());
             const hits = USAGE_CATEGORIES.flatMap((c) =>
                 c.keys.filter((k) => k.label.toLowerCase().includes(query)
                     || k.cap.toLowerCase().includes(query))
@@ -956,13 +996,74 @@ export function buildZmkPicker({ keyPressId, onPick }) {
             codes.append(...hits);
             return;
         }
+        if (category === 'taphold') { renderTapHoldComposer(); return; }
         if (category === 'layers') { renderLayerComposer(); return; }
         if (category === 'macros') { renderMacroChips(); return; }
         if (category === 'behaviors') { renderBehaviorComposer(); return; }
         const cat = USAGE_CATEGORIES.find((c) => c.id === category);
         if (!cat) return;
+        codes.append(modChipsRow());
         codes.append(...cat.keys.map((k) => usageButton(k, cat.toParam)));
         if (category === 'basic') codes.append(...specialButtons());
+    }
+
+    /** Tap-hold composer (Vial MT parity): hold = a modifier chip or any
+     * key, tap = any key; behavior list is shape-driven (Mod-Tap, Smart
+     * Mod…). Core Mod-Tap carries none of the home-row gates, so holds
+     * always work — the GUI answer to "my tap-hold hold does nothing". */
+    function renderTapHoldComposer() {
+        let holdUsage = 0;
+        let tapUsage = 0;
+
+        const bhvSel = el('select', {}, ...tapHoldBehaviors.map((d) =>
+            el('option', { value: d.id, text: d.displayName })));
+
+        const holdBtn = el('button', { class: 'code', text: 'hold…' });
+        const tapBtn = el('button', { class: 'code', text: 'tap…' });
+        const refresh = () => {
+            holdBtn.textContent = holdUsage ? usageCap(holdUsage) : 'hold…';
+            holdBtn.title = holdUsage ? usageLabel(holdUsage) : 'what holding does';
+            tapBtn.textContent = tapUsage ? usageCap(tapUsage) : 'tap…';
+            tapBtn.title = tapUsage ? usageLabel(tapUsage) : 'what tapping types';
+        };
+
+        // Quick chips: the 8 bare modifiers straight into HOLD (the common
+        // case); "any key…" opens the full picker for both slots.
+        const modChip = (id, cap, label) => el('button', {
+            class: 'btn small', text: cap, title: `hold = ${label}`,
+            onclick: () => { holdUsage = kpParam(id); refresh(); },
+        });
+        const holdChips = el('div', { style: 'display:flex; gap:4px; flex-wrap:wrap' },
+            modChip(0xE0, '⌃', 'Left Ctrl'), modChip(0xE1, '⇧', 'Left Shift'),
+            modChip(0xE2, '⌥', 'Left Alt'), modChip(0xE3, '⌘', 'Left GUI'),
+            modChip(0xE4, 'R⌃', 'Right Ctrl'), modChip(0xE5, 'R⇧', 'Right Shift'),
+            modChip(0xE6, 'R⌥', 'Right Alt'), modChip(0xE7, 'R⌘', 'Right GUI'));
+
+        holdBtn.addEventListener('click', () => {
+            pickUsage('Tap-hold — hold', holdUsage, (u) => { holdUsage = u >>> 0; refresh(); });
+        });
+        tapBtn.addEventListener('click', () => {
+            pickUsage('Tap-hold — tap', tapUsage, (u) => { tapUsage = u >>> 0; refresh(); });
+        });
+
+        const assign = el('button', {
+            class: 'code', text: 'Assign',
+            onclick: () => {
+                if (!holdUsage || !tapUsage) { toast('Pick both a hold and a tap first', true); return; }
+                onPick({ behaviorId: Number(bhvSel.value), param1: holdUsage, param2: tapUsage });
+            },
+        });
+
+        refresh();
+        codes.append(el('div', { class: 'composer', style: 'display:flex; flex-direction:column; gap:6px; align-items:flex-start' },
+            el('div', { style: 'display:flex; gap:6px; align-items:center; flex-wrap:wrap' },
+                el('label', { text: 'Behavior:' }), bhvSel,
+                el('label', { text: 'Hold:' }), holdBtn,
+                el('label', { text: 'Tap:' }), tapBtn,
+                assign),
+            holdChips,
+            el('div', { class: 'note faint',
+                text: 'Hold past the tapping term = the hold key; quick press = the tap key. The compiled home-row mods (HM_*) gate holds on idle/cross-hand by design — this composes the ungated core behavior.' })));
     }
 
     function layerSelect() {
@@ -1027,12 +1128,35 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         // firmware rejects assigning them with INVALID PARAMETERS no matter
         // the params — worse, the blank name sorted FIRST and became the
         // dropdown's default selection (bench 5's "leader still fails").
+        //
+        // Grouped since 2026-07-12 ("reconcile the behaviors selection"):
+        // one flat alphabetical list interleaved Flask modules, layer ops
+        // and system keys — the dropdown now buckets by what the behavior
+        // IS (shape first, then well-known names), same order every device.
         const all = [...behaviors.values()];
         const list = all.filter((d) => d.displayName)
             .sort((a, b) => a.displayName.localeCompare(b.displayName));
         const hidden = all.length - list.length;
-        const bhvSel = el('select', {}, ...list.map((d) =>
-            el('option', { value: d.id, text: d.displayName })));
+
+        const SYSTEM_NAMES = new Set(['Reset', 'Bootloader', 'Output Selection',
+            'Bluetooth', 'External Power', 'Studio Unlock', 'Soft Off',
+            'RGB Underglow', 'Backlight']);
+        const groupOf = (d) => {
+            if (/^Flask /.test(d.displayName) || d.displayName === 'Ball Swap') return 'Flask modules';
+            if (hasKind(d, 'param1', 'layer_id') || hasKind(d, 'param2', 'layer_id')) return 'Layers';
+            if (/Mouse/.test(d.displayName)) return 'Mouse';
+            if (SYSTEM_NAMES.has(d.displayName)) return 'System';
+            if (hasKind(d, 'param1', 'hid_usage') || hasKind(d, 'param2', 'hid_usage')
+                || /Key|Caps|Swapper|Sticky/.test(d.displayName)) return 'Keys & mods';
+            return 'Other';
+        };
+        const GROUP_ORDER = ['Keys & mods', 'Layers', 'Mouse', 'Flask modules', 'System', 'Other'];
+        const grouped = new Map(GROUP_ORDER.map((gr) => [gr, []]));
+        for (const d of list) grouped.get(groupOf(d)).push(d);
+        const bhvSel = el('select', {}, ...GROUP_ORDER
+            .filter((gr) => grouped.get(gr).length)
+            .map((gr) => el('optgroup', { label: gr }, ...grouped.get(gr).map((d) =>
+                el('option', { value: d.id, text: d.displayName })))));
         const paramsBox = el('span', {});
         const assign = el('button', { class: 'code', text: 'Assign' });
         let readParams = () => [0, 0];

@@ -9,11 +9,11 @@
 // entries, never the whole snapshot, so a template workspace can't wipe a
 // real keymap.
 
-import { el, modal, toast } from './ui.js?v=11';
-import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=11';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=11';
-import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=11';
-import { describe } from './keycodes.js?v=11';
+import { el, modal, toast } from './ui.js?v=12';
+import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=12';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=12';
+import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=12';
+import { describe } from './keycodes.js?v=12';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';

@@ -9,14 +9,14 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=11';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=11';
+import { CH, V } from './flaskproto.js?v=12';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=12';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
-         comboTypedToLegacy } from './zmk-combos-codec.js?v=11';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=11';
+         comboTypedToLegacy } from './zmk-combos-codec.js?v=12';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=12';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=11';
+    from './zmk-output-codec.js?v=12';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -62,6 +62,15 @@ async function exportFlaskStateInner(app) {
     }
     if (caps.ballSwap) {
         out.ballSwap = { swapped: await g(CH.ballSwap, V.bswapSwapped) };
+    }
+    if (caps.autoMouse) {
+        out.autoMouse = {
+            enabled: await g(CH.autoMouse, V.amEnabled),
+            timeout: await g(CH.autoMouse, V.amTimeout),
+            threshold: await g(CH.autoMouse, V.amThreshold),
+            layer: await g(CH.autoMouse, V.amLayer),
+            extend: await g(CH.autoMouse, V.amExtend),
+        };
     }
     if (caps.rgbMap) {
         const layers = await g(CH.rgbMap, V.rgbmapLayers);
@@ -228,6 +237,14 @@ async function applyFlaskStateInner(app, data) {
     await section('ballSwap', caps.ballSwap, async (s) => {
         if (s.swapped != null) await setU(CH.ballSwap, V.bswapSwapped, s.swapped);
     }, CH.ballSwap);
+
+    await section('autoMouse', caps.autoMouse, async (s) => {
+        if (s.enabled != null) await setU(CH.autoMouse, V.amEnabled, s.enabled);
+        if (s.timeout != null) await setU(CH.autoMouse, V.amTimeout, s.timeout);
+        if (s.threshold != null) await setU(CH.autoMouse, V.amThreshold, s.threshold);
+        if (s.layer != null) await setU(CH.autoMouse, V.amLayer, s.layer);
+        if (s.extend != null) await setU(CH.autoMouse, V.amExtend, s.extend);
+    }, CH.autoMouse);
 
     await section('rgb', caps.rgbMap, async (s) => {
         const layers = await flask.getU16(CH.rgbMap, V.rgbmapLayers);

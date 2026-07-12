@@ -15,7 +15,7 @@
 // half stays importable under plain `node` for the test vectors
 // (zmk-studio-test.mjs).
 
-import { diag } from './diag.js?v=11';
+import { diag } from './diag.js?v=12';
 
 // ---------------------------------------------------------------------------
 // Framing: SOF/ESC/EOF byte-stuffing (framing.ts equivalent).
