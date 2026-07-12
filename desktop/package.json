@@ -1,0 +1,14 @@
+{
+  "name": "flask-desktop",
+  "productName": "Flask",
+  "version": "0.1.0",
+  "description": "Desktop wrapper for the Flask web configurator — bundled Chromium with WebHID + WebSerial, no Chrome install needed",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
