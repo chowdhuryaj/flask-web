@@ -18,13 +18,20 @@
 //
 // Run: cd desktop && npm install && npm start
 
-const { app, BrowserWindow, dialog, session } = require('electron');
+const { app, BrowserWindow, Menu, dialog, session, shell } = require('electron');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const net = require('net');
 const path = require('path');
 
-const ROOT = path.join(__dirname, '..');
+// Dev run serves the repo checkout (this file's parent). The PACKAGED app
+// (electron-builder) carries the web files as extraResources under
+// Resources/web — __dirname points inside app.asar there, so '..' would
+// miss entirely.
+const ROOT = app.isPackaged
+    ? path.join(process.resourcesPath, 'web')
+    : path.join(__dirname, '..');
 const PORT = 8137; // serve.py's port — shared origin keeps things consistent
 
 const MIME = {
@@ -140,9 +147,87 @@ function wireDeviceSelection(ses) {
     ses.setDevicePermissionHandler(() => true);
 }
 
+// --- update check (packaged builds) ---------------------------------------
+//
+// The app is UNSIGNED (no Apple Developer cert yet), and electron-updater
+// refuses to install updates into an unsigned mac app — so this is the
+// honest version: compare against the newest GitHub release and open its
+// page for a manual download. Signing later upgrades this to real
+// auto-update without changing the release flow.
+const RELEASES_API = 'https://api.github.com/repos/chowdhuryaj/flask-web/releases/latest';
+const RELEASES_URL = 'https://github.com/chowdhuryaj/flask-web/releases/latest';
+
+function fetchLatestVersion() {
+    return new Promise((resolve, reject) => {
+        https.get(RELEASES_API, {
+            headers: { 'User-Agent': 'flask-desktop', Accept: 'application/vnd.github+json' },
+        }, (res) => {
+            let body = '';
+            res.on('data', (c) => { body += c; });
+            res.on('end', () => {
+                try {
+                    const tag = JSON.parse(body).tag_name || '';
+                    resolve(tag.replace(/^v/, ''));
+                } catch (e) { reject(e); }
+            });
+        }).on('error', reject);
+    });
+}
+
+function newerThan(a, b) { // semver-ish: is a newer than b
+    const pa = String(a).split('.').map(Number);
+    const pb = String(b).split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+        if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+    }
+    return false;
+}
+
+async function checkForUpdates(interactive) {
+    try {
+        const latest = await fetchLatestVersion();
+        if (latest && newerThan(latest, app.getVersion())) {
+            const { response } = await dialog.showMessageBox({
+                type: 'info',
+                message: `Flask ${latest} is available (you have ${app.getVersion()}).`,
+                detail: 'Download the new DMG from the releases page and replace the app.',
+                buttons: ['Open releases page', 'Later'],
+            });
+            if (response === 0) shell.openExternal(RELEASES_URL);
+        } else if (interactive) {
+            dialog.showMessageBox({ type: 'info', message: `Flask ${app.getVersion()} is up to date.` });
+        }
+    } catch (e) {
+        if (interactive) {
+            dialog.showMessageBox({ type: 'warning', message: `Update check failed: ${e.message}` });
+        }
+    }
+}
+
+function buildMenu() {
+    const template = [
+        {
+            label: app.name,
+            submenu: [
+                { role: 'about' },
+                { label: 'Check for Updates…', click: () => checkForUpdates(true) },
+                { type: 'separator' },
+                { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit' },
+            ],
+        },
+        { role: 'editMenu' },
+        { role: 'viewMenu' },
+        { role: 'windowMenu' },
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 async function start() {
     await app.whenReady();
 
+    if (process.platform === 'darwin' && !process.env.FLASK_SKIP_MENU) buildMenu();
     wireDeviceSelection(session.defaultSession);
 
     const port = await ensureServer();
@@ -188,6 +273,12 @@ async function start() {
     });
 
     win.loadURL(url);
+
+    // Quiet startup update check — packaged builds only (a dev checkout
+    // "updates" through git), and never during smoke runs.
+    if (app.isPackaged && !process.env.FLASK_DESKTOP_SMOKE) {
+        setTimeout(() => checkForUpdates(false), 4000);
+    }
 
     // Smoke mode (FLASK_DESKTOP_SMOKE=1): prove the page loads with the
     // device APIs present, print a line, and exit — used by scripted tests.

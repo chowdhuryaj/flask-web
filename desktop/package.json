@@ -1,14 +1,53 @@
 {
   "name": "flask-desktop",
   "productName": "Flask",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Desktop wrapper for the Flask web configurator — bundled Chromium with WebHID + WebSerial, no Chrome install needed",
   "private": true,
   "main": "main.js",
+  "author": "AJ Chowdhury",
+  "repository": "github:chowdhuryaj/flask-web",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --mac",
+    "dist:dir": "electron-builder --mac --dir"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.aj.flask",
+    "productName": "Flask",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "web",
+        "filter": [
+          "*.js",
+          "*.html",
+          "*.css",
+          "vendor/**",
+          "!desktop/**",
+          "!node_modules/**",
+          "!zmk-studio-test.mjs"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ],
+      "identity": null
+    }
   }
 }

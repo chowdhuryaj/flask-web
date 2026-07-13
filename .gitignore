@@ -1,3 +1,4 @@
 .DS_Store
 desktop/node_modules/
 desktop/package-lock.json
+desktop/dist/
