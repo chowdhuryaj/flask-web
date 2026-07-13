@@ -19,18 +19,22 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=12';
+import { CH, V } from './flaskproto.js?v=13';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities,
-         ZMK_TRACKBALLS } from './zmk.js?v=12';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=12';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=12';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=12';
+         ZMK_TRACKBALLS } from './zmk.js?v=13';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=13';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=13';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=13';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
-         COMBO_ACTION, decodeComboSlotV2, encodeComboSlotV2,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=12';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=12';
+         COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
+         decodeComboSlotV3, encodeComboSlotV3,
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=13';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=13';
+import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
+    from './zmk-tapdance-codec.js?v=13';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=13';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=12';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=13';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -44,9 +48,13 @@ const IMPRINT = {
     comboKeys: 8,
     macroSlots: 32,
     macroSteps: 32,
-    leaderSlots: 16,
+    leaderSlots: 32, // v14: Kconfig default bumped 16→32 (F-key preset needs 20)
     leaderKeys: 8,
     gestureSets: 8,
+    // v14: custom shift keys + runtime tap dances
+    cskSlots: 16,
+    tdSlots: 16,
+    tdTaps: 4,
 };
 
 // Firmware-seeded default gesture sets (input_processor_flask_gestures.c
@@ -163,10 +171,89 @@ function buildBehaviorCatalog() {
     // Ball swap round (2026-07-11, proto v11).
     add('Ball Swap', constants([['Toggle (saved)', 0], ['While held', 1]]));
     add('External Power', constants([['Off', 0], ['On', 1], ['Toggle', 2]]));
+    // v14 round: runtime tap dances (&ftd, slot-range metadata) + the
+    // composer's compiled tap-hold timing variants.
+    add('Tap Dance', range('Tap dance slot', 0, IMPRINT.tdSlots - 1));
+    add('Mod-Tap (fast 150)', usage('Hold'), usage('Tap'));
+    add('Mod-Tap (slow 300)', usage('Hold'), usage('Tap'));
+    add('Layer-Tap (fast 150)', layer(), usage('Tap'));
+    add('Layer-Tap (slow 300)', layer(), usage('Tap'));
+    // The keymap's slk_* OS-aware shortcut behaviors (zmk-switch-layout)
+    // ship no display-name/metadata — like urob's &leader they list blank
+    // and reject assignment. The imported default combos reference them by
+    // local id, so the sim needs real (nameless) entries for the combos
+    // tab's "behavior #N" rendering path.
+    for (const key of ['slk_copycut', 'slk_paste', 'slk_undoredo', 'slk_selall',
+        'slk_close', 'slk_ntab']) {
+        const id = nextId++;
+        catalog.set(id, { id, displayName: '', metadata: [] });
+        B[`(${key})`] = id;
+    }
     return catalog;
 }
 
 const BEHAVIORS = buildBehaviorCatalog();
+
+// ---------------------------------------------------------------------------
+// v14 default combos — the keymap's devicetree combos IMPORTED as compiled
+// defaults (flask,combos-defaults node, config/imprint.keymap). Firmware
+// boots with these in slots 0..27 (settings-tombstoned deletions excepted);
+// the sim MUST seed the same table, not an empty one (sim-fidelity rule:
+// the clean `positions: []` class of bug). All BEHAVIOR-typed outputs —
+// &kp is just Key Press with the usage in param1.
+
+function defaultCombos() {
+    const bhv = (name, param1 = 0, param2 = 0) => ({
+        action: COMBO_ACTION.behavior, behaviorId: B[name], param1, param2 });
+    const kp = (usage) => bhv('Key Press', usage);
+    const SFT = (u) => ((0x02 << 24) | u) >>> 0;
+    const GUI = (u) => ((0x08 << 24) | u) >>> 0;
+    const T = (positions, out, timeoutMs = 35, priorIdleMs = 0, layer = COMBO_LAYER_ANY) =>
+        ({ positions, ...out, timeoutMs, priorIdleMs, layer });
+    // usages: TAB 0x2B ESC 0x29 ENTER 0x28 DOT 0x37 COMMA 0x36 SEMI 0x33
+    // SQT 0x34 FSLH 0x38 LBKT 0x2F RBKT 0x30 N1 0x1E Q 0x14 Z 0x1D X 0x1B
+    const table = [
+        T([27, 26], bhv('(slk_copycut)'), 35, 150),          // copy_cut
+        T([26, 14], kp(SFT(KB(0x2B)))),                       // lbtab ⇧Tab
+        T([27, 15], kp(KB(0x2B))),                            // tab
+        T([13, 25], kp(KB(0x29))),                            // lesc
+        T([28, 27], bhv('(slk_paste)'), 35, 150),             // paste
+        T([26, 25], bhv('(slk_undoredo)'), 35, 150),          // undo_redo
+        T([29, 17], bhv('(slk_selall)'), 35, 140),            // sel_all
+        T([16, 28], kp(KB(0x28))),                            // ent
+        T([28, 40], bhv('(slk_close)')),                      // close
+        T([27, 39], bhv('(slk_ntab)')),                       // ntab
+        T([25, 37], kp(GUI(KB(0x14)))),                       // quit ⌘Q
+        T([21, 33], kp(SFT(KB(0x2B)))),                       // rbtab
+        T([20, 32], kp(KB(0x2B))),                            // rtab
+        T([22, 34], kp(KB(0x29))),                            // resc
+        T([19, 31], kp(KB(0x28))),                            // rent
+        T([18, 19], kp(SFT(KB(0x1E))), 35, 0, 0),             // excl — layer 0 only
+        T([30, 31], kp(KB(0x37))),                            // dot
+        T([42, 43], kp(KB(0x36))),                            // comma
+        T([42, 30], kp(KB(0x33))),                            // semi
+        T([32, 44], kp(KB(0x34))),                            // quote
+        T([31, 43], kp(KB(0x38))),                            // fslhq
+        T([33, 45], kp(KB(0x2F))),                            // lbkt
+        T([34, 46], kp(KB(0x30))),                            // rbkt
+        T([51, 50], bhv('Mouse Key Press', 0x08)),            // m4
+        T([52, 51], bhv('Mouse Key Press', 0x10)),            // m5
+        T([58, 64], bhv('Layer-Tap', 1, KB(0x1D)), 50),       // z — &lt 1 Z
+        T([59, 65], bhv('Layer-Tap', 2, KB(0x1B))),           // x — &lt 2 X
+        T([63, 69], bhv('Key Repeat')),                       // rrep
+    ];
+    return Array.from({ length: IMPRINT.comboSlots }, (_, i) => table[i]
+        ? { positions: [...table[i].positions], action: table[i].action,
+            behaviorId: table[i].behaviorId, param1: table[i].param1,
+            param2: table[i].param2 ?? 0, timeoutMs: table[i].timeoutMs,
+            priorIdleMs: table[i].priorIdleMs, layer: table[i].layer }
+        : emptyComboV3());
+}
+
+function emptyComboV3() {
+    return { positions: [], action: COMBO_ACTION.none, behaviorId: 0,
+        param1: 0, param2: 0, timeoutMs: 0, priorIdleMs: 0, layer: COMBO_LAYER_ANY };
+}
 
 // ---------------------------------------------------------------------------
 // Default keymap — approximates config/imprint.keymap. Layer ids are stable
@@ -338,6 +425,12 @@ function seedImprintTunables(tun) {
     seed(CH.autoMouse, V.amThreshold, 0);
     seed(CH.autoMouse, V.amLayer, 3);
     seed(CH.autoMouse, V.amExtend, 1);
+
+    // v14: custom shift keys + tap dances boot enabled (empty tables);
+    // rgb global brightness boots 100%.
+    seed(CH.customShift, V.cskEnabled, 1);
+    seed(CH.tapDance, V.tdEnabled, 1);
+    seed(CH.rgbMap, V.rgbmapBrightness, 100);
 }
 
 export function createZmkTemplate(family) {
@@ -379,8 +472,8 @@ export function createZmkTemplate(family) {
             removed: [],        // removed layers waiting for restore
             nextLayerId: layers.length,
             unsaved: false,
-            combos: Array.from({ length: IMPRINT.comboSlots }, () =>
-                ({ positions: [], action: COMBO_ACTION.none, behaviorId: 0, param1: 0, param2: 0 })),
+            // v14: the imported devicetree combos ARE the boot table.
+            combos: defaultCombos(),
             macros: Array.from({ length: IMPRINT.macroSlots }, () =>
                 Array.from({ length: IMPRINT.macroSteps }, () => ({ action: MACRO_ACTION.empty, param: 0 }))),
             rgb: Array.from({ length: IMPRINT.rgbLayers }, () =>
@@ -390,8 +483,16 @@ export function createZmkTemplate(family) {
             gestures: defaultGestureSets(),
             // v12 runtime LED order (LED index → keymap position).
             ledOrder: Array.from({ length: IMPRINT.rgbLeds }, (_, i) => i),
+            // v14: custom shift pairs + tap dances (boot empty).
+            csk: Array.from({ length: IMPRINT.cskSlots }, () => ({ base: 0, shifted: 0 })),
+            tapdance: Array.from({ length: IMPRINT.tdSlots }, () => ({
+                termMs: 0,
+                taps: Array.from({ length: IMPRINT.tdTaps }, () =>
+                    ({ action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 })),
+            })),
         },
-        zmkDirty: { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {} },
+        zmkDirty: { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {},
+            cskSlot: {}, tdStep: {} },
     };
 }
 
@@ -402,27 +503,45 @@ export function normalizeZmkWorkspace(ws) {
     ws.zmkDirty.macroStep ??= {};
     ws.zmkDirty.leaderSlot ??= {};
     ws.zmkDirty.gestureSlot ??= {};
+    ws.zmkDirty.cskSlot ??= {};
+    ws.zmkDirty.tdStep ??= {};
     if (ws.zmk) {
         ws.zmk.pendingKeymap ??= null;
         // v13: stored older workspaces gain the trackball decorations.
         if (ws.profile) ws.profile.decorations ??= ZMK_TRACKBALLS[ws.family] ?? [];
+        // v13→v14: the trackball nudge (left ball off the inner column) —
+        // refresh stored coordinates to the current table.
+        if (ws.profile?.decorations?.length) {
+            ws.profile.decorations = ZMK_TRACKBALLS[ws.family] ?? ws.profile.decorations;
+        }
         // The preview tracks the app's expected protocol — a stored older
         // workspace "gets a firmware update" on load: version bumps and
         // newly-added tunable ids seed their firmware defaults (existing
         // saved values untouched).
         const expected = ZMK_EXPECTED_PROTOCOL[ws.family] ?? ws.protocolVersion;
-        if ((ws.protocolVersion ?? 0) < expected) ws.protocolVersion = expected;
+        const storedVersion = ws.protocolVersion ?? 0;
+        if (storedVersion < expected) ws.protocolVersion = expected;
         ws.tunables ??= {};
         seedImprintTunables(ws.tunables);
-        // v9 capacity bumps: pad stored pre-v9 workspaces up to the new
-        // slot/step counts (append-only — existing content untouched).
-        // v12: stored usage-only combos migrate to the typed shape
-        // (mirrors the firmware's settings migration).
-        ws.zmk.combos = ws.zmk.combos.map((c) =>
-            c.action != null ? c : comboSlotToTyped(c));
+        // v14 "firmware update" semantics for combos: the real device DROPS
+        // pre-v14 saved slots and boots the imported devicetree defaults —
+        // a stored older workspace does the same (mirrors flask_combos
+        // settings restore; keeping old slots would shadow the defaults).
+        if (storedVersion < 14) {
+            ws.zmk.combos = defaultCombos();
+            ws.zmkDirty.combo = {};
+        }
+        // v12: stored usage-only combos migrate to the typed shape; v14
+        // adds the timing/layer fields to whatever survives.
+        ws.zmk.combos = ws.zmk.combos.map((c) => {
+            const t = c.action != null ? c : comboSlotToTyped(c);
+            t.timeoutMs ??= 0;
+            t.priorIdleMs ??= 0;
+            t.layer ??= COMBO_LAYER_ANY;
+            return t;
+        });
         while (ws.zmk.combos.length < IMPRINT.comboSlots) {
-            ws.zmk.combos.push({ positions: [], action: COMBO_ACTION.none,
-                behaviorId: 0, param1: 0, param2: 0 });
+            ws.zmk.combos.push(emptyComboV3());
         }
         ws.zmk.ledOrder ??= Array.from({ length: IMPRINT.rgbLeds }, (_, i) => i);
         while (ws.zmk.macros.length < IMPRINT.macroSlots) {
@@ -444,6 +563,16 @@ export function normalizeZmkWorkspace(ws) {
         while (ws.zmk.gestures.length < IMPRINT.gestureSets) {
             ws.zmk.gestures.push(Array.from({ length: 8 }, () => ({ action: 0, param: 0 })));
         }
+        // v14: leader capacity 16→32 + csk/tapdance tables.
+        while (ws.zmk.leader.length < IMPRINT.leaderSlots) {
+            ws.zmk.leader.push({ positions: [], action: 0, param: 0 });
+        }
+        ws.zmk.csk ??= Array.from({ length: IMPRINT.cskSlots }, () => ({ base: 0, shifted: 0 }));
+        ws.zmk.tapdance ??= Array.from({ length: IMPRINT.tdSlots }, () => ({
+            termMs: 0,
+            taps: Array.from({ length: IMPRINT.tdTaps }, () =>
+                ({ action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 })),
+        }));
     }
     return ws;
 }
@@ -454,12 +583,15 @@ export function zmkPendingCount(ws) {
     return Object.keys(d.combo).length + Object.keys(d.macroStep).length
         + Object.keys(d.leaderSlot ?? {}).length
         + Object.keys(d.gestureSlot ?? {}).length
+        + Object.keys(d.cskSlot ?? {}).length
+        + Object.keys(d.tdStep ?? {}).length
         + (ws.zmk?.pendingKeymap ? 1 : 0);
 }
 
 /** Drop everything ZMK-shaped queued for replay (the banner's Discard). */
 export function zmkClearDirty(ws) {
-    ws.zmkDirty = { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {} };
+    ws.zmkDirty = { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {},
+        cskSlot: {}, tdStep: {} };
     if (ws.zmk) ws.zmk.pendingKeymap = null;
     saveWorkspace(ws);
 }
@@ -491,6 +623,9 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.leader && id === V.leaderSlotCount) return this.ws.zmk.leader.length;
         if (ch === CH.leader && id === V.leaderKeys) return IMPRINT.leaderKeys;
         if (ch === CH.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
+        if (ch === CH.customShift && id === V.cskSlotCount) return this.ws.zmk.csk.length;
+        if (ch === CH.tapDance && id === V.tdSlotCount) return this.ws.zmk.tapdance.length;
+        if (ch === CH.tapDance && id === V.tdTaps) return IMPRINT.tdTaps;
         // Ball swap "effective" is live-only (base XOR momentary holds) —
         // the sim has no held keys, so it always equals the base state.
         if (ch === CH.ballSwap && id === V.bswapEffective) {
@@ -534,9 +669,28 @@ export class ZmkOfflineFlask extends OfflineFlask {
         }
         if (ch === CH.combos && id === V.combosSlotV2) {
             const slot = payload[0] ?? 0;
-            const s = zmk.combos[slot]
-                ?? { positions: [], action: COMBO_ACTION.none, behaviorId: 0, param1: 0, param2: 0 };
+            const s = zmk.combos[slot] ?? emptyComboV3();
             return encodeComboSlotV2(slot, s, IMPRINT.comboKeys);
+        }
+        if (ch === CH.combos && id === V.combosSlotV3) {
+            const slot = payload[0] ?? 0;
+            const s = zmk.combos[slot] ?? emptyComboV3();
+            return encodeComboSlotV3(slot, s, IMPRINT.comboKeys);
+        }
+        if (ch === CH.customShift && id === V.cskSlot) {
+            const slot = payload[0] ?? 0;
+            const s = zmk.csk[slot] ?? { base: 0, shifted: 0 };
+            return encodeCskSlot(slot, s);
+        }
+        if (ch === CH.tapDance && id === V.tdStep) {
+            const [slot, tap] = payload;
+            const o = zmk.tapdance[slot]?.taps[tap]
+                ?? { action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 };
+            return encodeTdStep(slot, tap, o);
+        }
+        if (ch === CH.tapDance && id === V.tdCfg) {
+            const slot = payload[0] ?? 0;
+            return encodeTdCfg(slot, zmk.tapdance[slot]?.termMs ?? 0);
         }
         if (ch === CH.rgbMap && id === V.rgbmapLedOrder) {
             const [start, count] = payload;
@@ -615,10 +769,77 @@ export class ZmkOfflineFlask extends OfflineFlask {
                 behaviorId = 0;
                 if (action !== COMBO_ACTION.none) param2 = 0;
             }
-            zmk.combos[d.slot] = { positions, action, behaviorId, param1, param2 };
+            // v2 writes keep the slot's existing timing/layer (a pre-v14
+            // app editing a v14 device leaves the knobs alone).
+            const keep = zmk.combos[d.slot];
+            zmk.combos[d.slot] = { positions, action, behaviorId, param1, param2,
+                timeoutMs: keep.timeoutMs ?? 0, priorIdleMs: keep.priorIdleMs ?? 0,
+                layer: keep.layer ?? COMBO_LAYER_ANY };
             this.ws.zmkDirty.combo[d.slot] = true;
             saveWorkspace(this.ws);
             return encodeComboSlotV2(d.slot, zmk.combos[d.slot], IMPRINT.comboKeys);
+        }
+        if (ch === CH.combos && id === V.combosSlotV3) {
+            const d = decodeComboSlotV3(payload, IMPRINT.comboKeys);
+            if (!zmk.combos[d.slot]) return payload;
+            const positions = d.positions
+                .filter((p) => p >= 0 && p < IMPRINT.positions)
+                .slice(0, IMPRINT.comboKeys);
+            // Firmware normalization (flask_combos_slot_set, v14): action
+            // rules as v2; timeout clamps to 10..2000 when nonzero; an
+            // emptied slot zeroes its timing and resets the layer gate.
+            let { action, behaviorId, param1, param2, timeoutMs, priorIdleMs, layer } = d;
+            if (action > COMBO_ACTION.behavior) action = COMBO_ACTION.none;
+            if (action === COMBO_ACTION.usage && param1 === 0) action = COMBO_ACTION.none;
+            if (action === COMBO_ACTION.none) { behaviorId = 0; param1 = 0; param2 = 0; }
+            if (action !== COMBO_ACTION.behavior) {
+                behaviorId = 0;
+                if (action !== COMBO_ACTION.none) param2 = 0;
+            }
+            if (timeoutMs) timeoutMs = Math.max(10, Math.min(2000, timeoutMs));
+            if (action === COMBO_ACTION.none) {
+                timeoutMs = 0; priorIdleMs = 0; layer = COMBO_LAYER_ANY;
+            }
+            zmk.combos[d.slot] = { positions, action, behaviorId, param1, param2,
+                timeoutMs, priorIdleMs, layer };
+            this.ws.zmkDirty.combo[d.slot] = true;
+            saveWorkspace(this.ws);
+            return encodeComboSlotV3(d.slot, zmk.combos[d.slot], IMPRINT.comboKeys);
+        }
+        if (ch === CH.customShift && id === V.cskSlot) {
+            const d = decodeCskSlot(payload);
+            if (!zmk.csk[d.slot]) return payload;
+            zmk.csk[d.slot] = { base: d.base, shifted: d.shifted };
+            this.ws.zmkDirty.cskSlot[d.slot] = true;
+            saveWorkspace(this.ws);
+            return encodeCskSlot(d.slot, zmk.csk[d.slot]);
+        }
+        if (ch === CH.tapDance && id === V.tdStep) {
+            const d = decodeTdStep(payload);
+            if (!zmk.tapdance[d.slot] || d.tap >= IMPRINT.tdTaps) return payload;
+            // Firmware normalization (flask_tapdance_output_set).
+            let { action, behaviorId, param1, param2 } = d;
+            if (action > TD_ACTION.behavior) action = TD_ACTION.none;
+            if (action === TD_ACTION.usage && param1 === 0) action = TD_ACTION.none;
+            if (action === TD_ACTION.none) { behaviorId = 0; param1 = 0; param2 = 0; }
+            if (action !== TD_ACTION.behavior) {
+                behaviorId = 0;
+                if (action !== TD_ACTION.none) param2 = 0;
+            }
+            zmk.tapdance[d.slot].taps[d.tap] = { action, behaviorId, param1, param2 };
+            this.ws.zmkDirty.tdStep[`${d.slot},${d.tap}`] = true;
+            saveWorkspace(this.ws);
+            return encodeTdStep(d.slot, d.tap, zmk.tapdance[d.slot].taps[d.tap]);
+        }
+        if (ch === CH.tapDance && id === V.tdCfg) {
+            const d = decodeTdCfg(payload);
+            if (!zmk.tapdance[d.slot]) return payload;
+            // Firmware clamp: 0 = default, else 50..1000.
+            zmk.tapdance[d.slot].termMs = d.termMs
+                ? Math.max(50, Math.min(1000, d.termMs)) : 0;
+            this.ws.zmkDirty.tdStep[`${d.slot},cfg`] = true;
+            saveWorkspace(this.ws);
+            return encodeTdCfg(d.slot, zmk.tapdance[d.slot].termMs);
         }
         if (ch === CH.rgbMap && id === V.rgbmapLedOrder) {
             const [start, count, ...pos] = payload;

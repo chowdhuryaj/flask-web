@@ -8,8 +8,8 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=12';
-import { diag } from './diag.js?v=12';
+import { CH, V } from './flaskproto.js?v=13';
+import { diag } from './diag.js?v=13';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -59,8 +59,12 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // map lives on the device; the reactive overlay follows it, no keymap
 // edit + reflash needed); v13 added flask_automouse 0x1B (QMK autoMouse
 // wire shape + extend-on-key 0x05 — replaced zip_temp_layer; timeout 0 =
-// latch until a transparent key, which is swallowed).
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 13 };
+// latch until a transparent key, which is swallowed); v14 added combos
+// slot v3 0x12 (per-combo timeout/prior-idle/layer — the keymap's
+// devicetree combos IMPORTED as compiled defaults), flask_csk 0x16
+// (custom shift keys, ZMK slot frame at 0x50), flask_tapdance 0x28
+// (runtime tap dances, &ftd), and rgbmap global brightness 0x0B.
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 14 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -146,6 +150,18 @@ export function zmkCapabilities(family, version) {
         // v12: typed combo outputs (slot v2 0x11) — usage-hold / macro /
         // behavior invocation. Pre-v12 firmware keeps the usage-only slot.
         combosTyped: flask && v >= 12,
+        // v14: per-combo timeout/prior-idle/layer (slot v3 0x12) — the
+        // imported devicetree combos' knobs, editable per slot.
+        combosTimed: flask && v >= 14,
+        // flask_csk custom shift keys (0x16, v14) — the ZMK-line Shift tab.
+        // QMK devices drive their CSK via the u16 pair tables; this flag
+        // is ZMK-only (slot frame at 0x50).
+        customShift: flask && v >= 14,
+        // flask_tapdance runtime tap dances (0x28, v14) — wizard +
+        // composer &ftd assignment.
+        tapDance: flask && v >= 14,
+        // rgbmap global brightness (0x0B, v14) — native-BRI analog.
+        rgbBrightness: flask && v >= 14,
         // v12: runtime LED→position order (rgbmap 0x0A) — the wizard
         // pushes the measured map to the device.
         rgbLedOrder: flask && v >= 12,
@@ -173,9 +189,21 @@ export function zmkCapabilities(family, version) {
 // Mouse/Gestures tabs label them by live role (ballswap-aware).
 export const ZMK_TRACKBALLS = {
     imprint: [
-        { kind: 'ball', side: 'left', x: 6.55, y: 4.35, r: 1.05 },
+        // Left x 6.55 → 7.1 (2026-07-12, AJ): at 6.55 the circle overlapped
+        // the half's innermost column (keys at x 5..6); 7.1 mirrors the
+        // right ball's clearance about the board center (8.75).
+        { kind: 'ball', side: 'left', x: 7.1, y: 4.35, r: 1.05 },
         { kind: 'ball', side: 'right', x: 10.4, y: 4.35, r: 1.05 },
     ],
+};
+
+// Fn-preset geometry for the Leader tab's "F-keys" one-click table (AJ's
+// 2026-07-12 spec): leader→digit = F1-F9, leader→0 = F10, leader→F→digit =
+// F11-F19, leader→F→0 = F20. Key POSITIONS on the base layer (flask_leader
+// matches positions, not usages) — digits[] is the 1..9,0 number row in
+// that order; fKey is the letter F.
+export const ZMK_LEADER_FN_PRESET = {
+    imprint: { digits: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], fKey: 28 },
 };
 
 /** Editor profile for a ZMK device — no Vial definition to build from, so

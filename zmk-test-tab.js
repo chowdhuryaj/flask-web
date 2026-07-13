@@ -12,11 +12,15 @@
 //   - Mouse + scroll tester: pointer speed/peak, buttons, wheel notches and
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
-import { el, card, toast } from './ui.js?v=12';
-import { CH, V } from './flaskproto.js?v=12';
-import { diag } from './diag.js?v=12';
-import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION }
-    from './zmk-combos-codec.js?v=12';
+import { el, card, toast } from './ui.js?v=13';
+import { CH, V } from './flaskproto.js?v=13';
+import { diag } from './diag.js?v=13';
+import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION,
+         encodeComboSlotV3, decodeComboSlotV3 }
+    from './zmk-combos-codec.js?v=13';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=13';
+import { TD_ACTION, encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
+    from './zmk-tapdance-codec.js?v=13';
 
 const now = () => performance.now();
 
@@ -181,6 +185,75 @@ export class ZmkTestTab {
                     await flask.setU16(CH.autoMouse, V.amTimeout, orig);
                     if (got !== want) throw new Error(`wrote ${want}, device reports ${got}`);
                     return `${orig} ms (layer ${await flask.getU16(CH.autoMouse, V.amLayer)})`;
+                });
+            }
+            if (caps.combosTimed) {
+                // v14 timed slot: wire-proves timeout/prior-idle/layer echo
+                // through the SLOT_V3 frame (encoding bugs beat the sim).
+                await probe('combos: timed-slot (v3) round-trip', async () => {
+                    const count = await flask.getU16(CH.combos, V.combosSlotCount);
+                    const keys = (await flask.getU16(CH.combos, V.combosKeys)) || 4;
+                    const i = count - 1;
+                    const orig = await flask.getBytes(CH.combos, V.combosSlotV3, [i], 1);
+                    const test = encodeComboSlotV3(i, {
+                        positions: [0, 1], action: COMBO_ACTION.usage, param1: 0x70004,
+                        timeoutMs: 120, priorIdleMs: 90, layer: 0,
+                    }, keys);
+                    const echo = await flask.setBytes(CH.combos, V.combosSlotV3, test, 1);
+                    const back = decodeComboSlotV3(echo, keys);
+                    await flask.setBytes(CH.combos, V.combosSlotV3, [i, ...orig.slice(1)], 1);
+                    if (back.timeoutMs !== 120 || back.priorIdleMs !== 90 || back.layer !== 0) {
+                        throw new Error(`timing echo ${back.timeoutMs}/${back.priorIdleMs}/${back.layer}`);
+                    }
+                    return `slot ${i} (timed)`;
+                });
+            }
+            if (caps.customShift) {
+                await probe('shift: enabled flag round-trip', () =>
+                    flipU16(CH.customShift, V.cskEnabled, 0));
+                await probe('shift: last-pair write/read/restore', async () => {
+                    const count = await flask.getU16(CH.customShift, V.cskSlotCount);
+                    const i = count - 1;
+                    const orig = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
+                    const echo = await flask.setBytes(CH.customShift, V.cskSlot,
+                        encodeCskSlot(i, { base: 0x70036, shifted: 0x70033 }), 1);
+                    const back = decodeCskSlot(echo);
+                    await flask.setBytes(CH.customShift, V.cskSlot, [i, ...orig.slice(1)], 1);
+                    if (back.base !== 0x70036 || back.shifted !== 0x70033) {
+                        throw new Error('echo mismatch');
+                    }
+                    return `pair ${i}`;
+                });
+            }
+            if (caps.tapDance) {
+                await probe('tapdance: enabled flag round-trip', () =>
+                    flipU16(CH.tapDance, V.tdEnabled, 0));
+                await probe('tapdance: last-slot term + step round-trip', async () => {
+                    const count = await flask.getU16(CH.tapDance, V.tdSlotCount);
+                    const i = count - 1;
+                    const origCfg = await flask.getBytes(CH.tapDance, V.tdCfg, [i], 1);
+                    const origStep = await flask.getBytes(CH.tapDance, V.tdStep, [i, 0], 2);
+                    const cfgEcho = decodeTdCfg(await flask.setBytes(CH.tapDance, V.tdCfg,
+                        encodeTdCfg(i, 250), 1));
+                    const stepEcho = decodeTdStep(await flask.setBytes(CH.tapDance, V.tdStep,
+                        encodeTdStep(i, 0, { action: TD_ACTION.usage, param1: 0x70004 }), 2));
+                    await flask.setBytes(CH.tapDance, V.tdCfg, [i, ...origCfg.slice(1)], 1);
+                    await flask.setBytes(CH.tapDance, V.tdStep, [i, 0, ...origStep.slice(2)], 2);
+                    if (cfgEcho.termMs !== 250 || stepEcho.param1 !== 0x70004) {
+                        throw new Error('echo mismatch');
+                    }
+                    return `slot ${i} @ 250 ms`;
+                });
+            }
+            if (caps.rgbBrightness) {
+                await probe('rgb: brightness round-trip', async () => {
+                    const orig = await flask.getU16(CH.rgbMap, V.rgbmapBrightness);
+                    const want = orig === 100 ? 60 : 100;
+                    await flask.setU16(CH.rgbMap, V.rgbmapBrightness, want);
+                    const got = await flask.getU16(CH.rgbMap, V.rgbmapBrightness);
+                    await flask.setU16(CH.rgbMap, V.rgbmapBrightness, orig);
+                    if (got !== want) throw new Error(`wrote ${want}, device reports ${got}`);
+                    return `${orig}%`;
                 });
             }
         } finally {

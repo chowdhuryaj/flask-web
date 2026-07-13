@@ -7,22 +7,22 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=12';
-import { renderKeyboardSVG } from './keymap-tab.js?v=12';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=12';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=12';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=12';
-import { ZMK_VIDPID } from './zmk.js?v=12';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=12';
+import { el, toast, card } from './ui.js?v=13';
+import { renderKeyboardSVG } from './keymap-tab.js?v=13';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=13';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=13';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=13';
+import { ZMK_VIDPID } from './zmk.js?v=13';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=13';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=12';
+} from './zmk-keycodes.js?v=13';
 // Circular with zmk-combos-tab (it imports buildZmkPicker for behavior
 // combo outputs) — safe: both sides export hoisted declarations and
 // neither calls the other at module-eval time.
-import { pickUsage, MODS } from './zmk-combos-tab.js?v=12';
+import { pickUsage, MODS } from './zmk-combos-tab.js?v=13';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -921,6 +921,11 @@ export function buildZmkPicker({ keyPressId, onPick }) {
     const macroBehavior = byName('Flask Macro');
     const macroRange = macroBehavior?.metadata?.[0]?.param1?.find((x) => x.kind === 'range');
 
+    // Tap Dance slots the same way (v14): "Tap dance" category assigns
+    // &ftd <slot> in one click; edit the dances in the Tap Dance tab.
+    const tdBehavior = byName('Tap Dance');
+    const tdRange = tdBehavior?.metadata?.[0]?.param1?.find((x) => x.kind === 'range');
+
     function renderCats() {
         const chips = [];
         if (keyPressId != null) {
@@ -931,6 +936,7 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         }
         if (layerBehaviors.length) chips.push({ id: 'layers', label: 'Layers' });
         if (macroBehavior && macroRange) chips.push({ id: 'macros', label: 'Macros' });
+        if (tdBehavior && tdRange) chips.push({ id: 'tapdance', label: 'Tap dance' });
         chips.push({ id: 'behaviors', label: 'Behaviors' });
         cats.replaceChildren(...chips.map((c) => el('button', {
             class: c.id === category ? 'active' : '',
@@ -999,6 +1005,7 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         if (category === 'taphold') { renderTapHoldComposer(); return; }
         if (category === 'layers') { renderLayerComposer(); return; }
         if (category === 'macros') { renderMacroChips(); return; }
+        if (category === 'tapdance') { renderTapDanceChips(); return; }
         if (category === 'behaviors') { renderBehaviorComposer(); return; }
         const cat = USAGE_CATEGORIES.find((c) => c.id === category);
         if (!cat) return;
@@ -1017,6 +1024,25 @@ export function buildZmkPicker({ keyPressId, onPick }) {
 
         const bhvSel = el('select', {}, ...tapHoldBehaviors.map((d) =>
             el('option', { value: d.id, text: d.displayName })));
+
+        // Timing chips (v14, AJ's "behavior modification settings" ask):
+        // core hold-tap params are const devicetree, so timing choices are
+        // precompiled Mod-Tap variants — the chips just flip the behavior
+        // dropdown between them (Fast 150 / Standard 200 / Slow 300).
+        const mtVariants = tapHoldBehaviors.filter((d) => /^Mod-Tap/.test(d.displayName));
+        const timingRow = mtVariants.length > 1
+            ? el('div', { style: 'display:flex; gap:4px; align-items:center; flex-wrap:wrap' },
+                el('span', { class: 'note faint', text: 'timing:' }),
+                ...mtVariants.map((d) => {
+                    const m = d.displayName.match(/\((\w+) (\d+)\)/);
+                    const label = m ? `${m[1]} ${m[2]}` : 'standard 200';
+                    return el('button', {
+                        class: 'btn small', text: label,
+                        title: `${d.displayName} — tapping term ${m ? m[2] : 200} ms (a compiled variant; core hold-tap timing is fixed at build)`,
+                        onclick: () => { bhvSel.value = d.id; },
+                    });
+                }))
+            : null;
 
         const holdBtn = el('button', { class: 'code', text: 'hold…' });
         const tapBtn = el('button', { class: 'code', text: 'tap…' });
@@ -1062,8 +1088,23 @@ export function buildZmkPicker({ keyPressId, onPick }) {
                 el('label', { text: 'Tap:' }), tapBtn,
                 assign),
             holdChips,
+            timingRow,
             el('div', { class: 'note faint',
-                text: 'Hold past the tapping term = the hold key; quick press = the tap key. The compiled home-row mods (HM_*) gate holds on idle/cross-hand by design — this composes the ungated core behavior.' })));
+                text: 'Hold past the tapping term = the hold key; quick press = the tap key. The compiled home-row mods (HM_*) gate holds on idle/cross-hand by design — this composes the ungated core behavior. Timing picks a compiled variant (Layer-Tap variants live under Layers).' })));
+    }
+
+    /** Tap Dance slot chips (v14): assign &ftd <slot> in one click — the
+     * dances themselves are edited in the Tap Dance tab. */
+    function renderTapDanceChips() {
+        const max = Math.min(tdRange.max, 63);
+        codes.append(el('div', { class: 'note faint',
+            text: 'Assign a runtime tap dance (build them in the Tap Dance tab — 🪄 New tap dance).' }));
+        for (let slot = tdRange.min; slot <= max; slot++) {
+            codes.append(el('button', {
+                class: 'code', title: `Tap dance slot ${slot} (&ftd ${slot})`,
+                onclick: () => onPick({ behaviorId: tdBehavior.id, param1: slot, param2: 0 }),
+            }, `TD${slot}`, el('span', { class: 'full', text: `Tap dance ${slot}` })));
+        }
     }
 
     function layerSelect() {
@@ -1134,8 +1175,18 @@ export function buildZmkPicker({ keyPressId, onPick }) {
         // and system keys — the dropdown now buckets by what the behavior
         // IS (shape first, then well-known names), same order every device.
         const all = [...behaviors.values()];
-        const list = all.filter((d) => d.displayName)
-            .sort((a, b) => a.displayName.localeCompare(b.displayName));
+        // Dedupe by display name (2026-07-12, "reconcile the duplicates"):
+        // a keymap can compile several instances that Studio reports under
+        // the SAME name (identical variants, re-included nodes) — two
+        // "Mod-Tap" rows assign identically, so only the first (lowest id)
+        // is listed. DIFFERENT behaviors keep distinct display-names by
+        // convention (the timing variants carry theirs in parentheses).
+        const seen = new Set();
+        const list = all.filter((d) => {
+            if (!d.displayName || seen.has(d.displayName)) return false;
+            seen.add(d.displayName);
+            return true;
+        }).sort((a, b) => a.displayName.localeCompare(b.displayName));
         const hidden = all.length - list.length;
 
         const SYSTEM_NAMES = new Set(['Reset', 'Bootloader', 'Output Selection',
@@ -1244,7 +1295,7 @@ export function buildZmkPicker({ keyPressId, onPick }) {
             el('label', { text: 'Behavior:' }), bhvSel, paramsBox, assign));
         if (hidden > 0) {
             codes.append(el('div', { class: 'note faint',
-                text: `${hidden} firmware behavior${hidden === 1 ? '' : 's'} hidden — no Studio metadata, the firmware refuses to assign them.` }));
+                text: `${hidden} firmware behavior${hidden === 1 ? '' : 's'} hidden — duplicates of a listed name, or no Studio metadata (the firmware rejects assigning those with INVALID PARAMETERS).` }));
         }
     }
 

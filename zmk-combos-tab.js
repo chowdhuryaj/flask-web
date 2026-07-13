@@ -7,32 +7,32 @@
 //
 // Differences from Coutsos (compile-time .keymap editing) by design:
 //  - edits are LIVE on the device (write-through), Save persists;
-//  - output is an encoded HID usage (keycode + modifiers — Vial parity),
-//    not an arbitrary behavior;
-//  - the timeout is global (one candidate window for all slots);
-//  - devicetree combos baked into the firmware are invisible here (ZMK
-//    Studio has no combo RPC) — runtime slots on the same positions
-//    shadow them.
+//  - outputs are typed since v12 (usage / macro / any Studio behavior);
+//  - per-combo timeout / prior-idle / layer since v14 (proto 14) — the
+//    keymap's devicetree combos were IMPORTED into runtime slots as
+//    compiled defaults, so they all show up and edit here now (pre-v14
+//    firmware kept them invisible and the timeout global).
 //
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=12';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=12';
-import { CH, V } from './flaskproto.js?v=12';
-import { renderKeyboardSVG } from './keymap-tab.js?v=12';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=13';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=13';
+import { CH, V } from './flaskproto.js?v=13';
+import { renderKeyboardSVG } from './keymap-tab.js?v=13';
 import {
     keyboardUsages, consumerUsages, kpParam, cpParam,
     usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=12';
+} from './zmk-keycodes.js?v=13';
 import {
-    COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION,
+    COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
+    decodeComboSlotV3, encodeComboSlotV3,
     comboSlotToTyped, comboTypedToLegacy,
-} from './zmk-combos-codec.js?v=12';
-import { zmkBehaviors } from './zmk-keycodes.js?v=12';
-import { buildZmkPicker } from './zmk-keymap-tab.js?v=12';
+} from './zmk-combos-codec.js?v=13';
+import { zmkBehaviors } from './zmk-keycodes.js?v=13';
+import { buildZmkPicker } from './zmk-keymap-tab.js?v=13';
 
 // Shared with the keymap picker's mod chips + tap-hold composer (same
 // circular-import pattern as buildZmkPicker: only used inside functions).
@@ -146,11 +146,17 @@ export class ZmkCombosTab {
             // behavior); older firmware keeps the usage-only frame, bridged
             // into the same typed shape so the tab has ONE internal model.
             this.typed = !!this.app.caps?.combosTyped;
+            // v14 timed slots: per-combo timeout / prior-idle / layer (the
+            // imported devicetree combos' knobs) ride the SLOT_V3 frame.
+            this.timed = !!this.app.caps?.combosTimed;
             this.macroSlots = (this.typed && this.app.caps?.macros)
                 ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
-                if (this.typed) {
+                if (this.timed) {
+                    const r = await flask.getBytes(CH.combos, V.combosSlotV3, [i], 1);
+                    this.slots.push(decodeComboSlotV3(r, this.maxKeys));
+                } else if (this.typed) {
                     const r = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
                     this.slots.push(decodeComboSlotV2(r, this.maxKeys));
                 } else {
@@ -166,7 +172,11 @@ export class ZmkCombosTab {
 
     async writeSlot(i, before = null) {
         try {
-            if (this.typed) {
+            if (this.timed) {
+                const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV3,
+                    encodeComboSlotV3(i, this.slots[i], this.maxKeys), 1);
+                this.slots[i] = decodeComboSlotV3(r, this.maxKeys); // adopt the echo
+            } else if (this.typed) {
                 const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV2,
                     encodeComboSlotV2(i, this.slots[i], this.maxKeys), 1);
                 this.slots[i] = decodeComboSlotV2(r, this.maxKeys); // adopt the echo
@@ -200,7 +210,8 @@ export class ZmkCombosTab {
 
     emptySlot(i) {
         return { slot: i, positions: [], action: COMBO_ACTION.none,
-            behaviorId: 0, param1: 0, param2: 0 };
+            behaviorId: 0, param1: 0, param2: 0,
+            timeoutMs: 0, priorIdleMs: 0, layer: COMBO_LAYER_ANY };
     }
 
     async clearSlot(i) {
@@ -363,6 +374,46 @@ export class ZmkCombosTab {
                 })));
     }
 
+    /** Per-combo timing/layer strip (v14 timed slots). Inputs commit ONCE
+     * on change — writeSlot re-renders, so no blur double-commit path. */
+    timingStrip(i) {
+        const s = this.slots[i];
+        const commit = (patch) => {
+            const before = { ...s, positions: [...s.positions] };
+            Object.assign(this.slots[i], patch);
+            this.writeSlot(i, before);
+        };
+        const num = (value, title, placeholder, onCommit) => el('input', {
+            type: 'number', min: 0, max: 2000, value: value || '',
+            placeholder, title,
+            style: 'width:72px',
+            onchange: (e) => onCommit(Math.max(0, Math.min(2000, Number(e.target.value) || 0))),
+        });
+        const layerNames = this.app.profile?.layerNames ?? [];
+        const layerCount = Math.max(layerNames.length, 6);
+        const layerSel = el('select', {
+            title: 'layer this combo fires on',
+            onchange: (e) => commit({ layer: Number(e.target.value) }),
+        },
+            el('option', { value: COMBO_LAYER_ANY, text: 'All layers',
+                selected: s.layer === COMBO_LAYER_ANY }),
+            ...Array.from({ length: layerCount }, (_, l) => el('option', {
+                value: l, text: layerNames[l] ? `${l}: ${layerNames[l]}` : `Layer ${l}`,
+                selected: s.layer === l,
+            })));
+        return el('div', {
+            style: 'display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px',
+        },
+            el('span', { class: 'note faint', text: 'timeout' }),
+            num(s.timeoutMs, 'candidate window for THIS combo, ms — 0 inherits the global timeout',
+                'global', (v) => commit({ timeoutMs: v })),
+            el('span', { class: 'note faint', text: 'prior idle' }),
+            num(s.priorIdleMs, 'only fire when the last non-modifier tap is at least this old, ms — guards against typing rolls; 0 = off',
+                'off', (v) => commit({ priorIdleMs: v })),
+            el('span', { class: 'note faint', text: 'layer' }),
+            layerSel);
+    }
+
     comboCard(i) {
         const s = this.slots[i];
         const live = !comboSlotV2IsEmpty(s);
@@ -396,7 +447,8 @@ export class ZmkCombosTab {
             el('div', { style: 'display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap' },
                 el('div', {},
                     el('div', { class: 'note faint', text: 'output' }), tile),
-                el('div', { style: 'flex:1; overflow-x:auto' }, this.miniBoard(i))));
+                el('div', { style: 'flex:1; overflow-x:auto' }, this.miniBoard(i))),
+            this.timed ? this.timingStrip(i) : null);
     }
 
     render() {
@@ -420,7 +472,9 @@ export class ZmkCombosTab {
             'press keys together, get a keycode — live-editable, unlike ZMK\'s devicetree combos',
             toggleRow({
                 label: 'Combos enabled',
-                hint: 'master switch for RUNTIME combos (slots stay stored) — the '
+                hint: this.timed
+                    ? 'master switch for ALL combos — the keymap\'s combos live in these slots since v14'
+                    : 'master switch for RUNTIME combos (slots stay stored) — the '
                     + 'firmware\'s compiled devicetree combos have no off switch',
                 value: this.enabled,
                 onChange: async (val) => {
@@ -430,7 +484,9 @@ export class ZmkCombosTab {
             }),
             sliderRow({
                 label: 'Timeout',
-                hint: 'candidate window for all combos, ms',
+                hint: this.timed
+                    ? 'default candidate window, ms — a combo\'s own timeout overrides it'
+                    : 'candidate window for all combos, ms',
                 min: 10, max: 2000, step: 5, value: this.timeout,
                 format: (v) => `${v} ms`,
                 onChange: async (val) => {

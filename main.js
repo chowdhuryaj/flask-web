@@ -2,41 +2,43 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=12';
-import { diag } from './diag.js?v=12';
-import { FlaskHID } from './webhid.js?v=12';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=12';
+import { el, toast, modal } from './ui.js?v=13';
+import { diag } from './diag.js?v=13';
+import { FlaskHID } from './webhid.js?v=13';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=13';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=12';
-import { VialClient } from './vialclient.js?v=12';
-import { parseDefinition } from './vialdef.js?v=12';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=12';
-import { capabilities } from './caps.js?v=12';
-import { setDeviceCustomKeys } from './keycodes.js?v=12';
-import { KeymapTab } from './keymap-tab.js?v=12';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=12';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=12';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=12';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=12';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=12';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=12';
-import { ZmkTestTab } from './zmk-test-tab.js?v=12';
-import { MouseTab } from './mouse-tab.js?v=12';
-import { TypingTab } from './typing-tab.js?v=12';
-import { SettingsTab } from './settings-tab.js?v=12';
-import { HUD } from './hud.js?v=12';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=12';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=13';
+import { VialClient } from './vialclient.js?v=13';
+import { parseDefinition } from './vialdef.js?v=13';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=13';
+import { capabilities } from './caps.js?v=13';
+import { setDeviceCustomKeys } from './keycodes.js?v=13';
+import { KeymapTab } from './keymap-tab.js?v=13';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=13';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=13';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=13';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=13';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=13';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=13';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=13';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=13';
+import { ZmkTestTab } from './zmk-test-tab.js?v=13';
+import { MouseTab } from './mouse-tab.js?v=13';
+import { TypingTab } from './typing-tab.js?v=13';
+import { SettingsTab } from './settings-tab.js?v=13';
+import { HUD } from './hud.js?v=13';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=13';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=12';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=13';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=12';
-import { MacrosTab } from './macros-tab.js?v=12';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=12';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=12';
-import { RgbTab } from './rgb-tab.js?v=12';
-import { DisplayTab } from './display-tab.js?v=12';
-import { exportVil, importVil, downloadText } from './vil.js?v=12';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=13';
+import { MacrosTab } from './macros-tab.js?v=13';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=13';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=13';
+import { RgbTab } from './rgb-tab.js?v=13';
+import { DisplayTab } from './display-tab.js?v=13';
+import { exportVil, importVil, downloadText } from './vil.js?v=13';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -409,6 +411,12 @@ function buildTabs() {
     // caps.vial above.
     if (app.caps.combos) TABS.push({ id: 'zmk-combos', label: 'Combos', ctor: ZmkCombosTab });
     if (app.caps.macros) TABS.push({ id: 'zmk-macros', label: 'Macros', ctor: ZmkMacrosTab });
+    // v14 ZMK-line surfaces: runtime tap dances (0x28) + custom shift keys
+    // (0x16 — the QMK customShift channel, ZMK slot frame).
+    if (app.caps.tapDance) TABS.push({ id: 'zmk-tapdance', label: 'Tap Dance', ctor: ZmkTapDanceTab });
+    if (app.caps.customShift && isZmkFamily(app.family)) {
+        TABS.push({ id: 'zmk-shift', label: 'Shift', ctor: ZmkShiftTab });
+    }
     if (app.caps.leader) TABS.push({ id: 'zmk-leader', label: 'Leader', ctor: ZmkLeaderTab });
     // ZMK line: browser-event testers + timing calibrators (QMK devices have
     // the Vial matrix tester + Typing tab instead).

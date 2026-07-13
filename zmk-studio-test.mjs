@@ -412,7 +412,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 13, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, 14, 'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
@@ -487,9 +487,11 @@ eq(zigzag(1), 2, 'zigzag(1)');
         await studio.setLayerBinding(0, 14, { behaviorId: fled.id, param1: 7, param2: 0 });
     } catch (e) { junkErr = e.message; }
     eq(junkErr, 'INVALID_PARAMETERS', 'nonzero param on a 0-param behavior is rejected');
-    // The composer's assignability rule: display name present.
-    eq(details.filter((d) => d.displayName).length, details.length - 1,
-        'exactly the nameless behavior is composer-hidden');
+    // The composer's assignability rule: display name present. v14 grew
+    // the nameless set to 7 — urob's &leader plus the six slk_* OS-aware
+    // shortcut behaviors the imported default combos reference.
+    eq(details.filter((d) => d.displayName).length, details.length - 7,
+        'exactly the nameless behaviors are composer-hidden');
     await studio.discardChanges();
 }
 
@@ -586,9 +588,9 @@ eq(zigzag(1), 2, 'zigzag(1)');
         await import('./zmk-output-codec.js');
 
     const ws = createZmkTemplate('imprint');
-    eq(ws.protocolVersion, 13, 'template speaks v13');
+    eq(ws.protocolVersion, 14, 'template speaks v14');
     const flask = new ZmkOfflineFlask(ws);
-    eq(await flask.getU16(CH.leader, V.leaderSlotCount), 16, 'sim leader slots');
+    eq(await flask.getU16(CH.leader, V.leaderSlotCount), 32, 'sim leader slots');
     eq(await flask.getU16(CH.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
     eq(await flask.getU16(CH.leader, V.leaderTimeout), 1000, 'sim leader timeout default');
     eq(await flask.getU16(CH.gestures, V.gesturesSetCount), 8, 'sim gesture sets');
@@ -828,6 +830,96 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     await flask.setBytes(CH.rgbMap, V.rgbmapLedOrder, [10, 4, 60, 61, 62, 255]);
     eq([...await flask.getBytes(CH.rgbMap, V.rgbmapLedOrder, [10, 4], 2)],
         [10, 4, 60, 61, 62, 255], 'ledOrder chunk round trip');
+    delete globalThis.localStorage;
+}
+
+// ---- v14: timed combo slots, imported defaults, csk, tap dance, brightness ----
+{
+    globalThis.localStorage = {
+        _m: new Map(),
+        getItem(k) { return this._m.get(k) ?? null; },
+        setItem(k, v) { this._m.set(k, String(v)); },
+        removeItem(k) { this._m.delete(k); },
+    };
+    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js');
+    const { CH, V } = await import('./flaskproto.js');
+    const { encodeComboSlotV3, decodeComboSlotV3, COMBO_ACTION, COMBO_LAYER_ANY } =
+        await import('./zmk-combos-codec.js');
+    const { encodeCskSlot, decodeCskSlot, cskSlotIsEmpty } =
+        await import('./zmk-csk-codec.js');
+    const { TD_ACTION, encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg,
+        tdDanceLength } = await import('./zmk-tapdance-codec.js');
+
+    // v3 codec round trip (timing + layer ride behind the v2 frame).
+    const t3 = { positions: [3, 9], action: COMBO_ACTION.behavior,
+        behaviorId: 0xBEEF, param1: 0x02070004, param2: 7,
+        timeoutMs: 120, priorIdleMs: 150, layer: 2 };
+    const enc3 = encodeComboSlotV3(6, t3, 8);
+    eq(enc3.length, 1 + 8 + 11 + 5, 'v3 frame length (8-key device)');
+    eq(decodeComboSlotV3(enc3, 8), { slot: 6, ...t3 }, 'v3 codec round trip');
+
+    // Sim boots the IMPORTED devicetree combos (28 defaults, firmware boot
+    // state), not an empty table.
+    const ws = createZmkTemplate('imprint');
+    const flask = new ZmkOfflineFlask(ws);
+    const d0 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [0], 1), 8);
+    eq(d0.positions, [27, 26], 'default 0 = copy_cut positions');
+    eq(d0.timeoutMs, 35, 'default 0 timeout 35 ms');
+    eq(d0.priorIdleMs, 150, 'default 0 prior-idle 150 ms');
+    eq(d0.layer, COMBO_LAYER_ANY, 'default 0 fires on all layers');
+    const d15 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [15], 1), 8);
+    eq(d15.layer, 0, 'excl combo is layer-0 gated');
+    const d27 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [27], 1), 8);
+    eq(d27.action, COMBO_ACTION.behavior, 'rrep default is a behavior output');
+    const d25 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [25], 1), 8);
+    eq(d25.timeoutMs, 50, 'z combo keeps its 50 ms window');
+    eq(d25.param2 >>> 0, 0x7001D, 'z combo carries lt tap usage in param2');
+
+    // v3 write normalization: timeout clamps 10..2000, emptied slot resets
+    // timing/layer.
+    const echo3 = decodeComboSlotV3(await flask.setBytes(CH.combos, V.combosSlotV3,
+        encodeComboSlotV3(40, { positions: [1, 2], action: COMBO_ACTION.usage,
+            param1: 0x70004, timeoutMs: 5, priorIdleMs: 90, layer: 3 }, 8)), 8);
+    eq(echo3.timeoutMs, 10, 'v3 timeout clamps up to 10');
+    eq(echo3.layer, 3, 'v3 layer stored');
+    const cleared = decodeComboSlotV3(await flask.setBytes(CH.combos, V.combosSlotV3,
+        encodeComboSlotV3(40, { positions: [], action: COMBO_ACTION.none,
+            timeoutMs: 500, priorIdleMs: 90, layer: 3 }, 8)), 8);
+    eq(cleared.timeoutMs, 0, 'emptied slot zeroes timeout');
+    eq(cleared.layer, COMBO_LAYER_ANY, 'emptied slot resets the layer gate');
+
+    // csk codec + sim round trip.
+    const cskEnc = encodeCskSlot(4, { base: 0x70036, shifted: 0x70033 });
+    eq(cskEnc.length, 9, 'csk frame length');
+    eq(decodeCskSlot(cskEnc), { slot: 4, base: 0x70036, shifted: 0x70033 },
+        'csk codec round trip');
+    eq(cskSlotIsEmpty({ base: 0, shifted: 0 }), true, 'csk empty rule');
+    const cskEcho = decodeCskSlot(await flask.setBytes(CH.customShift, V.cskSlot, cskEnc));
+    eq(cskEcho.base, 0x70036, 'sim stores the csk base');
+    eq(await flask.getU16(CH.customShift, V.cskSlotCount), 16, 'csk slot count');
+    eq(await flask.getU16(CH.customShift, V.cskEnabled), 1, 'csk boots enabled');
+
+    // tap dance codec + sim round trip (term clamp + step normalization).
+    const stepEnc = encodeTdStep(2, 1, { action: TD_ACTION.usage, param1: 0x70005 });
+    eq(stepEnc.length, 13, 'td step frame length');
+    eq(decodeTdStep(stepEnc), { slot: 2, tap: 1, action: TD_ACTION.usage,
+        behaviorId: 0, param1: 0x70005, param2: 0 }, 'td step codec round trip');
+    eq(decodeTdCfg(encodeTdCfg(2, 250)), { slot: 2, termMs: 250 }, 'td cfg codec round trip');
+    const cfgEcho = decodeTdCfg(await flask.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(2, 20)));
+    eq(cfgEcho.termMs, 50, 'sim clamps the term up to 50');
+    await flask.setBytes(CH.tapDance, V.tdStep, stepEnc);
+    const stepBack = decodeTdStep(await flask.getBytes(CH.tapDance, V.tdStep, [2, 1], 2));
+    eq(stepBack.param1, 0x70005, 'sim stores the td step');
+    eq(tdDanceLength([{ action: 1 }, { action: 0 }, { action: 1 }]), 1,
+        'dance length is the contiguous prefix');
+    eq(await flask.getU16(CH.tapDance, V.tdSlotCount), 16, 'td slot count');
+    eq(await flask.getU16(CH.tapDance, V.tdTaps), 4, 'td taps per slot');
+
+    // v14 leader capacity + brightness seed.
+    eq(await flask.getU16(CH.leader, V.leaderSlotCount), 32, 'leader slots 32 (v14)');
+    eq(await flask.getU16(CH.rgbMap, V.rgbmapBrightness), 100, 'brightness boots 100%');
+    const b = await flask.setU16(CH.rgbMap, V.rgbmapBrightness, 60);
+    eq(b, 60, 'brightness set echoes');
     delete globalThis.localStorage;
 }
 

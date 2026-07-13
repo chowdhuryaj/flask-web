@@ -264,11 +264,17 @@ main { padding: 16px; max-width: 1200px; margin: 0 auto; }
   border-bottom: 1px solid var(--border);
 }
 .row:last-child { border-bottom: none; }
-.row .lbl { flex: 0 0 200px; font-size: 13px; }
+/* Rows must never push content outside their card: label and slider
+ * SHRINK (2026-07-12 — the old fixed 200px label + 120px slider + 64px
+ * value forced a 404px minimum that overflowed narrow cards, floating
+ * the numbers outside the box); the value hugs its text and stays in. */
+.row .lbl { flex: 1 1 140px; min-width: 110px; font-size: 13px; }
 .row .lbl .hint { display: block; color: var(--faint); font-size: 11px; }
-.row input[type="range"] { flex: 1; min-width: 120px; }
+.row input[type="range"] { flex: 1 1 90px; min-width: 70px; }
 .row .val {
-  flex: 0 0 64px;
+  flex: 0 0 auto;
+  min-width: 52px;
+  white-space: nowrap;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--muted);

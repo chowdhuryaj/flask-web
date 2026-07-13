@@ -7,13 +7,14 @@
 // pickTypedOutput (exported; the Gestures tab shares it) wraps the combos
 // tab's usage picker with the action choice: keycode / macro / none.
 
-import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=12';
-import { CH, V } from './flaskproto.js?v=12';
-import { renderKeyboardSVG } from './keymap-tab.js?v=12';
-import { pickUsage } from './zmk-combos-tab.js?v=12';
-import { usageCap, usageLabel } from './zmk-keycodes.js?v=12';
+import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=13';
+import { CH, V } from './flaskproto.js?v=13';
+import { ZMK_LEADER_FN_PRESET } from './zmk.js?v=13';
+import { renderKeyboardSVG } from './keymap-tab.js?v=13';
+import { pickUsage } from './zmk-combos-tab.js?v=13';
+import { usageCap, usageLabel, kpParam } from './zmk-keycodes.js?v=13';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty }
-    from './zmk-output-codec.js?v=12';
+    from './zmk-output-codec.js?v=13';
 
 /** Label for a typed output. */
 export function outputLabel(o, { cap = false } = {}) {
@@ -115,6 +116,57 @@ export class ZmkLeaderTab {
             leaderSlotIsEmpty(s) && !this.drafts.has(idx));
         if (i < 0) { toast(`All ${this.slotCount} leader slots are in use`, true); return; }
         this.drafts.add(i);
+        this.render();
+    }
+
+    /** F-key preset (AJ's 2026-07-12 spec): leader→1..9 = F1-F9, leader→0
+     * = F10, leader→F→1..9 = F11-F19, leader→F→0 = F20. Fills FREE slots
+     * only — existing sequences stay untouched. */
+    async addFnPreset() {
+        const fam = this.app.profile?.family ?? 'imprint';
+        const geo = ZMK_LEADER_FN_PRESET[fam];
+        if (!geo) { toast('No F-key preset geometry for this board', true); return; }
+
+        // F1-F12 = usage 0x3A+, F13-F24 = 0x68+ (HID keyboard page).
+        const fUsage = (n) => kpParam(n <= 12 ? 0x3A + n - 1 : 0x68 + n - 13);
+        const wanted = [];
+        for (let n = 1; n <= 10; n++) {
+            wanted.push({ positions: [geo.digits[n - 1]], usage: fUsage(n) });
+        }
+        for (let n = 11; n <= 20; n++) {
+            wanted.push({ positions: [geo.fKey, geo.digits[n - 11]], usage: fUsage(n) });
+        }
+
+        // Skip pairs whose exact sequence already exists; place the rest in
+        // free slots.
+        const seqKey = (p) => p.join(',');
+        const existing = new Set(this.slots
+            .filter((s) => !leaderSlotIsEmpty(s)).map((s) => seqKey(s.positions)));
+        const todo = wanted.filter((w) => !existing.has(seqKey(w.positions)));
+        const free = this.slots.map((s, i) => i)
+            .filter((i) => leaderSlotIsEmpty(this.slots[i]) && !this.drafts.has(i));
+        if (todo.length === 0) { toast('F-key sequences already present'); return; }
+        if (free.length < todo.length) {
+            toast(`Needs ${todo.length} free slots, only ${free.length} left`, true);
+            return;
+        }
+        const { hid } = this.app;
+        hid?.pause?.();
+        try {
+            for (let k = 0; k < todo.length; k++) {
+                const i = free[k];
+                this.slots[i] = { seq: i, positions: [...todo[k].positions],
+                    action: OUTPUT_ACTION.usage, param: todo[k].usage };
+                const r = await this.app.flask.setBytes(CH.leader, V.leaderSlot,
+                    encodeLeaderSlot(i, this.slots[i], this.maxKeys), 1);
+                this.slots[i] = decodeLeaderSlot(r, this.maxKeys);
+            }
+            toast(`${todo.length} F-key sequences added — Save to persist`);
+        } catch (e) {
+            toast(`F-key preset failed: ${e.message}`, true);
+        } finally {
+            hid?.resume?.();
+        }
         this.render();
     }
 
@@ -248,6 +300,11 @@ export class ZmkLeaderTab {
                 el('button', {
                     class: 'btn small primary', text: '＋ New sequence',
                     onclick: () => this.addSequence(),
+                }),
+                el('button', {
+                    class: 'btn small', text: 'F-keys preset',
+                    title: 'leader→1..9 = F1-F9, leader→0 = F10, leader→F→1..9 = F11-F19, leader→F→0 = F20',
+                    onclick: () => this.addFnPreset(),
                 }),
                 el('span', { class: 'note faint', text: `${used}/${this.slotCount} slots used` }),
                 el('span', { style: 'flex:1' }),

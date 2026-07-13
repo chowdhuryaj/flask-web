@@ -90,6 +90,35 @@ export function comboSlotV2IsEmpty({ positions = [], action = 0 }) {
     return action === COMBO_ACTION.none || positions.length < 2;
 }
 
+// ---------------------------------------------------------------------------
+// v14 timed slots (COMBOS_SLOT_V3 0x12): the v2 frame plus per-combo
+// timing/layer — the imported devicetree combos' knobs. Wire:
+//   [v2 frame…, timeout_hi, timeout_lo, prior_hi, prior_lo, layer]
+// timeoutMs 0 = inherit the global window; priorIdleMs 0 = no typing-roll
+// guard; layer = layer INDEX, 0xFF = active on all layers.
+
+export const COMBO_LAYER_ANY = 0xFF;
+
+/** Reply payload → typed slot + { timeoutMs, priorIdleMs, layer }. */
+export function decodeComboSlotV3(bytes, maxKeys = COMBO_MAX_KEYS) {
+    const s = decodeComboSlotV2(bytes, maxKeys);
+    const t = 1 + maxKeys + 11;
+    s.timeoutMs = (((bytes[t] ?? 0) << 8) | (bytes[t + 1] ?? 0)) >>> 0;
+    s.priorIdleMs = (((bytes[t + 2] ?? 0) << 8) | (bytes[t + 3] ?? 0)) >>> 0;
+    s.layer = bytes[t + 4] ?? COMBO_LAYER_ANY;
+    return s;
+}
+
+/** Typed+timed slot → SET payload. */
+export function encodeComboSlotV3(slot, s, maxKeys = COMBO_MAX_KEYS) {
+    const timeoutMs = (s.timeoutMs ?? 0) & 0xFFFF;
+    const priorIdleMs = (s.priorIdleMs ?? 0) & 0xFFFF;
+    const layer = (s.layer ?? COMBO_LAYER_ANY) & 0xFF;
+    return [...encodeComboSlotV2(slot, s, maxKeys),
+        (timeoutMs >>> 8) & 0xFF, timeoutMs & 0xFF,
+        (priorIdleMs >>> 8) & 0xFF, priorIdleMs & 0xFF, layer];
+}
+
 /** Legacy {usage} slot ↔ typed slot bridges (v11 firmware / old exports). */
 export function comboSlotToTyped({ slot, positions = [], usage = 0 }) {
     return {

@@ -9,14 +9,18 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=12';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=12';
+import { CH, V } from './flaskproto.js?v=13';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=13';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
-         comboTypedToLegacy } from './zmk-combos-codec.js?v=12';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=12';
+         encodeComboSlotV3, decodeComboSlotV3,
+         comboTypedToLegacy } from './zmk-combos-codec.js?v=13';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=13';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=12';
+    from './zmk-output-codec.js?v=13';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=13';
+import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
+    from './zmk-tapdance-codec.js?v=13';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -94,6 +98,41 @@ async function exportFlaskStateInner(app) {
                 await g(CH.rgbMap, V.rgbmapEffectVal),
             ];
         }
+        if (caps.rgbBrightness) {
+            out.rgb.brightness = await g(CH.rgbMap, V.rgbmapBrightness);
+        }
+    }
+    if (caps.customShift) {
+        const count = await g(CH.customShift, V.cskSlotCount);
+        const slots = [];
+        for (let i = 0; i < count; i++) {
+            const r = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
+            const { base, shifted } = decodeCskSlot(r);
+            slots.push({ base, shifted });
+        }
+        out.customShift = {
+            enabled: await g(CH.customShift, V.cskEnabled),
+            slots,
+        };
+    }
+    if (caps.tapDance) {
+        const count = await g(CH.tapDance, V.tdSlotCount);
+        const tapCap = await g(CH.tapDance, V.tdTaps) || 4;
+        const slots = [];
+        for (let i = 0; i < count; i++) {
+            const cfg = decodeTdCfg(await flask.getBytes(CH.tapDance, V.tdCfg, [i], 1));
+            const taps = [];
+            for (let t = 0; t < tapCap; t++) {
+                const d = decodeTdStep(await flask.getBytes(CH.tapDance, V.tdStep, [i, t], 2));
+                taps.push({ action: d.action, behaviorId: d.behaviorId,
+                    param1: d.param1, param2: d.param2 });
+            }
+            slots.push({ termMs: cfg.termMs, taps });
+        }
+        out.tapDance = {
+            enabled: await g(CH.tapDance, V.tdEnabled),
+            slots,
+        };
     }
     if (caps.combos) {
         const count = await g(CH.combos, V.combosSlotCount);
@@ -101,9 +140,16 @@ async function exportFlaskStateInner(app) {
             ? (await g(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         const slots = [];
         for (let i = 0; i < count; i++) {
-            // v12: slots are TYPED in the file (behavior outputs survive a
-            // backup); pre-v12 exports keep the legacy {positions, usage}.
-            if (caps.combosTyped) {
+            // v14: timed slots carry per-combo timeout/prior-idle/layer;
+            // v12: TYPED slots (behavior outputs survive a backup);
+            // pre-v12 exports keep the legacy {positions, usage}.
+            if (caps.combosTimed) {
+                const r = await flask.getBytes(CH.combos, V.combosSlotV3, [i], 1);
+                const { positions, action, behaviorId, param1, param2,
+                    timeoutMs, priorIdleMs, layer } = decodeComboSlotV3(r, keys);
+                slots.push({ positions, action, behaviorId, param1, param2,
+                    timeoutMs, priorIdleMs, layer });
+            } else if (caps.combosTyped) {
                 const r = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
                 const { positions, action, behaviorId, param1, param2 } =
                     decodeComboSlotV2(r, keys);
@@ -265,6 +311,9 @@ async function applyFlaskStateInner(app, data) {
             await setU(CH.rgbMap, V.rgbmapEffectSat, sa);
             await setU(CH.rgbMap, V.rgbmapEffectVal, v);
         }
+        if (caps.rgbBrightness && s.brightness != null) {
+            await setU(CH.rgbMap, V.rgbmapBrightness, s.brightness);
+        }
     }, CH.rgbMap);
 
     await section('combos', caps.combos, async (s) => {
@@ -272,11 +321,14 @@ async function applyFlaskStateInner(app, data) {
         const keys = caps.combosKeys
             ? (await flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
-            // File slots may be legacy {usage} or typed (v12 exports);
-            // device may be either too — bridge both directions.
+            // File slots may be legacy {usage}, typed (v12) or timed (v14);
+            // device may be any of those too — bridge every direction.
             const typed = s.slots[i].action != null
                 ? s.slots[i] : comboSlotToTyped(s.slots[i]);
-            if (caps.combosTyped) {
+            if (caps.combosTimed) {
+                await flask.setBytes(CH.combos, V.combosSlotV3,
+                    encodeComboSlotV3(i, typed, keys), 1); // missing timing encodes as 0/ANY
+            } else if (caps.combosTyped) {
                 await flask.setBytes(CH.combos, V.combosSlotV2,
                     encodeComboSlotV2(i, typed, keys), 1);
             } else {
@@ -288,6 +340,33 @@ async function applyFlaskStateInner(app, data) {
         if (s.enabled != null) await setU(CH.combos, V.combosEnabled, s.enabled);
         if (s.timeout != null) await setU(CH.combos, V.combosTimeout, s.timeout);
     }, CH.combos);
+
+    await section('customShift', caps.customShift, async (s) => {
+        const count = await flask.getU16(CH.customShift, V.cskSlotCount);
+        for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
+            await flask.setBytes(CH.customShift, V.cskSlot,
+                encodeCskSlot(i, s.slots[i]), 1);
+            applied++;
+        }
+        if (s.enabled != null) await setU(CH.customShift, V.cskEnabled, s.enabled);
+    }, CH.customShift);
+
+    await section('tapDance', caps.tapDance, async (s) => {
+        const count = await flask.getU16(CH.tapDance, V.tdSlotCount);
+        const tapCap = await flask.getU16(CH.tapDance, V.tdTaps) || 4;
+        for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
+            const slot = s.slots[i];
+            await flask.setBytes(CH.tapDance, V.tdCfg,
+                encodeTdCfg(i, slot.termMs ?? 0), 1);
+            applied++;
+            for (let t = 0; t < Math.min(tapCap, slot.taps?.length ?? 0); t++) {
+                await flask.setBytes(CH.tapDance, V.tdStep,
+                    encodeTdStep(i, t, slot.taps[t]), 2);
+                applied++;
+            }
+        }
+        if (s.enabled != null) await setU(CH.tapDance, V.tdEnabled, s.enabled);
+    }, CH.tapDance);
 
     await section('macros', caps.macros, async (s) => {
         const count = await flask.getU16(CH.macros, V.macrosSlotCount);

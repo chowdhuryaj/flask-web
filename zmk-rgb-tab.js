@@ -15,10 +15,10 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=12';
-import { CH, V } from './flaskproto.js?v=12';
-import { hsvCss } from './rgb-tab.js?v=12';
-import { renderKeyboardSVG } from './keymap-tab.js?v=12';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=13';
+import { CH, V } from './flaskproto.js?v=13';
+import { hsvCss } from './rgb-tab.js?v=13';
+import { renderKeyboardSVG } from './keymap-tab.js?v=13';
 
 /**
  * LED index → key mapping over the physical layout.
@@ -79,6 +79,9 @@ export class ZmkRgbTab {
         this.enabled = await flask.getU16(CH.rgbMap, V.rgbmapEnabled);
         this.layerCount = await flask.getU16(CH.rgbMap, V.rgbmapLayers);
         this.ledCount = await flask.getU16(CH.rgbMap, V.rgbmapLeds);
+        // v14: global brightness percent (native rgb_ug BRI analog).
+        this.brightness = this.app.caps?.rgbBrightness
+            ? await flask.getU16(CH.rgbMap, V.rgbmapBrightness) : null;
         if (this.app.caps?.rgbEffects) {
             this.effect = await flask.getU16(CH.rgbMap, V.rgbmapEffect);
             this.effectSpeed = await flask.getU16(CH.rgbMap, V.rgbmapEffectSpeed);
@@ -487,6 +490,16 @@ export class ZmkRgbTab {
                     return this.enabled;
                 },
             }),
+            this.brightness != null ? sliderRow({
+                label: 'Brightness',
+                hint: 'global — scales the painted map, effects and overlays on both halves',
+                min: 0, max: 100, step: 5, value: this.brightness,
+                format: (v) => `${v}%`,
+                onChange: async (val) => {
+                    this.brightness = await flask.setU16(CH.rgbMap, V.rgbmapBrightness, val);
+                    return this.brightness;
+                },
+            }) : null,
             selectRow({
                 label: 'Layer', value: this.layer,
                 options: Array.from({ length: this.layerCount }, (_, i) =>

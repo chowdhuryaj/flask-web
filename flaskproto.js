@@ -34,6 +34,7 @@ export const CH = {
     macros: 0x25,   // ZMK line v8+: flask_macros runtime macro steps
     scrollSnap: 0x26, // ZMK line v9+: flask_scrollsnap axis snap/lock
     ballSwap: 0x27, // ZMK line v11+: flask_ballswap trackball role swap
+    tapDance: 0x28, // ZMK line v14+: flask_tapdance runtime tap dances
 };
 
 export const V = {
@@ -66,8 +67,11 @@ export const V = {
     dragActive: 0x04, // live: GET diagnostic, SET force on/off — never persisted
     dragInterval: 0x06, dragMaxNotches: 0x07, // Sval extensions
     dragInvertX: 0x0A, // retired (was ZMK-line only; no current family exposes it)
-    // custom shift keys
+    // custom shift keys — 0x01/0x02 shared with QMK; 0x50 is the ZMK-line
+    // v14 slot frame [slot, base u32 BE, shifted u32 BE] (ZMK keymap
+    // encoding — QMK's u16 pair tables at 0x10+/0x30+ can't carry it)
     cskEnabled: 0x01, cskSlotCount: 0x02,
+    cskSlot: 0x50,
     // select word
     selectWordMac: 0x01,
     // sentence case
@@ -129,6 +133,9 @@ export const V = {
     // param1 u32 BE, param2 u32 BE] — action 0 none / 1 usage-hold /
     // 2 play-macro / 3 invoke-behavior (Studio local id + two params).
     combosSlotV2: 0x11,
+    // v14 timed slot: the v2 frame + [timeout u16 BE, prior-idle u16 BE,
+    // layer index (0xFF = all)] — the imported devicetree combos' knobs.
+    combosSlotV3: 0x12,
     // macros (0x25, ZMK line) — enabled/counts/pacing are u16; state is
     // live-only (GET = playing slot+1 or 0; SET v>0 plays v-1, 0 stops);
     // step is a PAYLOAD-ADDRESSED byte frame [slot, step, action, param u32 BE]
@@ -143,6 +150,14 @@ export const V = {
     // (SET applies live; SAVE or the &bswap 0 key persists); effective is
     // RO = base XOR momentary &bswap 1 holds.
     bswapSwapped: 0x01, bswapEffective: 0x02,
+    // rgb brightness (0x21, ZMK line v14) — global percent 0-100, scales
+    // every rendered pixel on both halves.
+    rgbmapBrightness: 0x0B,
+    // tap dance (0x28, ZMK line v14) — enabled/counts u16; step + cfg are
+    // PAYLOAD-ADDRESSED byte frames: step [slot, tap, action, behavior u16
+    // BE, p1 u32 BE, p2 u32 BE], cfg [slot, term u16 BE (0 = default 200)].
+    tdEnabled: 0x01, tdSlotCount: 0x02, tdTaps: 0x03,
+    tdStep: 0x50, tdCfg: 0x51,
 };
 
 // Slot value-id helpers (append-only wire ids).
