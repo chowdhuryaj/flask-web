@@ -56,9 +56,35 @@ macOS refuses to swap unsigned bundles. If a Developer ID cert shows up
 later: set `mac.identity`, add `electron-updater`, keep the same release
 flow.
 
+## Windows (portable, for the radiology workstation)
+
+```
+npm run dist:win      # → dist/Flask-1.0.0-win.zip  (x64)
+```
+
+Extract the zip anywhere — a USB stick is the point — and run `Flask.exe`.
+No installer, no admin rights, nothing written outside the folder. It builds
+fine from macOS: electron-builder pulls the win32 Electron and, with no
+signing cert configured, skips the signtool step (it still downloads Wine on
+the way there — harmless, just slow the first time).
+
+`zip` rather than NSIS `portable` on purpose: NSIS needs Wine to actually
+*run*, and an installer is the wrong shape for a machine you can't install
+software on.
+
+**It may not run there, and that's expected.** The build is unsigned, so
+SmartScreen will warn ("Windows protected your PC" → More info → Run anyway),
+and a managed clinical box may block it outright via AppLocker/WDAC, or refuse
+USB mass storage. **None of that blocks the keyboard.** The Modes tab's "Make
+baseline" writes a mode into the keyboard's own flash, so the board boots into
+it with no app attached — carry the app if it runs, but don't depend on it.
+
 ## Notes
 
 - Local single-user tool: all web permissions are granted to the app
   origin. Don't point it at remote URLs.
 - Dev runs (`npm start`) serve the repo checkout — edits show on reload.
   Packaged runs serve their bundled copy — rebuild to pick up changes.
+- The app menu is built on every platform; Windows/Linux get the mac app
+  menu's items under File (hide/hideOthers/unhide are macOS-only roles).
+  `FLASK_SKIP_MENU=1` suppresses it for the smoke gate.

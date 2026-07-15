@@ -205,21 +205,32 @@ async function checkForUpdates(interactive) {
 }
 
 function buildMenu() {
+    // hide/hideOthers/unhide are macOS-only roles and Windows has no app menu,
+    // so Windows gets the same items under File. Skipping the menu entirely off
+    // macOS would fall back to Electron's default one and silently lose "Check
+    // for Updates…" — the only way a new version reaches a machine you can't
+    // install software on, which is exactly the Windows use case here.
+    const isMac = process.platform === 'darwin';
+    const updates = { label: 'Check for Updates…', click: () => checkForUpdates(true) };
     const template = [
-        {
+        isMac ? {
             label: app.name,
             submenu: [
                 { role: 'about' },
-                { label: 'Check for Updates…', click: () => checkForUpdates(true) },
+                updates,
                 { type: 'separator' },
                 { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
                 { type: 'separator' },
                 { role: 'quit' },
             ],
+        } : {
+            label: '&File',
+            submenu: [updates, { type: 'separator' }, { role: 'quit' }],
         },
         { role: 'editMenu' },
         { role: 'viewMenu' },
         { role: 'windowMenu' },
+        ...(isMac ? [] : [{ role: 'help', submenu: [{ role: 'about' }] }]),
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -227,7 +238,7 @@ function buildMenu() {
 async function start() {
     await app.whenReady();
 
-    if (process.platform === 'darwin' && !process.env.FLASK_SKIP_MENU) buildMenu();
+    if (!process.env.FLASK_SKIP_MENU) buildMenu();
     wireDeviceSelection(session.defaultSession);
 
     const port = await ensureServer();

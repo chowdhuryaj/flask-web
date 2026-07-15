@@ -10,7 +10,8 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --mac",
-    "dist:dir": "electron-builder --mac --dir"
+    "dist:dir": "electron-builder --mac --dir",
+    "dist:win": "electron-builder --win"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -48,6 +49,11 @@
         { "target": "zip", "arch": ["arm64"] }
       ],
       "identity": null
+    },
+    "win": {
+      "target": [
+        { "target": "zip", "arch": ["x64"] }
+      ]
     }
   }
 }
