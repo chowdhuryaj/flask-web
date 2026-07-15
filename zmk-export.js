@@ -9,18 +9,18 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=14';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=14';
+import { CH, V } from './flaskproto.js?v=15';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=15';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy } from './zmk-combos-codec.js?v=14';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=14';
+         comboTypedToLegacy } from './zmk-combos-codec.js?v=15';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=15';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=14';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=14';
+    from './zmk-output-codec.js?v=15';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=15';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=14';
+    from './zmk-tapdance-codec.js?v=15';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */

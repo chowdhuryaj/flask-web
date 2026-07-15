@@ -15,10 +15,11 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=14';
-import { CH, V } from './flaskproto.js?v=14';
-import { hsvCss } from './rgb-tab.js?v=14';
-import { renderKeyboardSVG } from './keymap-tab.js?v=14';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=15';
+import { CH, V } from './flaskproto.js?v=15';
+import { hsvCss } from './rgb-tab.js?v=15';
+import { colorPicker } from './colorpicker.js?v=15';
+import { renderKeyboardSVG } from './keymap-tab.js?v=15';
 
 /**
  * LED index → key mapping over the physical layout.
@@ -465,18 +466,13 @@ export class ZmkRgbTab {
             return;
         }
         const { flask } = this.app;
-        const [h, s, v] = this.brush;
-        const preview = el('span', {
-            class: 'code',
-            style: `background:${hsvCss(h, s, v)}; width:40px; height:24px; display:inline-block`,
-        });
-        const brushSlider = (label, idx) => sliderRow({
-            label, min: 0, max: 255, step: 1, value: this.brush[idx],
-            onChange: async (val) => {
-                this.brush[idx] = val;
-                preview.style.background = hsvCss(...this.brush);
-                return val;
-            },
+        // The brush is the whole point of this tab, so it gets a real picker:
+        // SV field + hue strip + hex + eyedropper + presets + saved swatches,
+        // instead of three 0-255 sliders you re-dial for every colour. The
+        // picker speaks the firmware's HSV space directly — nothing converts.
+        const picker = colorPicker({
+            hsv: this.brush,
+            onChange: (hsv) => { this.brush = hsv; },
         });
 
         const painter = card('Per-key RGB map',
@@ -511,9 +507,9 @@ export class ZmkRgbTab {
                 },
             }),
             el('div', { class: 'row' },
-                el('span', { class: 'lbl', text: 'Brush' }),
-                el('span', { style: 'flex:1' }), preview),
-            brushSlider('Hue', 0), brushSlider('Saturation', 1), brushSlider('Value', 2),
+                el('span', { class: 'lbl' }, 'Brush',
+                    el('span', { class: 'hint', text: 'click a key on the board to paint it; right-click clears' }))),
+            picker,
             this.board(),
             el('div', { class: 'savebar' },
                 el('button', { class: 'btn small', text: 'Fill layer with brush', onclick: () => this.fill() }),

@@ -483,6 +483,75 @@ main { padding: var(--sp-6); max-width: 1200px; margin: 0 auto; }
 .savebar[data-state="saved"] .state { color: var(--muted); }
 .savebar[data-state="saved"] .state::before { background: var(--ok); }
 
+/* ---------- colour picker (colorpicker.js) ----------
+ * Inline, not a modal: picking a colour IS the task on the RGB tab, and the
+ * three 0-255 sliders it replaces were the reason changing a colour felt like
+ * work. Swatches carry a border because a colour block on a same-ish surface
+ * has no edge of its own — and a white swatch on a light theme would otherwise
+ * vanish entirely. */
+
+.cp { display: flex; flex-direction: column; gap: var(--sp-4); margin: var(--sp-4) 0; }
+.cp-top { display: flex; gap: var(--sp-5); align-items: flex-start; flex-wrap: wrap; }
+/* Hue strip sits UNDER the field and matches its width — the two are one
+   control, and splitting them across a row reads as two unrelated widgets. */
+.cp-main { display: flex; flex-direction: column; gap: var(--sp-3); flex: 1 1 220px; max-width: 320px; }
+
+.cp-field {
+  position: relative;
+  height: 132px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border2);
+  cursor: crosshair;
+  touch-action: none;   /* pointer drag, not a page scroll */
+}
+.cp-hue {
+  position: relative;
+  height: 14px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border2);
+  cursor: ew-resize;
+  touch-action: none;
+  background: linear-gradient(to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+
+.cp-dot {
+  position: absolute;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cp-dot-hue { top: 50%; background: transparent; }
+
+.cp-side { display: flex; flex-direction: column; gap: var(--sp-3); justify-content: flex-start; }
+.cp-preview {
+  width: 44px; height: 32px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border2);
+  flex: none;
+}
+.cp-hex {
+  width: 84px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  text-transform: lowercase;
+}
+
+.cp-chips { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; }
+.cp-chip {
+  width: 24px; height: 24px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--border2);
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.cp-chip:hover { border-color: var(--accent); transform: scale(1.12); }
+
 /* ---------- modal ---------- */
 
 .modal-back {

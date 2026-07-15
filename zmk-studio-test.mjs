@@ -704,6 +704,52 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(persisted.saved, dSaves.length, 'default apply reports the saved channel count');
 }
 
+// ---- colour picker maths (colorpicker.js) ----
+{
+    const C = await import('./colorpicker.js');
+
+    // The picker speaks the FIRMWARE's space (h/s/v 0-255), so a colour that
+    // survives a round trip is a colour the board renders as shown.
+    for (const hsv of [[0, 0, 255], [0, 255, 255], [85, 255, 255], [170, 255, 255],
+                       [128, 128, 128], [0, 0, 0], [212, 200, 90]]) {
+        const back = C.rgbToHsv(...C.hsvToRgb(...hsv));
+        // Hue is meaningless with no saturation, and both are meaningless at
+        // zero value — only assert what the colour space actually preserves.
+        if (hsv[2] === 0) { eq(back[2], 0, `hsv ${hsv} round-trips black`); continue; }
+        eq(Math.abs(back[1] - hsv[1]) <= 1, true, `hsv ${hsv} round-trips saturation`);
+        eq(Math.abs(back[2] - hsv[2]) <= 1, true, `hsv ${hsv} round-trips value`);
+        if (hsv[1] > 0) {
+            eq(Math.min(Math.abs(back[0] - hsv[0]), 255 - Math.abs(back[0] - hsv[0])) <= 1,
+                true, `hsv ${hsv} round-trips hue`);
+        }
+    }
+
+    eq(C.hsvHex(0, 0, 255), '#ffffff', 'full value, no saturation is white');
+    eq(C.hsvHex(0, 255, 255), '#ff0000', 'hue 0 is red');
+    eq(C.hsvHex(85, 255, 255), '#00ff00', 'hue 85 is green');
+    eq(C.hsvHex(170, 255, 255), '#0000ff', 'hue 170 is blue');
+    eq(C.hsvHex(0, 0, 0), '#000000', 'zero value is black');
+
+    eq(C.hexToHsv('#ff0000').join(','), '0,255,255', 'hex red parses');
+    eq(C.hexToHsv('f00').join(','), '0,255,255', 'shorthand hex parses');
+    eq(C.hexToHsv('00FF00').join(','), '85,255,255', 'hex is case-insensitive, # optional');
+    eq(C.hexToHsv('nope'), null, 'a non-colour is rejected, not coerced');
+    eq(C.hexToHsv('#12345'), null, 'a partial hex is rejected');
+    eq(C.hexToHsv(''), null, 'empty is rejected');
+    eq(C.hexToHsv(null), null, 'null is rejected');
+
+    // hsvCssOf must agree with the existing painter, or a swatch would preview
+    // a different colour than the board shows.
+    const { hsvCss } = await import('./rgb-tab.js');
+    for (const hsv of [[0, 255, 255], [85, 255, 255], [128, 128, 128], [212, 200, 90]]) {
+        eq(C.hsvCssOf(...hsv), hsvCss(...hsv), `picker preview matches the painter for ${hsv}`);
+    }
+
+    eq(C.COLOR_PRESETS.length > 0, true, 'presets exist');
+    eq(C.COLOR_PRESETS.every((p) => p.name && p.hsv.length === 3
+        && p.hsv.every((n) => n >= 0 && n <= 255)), true, 'every preset is a named, in-range hsv');
+}
+
 // ---- Modes store (zmk-modes.js) ----
 {
     const M = await import('./zmk-modes.js');
