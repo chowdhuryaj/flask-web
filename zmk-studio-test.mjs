@@ -704,6 +704,53 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(persisted.saved, dSaves.length, 'default apply reports the saved channel count');
 }
 
+// ---- Modes store (zmk-modes.js) ----
+{
+    const M = await import('./zmk-modes.js');
+    const payload = (layers = 3, flask = null) => ({
+        kind: 'flask-zmk-keymap', version: 2,
+        layers: Array.from({ length: layers }, (_, i) => ({ name: `L${i}`, bindings: [] })),
+        ...(flask ? { flask } : {}),
+    });
+
+    eq(M.modesStoreKey('imprint'), 'flask-zmk-modes:imprint', 'modes are stored per family');
+    eq(M.normalizeStore(null).modes.length, 0, 'a missing store degrades to empty');
+    eq(M.normalizeStore({ modes: 'nope' }).modes.length, 0, 'a corrupt store degrades to empty');
+
+    let s = M.emptyStore();
+    ({ store: s } = M.addMode(s, 'Radiology', payload()));
+    ({ store: s } = M.addMode(s, 'Radiology', payload()));
+    eq(s.modes[1].name, 'Radiology 2', 'a duplicate name is disambiguated, not silently merged');
+    ({ store: s } = M.addMode(s, '   ', payload()));
+    eq(s.modes[2].name, 'Untitled', 'a blank name falls back rather than creating an unclickable row');
+    eq(new Set(s.modes.map((m) => m.id)).size, 3, 'mode ids are unique');
+
+    // Baseline pointer integrity — a badge must never outlive its mode.
+    s = M.setBaseline(s, s.modes[0].id);
+    eq(s.baselineId, s.modes[0].id, 'baseline points at the chosen mode');
+    s = M.setBaseline(s, 'nope');
+    eq(s.baselineId, null, 'baseline refuses an id that is not in the store');
+    s = M.setBaseline(s, s.modes[0].id);
+    const keptId = s.modes[1].id;
+    s = M.deleteMode(s, s.modes[0].id);
+    eq(s.baselineId, null, 'deleting the baseline mode clears the pointer');
+    eq(M.normalizeStore({ modes: s.modes, baselineId: 'ghost' }).baselineId, null,
+        'a dangling baseline id is dropped on load');
+
+    // Rename must not collide with OTHER modes but may keep its own name.
+    s = M.renameMode(s, keptId, 'Radiology 2');
+    eq(M.getMode(s, keptId).name, 'Radiology 2', 'renaming to its own name is a no-op, not "… 2"');
+
+    eq(M.isModePayload(payload()), true, 'a v2 export is a valid mode payload');
+    eq(M.isModePayload({ kind: 'something-else', layers: [] }), false, 'a foreign file is rejected');
+    eq(M.isModePayload({ kind: 'flask-zmk-keymap' }), false, 'a payload with no layers is rejected');
+
+    eq(M.modeSummary({ data: payload(3) }), '3 layers · keymap only',
+        'a keymap-only snapshot says so rather than implying module state');
+    eq(M.modeSummary({ data: payload(1, { rgb: {}, combos: {} }) }), '1 layer · RGB, combos',
+        'the summary names the sections a mode actually carries');
+}
+
 // ---- v13 caps + profile decorations (zmk.js) ----
 {
     const { zmkCapabilities, zmkProfile, ZMK_TRACKBALLS } = await import('./zmk.js');

@@ -23,6 +23,7 @@ import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=14';
 import { ZmkShiftTab } from './zmk-shift-tab.js?v=14';
 import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=14';
 import { ZmkTestTab } from './zmk-test-tab.js?v=15';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=14';
 import { MouseTab } from './mouse-tab.js?v=14';
 import { TypingTab } from './typing-tab.js?v=14';
 import { SettingsTab } from './settings-tab.js?v=14';
@@ -424,6 +425,10 @@ function buildTabs() {
     if (app.caps.leader) TABS.push({ id: 'zmk-leader', label: 'Leader', ctor: ZmkLeaderTab });
     // ZMK line: browser-event testers + timing calibrators (QMK devices have
     // the Vial matrix tester + Typing tab instead).
+    // Modes are app-side snapshots of the whole device, so they need no
+    // capability beyond being a ZMK board — a keymap-only mode is still a mode
+    // on a device with no Flask HID.
+    if (isZmkFamily(app.family)) TABS.push({ id: 'zmk-modes', label: 'Modes', ctor: ZmkModesTab });
     if (isZmkFamily(app.family)) TABS.push({ id: 'zmk-test', label: 'Test', ctor: ZmkTestTab });
     if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
     if (app.caps.vial) TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });

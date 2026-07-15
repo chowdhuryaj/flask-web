@@ -30,11 +30,20 @@ import { pickUsage, MODS } from './zmk-combos-tab.js?v=14';
 // a per-instance client would leak an open port and block the next connect.
 let sharedClient = null;
 let activeTabAbort = null;      // event listeners of the superseded instance
+let liveTab = null;             // the instance main.js currently has mounted
 
 function studioClient() {
     if (!sharedClient) sharedClient = new StudioClient();
     return sharedClient;
 }
+
+/** The mounted keymap tab, or null before one exists. The Modes tab needs it
+ * to apply and save the keymap half of a mode; module-scope for the same
+ * reason sharedClient is — main.js rebuilds every tab instance on reconnect
+ * with no dtor, so the newest constructor simply wins. Reaching for the tab
+ * through main.js's TABS array instead would be a circular import AND put ZMK
+ * knowledge in a shared file. */
+export function zmkLiveKeymapTab() { return liveTab; }
 
 export class ZmkKeymapTab {
     constructor(app) {
@@ -54,6 +63,8 @@ export class ZmkKeymapTab {
         this.keyPressId = null;
         this.renaming = false;
         this.removedLayers = [];    // session undo stack for remove-layer
+
+        liveTab = this;         // newest instance wins (see zmkLiveKeymapTab)
 
         // Rebind client events to THIS instance (abort the previous one's).
         activeTabAbort?.abort();
@@ -520,7 +531,12 @@ export class ZmkKeymapTab {
 
     // ---- keymap file export / import ----
 
-    async exportKeymap() {
+    /** The v2 export payload: keymap layers + (when the device has Flask HID)
+     * every module section. ONE builder on purpose — the Modes tab captures a
+     * mode with this exact call, so a mode and an export file can never drift
+     * into two shapes. `quiet` skips the progress toasts a background capture
+     * shouldn't emit. */
+    async buildExportData({ quiet = false } = {}) {
         const data = {
             kind: 'flask-zmk-keymap',
             version: 2,
@@ -536,12 +552,17 @@ export class ZmkKeymapTab {
         // the settings partition, this file restores it).
         if (this.app?.flask && this.app?.caps?.flask) {
             try {
-                toast('Reading module state…');
+                if (!quiet) toast('Reading module state…');
                 data.flask = await exportFlaskState(this.app);
             } catch (e) {
                 toast(`Module state skipped: ${e.message}`, true);
             }
         }
+        return data;
+    }
+
+    async exportKeymap() {
+        const data = await this.buildExportData();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = el('a', {
             href: URL.createObjectURL(blob),
