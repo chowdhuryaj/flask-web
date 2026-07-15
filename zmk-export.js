@@ -230,15 +230,23 @@ async function exportFlaskStateInner(app) {
 
 /** Apply an export's `flask` section to the connected device: write-through
  * everything the device's caps accept, SAVE each touched channel. Returns
- * { applied, failures } — a failure skips that section, the rest land. */
-export async function applyFlaskState(app, data) {
+ * { applied, failures } — a failure skips that section, the rest land.
+ *
+ * `save: false` writes everything LIVE and skips the SAVE pass — the Modes
+ * switch. Values are on the device immediately and revert on power-off, which
+ * is the wanted semantics for a mode you carry in the app: the device keeps
+ * ONE saved baseline (the environment where you have no app), and alternates
+ * are applied live from the environment where you do. It also writes nothing
+ * to a 32 KB settings partition and never enters the SAVE path.
+ * Restores (import, auto-restore) keep the default and DO save. */
+export async function applyFlaskState(app, data, { save = true } = {}) {
     // Bulk write-through: HUD backs off until every section + SAVE landed.
     app.hid?.pause?.();
-    try { return await applyFlaskStateInner(app, data); }
+    try { return await applyFlaskStateInner(app, data, save); }
     finally { app.hid?.resume?.(); }
 }
 
-async function applyFlaskStateInner(app, data) {
+async function applyFlaskStateInner(app, data, save = true) {
     const { flask, caps } = app;
     let applied = 0;
     const failures = [];
@@ -417,8 +425,10 @@ async function applyFlaskStateInner(app, data) {
         applied++;
     }
 
-    for (const ch of saves) {
-        try { await flask.save(ch); } catch (e) { failures.push(`save 0x${ch.toString(16)}: ${e.message}`); }
+    if (save) {
+        for (const ch of saves) {
+            try { await flask.save(ch); } catch (e) { failures.push(`save 0x${ch.toString(16)}: ${e.message}`); }
+        }
     }
-    return { applied, failures };
+    return { applied, failures, saved: save ? saves.length : 0 };
 }

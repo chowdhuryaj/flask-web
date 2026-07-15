@@ -678,6 +678,30 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(await b.flask.getU16(CH.autoMouse, V.amThreshold), 40, 'import restored automouse threshold');
     const b5 = await b.flask.getBytes(CH.combos, V.combosSlot, [5]);
     eq(b5[1], 10, 'import restored combo positions');
+
+    // Modes switch: `save: false` writes everything LIVE and touches no
+    // channel's SAVE. This is the whole point of an app-side mode — the
+    // device keeps one saved baseline and alternates never enter the SAVE
+    // path or grow the 32 KB settings partition.
+    const c = mkApp();
+    const cSaves = [];
+    c.flask.save = async (ch) => { cSaves.push(ch); };
+    const live = await applyFlaskState(c, state, { save: false });
+    eq(live.failures.length, 0, 'live-apply lands with no failures');
+    eq(cSaves.length, 0, 'live-apply issues no SAVE for any channel');
+    eq(live.saved, 0, 'live-apply reports nothing saved');
+    eq(await c.flask.getU16(CH.scrollSnap, V.snapThreshold), 80,
+        'live-apply still writes values through to the device');
+    eq(await c.flask.getU16(CH.autoMouse, V.amThreshold), 40,
+        'live-apply writes automouse through too');
+
+    // …and the default still saves, so import/auto-restore are unchanged.
+    const d = mkApp();
+    const dSaves = [];
+    d.flask.save = async (ch) => { dSaves.push(ch); };
+    const persisted = await applyFlaskState(d, state);
+    eq(dSaves.length > 0, true, 'default apply still SAVEs each touched channel');
+    eq(persisted.saved, dSaves.length, 'default apply reports the saved channel count');
 }
 
 // ---- v13 caps + profile decorations (zmk.js) ----
