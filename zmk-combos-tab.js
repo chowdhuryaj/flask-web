@@ -33,6 +33,7 @@ import {
 } from './zmk-combos-codec.js?v=13';
 import { zmkBehaviors } from './zmk-keycodes.js?v=13';
 import { buildZmkPicker } from './zmk-keymap-tab.js?v=13';
+import { captureOneKey } from './zmk-capture.js?v=13';
 
 // Shared with the keymap picker's mod chips + tap-hold composer (same
 // circular-import pattern as buildZmkPicker: only used inside functions).
@@ -79,6 +80,33 @@ export function pickUsage(title, currentUsage, onApply) {
         return btn;
     });
 
+    // Press-to-pick: arm window key capture and adopt the pressed key
+    // (with any held modifiers), the keymap editor's type-to-assign in every
+    // settings-tab picker. A second click (or Esc) disarms.
+    let captureStop = null;
+    const syncMods = () => modBtns.forEach((b, i) =>
+        b.classList.toggle('primary', !!(mods & MODS[i].bit)));
+    const pressBtn = el('button', {
+        class: 'btn small',
+        title: 'press the physical key you want (chords capture their modifiers)',
+        text: '⌨ Press a key',
+    });
+    const setArmed = (on) => {
+        pressBtn.classList.toggle('primary', on);
+        pressBtn.textContent = on ? '⌨ Press a key… (Esc)' : '⌨ Press a key';
+    };
+    pressBtn.addEventListener('click', () => {
+        if (captureStop) { captureStop(); return; }
+        setArmed(true);
+        captureStop = captureOneKey((param) => {
+            mods = (param >>> 24) & 0xFF;
+            base = baseOf(param);
+            syncMods();
+            refreshPreview();
+            buildChips(search.value);
+        }, { onStop: () => { captureStop = null; setArmed(false); } });
+    });
+
     const chipsWrap = el('div', {
         style: 'display:flex; flex-wrap:wrap; gap:4px; max-height:260px; overflow-y:auto; margin-top:8px',
     });
@@ -109,12 +137,13 @@ export function pickUsage(title, currentUsage, onApply) {
         el('div', { class: 'row' },
             el('span', { class: 'lbl', text: 'Key' }),
             el('span', { style: 'flex:1' }), preview),
-        el('div', { style: 'display:flex; gap:6px; margin:8px 0' }, ...modBtns),
+        el('div', { style: 'display:flex; gap:6px; margin:8px 0; align-items:center; flex-wrap:wrap' },
+            ...modBtns, el('span', { style: 'flex:1' }), pressBtn),
         search, chipsWrap);
 
     const back = modal(title, body, [
-        el('button', { class: 'btn small', text: 'Cancel', onclick: () => back.remove() }),
-        el('button', { class: 'btn small primary', text: 'Apply', onclick: apply }),
+        el('button', { class: 'btn small', text: 'Cancel', onclick: () => { captureStop?.(); back.remove(); } }),
+        el('button', { class: 'btn small primary', text: 'Apply', onclick: () => { captureStop?.(); apply(); } }),
     ]);
     refreshPreview();
     buildChips();

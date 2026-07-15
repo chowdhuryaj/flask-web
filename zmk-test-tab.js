@@ -188,6 +188,39 @@ export class ZmkTestTab {
                 });
             }
             if (caps.combosTimed) {
+                // DIAG (temporary): isolate "v3 SET stores timing" from
+                // "prior probe polluted the slot". Uses a fresh slot, clears
+                // it first, then round-trips distinctive values.
+                await probe('combos: v3 timing on CLEAN slot (diag)', async () => {
+                    const count = await flask.getU16(CH.combos, V.combosSlotCount);
+                    const keys = (await flask.getU16(CH.combos, V.combosKeys)) || 4;
+                    const j = count - 2; // untouched by the v2/v3 slot-(count-1) probes
+                    const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, '0')).join(' ');
+                    const save = await flask.getBytes(CH.combos, V.combosSlotV3, [j], 1);
+                    // 1) clear (action none → firmware forces timing to 0)
+                    await flask.setBytes(CH.combos, V.combosSlotV3,
+                        encodeComboSlotV3(j, { positions: [], action: COMBO_ACTION.none }, keys), 1);
+                    const cleared = decodeComboSlotV3(
+                        await flask.getBytes(CH.combos, V.combosSlotV3, [j], 1), keys);
+                    // 2) write distinctive timing (values absent from any other frame)
+                    const wtx = encodeComboSlotV3(j, {
+                        positions: [2, 3], action: COMBO_ACTION.usage, param1: 0x7000A,
+                        timeoutMs: 201, priorIdleMs: 151, layer: 1,
+                    }, keys);
+                    const wecho = await flask.setBytes(CH.combos, V.combosSlotV3, wtx, 1);
+                    const set = decodeComboSlotV3(wecho, keys);
+                    // 3) independent read-back
+                    const rb = decodeComboSlotV3(
+                        await flask.getBytes(CH.combos, V.combosSlotV3, [j], 1), keys);
+                    await flask.setBytes(CH.combos, V.combosSlotV3, [j, ...save.slice(1)], 1);
+                    const ok = rb.timeoutMs === 201 && rb.priorIdleMs === 151 && rb.layer === 1;
+                    const msg = `slot ${j}: cleared ${cleared.timeoutMs}/${cleared.priorIdleMs}/${cleared.layer}`
+                        + `; setEcho ${set.timeoutMs}/${set.priorIdleMs}/${set.layer}`
+                        + `; readback ${rb.timeoutMs}/${rb.priorIdleMs}/${rb.layer}`
+                        + ` | wtx ${hex(wtx)} | wecho ${hex(wecho)}`;
+                    if (!ok) throw new Error(msg);
+                    return msg;
+                });
                 // v14 timed slot: wire-proves timeout/prior-idle/layer echo
                 // through the SLOT_V3 frame (encoding bugs beat the sim).
                 await probe('combos: timed-slot (v3) round-trip', async () => {
@@ -203,7 +236,9 @@ export class ZmkTestTab {
                     const back = decodeComboSlotV3(echo, keys);
                     await flask.setBytes(CH.combos, V.combosSlotV3, [i, ...orig.slice(1)], 1);
                     if (back.timeoutMs !== 120 || back.priorIdleMs !== 90 || back.layer !== 0) {
-                        throw new Error(`timing echo ${back.timeoutMs}/${back.priorIdleMs}/${back.layer}`);
+                        const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, '0')).join(' ');
+                        throw new Error(`timing echo ${back.timeoutMs}/${back.priorIdleMs}/${back.layer}`
+                            + ` [keys ${keys} count ${count}; orig ${hex(orig)}; tx ${hex(test)}; rx ${hex(echo)}]`);
                     }
                     return `slot ${i} (timed)`;
                 });

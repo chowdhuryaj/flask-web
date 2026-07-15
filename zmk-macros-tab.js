@@ -20,6 +20,7 @@ import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=13';
 import { CH, V } from './flaskproto.js?v=13';
 import { usageCap, usageLabel } from './zmk-keycodes.js?v=13';
 import { pickUsage } from './zmk-combos-tab.js?v=13';
+import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=13';
 import {
     MACRO_ACTION, MACRO_ACTION_LABELS,
     decodeMacroStep, encodeMacroStep, macroIsEmpty, macroLiveSteps,
@@ -130,6 +131,89 @@ export class ZmkMacrosTab {
         }
     }
 
+    // ---- keystroke recording ----
+    // Arm window key capture and turn what you TYPE into steps, instead of
+    // laying them out by hand. Each keydown appends a Press; the matching
+    // keyup collapses an untouched Press into a Tap (plain typing → Tap per
+    // key) or emits a Release (so a held chord like ⌃C records as Press
+    // Ctrl · Tap C · Release Ctrl). Modifiers are their own steps, so the
+    // key steps carry the BARE usage (no folded mods). Timing isn't
+    // recorded — the tab's global tap/gap pacing covers it; add a Wait step
+    // by hand for a long pause. Esc or leaving the tab stops.
+
+    _recActive() { return !!this._rec; }
+
+    toggleRecord(m) {
+        if (this._rec) {                          // stop (this card or another)
+            const stopping = this._rec.m;
+            this._recStop?.();
+            if (stopping !== m) this.startRecord(m);   // switch cards
+            return;
+        }
+        this.startRecord(m);
+    }
+
+    startRecord(m) {
+        // Append after the live steps; remember where we began so the flush
+        // and an empty-recording cancel both know the range.
+        this._rec = { m, start: macroLiveSteps(this.steps[m]).length };
+        if (this._rec.start >= this.stepCount) {
+            toast(`Macro ${m} is full (${this.stepCount} steps)`, true);
+            this._rec = null;
+            return;
+        }
+        this.drafts.add(m);
+        this._recStop = armCapture({
+            isActive: () => !!this.root.closest('.panel.active'),
+            onDown: (param) => this._recDown(m, param),
+            onUp: (param) => this._recUp(m, param),
+            onStop: () => this._recFinish(),
+        });
+        this.render();
+        toast('Recording — type your macro; Esc or ⏹ stops', false);
+    }
+
+    _liveLen(m) { return macroLiveSteps(this.steps[m]).length; }
+
+    _recDown(m, param) {
+        const live = this._liveLen(m);
+        if (live >= this.stepCount) {              // no room — stop cleanly
+            toast(`Macro full at ${this.stepCount} steps — recording stopped`, true);
+            this._recStop?.();
+            return;
+        }
+        // Modifiers keep their bare usage already; other keys drop folded
+        // implicit mods (the modifier is its own Press/Release step).
+        const usage = isModifierUsage(param) ? param : bareUsage(param);
+        this.steps[m][live] = { action: MACRO_ACTION.press, param: usage };
+        this.render();
+    }
+
+    _recUp(m, param) {
+        const usage = isModifierUsage(param) ? param : bareUsage(param);
+        const live = this._liveLen(m);
+        const last = live > 0 ? this.steps[m][live - 1] : null;
+        // A Press of this exact key with nothing recorded since → a Tap.
+        if (last && last.action === MACRO_ACTION.press && last.param === usage) {
+            last.action = MACRO_ACTION.tap;
+        } else if (live < this.stepCount) {
+            this.steps[m][live] = { action: MACRO_ACTION.release, param: usage };
+        }
+        this.render();
+    }
+
+    async _recFinish() {
+        const rec = this._rec;
+        this._rec = null;
+        this._recStop = null;
+        if (!rec) return;
+        // Persist the recorded range (adopting each echo); writeFrom renders.
+        await this.writeFrom(rec.m, rec.start);
+        const added = this._liveLen(rec.m) - rec.start;
+        toast(added ? `Recorded ${added} step${added === 1 ? '' : 's'} — Save to persist`
+                    : 'Recording stopped — nothing captured');
+    }
+
     stepRow(m, s) {
         const step = this.steps[m][s];
         const isKey = step.action === MACRO_ACTION.tap
@@ -203,6 +287,14 @@ export class ZmkMacrosTab {
                             : 'empty — add a step below',
                     })),
                 el('span', { style: 'flex:1' }),
+                el('button', {
+                    class: 'btn small' + (this._rec?.m === m ? ' primary' : ''),
+                    text: this._rec?.m === m ? '⏹ Stop (Esc)' : '⏺ Record',
+                    title: this._rec?.m === m
+                        ? 'stop recording'
+                        : 'type your macro — keystrokes become steps (chords keep their modifiers)',
+                    onclick: () => this.toggleRecord(m),
+                }),
                 el('button', {
                     class: 'btn small', text: '▶ Play', title: 'play this macro from here — no key binding needed',
                     onclick: () => this.play(m),

@@ -923,4 +923,69 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     delete globalThis.localStorage;
 }
 
+// ---- keymap auto-restore snapshot/diff (zmk-keymap-sync.js, pure) ----
+{
+    const { keymapLayersData, diffKeymapLayers, keymapDiffers } =
+        await import('./zmk-keymap-sync.js');
+
+    const behaviors = new Map([
+        [7, { displayName: 'Key Press' }],
+        [9, { displayName: 'Momentary Layer' }],
+        [11, { displayName: '' }],          // metadata-less: name must NOT match
+    ]);
+    const keymap = { layers: [
+        { name: 'Base', bindings: [
+            { behaviorId: 7, param1: 0x70004, param2: 0 },
+            { behaviorId: 9, param1: 1, param2: 0 },
+        ] },
+        { name: 'Nav', bindings: [{ behaviorId: 7, param1: 0x70050, param2: 0 }] },
+    ] };
+    const snap = keymapLayersData(keymap, behaviors);
+    eq(snap[0].bindings[0], { behavior: 'Key Press', behaviorId: 7, param1: 0x70004, param2: 0 },
+        'snapshot carries display name + id + params');
+
+    // identical → no diff
+    const live = JSON.parse(JSON.stringify(snap));
+    eq(diffKeymapLayers(snap, live), { keys: 0, names: 0, layersA: 2, layersB: 2 },
+        'identical layers diff clean');
+    eq(keymapDiffers(diffKeymapLayers(snap, live)), false, 'identical = no restore');
+
+    // param drift on one key
+    live[0].bindings[1].param1 = 3;
+    eq(diffKeymapLayers(snap, live).keys, 1, 'param change counts one key');
+
+    // cross-build: ids shifted but names match → clean
+    const rebuilt = JSON.parse(JSON.stringify(snap));
+    rebuilt[0].bindings[0].behaviorId = 99;
+    eq(diffKeymapLayers(snap, rebuilt).keys, 0, 'name match beats id drift');
+
+    // name-less on one side falls back to id compare
+    const anon = JSON.parse(JSON.stringify(snap));
+    anon[0].bindings[0].behavior = null;
+    eq(diffKeymapLayers(snap, anon).keys, 0, 'null name falls back to same id');
+    anon[0].bindings[0].behaviorId = 99;
+    eq(diffKeymapLayers(snap, anon).keys, 1, 'null name + id drift = differs');
+
+    // layer rename + count mismatch
+    const renamed = JSON.parse(JSON.stringify(snap));
+    renamed[1].name = 'Navigation';
+    eq(diffKeymapLayers(snap, renamed).names, 1, 'layer rename counts');
+    const d = diffKeymapLayers(snap, snap.slice(0, 1));
+    eq([d.layersA, d.layersB, keymapDiffers(d)], [2, 1, true],
+        'layer-count mismatch reported and restorable');
+}
+
+// ---- capture helpers (zmk-capture.js, pure — window untouched) ----
+{
+    const { isModifierUsage, bareUsage } = await import('./zmk-capture.js');
+    const { kpParam } = await import('./zmk-keycodes.js');
+    eq(isModifierUsage(kpParam(0xE0)), true, 'Left Ctrl is a modifier usage');
+    eq(isModifierUsage(kpParam(0xE7)), true, 'Right GUI is a modifier usage');
+    eq(isModifierUsage(kpParam(0x04)), false, 'A is not a modifier usage');
+    // ⌃C folded (ctrl bit in the top byte) → bare C, mods stripped.
+    const ctrlC = ((0x01 << 24) | kpParam(0x06)) >>> 0;
+    eq(bareUsage(ctrlC), kpParam(0x06), 'bareUsage strips folded modifiers');
+    eq(bareUsage(kpParam(0x06)), kpParam(0x06), 'bareUsage is a no-op on a plain key');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

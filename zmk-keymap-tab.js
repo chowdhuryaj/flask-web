@@ -12,6 +12,7 @@ import { renderKeyboardSVG } from './keymap-tab.js?v=13';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=13';
 import { zmkApplyPendingKeymap } from './zmk-offline.js?v=13';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=13';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=13';
 import { ZMK_VIDPID } from './zmk.js?v=13';
 import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=13';
 import {
@@ -128,6 +129,11 @@ export class ZmkKeymapTab {
             this.render();
             const info = await this.client.getDeviceInfo();
             this.deviceName = info.name || 'ZMK device';
+            // Snapshot storage key rides the serial so two boards on one
+            // machine keep separate saved keymaps.
+            this.deviceSerial = info.serialNumber?.length
+                ? Array.from(info.serialNumber, (x) => x.toString(16).padStart(2, '0')).join('')
+                : '';
             const lock = await this.client.getLockState();
             if (lock !== LOCK_UNLOCKED) {
                 this.state = 'locked';
@@ -182,6 +188,7 @@ export class ZmkKeymapTab {
             this.state = 'ready';
             this.render();
             await this._applyQueuedOfflineKeymap();
+            await this._keymapSyncCheck();
         } catch (e) {
             this._handleRpcError(e, 'Keymap load failed');
         }
@@ -209,6 +216,77 @@ export class ZmkKeymapTab {
         } catch (e) {
             toast(`Offline keymap sync failed: ${e.message} — still queued`, true);
         }
+    }
+
+    // ---- keymap auto-restore (consistent across flashes / settings resets) ----
+
+    _snapKey() {
+        return `zmk-keymap-snapshot:${this.deviceSerial || this.deviceName || 'zmk'}`;
+    }
+
+    _readSnapshot() {
+        try {
+            return JSON.parse(localStorage.getItem(this._snapKey()) || 'null');
+        } catch {
+            return null;
+        }
+    }
+
+    _writeSnapshot() {
+        if (this.app?.zmkStudioSim || !this.keymap) return;
+        try {
+            localStorage.setItem(this._snapKey(), JSON.stringify({
+                savedAt: new Date().toISOString(),
+                device: this.deviceName,
+                layers: keymapLayersData(this.keymap, zmkBehaviors()),
+            }));
+        } catch { /* quota/private mode — the snapshot is best-effort */ }
+    }
+
+    /** Auto-restore: keep the device keymap consistent with Flask's last
+     * SAVED copy across reflashes and settings resets. The snapshot
+     * refreshes on every successful device save; a device that reads back
+     * different at connect (settings_reset wiped the Studio overlay, fresh
+     * board) gets the snapshot re-applied and saved. Runs only unlocked —
+     * Studio writes are physical-unlock-gated — so the post-reset flow is:
+     * plug in, press &studio_unlock, done. The offline-preview queue
+     * applies first and wins: its save refreshes the snapshot, so this
+     * check then sees zero diff. Skipped in the sim (the offline workspace
+     * has its own persistence). */
+    async _keymapSyncCheck() {
+        if (this.app?.zmkStudioSim || !this.keymap) return;
+        const snap = this._readSnapshot();
+        if (!snap?.layers?.length) {
+            this._writeSnapshot();      // first contact with this board: adopt it
+            return;
+        }
+        const live = keymapLayersData(this.keymap, zmkBehaviors());
+        const d = diffKeymapLayers(snap.layers, live);
+        if (!keymapDiffers(d)) return;
+        // Stash the device's copy so the restore is one click to undo.
+        this._preRestore = { layers: live };
+        const res = await this.applyKeymapData(
+            { kind: 'flask-zmk-keymap', version: 2, layers: snap.layers }, { quiet: true });
+        if (!res || res.stopped) { this._preRestore = null; return; }   // applier already toasted
+        if (res.wrote || res.renamed) await this.saveChanges();
+        const when = snap.savedAt ? new Date(snap.savedAt).toLocaleString() : 'unknown time';
+        const skipNote = res.skipped ? `, ${res.skipped} unresolvable skipped` : '';
+        toast(`Keymap auto-restored from Flask's saved copy (${res.wrote} keys, ${res.renamed} names${skipNote}; saved ${when}) — ⟲ in the toolbar undoes`);
+        this.render();
+    }
+
+    /** Put back the keymap the device had before auto-restore ran, and
+     * adopt it as the new snapshot (the save hook does that). */
+    async _undoKeymapRestore() {
+        const pre = this._preRestore;
+        if (!pre) return;
+        const res = await this.applyKeymapData(
+            { kind: 'flask-zmk-keymap', version: 2, layers: pre.layers }, { quiet: true });
+        if (!res || res.stopped) return;
+        this._preRestore = null;
+        if (res.wrote || res.renamed) await this.saveChanges();
+        toast('Auto-restore undone — the device copy is back and is the new snapshot');
+        this.render();
     }
 
     /** Feed the HUD: publish device-sourced geometry, layer names, and the
@@ -331,6 +409,9 @@ export class ZmkKeymapTab {
         try {
             await this.client.saveChanges();
             this._setUnsaved(false);
+            // What's saved on the device is Flask's copy of record — the
+            // auto-restore snapshot follows every successful save.
+            this._writeSnapshot();
             toast('Saved to keyboard');
         } catch (e) {
             if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
@@ -440,23 +521,15 @@ export class ZmkKeymapTab {
     // ---- keymap file export / import ----
 
     async exportKeymap() {
-        const behaviors = zmkBehaviors();
         const data = {
             kind: 'flask-zmk-keymap',
             version: 2,
             device: this.deviceName,
             exported: new Date().toISOString(),
-            layers: this.keymap.layers.map((l) => ({
-                name: l.name,
-                bindings: l.bindings.map((b) => ({
-                    // Display name first-class: behavior ids can shift across
-                    // firmware builds, names are stable.
-                    behavior: behaviors.get(b.behaviorId)?.displayName ?? null,
-                    behaviorId: b.behaviorId,
-                    param1: b.param1,
-                    param2: b.param2,
-                })),
-            })),
+            // Display name first-class: behavior ids can shift across
+            // firmware builds, names are stable. Same shape as the
+            // auto-restore snapshot (zmk-keymap-sync.js).
+            layers: keymapLayersData(this.keymap, zmkBehaviors()),
         };
         // v2: full-device backup — tunables + RGB map/effect + every runtime
         // slot table ride along (the ZMK .vil equivalent; a re-flash wipes
@@ -697,7 +770,12 @@ export class ZmkKeymapTab {
                 title: 'Apply a keymap JSON file live — then Save to persist',
                 onclick: () => file.click(),
             }),
-            file);
+            file,
+            ...(this._preRestore ? [el('button', {
+                class: 'btn small', text: '⟲ Undo restore',
+                title: 'Put back the keymap the device had before auto-restore (and keep it as the new snapshot)',
+                onclick: () => this._undoKeymapRestore(),
+            })] : []));
         this._updateSaveBar = () => {
             save.disabled = discard.disabled = !this.unsaved;
             note.textContent = this.unsaved
