@@ -9,18 +9,18 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=16';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=16';
+import { CH, V } from './flaskproto.js?v=17';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=17';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy } from './zmk-combos-codec.js?v=16';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=16';
+         comboTypedToLegacy } from './zmk-combos-codec.js?v=17';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=17';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=16';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=16';
+    from './zmk-output-codec.js?v=17';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=17';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=16';
+    from './zmk-tapdance-codec.js?v=17';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -63,6 +63,9 @@ async function exportFlaskStateInner(app) {
             lockEvents: await g(CH.scrollSnap, V.snapLockEvents),
             idleReset: await g(CH.scrollSnap, V.snapIdleReset),
         };
+    }
+    if (caps.scrollSpeed) {
+        out.scrollSpeed = { speedPct: await g(CH.scrollScale, V.scrollSpeedPct) };
     }
     if (caps.ballSwap) {
         out.ballSwap = { swapped: await g(CH.ballSwap, V.bswapSwapped) };
@@ -287,6 +290,10 @@ async function applyFlaskStateInner(app, data, save = true) {
             if (s[k] != null) await setU(CH.scrollSnap, id, s[k]);
         }
     }, CH.scrollSnap);
+
+    await section('scrollSpeed', caps.scrollSpeed, async (s) => {
+        if (s.speedPct != null) await setU(CH.scrollScale, V.scrollSpeedPct, s.speedPct);
+    }, CH.scrollScale);
 
     await section('ballSwap', caps.ballSwap, async (s) => {
         if (s.swapped != null) await setU(CH.ballSwap, V.bswapSwapped, s.swapped);

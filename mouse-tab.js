@@ -3,10 +3,10 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=16';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=17';
 import { CH, V, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
-         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=16';
-import { renderKeyboardSVG } from './keymap-tab.js?v=16';
+         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=17';
+import { renderKeyboardSVG } from './keymap-tab.js?v=17';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -179,6 +179,22 @@ export class MouseTab {
                 value: await g(CH.smoothing, V.smoothingTimeout),
                 onChange: (v) => flask.setU16(CH.smoothing, V.smoothingTimeout, v) }),
             saveBar(() => flask.save(CH.smoothing))));
+        }
+
+        // ---- scroll speed ----
+        // ZMK line v15+ (flask_scrollscale, channel 0x29). The value is a
+        // PERCENT of the divisors compiled into the keymap, not an absolute
+        // rate — 100 means "exactly the firmware default", which is why the
+        // slider reads in x rather than counts-per-notch. One knob drives
+        // both axes, so their base ratio survives. Caps-driven — QMK
+        // families tune scroll speed through dragscroll (0x15) instead.
+        if (caps.scrollSpeed) {
+        cardsRow.append(card('Scroll speed', 'how far the scroll ball travels per notch',
+            sliderRow({ label: 'Speed', hint: '100% = the firmware default; higher scrolls faster per roll',
+                min: 25, max: 400, step: 5, format: (v) => `${v}%`,
+                value: await g(CH.scrollScale, V.scrollSpeedPct),
+                onChange: (v) => flask.setU16(CH.scrollScale, V.scrollSpeedPct, v) }),
+            saveBar(() => flask.save(CH.scrollScale))));
         }
 
         // ---- scroll axis snap/lock ----

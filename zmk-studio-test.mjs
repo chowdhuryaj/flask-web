@@ -412,7 +412,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 14, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, 15, 'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
@@ -425,6 +425,10 @@ eq(zigzag(1), 2, 'zigzag(1)');
     // v9 seeds: accel boots disabled with drashna defaults; snap enabled.
     eq(await flask.getU16(CH.accel, V.accelEnabled), 0, 'sim accel boots disabled');
     eq(await flask.getU16(CH.accel, V.accelTakeoff), 200, 'sim accel takeoff default');
+    // v15 scroll speed: 100 = "the keymap's compiled divisors verbatim", so
+    // the firmware's boot value and the sim's must agree on the no-op point.
+    eq(await flask.getU16(CH.scrollScale, V.scrollSpeedPct), 100,
+        'sim scroll speed boots at the firmware default (100 = no change)');
     eq(await flask.getU16(CH.scrollSnap, V.snapEnabled), 1, 'sim snap boots enabled');
     eq(await flask.getU16(CH.scrollSnap, V.snapThreshold), 63, 'sim snap threshold default');
     eq(await flask.getU16(CH.rgbMap, V.rgbmapEffect), 0, 'sim rgb effect boots off');
@@ -584,11 +588,13 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const { createZmkTemplate, ZmkOfflineFlask, zmkPendingCount, zmkClearDirty } =
         await import('./zmk-offline.js');
     const { CH, V } = await import('./flaskproto.js');
+    const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js');
     const { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot } =
         await import('./zmk-output-codec.js');
 
     const ws = createZmkTemplate('imprint');
-    eq(ws.protocolVersion, 14, 'template speaks v14');
+    eq(ws.protocolVersion, ZMK_EXPECTED_PROTOCOL.imprint,
+        'template speaks the protocol the app expects');
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.leader, V.leaderSlotCount), 32, 'sim leader slots');
     eq(await flask.getU16(CH.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
@@ -644,6 +650,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     // Device A: make it distinctive.
     const a = mkApp();
     await a.flask.setU16(CH.scrollSnap, V.snapThreshold, 80);
+    await a.flask.setU16(CH.scrollScale, V.scrollSpeedPct, 175);
     await a.flask.setBytes(CH.rgbMap, V.rgbmapLed, [1, 7, 10, 20, 30]);
     await a.flask.setBytes(CH.combos, V.combosSlot,
         encodeComboSlot(5, { positions: [10, 11], usage: 0x70005 }, 8));
@@ -656,6 +663,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
     const state = await exportFlaskState(a);
     eq(state.scrollSnap.threshold, 80, 'export carries snap threshold');
+    eq(state.scrollSpeed.speedPct, 175, 'export carries scroll speed');
     eq(state.autoMouse.timeout, 0, 'export carries the automouse latch timeout (v13)');
     eq(state.autoMouse.threshold, 40, 'export carries the automouse threshold');
     eq(state.rgb.map[1][7].join(','), '10,20,30', 'export carries the RGB map');
@@ -671,6 +679,8 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(failures.length, 0, 'import applies with no failures');
     eq(applied > 700, true, 'import writes the full surface (map + slots + knobs)');
     eq(await b.flask.getU16(CH.scrollSnap, V.snapThreshold), 80, 'import restored snap');
+    eq(await b.flask.getU16(CH.scrollScale, V.scrollSpeedPct), 175,
+        'import restored scroll speed');
     const led = await b.flask.getBytes(CH.rgbMap, V.rgbmapLed, [1, 7]);
     eq([led[2], led[3], led[4]].join(','), '10,20,30', 'import restored the RGB map');
     eq(await b.flask.getU16(CH.gestures, V.gesturesActiveSet), 2, 'import restored active set');

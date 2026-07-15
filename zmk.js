@@ -8,8 +8,8 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=16';
-import { diag } from './diag.js?v=16';
+import { CH, V } from './flaskproto.js?v=17';
+import { diag } from './diag.js?v=17';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -64,7 +64,7 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // devicetree combos IMPORTED as compiled defaults), flask_csk 0x16
 // (custom shift keys, ZMK slot frame at 0x50), flask_tapdance 0x28
 // (runtime tap dances, &ftd), and rgbmap global brightness 0x0B.
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 14 };
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 15 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -101,6 +101,11 @@ export function zmkCapabilities(family, version) {
         // flask_scrollsnap (0x26, v9): runtime axis snap/lock on the
         // scroll ball (ZMK-line only channel).
         scrollSnap: flask && v >= 9,
+        // flask_scrollscale (0x29, v15): live scroll speed as a percent of
+        // the keymap's compiled divisors. ZMK-line only — the QMK families
+        // reach scroll speed through dragscroll (0x15), which this device
+        // does not compile.
+        scrollSpeed: flask && v >= 15,
         // flask_ballswap (0x27, v11): live trackball role swap — toggle
         // persists (survives reflash), momentary key swaps while held.
         ballSwap: flask && v >= 11,

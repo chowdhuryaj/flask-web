@@ -19,22 +19,22 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=16';
+import { CH, V } from './flaskproto.js?v=17';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities,
-         ZMK_TRACKBALLS } from './zmk.js?v=16';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=16';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=16';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=16';
+         ZMK_TRACKBALLS } from './zmk.js?v=17';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=17';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=17';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=17';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=16';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=16';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=17';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=17';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=16';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=16';
+    from './zmk-tapdance-codec.js?v=17';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=17';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=16';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=17';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -400,6 +400,10 @@ function seedImprintTunables(tun) {
     seed(CH.scrollSnap, V.snapLockMs, 250);
     seed(CH.scrollSnap, V.snapLockEvents, 0);
     seed(CH.scrollSnap, V.snapIdleReset, 300);
+    // v15: scroll speed (flask_scrollscale). The firmware boots at 100 —
+    // "the keymap's compiled divisors verbatim" — and there is no DT knob to
+    // disagree with, so 100 is the real boot state, not an idealized one.
+    seed(CH.scrollScale, V.scrollSpeedPct, 100);
     // v9: rgb effect engine (firmware boot state — off, mid speed, teal-ish)
     seed(CH.rgbMap, V.rgbmapEffect, 0);
     seed(CH.rgbMap, V.rgbmapEffectSpeed, 128);

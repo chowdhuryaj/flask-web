@@ -35,6 +35,7 @@ export const CH = {
     scrollSnap: 0x26, // ZMK line v9+: flask_scrollsnap axis snap/lock
     ballSwap: 0x27, // ZMK line v11+: flask_ballswap trackball role swap
     tapDance: 0x28, // ZMK line v14+: flask_tapdance runtime tap dances
+    scrollScale: 0x29, // ZMK line v15+: flask_scrollscale live scroll speed
 };
 
 export const V = {
@@ -91,6 +92,11 @@ export const V = {
     // key, extend re-arms the timeout on non-transparent keys)
     amEnabled: 0x01, amTimeout: 0x02, amThreshold: 0x03, amLayer: 0x04,
     amExtend: 0x05,
+    // scroll speed (flask_scrollscale, ZMK line v15+). A PERCENT of the
+    // keymap's compiled divisors, not an absolute rate: 100 = the firmware's
+    // benched default, 200 = twice as fast. One knob drives both axes so
+    // their base ratio (16 horizontal : 12 vertical on the Imprint) holds.
+    scrollSpeedPct: 0x01,
     // wheel chords
     wcEnabled: 0x01, wcStep: 0x02, wcHoldMs: 0x03,
     // OS shortcuts

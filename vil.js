@@ -12,9 +12,9 @@
 // ("KC_A") are skipped and counted (no qmk_id table here).
 
 import { CH, V, slot, GESTURE_SETS, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS,
-         WC_BUTTONS, NLKB } from './flaskproto.js?v=16';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=16';
-import { encoderCount } from './profiles.js?v=16';
+         WC_BUTTONS, NLKB } from './flaskproto.js?v=17';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=17';
+import { encoderCount } from './profiles.js?v=17';
 
 // ---------- tuning dump spec (mirrors AppModel.tuningDumpSpec) ----------
 // Replayed in THIS order on restore: DPI index ids come before raw-CPI ids
