@@ -4,8 +4,8 @@
 // custom text ≤5 chars/line; push/raw-cmd/reinit are live actions (offline
 // mode journals only widgets, text, and the three sliders).
 
-import { el, card, sliderRow, selectRow, saveBar, toast } from './ui.js?v=17';
-import { CH, V, slot, NLKB } from './flaskproto.js?v=17';
+import { el, card, sliderRow, selectRow, saveBar, toast } from './ui.js?v=18';
+import { CH, V, slot, NLKB } from './flaskproto.js?v=18';
 
 export class DisplayTab {
     constructor(app) { this.app = app; this.root = el('div'); }

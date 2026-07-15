@@ -8,7 +8,7 @@
 // board position and auto-advances — a different lifecycle); the shared
 // primitives here cover the modal/streaming cases.
 
-import { eventToUsageParam } from './zmk-keycodes.js?v=17';
+import { eventToUsageParam } from './zmk-keycodes.js?v=18';
 
 /** True when a usage param is a bare modifier key (LC/LS/…): keyboard-page
  * usage id 0xE0–0xE7. Mirrors the keymap editor's own test. */

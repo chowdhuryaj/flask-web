@@ -15,11 +15,11 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=17';
-import { CH, V } from './flaskproto.js?v=17';
-import { hsvCss } from './rgb-tab.js?v=17';
-import { colorPicker } from './colorpicker.js?v=17';
-import { renderKeyboardSVG } from './keymap-tab.js?v=17';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=18';
+import { CH, V } from './flaskproto.js?v=18';
+import { hsvCss } from './rgb-tab.js?v=18';
+import { colorPicker } from './colorpicker.js?v=18';
+import { renderKeyboardSVG } from './keymap-tab.js?v=18';
 
 /**
  * LED index → key mapping over the physical layout.
@@ -35,6 +35,28 @@ import { renderKeyboardSVG } from './keymap-tab.js?v=17';
  * where entry i = the key lit by LED i (or undefined).
  */
 const LEDMAP_STORE = 'flask-zmk-ledmap-imprint';
+
+/* Idle-blank presets (v16, rgbmap 0x0C). Seconds; 0 = never. Nothing below
+ * 30 is offered — the firmware floors there, because ZMK's activity-idle
+ * event is the earliest signal flask_rgb gets and it fires at 30 s. A device
+ * restored to some other value keeps it rather than silently snapping to a
+ * preset. */
+const IDLE_PRESETS = [
+    { value: 30, label: '30 seconds' },
+    { value: 60, label: '1 minute' },
+    { value: 120, label: '2 minutes' },
+    { value: 300, label: '5 minutes' },
+    { value: 600, label: '10 minutes' },
+    { value: 1800, label: '30 minutes' },
+    { value: 0, label: 'Never (stays lit)' },
+];
+
+function idleOptions(current) {
+    if (current != null && !IDLE_PRESETS.some((p) => p.value === current)) {
+        return [{ value: current, label: `${current} seconds` }, ...IDLE_PRESETS];
+    }
+    return IDLE_PRESETS;
+}
 
 export function storedLedMap() {
     try { return JSON.parse(localStorage.getItem(LEDMAP_STORE)) ?? null; }
@@ -83,6 +105,8 @@ export class ZmkRgbTab {
         // v14: global brightness percent (native rgb_ug BRI analog).
         this.brightness = this.app.caps?.rgbBrightness
             ? await flask.getU16(CH.rgbMap, V.rgbmapBrightness) : null;
+        this.idleTimeout = this.app.caps?.rgbIdleTimeout
+            ? await flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout) : null;
         if (this.app.caps?.rgbEffects) {
             this.effect = await flask.getU16(CH.rgbMap, V.rgbmapEffect);
             this.effectSpeed = await flask.getU16(CH.rgbMap, V.rgbmapEffectSpeed);
@@ -494,6 +518,19 @@ export class ZmkRgbTab {
                 onChange: async (val) => {
                     this.brightness = await flask.setU16(CH.rgbMap, V.rgbmapBrightness, val);
                     return this.brightness;
+                },
+            }) : null,
+            this.idleTimeout != null ? selectRow({
+                label: 'Turn off after',
+                hint: 'idle time before the strip blanks — this is also why a colour '
+                    + 'can look like it did not apply: the write lands, but a blanked '
+                    + 'strip only renders it on your next keypress',
+                value: this.idleTimeout,
+                options: idleOptions(this.idleTimeout),
+                onChange: async (val) => {
+                    this.idleTimeout = await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout,
+                        Number(val));
+                    return this.idleTimeout;
                 },
             }) : null,
             selectRow({

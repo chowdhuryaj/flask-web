@@ -159,6 +159,10 @@ export const V = {
     // rgb brightness (0x21, ZMK line v14) — global percent 0-100, scales
     // every rendered pixel on both halves.
     rgbmapBrightness: 0x0B,
+    // v16: seconds of KEYBOARD inactivity before the strip blanks; 0 = never.
+    // The firmware floors anything below its compiled ZMK idle timeout (30 s)
+    // — that event is the earliest signal flask_rgb gets.
+    rgbmapIdleTimeout: 0x0C,
     // tap dance (0x28, ZMK line v14) — enabled/counts u16; step + cfg are
     // PAYLOAD-ADDRESSED byte frames: step [slot, tap, action, behavior u16
     // BE, p1 u32 BE, p2 u32 BE], cfg [slot, term u16 BE (0 = default 200)].

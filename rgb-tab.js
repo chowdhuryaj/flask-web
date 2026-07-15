@@ -4,8 +4,8 @@
 // the Flask handler leaves data[1] ∈ 0x40-0x44 alone by design).
 // Ports of NLKB16Model.swift + TileGridTabs.swift.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=17';
-import { CH, V, NLKB } from './flaskproto.js?v=17';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=18';
+import { CH, V, NLKB } from './flaskproto.js?v=18';
 
 const VIALRGB = { getInfo: 0x40, mode: 0x41, getSupported: 0x42 };
 const EFFECT_NAMES = ['Off', 'Direct Control', 'Solid Color', 'Alphas/Mods',

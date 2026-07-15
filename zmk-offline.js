@@ -19,22 +19,22 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=17';
+import { CH, V } from './flaskproto.js?v=18';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities,
-         ZMK_TRACKBALLS } from './zmk.js?v=17';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=17';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=17';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=17';
+         ZMK_TRACKBALLS } from './zmk.js?v=18';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=18';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=18';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=18';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=17';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=17';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=18';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=18';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=17';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=17';
+    from './zmk-tapdance-codec.js?v=18';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=18';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=17';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=18';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 
@@ -435,6 +435,10 @@ function seedImprintTunables(tun) {
     seed(CH.customShift, V.cskEnabled, 1);
     seed(CH.tapDance, V.tdEnabled, 1);
     seed(CH.rgbMap, V.rgbmapBrightness, 100);
+    // v16: idle blank timeout. The firmware defaults to
+    // CONFIG_ZMK_IDLE_TIMEOUT/1000 = 30 s (it is deliberately the pre-v16
+    // behaviour), so 30 is the real boot value — not an idealized "never".
+    seed(CH.rgbMap, V.rgbmapIdleTimeout, 30);
 }
 
 export function createZmkTemplate(family) {
@@ -646,6 +650,18 @@ export class ZmkOfflineFlask extends OfflineFlask {
         // ZMK divergence from the QMK LIVE_SET: the gesture active set is a
         // REAL persisted setting on flask_gestures (QMK's 0x11:0x02 is a
         // transient latch toggle, hence its LIVE_SET entry upstream).
+        // Firmware floor (flask_rgb): 0 means never blank, but any nonzero
+        // value below the compiled ZMK idle timeout (30 s) blanks AT that
+        // timeout — the activity-idle event is the earliest signal the module
+        // gets. Mirror it, or the app shows a setting the device can't honour.
+        if (ch === CH.rgbMap && id === V.rgbmapIdleTimeout) {
+            const raw = Math.max(0, Math.round(value));
+            const v = raw === 0 ? 0 : Math.max(30, raw);
+            this.ws.tunables[`${ch}:${id}`] = { op: 'u16', val: v };
+            this.ws.dirty.tun[`${ch}:${id}`] = { op: 'u16', val: v };
+            saveWorkspace(this.ws);
+            return v;
+        }
         // Firmware clamp (flask_scrollscale_params_set): 25..400. The device
         // re-GETs after the SET, so the echo carries the clamped value — the
         // sim has to agree or an out-of-range write looks accepted here and

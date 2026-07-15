@@ -8,8 +8,8 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=17';
-import { diag } from './diag.js?v=17';
+import { CH, V } from './flaskproto.js?v=18';
+import { diag } from './diag.js?v=18';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -63,8 +63,14 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)' };
 // slot v3 0x12 (per-combo timeout/prior-idle/layer — the keymap's
 // devicetree combos IMPORTED as compiled defaults), flask_csk 0x16
 // (custom shift keys, ZMK slot frame at 0x50), flask_tapdance 0x28
-// (runtime tap dances, &ftd), and rgbmap global brightness 0x0B.
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 15 };
+// (runtime tap dances, &ftd), and rgbmap global brightness 0x0B; v15 added
+// flask_scrollscale 0x29 (live scroll speed as a PERCENT of the keymap's
+// compiled divisors — 100 = the firmware default, one knob for both axes);
+// v16 added the rgbmap idle blank timeout 0x0C (seconds of KEYBOARD idle
+// before the strip blanks, 0 = never — the strip going dark is also why
+// paints looked like they "didn't apply": the write lands, but a blanked
+// strip only renders it on the next keypress).
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 16 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -167,6 +173,11 @@ export function zmkCapabilities(family, version) {
         tapDance: flask && v >= 14,
         // rgbmap global brightness (0x0B, v14) — native-BRI analog.
         rgbBrightness: flask && v >= 14,
+        // rgbmap idle blank timeout (0x0C, v16): seconds of KEYBOARD idle
+        // before the strip blanks; 0 = never. The strip going dark is also
+        // why paints look like they "don't apply" — the write lands, it just
+        // isn't rendered until the next keypress.
+        rgbIdleTimeout: flask && v >= 16,
         // v12: runtime LED→position order (rgbmap 0x0A) — the wizard
         // pushes the measured map to the device.
         rgbLedOrder: flask && v >= 12,

@@ -396,6 +396,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const { createZmkTemplate, ZmkOfflineFlask, OfflineStudioClient,
             zmkPendingCount } = await import('./zmk-offline.js');
     const { CH, V } = await import('./flaskproto.js');
+    const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js');
 
     // localStorage shim so saveWorkspace calls inside the sims don't throw.
     globalThis.localStorage ??= {
@@ -412,7 +413,8 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 70), true,
         'every template layer has 70 bindings');
     eq(ws.profile.keys.length, 70, 'template geometry has 70 keys');
-    eq(ws.protocolVersion, 15, 'template speaks the expected imprint protocol');
+    eq(ws.protocolVersion, ZMK_EXPECTED_PROTOCOL.imprint,
+        'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
     eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
@@ -427,6 +429,15 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(await flask.getU16(CH.accel, V.accelTakeoff), 200, 'sim accel takeoff default');
     // v15 scroll speed: 100 = "the keymap's compiled divisors verbatim", so
     // the firmware's boot value and the sim's must agree on the no-op point.
+    // v16 rgb idle blank: 30 = CONFIG_ZMK_IDLE_TIMEOUT/1000, the firmware's
+    // real default (deliberately the pre-v16 behaviour).
+    eq(await flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout), 30,
+        'sim rgb idle timeout boots at the firmware default (30s)');
+    eq(await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 5), 30,
+        'sim floors a sub-30s idle timeout like the firmware');
+    eq(await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 0), 0,
+        'sim keeps 0 (never blank) rather than flooring it');
+    await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 30);
     eq(await flask.getU16(CH.scrollScale, V.scrollSpeedPct), 100,
         'sim scroll speed boots at the firmware default (100 = no change)');
     // The sim mirrors flask_scrollscale_params_set's 25..400 clamp; the
@@ -658,6 +669,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const a = mkApp();
     await a.flask.setU16(CH.scrollSnap, V.snapThreshold, 80);
     await a.flask.setU16(CH.scrollScale, V.scrollSpeedPct, 175);
+    await a.flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 0); // never blank
     await a.flask.setBytes(CH.rgbMap, V.rgbmapLed, [1, 7, 10, 20, 30]);
     await a.flask.setBytes(CH.combos, V.combosSlot,
         encodeComboSlot(5, { positions: [10, 11], usage: 0x70005 }, 8));
@@ -671,6 +683,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const state = await exportFlaskState(a);
     eq(state.scrollSnap.threshold, 80, 'export carries snap threshold');
     eq(state.scrollSpeed.speedPct, 175, 'export carries scroll speed');
+    eq(state.rgb.idleTimeout, 0, 'export carries the rgb idle timeout (0 = never)');
     eq(state.autoMouse.timeout, 0, 'export carries the automouse latch timeout (v13)');
     eq(state.autoMouse.threshold, 40, 'export carries the automouse threshold');
     eq(state.rgb.map[1][7].join(','), '10,20,30', 'export carries the RGB map');
@@ -688,6 +701,8 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(await b.flask.getU16(CH.scrollSnap, V.snapThreshold), 80, 'import restored snap');
     eq(await b.flask.getU16(CH.scrollScale, V.scrollSpeedPct), 175,
         'import restored scroll speed');
+    eq(await b.flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout), 0,
+        'import restored the rgb idle timeout');
     const led = await b.flask.getBytes(CH.rgbMap, V.rgbmapLed, [1, 7]);
     eq([led[2], led[3], led[4]].join(','), '10,20,30', 'import restored the RGB map');
     eq(await b.flask.getU16(CH.gestures, V.gesturesActiveSet), 2, 'import restored active set');

@@ -9,18 +9,18 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=17';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=17';
+import { CH, V } from './flaskproto.js?v=18';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=18';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy } from './zmk-combos-codec.js?v=17';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=17';
+         comboTypedToLegacy } from './zmk-combos-codec.js?v=18';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=18';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=17';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=17';
+    from './zmk-output-codec.js?v=18';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=18';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=17';
+    from './zmk-tapdance-codec.js?v=18';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -103,6 +103,9 @@ async function exportFlaskStateInner(app) {
         }
         if (caps.rgbBrightness) {
             out.rgb.brightness = await g(CH.rgbMap, V.rgbmapBrightness);
+        }
+        if (caps.rgbIdleTimeout) {
+            out.rgb.idleTimeout = await g(CH.rgbMap, V.rgbmapIdleTimeout);
         }
     }
     if (caps.customShift) {
@@ -328,6 +331,9 @@ async function applyFlaskStateInner(app, data, save = true) {
         }
         if (caps.rgbBrightness && s.brightness != null) {
             await setU(CH.rgbMap, V.rgbmapBrightness, s.brightness);
+        }
+        if (caps.rgbIdleTimeout && s.idleTimeout != null) {
+            await setU(CH.rgbMap, V.rgbmapIdleTimeout, s.idleTimeout);
         }
     }, CH.rgbMap);
 

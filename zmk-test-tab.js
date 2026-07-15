@@ -12,15 +12,15 @@
 //   - Mouse + scroll tester: pointer speed/peak, buttons, wheel notches and
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
-import { el, card, toast } from './ui.js?v=17';
-import { CH, V } from './flaskproto.js?v=17';
-import { diag } from './diag.js?v=17';
+import { el, card, toast } from './ui.js?v=18';
+import { CH, V } from './flaskproto.js?v=18';
+import { diag } from './diag.js?v=18';
 import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION,
          encodeComboSlotV3, decodeComboSlotV3 }
-    from './zmk-combos-codec.js?v=17';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=17';
+    from './zmk-combos-codec.js?v=18';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=18';
 import { TD_ACTION, encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=17';
+    from './zmk-tapdance-codec.js?v=18';
 
 const now = () => performance.now();
 
@@ -150,6 +150,21 @@ export class ZmkTestTab {
             if (caps.autoscroll) {
                 await probe('autoscroll: inverted flag round-trip', () =>
                     flipU16(CH.autoscroll, V.asInverted, 1));
+            }
+            if (caps.rgbIdleTimeout) {
+                await probe('rgb: idle timeout round-trip', () =>
+                    flipU16(CH.rgbMap, V.rgbmapIdleTimeout, 300));
+                // Nonzero values under the compiled ZMK idle timeout cannot be
+                // honoured (that event is the earliest signal flask_rgb gets),
+                // so the device must store and echo the FLOOR, not the request.
+                // An echo of 5 means it is reporting a setting it does not have.
+                await probe('rgb: idle timeout floors below 30s', async () => {
+                    const orig = await flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout);
+                    const got = await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 5);
+                    await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, orig);
+                    if (got !== 30) throw new Error(`sent 5, device reports ${got} (want 30)`);
+                    return `5→${got}, restored ${orig}`;
+                });
             }
             if (caps.scrollSpeed) {
                 await probe('scroll speed: round-trip', () =>

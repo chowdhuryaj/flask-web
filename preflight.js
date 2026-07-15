@@ -16,9 +16,9 @@
 // if the all-devices chooser opens, WebHID is allowed and the problem is the
 // device, not the policy.
 
-import { el } from './ui.js?v=17';
-import { diag } from './diag.js?v=17';
-import { USAGE_PAGE, USAGE } from './webhid.js?v=17';
+import { el } from './ui.js?v=18';
+import { diag } from './diag.js?v=18';
+import { USAGE_PAGE, USAGE } from './webhid.js?v=18';
 
 // Below this, no human dismissed a dialog — the chooser never appeared.
 const CHOOSER_FLOOR_MS = 400;
