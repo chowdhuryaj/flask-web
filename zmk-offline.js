@@ -646,6 +646,17 @@ export class ZmkOfflineFlask extends OfflineFlask {
         // ZMK divergence from the QMK LIVE_SET: the gesture active set is a
         // REAL persisted setting on flask_gestures (QMK's 0x11:0x02 is a
         // transient latch toggle, hence its LIVE_SET entry upstream).
+        // Firmware clamp (flask_scrollscale_params_set): 25..400. The device
+        // re-GETs after the SET, so the echo carries the clamped value — the
+        // sim has to agree or an out-of-range write looks accepted here and
+        // gets rejected on hardware.
+        if (ch === CH.scrollScale && id === V.scrollSpeedPct) {
+            const v = Math.min(Math.max(25, Math.round(value)), 400);
+            this.ws.tunables[`${ch}:${id}`] = { op: 'u16', val: v };
+            this.ws.dirty.tun[`${ch}:${id}`] = { op: 'u16', val: v };
+            saveWorkspace(this.ws);
+            return v;
+        }
         if (ch === CH.gestures && id === V.gesturesActiveSet) {
             const v = Math.min(Math.max(0, Math.round(value)), this.ws.zmk.gestures.length - 1);
             this.ws.tunables[`${ch}:${id}`] = { op: 'u16', val: v };

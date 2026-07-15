@@ -429,6 +429,13 @@ eq(zigzag(1), 2, 'zigzag(1)');
     // the firmware's boot value and the sim's must agree on the no-op point.
     eq(await flask.getU16(CH.scrollScale, V.scrollSpeedPct), 100,
         'sim scroll speed boots at the firmware default (100 = no change)');
+    // The sim mirrors flask_scrollscale_params_set's 25..400 clamp; the
+    // firmware re-GETs after a SET so the echo is the clamped value.
+    eq(await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 500), 400,
+        'sim clamps scroll speed high like the firmware');
+    eq(await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 5), 25,
+        'sim clamps scroll speed low like the firmware');
+    await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 100);
     eq(await flask.getU16(CH.scrollSnap, V.snapEnabled), 1, 'sim snap boots enabled');
     eq(await flask.getU16(CH.scrollSnap, V.snapThreshold), 63, 'sim snap threshold default');
     eq(await flask.getU16(CH.rgbMap, V.rgbmapEffect), 0, 'sim rgb effect boots off');

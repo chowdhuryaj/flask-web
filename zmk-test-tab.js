@@ -151,6 +151,25 @@ export class ZmkTestTab {
                 await probe('autoscroll: inverted flag round-trip', () =>
                     flipU16(CH.autoscroll, V.asInverted, 1));
             }
+            if (caps.scrollSpeed) {
+                await probe('scroll speed: round-trip', () =>
+                    flipU16(CH.scrollScale, V.scrollSpeedPct, 175));
+                // The firmware clamps to 25..400 and the handler re-GETs after
+                // the SET, so the echo must carry the CLAMPED value. An echo of
+                // 500 here means the clamp never ran (or the reply is a stale
+                // wire) — the class of wire bug the sim provably cannot catch.
+                await probe('scroll speed: clamps out-of-range', async () => {
+                    const orig = await flask.getU16(CH.scrollScale, V.scrollSpeedPct);
+                    const echo = await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 500);
+                    const got = await flask.getU16(CH.scrollScale, V.scrollSpeedPct);
+                    await flask.setU16(CH.scrollScale, V.scrollSpeedPct, orig);
+                    if (got !== 400) throw new Error(`sent 500, device kept ${got} (want 400)`);
+                    if (echo != null && echo !== 400) {
+                        throw new Error(`echo said ${echo}, device stored ${got}`);
+                    }
+                    return `500→${got}, restored ${orig}`;
+                });
+            }
             if (caps.rgbMap) {
                 await probe('rgb: led write/read/restore', async () => {
                     const orig = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [0, 0], 2);
