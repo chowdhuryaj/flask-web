@@ -168,17 +168,39 @@ export function selectRow(opts) {
     return row;
 }
 
-/** Per-channel Save bar: snapshots live values into the firmware EEPROM. */
+/** The app's central concept, said one way everywhere: an edit is LIVE on the
+ * device the moment you make it, and only a Save survives power-off.
+ * `null` is the honest default — at load we know edits apply live, but NOT
+ * whether flash currently matches the screen, so the bar claims neither. */
+export const SAVE_STATE = {
+    null: 'Edits apply live — Save to keep them',
+    live: 'Live — reverts on power-off',
+    saved: 'Saved to keyboard',
+};
+
+/** Per-channel Save bar: snapshots live values into the firmware EEPROM.
+ * The dot + label is the canonical live/saved vocabulary (same dot language as
+ * the header's connection pill) — pass `note` only for context the dot cannot
+ * carry, never to restate live-vs-saved. Call `bar.setState('live'|'saved')`
+ * from tabs that actually track dirtiness; tabs that don't stay on the neutral
+ * default rather than asserting something they haven't checked. */
 export function saveBar(onSave, note) {
     const btn = el('button', { class: 'btn small', text: 'Save to keyboard' });
+    const state = el('span', { class: 'state', text: SAVE_STATE.null });
+    const bar = el('div', { class: 'savebar' }, btn, state);
+    if (note) bar.append(el('span', { class: 'note', text: note }));
+
+    bar.setState = (s) => {
+        if (s) bar.dataset.state = s; else delete bar.dataset.state;
+        state.textContent = SAVE_STATE[s] || SAVE_STATE.null;
+    };
     btn.addEventListener('click', async () => {
         btn.disabled = true;
-        try { await onSave(); toast('Saved'); }
+        try { await onSave(); toast('Saved'); bar.setState('saved'); }
         catch (e) { toast(`Save failed: ${e.message}`, true); }
         btn.disabled = false;
     });
-    return el('div', { class: 'savebar' }, btn,
-        el('span', { class: 'note', text: note || 'Live changes persist across power cycles only after saving.' }));
+    return bar;
 }
 
 export function card(title, sub, ...kids) {

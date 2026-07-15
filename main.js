@@ -2,43 +2,43 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=13';
-import { diag } from './diag.js?v=13';
-import { FlaskHID } from './webhid.js?v=13';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=13';
+import { el, toast, modal } from './ui.js?v=14';
+import { diag } from './diag.js?v=14';
+import { FlaskHID } from './webhid.js?v=14';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=14';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=13';
-import { VialClient } from './vialclient.js?v=13';
-import { parseDefinition } from './vialdef.js?v=13';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=13';
-import { capabilities } from './caps.js?v=13';
-import { setDeviceCustomKeys } from './keycodes.js?v=13';
-import { KeymapTab } from './keymap-tab.js?v=13';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=13';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=13';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=13';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=13';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=13';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=13';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=13';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=13';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=14';
+import { VialClient } from './vialclient.js?v=14';
+import { parseDefinition } from './vialdef.js?v=14';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=14';
+import { capabilities } from './caps.js?v=14';
+import { setDeviceCustomKeys } from './keycodes.js?v=14';
+import { KeymapTab } from './keymap-tab.js?v=14';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=14';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=14';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=14';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=14';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=14';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=14';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=14';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=14';
 import { ZmkTestTab } from './zmk-test-tab.js?v=15';
-import { MouseTab } from './mouse-tab.js?v=13';
-import { TypingTab } from './typing-tab.js?v=13';
-import { SettingsTab } from './settings-tab.js?v=13';
-import { HUD } from './hud.js?v=13';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=13';
+import { MouseTab } from './mouse-tab.js?v=14';
+import { TypingTab } from './typing-tab.js?v=14';
+import { SettingsTab } from './settings-tab.js?v=14';
+import { HUD } from './hud.js?v=14';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=14';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=13';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=14';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=13';
-import { MacrosTab } from './macros-tab.js?v=13';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=13';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=13';
-import { RgbTab } from './rgb-tab.js?v=13';
-import { DisplayTab } from './display-tab.js?v=13';
-import { exportVil, importVil, downloadText } from './vil.js?v=13';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=14';
+import { MacrosTab } from './macros-tab.js?v=14';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=14';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=14';
+import { RgbTab } from './rgb-tab.js?v=14';
+import { DisplayTab } from './display-tab.js?v=14';
+import { exportVil, importVil, downloadText } from './vil.js?v=14';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -49,23 +49,27 @@ const THEMES = {
     classic: { label: 'Classic (auto light/dark)' },
     light: {
         label: 'Light',
-        vars: { bg: '#f5f5f4', surface: '#ffffff', surface2: '#fafaf9', text: '#1c1c1a', muted: '#6b6b66', faint: '#9a9a93', border: '#e2e2dd', border2: '#cfcfc8', accent: '#2563eb', 'accent-bg': '#e8f0fe', 'accent-text': '#14458a', ok: '#15803d', 'ok-bg': '#e7f6ec', danger: '#b42318', 'danger-bg': '#fdeceb', keycap: '#ffffff', 'keycap-border': '#cfcfc8' },
+        vars: { bg: '#f5f5f4', surface: '#ffffff', surface2: '#fafaf9', text: '#1c1c1a', muted: '#6b6b66', faint: '#9a9a93', border: '#e2e2dd', border2: '#cfcfc8', accent: '#2563eb', 'accent-bg': '#e8f0fe', 'accent-text': '#14458a', ok: '#15803d', 'ok-bg': '#e7f6ec', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#b42318', 'danger-bg': '#fdeceb', keycap: '#ffffff', 'keycap-border': '#cfcfc8' },
     },
     dark: {
         label: 'Dark',
-        vars: { bg: '#1a1a18', surface: '#242422', surface2: '#2c2c29', text: '#ececea', muted: '#a3a39d', faint: '#76766f', border: '#36352f', border2: '#45443d', accent: '#5b9aff', 'accent-bg': '#1c2a44', 'accent-text': '#bcd4ff', ok: '#69d28c', 'ok-bg': '#15301f', danger: '#f1857c', 'danger-bg': '#3a1714', keycap: '#2c2c29', 'keycap-border': '#45443d' },
+        vars: { bg: '#1a1a18', surface: '#242422', surface2: '#2c2c29', text: '#ececea', muted: '#a3a39d', faint: '#76766f', border: '#36352f', border2: '#45443d', accent: '#5b9aff', 'accent-bg': '#1c2a44', 'accent-text': '#bcd4ff', ok: '#69d28c', 'ok-bg': '#15301f', warn: '#e0a94f', 'warn-bg': '#3a2d14', danger: '#f1857c', 'danger-bg': '#3a1714', keycap: '#2c2c29', 'keycap-border': '#45443d' },
     },
     nord: {
         label: 'Nord',
-        vars: { bg: '#2e3440', surface: '#3b4252', surface2: '#434c5e', text: '#eceff4', muted: '#aeb8cc', faint: '#7b869c', border: '#4c566a', border2: '#596580', accent: '#88c0d0', 'accent-bg': '#274552', 'accent-text': '#c8e4ec', ok: '#a3be8c', 'ok-bg': '#33402c', danger: '#bf616a', 'danger-bg': '#40272b', keycap: '#434c5e', 'keycap-border': '#596580' },
+        vars: { bg: '#2e3440', surface: '#3b4252', surface2: '#434c5e', text: '#eceff4', muted: '#aeb8cc', faint: '#7b869c', border: '#4c566a', border2: '#596580', accent: '#88c0d0', 'accent-bg': '#274552', 'accent-text': '#c8e4ec', ok: '#a3be8c', 'ok-bg': '#33402c', warn: '#ebcb8b', 'warn-bg': '#3f3826', danger: '#bf616a', 'danger-bg': '#40272b', keycap: '#434c5e', 'keycap-border': '#596580' },
     },
     dracula: {
         label: 'Dracula',
-        vars: { bg: '#282a36', surface: '#313342', surface2: '#3a3d4f', text: '#f8f8f2', muted: '#b6b8c8', faint: '#7e8195', border: '#44475a', border2: '#565a72', accent: '#bd93f9', 'accent-bg': '#3b3354', 'accent-text': '#e3d3ff', ok: '#50fa7b', 'ok-bg': '#1f4030', danger: '#ff5555', 'danger-bg': '#4a2020', keycap: '#3a3d4f', 'keycap-border': '#565a72' },
+        vars: { bg: '#282a36', surface: '#313342', surface2: '#3a3d4f', text: '#f8f8f2', muted: '#b6b8c8', faint: '#7e8195', border: '#44475a', border2: '#565a72', accent: '#bd93f9', 'accent-bg': '#3b3354', 'accent-text': '#e3d3ff', ok: '#50fa7b', 'ok-bg': '#1f4030', warn: '#ffb86c', 'warn-bg': '#43331f', danger: '#ff5555', 'danger-bg': '#4a2020', keycap: '#3a3d4f', 'keycap-border': '#565a72' },
     },
     solarized: {
         label: 'Solarized Light',
-        vars: { bg: '#fdf6e3', surface: '#fefbf0', surface2: '#f5efdc', text: '#073642', muted: '#657b83', faint: '#93a1a1', border: '#e6dfc8', border2: '#d3cbb0', accent: '#268bd2', 'accent-bg': '#e0eef8', 'accent-text': '#0d5a8f', ok: '#859900', 'ok-bg': '#eef0d8', danger: '#dc322f', 'danger-bg': '#fbe3e2', keycap: '#fefbf0', 'keycap-border': '#d3cbb0' },
+        // muted/ok use Solarized base01 + a darkened green: the canonical
+        // base00 #657b83 (4.30:1) and green #859900 (2.76:1 on ok-bg — the
+        // "template" badge text) both sit under the 4.5:1 floor on this
+        // theme's near-white surface.
+        vars: { bg: '#fdf6e3', surface: '#fefbf0', surface2: '#f5efdc', text: '#073642', muted: '#586e75', faint: '#93a1a1', border: '#e6dfc8', border2: '#d3cbb0', accent: '#268bd2', 'accent-bg': '#e0eef8', 'accent-text': '#0d5a8f', ok: '#5b6800', 'ok-bg': '#eef0d8', warn: '#7d5c00', 'warn-bg': '#f6eed3', danger: '#dc322f', 'danger-bg': '#fbe3e2', keycap: '#fefbf0', 'keycap-border': '#d3cbb0' },
     },
 };
 

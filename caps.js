@@ -12,7 +12,7 @@
 // has its own (v8 today). A raw `version >= N` compare across families is
 // WRONG — always gate here.
 
-import { isZmkFamily, zmkCapabilities } from './zmk.js?v=13';
+import { isZmkFamily, zmkCapabilities } from './zmk.js?v=14';
 
 export function capabilities(family, version) {
     if (isZmkFamily(family)) return zmkCapabilities(family, version);

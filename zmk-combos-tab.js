@@ -16,24 +16,24 @@
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=13';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=13';
-import { CH, V } from './flaskproto.js?v=13';
-import { renderKeyboardSVG } from './keymap-tab.js?v=13';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=14';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=14';
+import { CH, V } from './flaskproto.js?v=14';
+import { renderKeyboardSVG } from './keymap-tab.js?v=14';
 import {
     keyboardUsages, consumerUsages, kpParam, cpParam,
     usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=13';
+} from './zmk-keycodes.js?v=14';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
     comboSlotToTyped, comboTypedToLegacy,
-} from './zmk-combos-codec.js?v=13';
-import { zmkBehaviors } from './zmk-keycodes.js?v=13';
-import { buildZmkPicker } from './zmk-keymap-tab.js?v=13';
-import { captureOneKey } from './zmk-capture.js?v=13';
+} from './zmk-combos-codec.js?v=14';
+import { zmkBehaviors } from './zmk-keycodes.js?v=14';
+import { buildZmkPicker } from './zmk-keymap-tab.js?v=14';
+import { captureOneKey } from './zmk-capture.js?v=14';
 
 // Shared with the keymap picker's mod chips + tap-hold composer (same
 // circular-import pattern as buildZmkPicker: only used inside functions).
@@ -529,8 +529,7 @@ export class ZmkCombosTab {
                     onclick: () => this.addCombo(),
                 }),
                 el('span', { class: 'note faint', text: `${used} of ${this.slotCount} slots in use` })),
-            saveBar(() => flask.save(CH.combos),
-                'Edits are live; Save persists them across power cycles.'));
+            saveBar(() => flask.save(CH.combos)));
 
         this.root.replaceChildren(controls,
             ...visible.map((i) => this.comboCard(i)),

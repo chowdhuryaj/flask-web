@@ -2,10 +2,10 @@
 // SVG rendering pattern from AlooMapper's renderDiagram; geometry from
 // profiles.js (key units × UNIT px).
 
-import { el, svgEl, toast, card } from './ui.js?v=13';
-import { capLabel, hoverText } from './keycodes.js?v=13';
-import { buildPicker } from './picker.js?v=13';
-import { encoderCount } from './profiles.js?v=13';
+import { el, svgEl, toast, card } from './ui.js?v=14';
+import { capLabel, hoverText } from './keycodes.js?v=14';
+import { buildPicker } from './picker.js?v=14';
+import { encoderCount } from './profiles.js?v=14';
 
 const UNIT = 56;
 const GAP = 3;

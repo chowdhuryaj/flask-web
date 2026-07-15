@@ -7,23 +7,23 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card } from './ui.js?v=13';
-import { renderKeyboardSVG } from './keymap-tab.js?v=13';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=13';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=13';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=13';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=13';
-import { ZMK_VIDPID } from './zmk.js?v=13';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=13';
+import { el, toast, card, SAVE_STATE } from './ui.js?v=14';
+import { renderKeyboardSVG } from './keymap-tab.js?v=14';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=14';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=14';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=14';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=14';
+import { ZMK_VIDPID } from './zmk.js?v=14';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=14';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=13';
+} from './zmk-keycodes.js?v=14';
 // Circular with zmk-combos-tab (it imports buildZmkPicker for behavior
 // combo outputs) — safe: both sides export hoisted declarations and
 // neither calls the other at module-eval time.
-import { pickUsage, MODS } from './zmk-combos-tab.js?v=13';
+import { pickUsage, MODS } from './zmk-combos-tab.js?v=14';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -740,7 +740,7 @@ export class ZmkKeymapTab {
             class: 'btn small', text: 'Discard',
             onclick: () => this.discardChanges(),
         });
-        const note = el('span', { class: 'note' });
+        const note = el('span', { class: 'state' });
         const file = el('input', { type: 'file', accept: '.json,application/json', style: 'display:none' });
         file.addEventListener('change', () => {
             const f = file.files?.[0];
@@ -756,7 +756,7 @@ export class ZmkKeymapTab {
         capture.addEventListener('click', () => this._setCapture(!this._captureOn, capture));
         this._captureBtn = capture;
 
-        const bar = el('div', { class: 'savebar', style: 'margin: 0 0 10px' },
+        const bar = el('div', { class: 'savebar toolbar' },
             save, discard, note,
             el('span', { style: 'flex:1' }),
             capture,
@@ -778,9 +778,10 @@ export class ZmkKeymapTab {
             })] : []));
         this._updateSaveBar = () => {
             save.disabled = discard.disabled = !this.unsaved;
-            note.textContent = this.unsaved
-                ? 'Unsaved — live now, reverts on power-off.'
-                : 'No unsaved changes.';
+            // Canonical live/saved vocabulary (ui.js SAVE_STATE) — this tab is
+            // one of the few that genuinely tracks dirtiness, so it may assert.
+            bar.dataset.state = this.unsaved ? 'live' : 'saved';
+            note.textContent = this.unsaved ? SAVE_STATE.live : SAVE_STATE.saved;
         };
         this._updateSaveBar();
         return bar;
