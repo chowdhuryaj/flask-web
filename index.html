@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flask — Vial configurator</title>
-  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="stylesheet" href="styles.css?v=16">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚗️</text></svg>">
   <!-- Classic script (not a module): UMD root detection needs a real `this`.
        Exposes window['xz-decompress'].XzReadableStream — used by vialdef.js. -->
-  <script src="vendor/xz-decompress.js?v=15"></script>
+  <script src="vendor/xz-decompress.js?v=16"></script>
 </head>
 <body>
   <header>
@@ -42,8 +42,10 @@
 
   <main>
     <div id="unsupported" class="banner" style="display:none">
-      This browser has no WebHID. Use Chrome, Edge, or another Chromium-based
-      browser (WebHID is not available in Firefox or Safari).
+      <span id="unsupported-msg">This browser has no WebHID. Use Chrome, Edge, or another Chromium-based
+      browser (WebHID is not available in Firefox or Safari).</span>
+      <span class="spacer"></span>
+      <button class="btn small" id="unsupported-why">Why?</button>
     </div>
     <div id="landing" class="landing">
       <h2>Flask web configurator</h2>
@@ -57,10 +59,13 @@
         changes queue locally and apply automatically the next time that
         keyboard is connected.</p>
       <div class="dev-list" id="offline-list"></div>
+      <p class="faint" style="margin-top:28px">Connect not working, or on a managed
+        machine? <button class="btn small" id="preflight-btn">Run a compatibility check</button></p>
+      <div id="preflight" class="card preflight" style="display:none"></div>
     </div>
     <div id="panels"></div>
   </main>
 
-  <script type="module" src="main.js?v=17"></script>
+  <script type="module" src="main.js?v=18"></script>
 </body>
 </html>

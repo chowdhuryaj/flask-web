@@ -283,6 +283,45 @@ main { padding: var(--sp-6); max-width: 1200px; margin: 0 auto; }
 .cards-row { display: flex; gap: var(--sp-5); flex-wrap: wrap; }
 .cards-row .card { flex: 1 1 340px; margin-bottom: 0; }
 
+/* ---------- preflight (compatibility check) ---------- */
+/* Colour rides the icon/dot only — --warn and --danger both fail contrast as
+   body text in the light themes (see the 708a4c7 design pass). */
+.preflight { text-align: left; margin-top: var(--sp-5); }
+/* .landing p centres and clamps to 480px — inside the panel that reads as a
+   stray indent next to the flush-left check rows. It is declared later in
+   this file at equal specificity, so this needs the extra class to win. */
+.landing .preflight p { max-width: 64ch; margin: var(--sp-5) 0; }
+.preflight-head {
+  display: flex; align-items: center; gap: var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.preflight-head h3 { margin: 0; }
+.preflight-body {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  margin: var(--sp-5) 0;
+}
+.preflight-row {
+  display: grid;
+  grid-template-columns: 16px minmax(140px, max-content) 1fr;
+  gap: var(--sp-4); align-items: baseline;
+  font-size: var(--fs-md);
+}
+.preflight-icon { font-weight: var(--fw-sb); text-align: center; }
+.preflight-row.pass .preflight-icon { color: var(--ok); }
+.preflight-row.fail .preflight-icon { color: var(--danger); }
+.preflight-row.warn .preflight-icon { color: var(--warn); }
+.preflight-row.info .preflight-icon { color: var(--faint); }
+.preflight-name { font-weight: var(--fw-md); }
+.preflight-detail { font-size: var(--fs-sm); }
+.preflight-actions { display: flex; gap: var(--sp-4); margin-top: var(--sp-5); }
+.pill.bad { background: var(--danger-bg); border-color: var(--danger); color: var(--text); }
+.pill.bad .dot { background: var(--danger); }
+.pill.warn .dot { background: var(--warn); }
+@media (max-width: 560px) {
+  .preflight-row { grid-template-columns: 16px 1fr; }
+  .preflight-detail { grid-column: 2; }
+}
+
 /* ---------- layer strip ---------- */
 
 .layer-strip { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-5); flex-wrap: wrap; }

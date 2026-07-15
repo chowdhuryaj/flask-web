@@ -4,10 +4,10 @@
 // journals the whole decoded macro list; sync replays it (and reports the
 // unlock requirement if the board arrives locked).
 
-import { el, card, toast } from './ui.js?v=15';
-import { kcCell, makePickerHost } from './picker.js?v=15';
-import { MacroCodec } from './vialproto.js?v=15';
-import { capLabel } from './keycodes.js?v=15';
+import { el, card, toast } from './ui.js?v=16';
+import { kcCell, makePickerHost } from './picker.js?v=16';
+import { MacroCodec } from './vialproto.js?v=16';
+import { capLabel } from './keycodes.js?v=16';
 
 export class MacrosTab {
     constructor(app) { this.app = app; this.root = el('div'); }

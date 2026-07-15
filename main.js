@@ -2,44 +2,45 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=15';
-import { diag } from './diag.js?v=15';
-import { FlaskHID } from './webhid.js?v=15';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=15';
+import { el, toast, modal } from './ui.js?v=16';
+import { diag } from './diag.js?v=16';
+import { FlaskHID } from './webhid.js?v=16';
+import { renderPreflight } from './preflight.js?v=16';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=16';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=15';
-import { VialClient } from './vialclient.js?v=15';
-import { parseDefinition } from './vialdef.js?v=15';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=15';
-import { capabilities } from './caps.js?v=15';
-import { setDeviceCustomKeys } from './keycodes.js?v=15';
-import { KeymapTab } from './keymap-tab.js?v=15';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=15';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=15';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=15';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=15';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=15';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=15';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=15';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=15';
-import { ZmkTestTab } from './zmk-test-tab.js?v=15';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=15';
-import { MouseTab } from './mouse-tab.js?v=15';
-import { TypingTab } from './typing-tab.js?v=15';
-import { SettingsTab } from './settings-tab.js?v=15';
-import { HUD } from './hud.js?v=15';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=15';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=16';
+import { VialClient } from './vialclient.js?v=16';
+import { parseDefinition } from './vialdef.js?v=16';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=16';
+import { capabilities } from './caps.js?v=16';
+import { setDeviceCustomKeys } from './keycodes.js?v=16';
+import { KeymapTab } from './keymap-tab.js?v=16';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=16';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=16';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=16';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=16';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=16';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=16';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=16';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=16';
+import { ZmkTestTab } from './zmk-test-tab.js?v=16';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=16';
+import { MouseTab } from './mouse-tab.js?v=16';
+import { TypingTab } from './typing-tab.js?v=16';
+import { SettingsTab } from './settings-tab.js?v=16';
+import { HUD } from './hud.js?v=16';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=16';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=15';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=16';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=15';
-import { MacrosTab } from './macros-tab.js?v=15';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=15';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=15';
-import { RgbTab } from './rgb-tab.js?v=15';
-import { DisplayTab } from './display-tab.js?v=15';
-import { exportVil, importVil, downloadText } from './vil.js?v=15';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=16';
+import { MacrosTab } from './macros-tab.js?v=16';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=16';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=16';
+import { RgbTab } from './rgb-tab.js?v=16';
+import { DisplayTab } from './display-tab.js?v=16';
+import { exportVil, importVil, downloadText } from './vil.js?v=16';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -481,18 +482,52 @@ async function refreshDeviceList() {
 
 async function connectClick() {
     if (!FlaskHID.supported()) return;
+    const t0 = performance.now();
     try {
         const device = await app.hid.requestDevice();
         await connectFlow(device);
     } catch (e) {
+        const ms = Math.round(performance.now() - t0);
+        // A policy block and a user cancel BOTH surface as an empty device
+        // list. The tell is the clock: nobody dismisses a chooser in 400ms,
+        // so an instant "cancel" means the chooser never opened. Same for a
+        // SecurityError/NotAllowedError off a real click. Send those to the
+        // preflight instead of swallowing them as a cancel.
+        const refused = e.name === 'SecurityError' || e.name === 'NotAllowedError';
+        if (refused || (e.kind === 'cancelled' && ms < 400)) {
+            diag.log('connect-refused', `${e.name ?? e.kind} after ${ms}ms — chooser likely never opened`);
+            toast('The device chooser never opened — WebHID may be blocked here. '
+                + 'Run the compatibility check on the landing page.', true);
+            return;
+        }
         if (e.kind !== 'cancelled') toast(e.message, true);
     }
 }
 
 function init() {
-    // No WebHID (Firefox/Safari): connecting is off, but offline editing
-    // still works — the queue applies later from a Chromium browser.
+    // The preflight panel: the only thing that separates "no WebHID" from
+    // "WebHID blocked by policy" from "device not found". Reachable always,
+    // because a policy block leaves navigator.hid in place and Connect just
+    // silently does nothing.
+    let preflightShown = false;
+    const showPreflight = () => {
+        const host = $('preflight');
+        host.style.display = '';
+        if (!preflightShown) { preflightShown = true; renderPreflight(host); }
+        host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    $('preflight-btn').addEventListener('click', showPreflight);
+    $('unsupported-why').addEventListener('click', showPreflight);
+
+    // No WebHID (Firefox/Safari, or a non-HTTPS origin): connecting is off,
+    // but offline editing still works — the queue applies later from a
+    // Chromium browser.
     if (!FlaskHID.supported()) {
+        if (!window.isSecureContext) {
+            $('unsupported-msg').textContent =
+                'This page is not on HTTPS, so the browser hides WebHID entirely. '
+                + 'Load the https:// address — this looks identical to an unsupported browser.';
+        }
         $('unsupported').style.display = '';
         $('connect-btn').disabled = true;
         $('landing-connect').disabled = true;
