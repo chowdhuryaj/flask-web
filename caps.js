@@ -12,10 +12,14 @@
 // has its own (v8 today). A raw `version >= N` compare across families is
 // WRONG — always gate here.
 
-import { isZmkFamily, zmkCapabilities } from './zmk.js?v=18';
+import { isZmkFamily, zmkCapabilities } from './zmk.js?v=32';
+import { isNapeFamily, napeCapabilities } from './nape.js?v=32';
 
 export function capabilities(family, version) {
     if (isZmkFamily(family)) return zmkCapabilities(family, version);
+    // Nape Pro: VIA wire protocol, no Vial surface and no Flask channel —
+    // its own table, same dispatch-at-the-top rule as the ZMK line.
+    if (isNapeFamily(family)) return napeCapabilities();
 
     const v = version ?? 0;
     const flask = version != null && family !== 'generic';

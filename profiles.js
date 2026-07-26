@@ -4,8 +4,9 @@
 // any Vial keyboard's self-served definition. ZMK devices are profiled by
 // zmk.js (zmkProfile) — this file only delegates identification/labels.
 
-import { VIDPID } from './flaskproto.js?v=18';
-import { zmkFamilyCandidate, ZMK_FAMILY_LABELS } from './zmk.js?v=18';
+import { VIDPID } from './flaskproto.js?v=32';
+import { zmkFamilyCandidate, ZMK_FAMILY_LABELS } from './zmk.js?v=32';
+import { napeFamilyCandidate, NAPE_FAMILY_LABELS } from './nape.js?v=32';
 
 // Adept geometry mirrors keyboards/ploopyco/madromys/info.json (key units).
 const ADEPT_KEYS = [
@@ -21,6 +22,11 @@ export function familyOf(vid, pid) {
     if (vid === VIDPID.adept.vid && pid === VIDPID.adept.pid) return 'adept';
     if (vid === VIDPID.nlkb16.vid && pid === VIDPID.nlkb16.pid) return 'nlkb16';
     if (vid === VIDPID.svalboard.vid && pid === VIDPID.svalboard.pid) return 'svalboard';
+    // Keychron Nape Pro: ZMK firmware, but a VIA wire protocol — profiled by
+    // nape.js on the VIA side. Its VID/PID is unique, so no meta confirmation
+    // is needed (unlike the ZMK line, which shares 1d50:615e).
+    const nape = napeFamilyCandidate(vid, pid);
+    if (nape) return nape;
     // ZMK candidate (stock ZMK VID/PID; loadZmkDevice confirms via meta 0x03).
     const zmk = zmkFamilyCandidate(vid, pid);
     if (zmk) return zmk;
@@ -31,6 +37,7 @@ export function familyLabel(family) {
     return {
         adept: 'Ploopy Adept', svalboard: 'Svalboard', nlkb16: 'NLKB16-02',
         generic: 'Vial keyboard',
+        ...NAPE_FAMILY_LABELS,
         ...ZMK_FAMILY_LABELS,
     }[family];
 }

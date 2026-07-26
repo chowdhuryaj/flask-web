@@ -5,7 +5,7 @@
 // Swift `.busy` throw replaced by a FIFO promise chain so any caller
 // (tabs, HUD poll) can fire and ordering is preserved.
 
-import { diag, diagHex } from './diag.js?v=18';
+import { diag, diagHex } from './diag.js?v=32';
 
 export const USAGE_PAGE = 0xFF60;
 export const USAGE = 0x61;
@@ -210,6 +210,26 @@ export class FlaskHID extends EventTarget {
         return this._enqueue(() =>
             this._send(prefix, (r) => r[1] === channel && r[2] === valueID
                 && echo.every((b, i) => r[3 + i] === b), opts));
+    }
+
+    /**
+     * VIA-framed command: the response echoes the command byte, and the first
+     * `echoBytes` argument bytes (dynamic_keymap_get/set_keycode echo
+     * layer+row+col; get/set_buffer echo offset+size; the Keychron 0xA7
+     * envelope echoes its sub-command id).
+     *
+     * Prefer this over rawCommand wherever the device echoes: rawCommand
+     * matches ANY next report, so a late reply that arrives after its own
+     * request timed out is adopted by whatever is in flight, and every read
+     * after that is shifted by one (the bench-2 slot-table failure, in the
+     * VIA dialect).
+     */
+    viaCommand(prefix, echoBytes = 0) {
+        const cmd = prefix[0];
+        const echo = prefix.slice(1, 1 + echoBytes);
+        return this._enqueue(() =>
+            this._send(prefix, (r) => r[0] === cmd
+                && echo.every((b, i) => r[1 + i] === b)));
     }
 
     /**

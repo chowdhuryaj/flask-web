@@ -735,3 +735,114 @@ body.hud-electron a { -webkit-app-region: no-drag; }
 .pill.offline { border-color: #e5a50a; }
 .pill.offline .dot { background: #e5a50a; }
 .badge.faint { opacity: 0.6; }
+
+/* ---------- Keychron Nape Pro ---------- */
+
+/* Live device state. Reads as instrument panel, not decoration: the values are
+   the point, the labels recede. */
+.nape-header { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-6); }
+.nape-chip {
+    display: flex; flex-direction: column; gap: 1px;
+    padding: var(--sp-2) var(--sp-4);
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface2);
+}
+.nape-chip-label { font-size: var(--fs-xs); color: var(--muted); }
+.nape-chip-value { font-size: var(--fs-md); color: var(--text); font-variant-numeric: tabular-nums; }
+
+.nape-section { margin-bottom: var(--sp-7); }
+.nape-section h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-lg); }
+.nape-section .hint { margin: 0 0 var(--sp-4); color: var(--muted); font-size: var(--fs-sm); max-width: 68ch; }
+.nape-section .row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.nape-section .row + .row { margin-top: var(--sp-2); }
+.nape-section .sep { width: 1px; height: 20px; background: var(--border2); margin: 0 var(--sp-1); }
+.nape-section .empty-note {
+    margin: 0 0 var(--sp-3); padding: var(--sp-4);
+    border: 1px dashed var(--border2); border-radius: 8px;
+    color: var(--muted); font-size: var(--fs-sm);
+}
+
+/* Layer selector: one row of chips, the live layer marked. Replaces a grid of
+   nine identical boards — on a six-key device only one layer matters at a time. */
+.layer-bar { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-4); }
+.layer-chip {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: var(--sp-2) var(--sp-4); min-width: 56px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); color: var(--muted);
+    font-size: var(--fs-sm); cursor: pointer;
+    transition: background var(--dur-fast) var(--ease-out),
+                border-color var(--dur-fast) var(--ease-out),
+                color var(--dur-fast) var(--ease-out);
+}
+.layer-chip:hover { background: var(--surface2); color: var(--text); }
+.layer-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.layer-chip.on {
+    background: var(--accent-bg); border-color: var(--accent);
+    color: var(--accent-text); font-weight: 600;
+}
+.layer-chip.live::after {
+    content: ''; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--ok); margin-top: 2px;
+}
+.layer-chip-angle { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.layer-chip.on .layer-chip-angle { color: var(--accent-text); }
+
+.board { border: 1px solid var(--border); border-radius: 10px; padding: var(--sp-4) var(--sp-5); background: var(--surface); }
+.board-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); flex-wrap: wrap; }
+.board-hint { margin: var(--sp-3) 0 0; color: var(--muted); font-size: var(--fs-xs); }
+
+.tag {
+    font-size: var(--fs-xs); padding: 1px var(--sp-2); border-radius: 999px;
+    background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+}
+.tag.live { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+
+.nape-picker {
+    border: 1px solid var(--accent); border-radius: 10px;
+    padding: var(--sp-4); margin-bottom: var(--sp-6); background: var(--surface);
+}
+.nape-picker h3 { margin: 0; font-size: var(--fs-md); }
+.nape-picker .row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); }
+.nape-picker input[type=text] {
+    padding: var(--sp-1) var(--sp-3); border: 1px solid var(--border2);
+    border-radius: 6px; background: var(--surface2); color: var(--text);
+}
+.picker-group { margin-top: var(--sp-4); }
+.picker-group h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--muted); }
+.keycap-btn {
+    padding: var(--sp-2) var(--sp-3); border: 1px solid var(--keycap-border);
+    border-radius: 6px; background: var(--keycap); color: var(--text);
+    cursor: pointer; font-size: var(--fs-sm);
+    transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.keycap-btn:hover { border-color: var(--accent); color: var(--accent-text); }
+.keycap-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.kc-editor { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.check.tiny { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); color: var(--muted); }
+.gest-label { display: inline-block; min-width: 56px; color: var(--text); font-size: var(--fs-sm); }
+.combo-row { border: 1px solid var(--border); border-radius: 8px; padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-2); }
+.combo-row.empty { opacity: .6; }
+.row.inert { opacity: .55; }
+
+/* Macros: a table, because it is tabular. */
+.macro-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.macro-table td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.macro-table tr:last-child td { border-bottom: 0; }
+.macro-idx { color: var(--muted); font-variant-numeric: tabular-nums; width: 3.5rem; }
+.macro-text { color: var(--text); word-break: break-word; }
+.macro-empty .macro-text { color: var(--faint); font-style: italic; }
+.macro-len { color: var(--muted); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.macro-editing { background: var(--accent-bg); }
+.macro-input {
+    width: 100%; padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--accent); border-radius: 6px;
+    background: var(--surface); color: var(--text); font-size: var(--fs-sm);
+}
+.macro-usage { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-4); color: var(--muted); font-size: var(--fs-xs); }
+.macro-bar { flex: 0 0 160px; height: 5px; border-radius: 999px; background: var(--surface2); overflow: hidden; }
+.macro-bar-fill { display: block; height: 100%; background: var(--accent); transition: width var(--dur-base) var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+    .layer-chip, .keycap-btn, .macro-bar-fill { transition: none; }
+}
