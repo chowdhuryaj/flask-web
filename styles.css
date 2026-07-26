@@ -846,3 +846,27 @@ body.hud-electron a { -webkit-app-region: no-drag; }
 @media (prefers-reduced-motion: reduce) {
     .layer-chip, .keycap-btn, .macro-bar-fill { transition: none; }
 }
+
+/* Shared keycode picker */
+.kp-current { display: flex; align-items: baseline; gap: var(--sp-2); margin: 0 0 var(--sp-4); }
+.kp-current-label { color: var(--muted); font-size: var(--fs-xs); }
+.kp-group { margin-top: var(--sp-4); }
+.kp-group h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--muted); }
+.kp-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.kp-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.kp-lead { color: var(--muted); font-size: var(--fs-xs); min-width: 4.5rem; }
+.kp-select {
+    padding: var(--sp-1) var(--sp-2); border: 1px solid var(--border2);
+    border-radius: 6px; background: var(--surface2); color: var(--text); font-size: var(--fs-sm);
+}
+.keycap-btn.on { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
+.kc-button {
+    padding: var(--sp-1) var(--sp-3); border: 1px solid var(--border2); border-radius: 6px;
+    background: var(--surface2); color: var(--text); font-size: var(--fs-sm); cursor: pointer;
+    min-width: 8rem; text-align: left;
+    transition: border-color var(--dur-fast) var(--ease-out);
+}
+.kc-button:hover { border-color: var(--accent); }
+.kc-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kc-button.on { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
+@media (prefers-reduced-motion: reduce) { .kc-button { transition: none; } }

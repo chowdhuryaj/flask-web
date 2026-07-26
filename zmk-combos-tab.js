@@ -16,24 +16,24 @@
 // Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
 // after its Studio load; before that a numeric position fallback renders.
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=32';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=32';
-import { CH, V } from './flaskproto.js?v=32';
-import { renderKeyboardSVG } from './keymap-tab.js?v=32';
+import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=33';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=33';
+import { CH, V } from './flaskproto.js?v=33';
+import { renderKeyboardSVG } from './keymap-tab.js?v=33';
 import {
     keyboardUsages, consumerUsages, kpParam, cpParam,
     usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=32';
+} from './zmk-keycodes.js?v=33';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
     comboSlotToTyped, comboTypedToLegacy,
-} from './zmk-combos-codec.js?v=32';
-import { zmkBehaviors } from './zmk-keycodes.js?v=32';
-import { buildZmkPicker } from './zmk-keymap-tab.js?v=32';
-import { captureOneKey } from './zmk-capture.js?v=32';
+} from './zmk-combos-codec.js?v=33';
+import { zmkBehaviors } from './zmk-keycodes.js?v=33';
+import { buildZmkPicker } from './zmk-keymap-tab.js?v=33';
+import { captureOneKey } from './zmk-capture.js?v=33';
 
 // Shared with the keymap picker's mod chips + tap-hold composer (same
 // circular-import pattern as buildZmkPicker: only used inside functions).

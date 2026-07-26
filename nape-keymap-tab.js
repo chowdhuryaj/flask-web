@@ -10,12 +10,11 @@
 // labelled by index until named at the bench, because guessing it once already
 // produced a wrong map.
 
-import { el, toast } from './ui.js?v=32';
-import { renderKeyboardSVG } from './keymap-tab.js?v=32';
-import {
-    KC, napeKeyLabel, napeKeycodeGroups, setScrollMode,
-} from './nape-proto.js?v=32';
-import { napeProfile, saveKeyName, napeColLabel } from './nape.js?v=32';
+import { el, toast } from './ui.js?v=33';
+import { renderKeyboardSVG } from './keymap-tab.js?v=33';
+import { KC, napeKeyLabel, setScrollMode } from './nape-proto.js?v=33';
+import { buildKeycodePicker } from './nape-keypicker.js?v=33';
+import { napeProfile, saveKeyName, napeColLabel } from './nape.js?v=33';
 
 export class NapeKeymapTab {
     constructor(app) {
@@ -134,12 +133,12 @@ export class NapeKeymapTab {
     _picker() {
         if (!this.sel) return el('div');
         const { layer, col } = this.sel;
-        const groups = napeKeycodeGroups().map((g) => el('div', { class: 'picker-group' },
-            el('h4', { text: g.name }),
-            el('div', { class: 'picker' }, ...g.codes.map((kc) => el('button', {
-                class: 'keycap-btn', text: napeKeyLabel(kc),
-                onclick: () => this._assign(layer, col, kc),
-            })))));
+        const picker = buildKeycodePicker({
+            value: this.app.napeKeymap[layer][col],
+            layers: this.app.layerCount,
+            macros: 16,
+            onPick: (kc) => this._assign(layer, col, kc),
+        });
         const nameInput = el('input', {
             type: 'text', placeholder: 'name this button (M1, 03…)',
             value: napeColLabel(col).startsWith('col ')
@@ -163,7 +162,7 @@ export class NapeKeymapTab {
                     class: 'btn', text: 'Cancel',
                     onclick: () => { committed = true; this.sel = null; this.render(); },
                 })),
-            ...groups);
+            picker);
     }
 
     _layerBar() {

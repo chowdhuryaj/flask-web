@@ -5,10 +5,11 @@
 // write exactly what their app writes, and nothing here touches the radio,
 // the bootloader, or whole-device config.
 
-import { el, toast } from './ui.js?v=32';
-import { KC, NAPE_COMBO_SLOTS } from './nape-proto.js?v=32';
-import { buildNapeExport, applyNapeImport, downloadNapeExport } from './nape-export.js?v=32';
-import { napeVisibleCols, napeColLabel } from './nape.js?v=32';
+import { el, toast } from './ui.js?v=33';
+import { KC, NAPE_COMBO_SLOTS, NAPE_LAYERS, napeKeyLabel } from './nape-proto.js?v=33';
+import { buildKeycodePicker } from './nape-keypicker.js?v=33';
+import { buildNapeExport, applyNapeImport, downloadNapeExport } from './nape-export.js?v=33';
+import { napeVisibleCols, napeColLabel } from './nape.js?v=33';
 
 const ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
@@ -77,9 +78,10 @@ export class NapeSettingsTab {
             this.gestures = await app.nape.gestures();
             this.combos = await app.nape.combos(NAPE_COMBO_SLOTS);
             this.showAllCombos = this.showAllCombos || false;
+            if (this.thLayer == null) this.thLayer = this.layer;
             this.tapholds = {};
             for (const c of napeVisibleCols()) {
-                this.tapholds[c] = await app.nape.taphold(this.layer, c);
+                this.tapholds[c] = await app.nape.taphold(this.thLayer, c);
             }
         } finally {
             app.hid.resume();
@@ -238,43 +240,88 @@ export class NapeSettingsTab {
         input.click();
     }
 
+    /** Inline keycode picker shared by tap-holds and combos. */
+    _picker(value, onPick, title) {
+        return el('div', { class: 'nape-picker' },
+            el('div', { class: 'row' },
+                el('h3', { text: title }),
+                el('button', { class: 'btn small', text: 'Close',
+                    onclick: () => { this.editing = null; this.render(); } })),
+            buildKeycodePicker({
+                value, layers: NAPE_LAYERS, macros: 16,
+                onPick: (kc) => { this.editing = null; onPick(kc); },
+            }));
+    }
+
+    _kcButton(value, onOpen, id) {
+        return el('button', {
+            class: 'kc-button' + (this.editing === id ? ' on' : ''),
+            text: napeKeyLabel(value || 0),
+            onclick: () => { this.editing = this.editing === id ? null : id; onOpen(); },
+        });
+    }
+
     _tapholds() {
         const rows = napeVisibleCols().map((col) => {
             const t = this.tapholds[col];
             // A tap/hold entry only fires if the key itself is CUSTOM(41) — that
             // keycode is what tells the firmware to consult this table. Editing
             // the entry for any other key silently does nothing.
-            const live = this.app.napeKeymap[this.layer]?.[col] === KC.tapHold;
+            const live = this.app.napeKeymap[this.thLayer]?.[col] === KC.tapHold;
             return el('div', { class: 'row' + (live ? '' : ' inert') },
             el('span', { class: 'gest-label', text: napeColLabel(col) }),
             el('span', { class: 'muted', text: 'tap' }),
-            keycodeEditor(t.tap, (v) => this._do(
-                () => this.app.nape.setTaphold({ layer: this.layer, col, tap: v, held: t.held }))),
+            this._kcButton(t.tap, () => {}, `th-${col}-tap`),
             el('span', { class: 'muted', text: 'hold' }),
-            keycodeEditor(t.held, (v) => this._do(
-                () => this.app.nape.setTaphold({ layer: this.layer, col, tap: t.tap, held: v }))),
+            this._kcButton(t.held, () => {}, `th-${col}-held`),
             (t.tap || t.held) ? el('button', {
                 class: 'btn small', text: 'Clear',
-                onclick: () => this._do(() => this.app.nape.deleteTaphold(this.layer, col)),
+                onclick: () => this._do(() => this.app.nape.deleteTaphold(this.thLayer, col)),
             }) : null,
             live ? null : el('button', {
                 class: 'btn small', text: 'Enable tap/hold here',
                 title: 'Sets this key to the tap/hold keycode so the entry below takes effect',
                 onclick: () => this._do(async () => {
-                    await this.app.nape.setKeycode(this.layer, col, KC.tapHold);
-                    const back = await this.app.nape.getKeycode(this.layer, col);
-                    this.app.napeKeymap[this.layer][col] = back;
-                    this.app.keymap[this.layer][0][col] = back;
+                    await this.app.nape.setKeycode(this.thLayer, col, KC.tapHold);
+                    const back = await this.app.nape.getKeycode(this.thLayer, col);
+                    this.app.napeKeymap[this.thLayer][col] = back;
+                    this.app.keymap[this.thLayer][0][col] = back;
                 }, 'Tap/hold enabled on this key'),
             }));
         });
+        const layerBar = el('div', { class: 'layer-bar' },
+            ...Array.from({ length: NAPE_LAYERS }, (_, l) => el('button', {
+                class: 'layer-chip' + (l === this.thLayer ? ' on' : '')
+                    + (l === this.layer ? ' live' : ''),
+                onclick: () => { this.thLayer = l; this.editing = null; this.load(); },
+            }, el('span', { text: `L${l}` }))));
+
+        const openId = this.editing;
+        let pickerHost = null;
+        if (typeof openId === 'string' && openId.startsWith('th-')) {
+            const [, colStr, which] = openId.split('-');
+            const col = Number(colStr);
+            const t = this.tapholds[col];
+            pickerHost = this._picker(which === 'tap' ? t.tap : t.held,
+                (kc) => this._do(() => this.app.nape.setTaphold({
+                    layer: this.thLayer, col,
+                    tap: which === 'tap' ? kc : t.tap,
+                    held: which === 'held' ? kc : t.held,
+                })),
+                `${napeColLabel(col)} — ${which === 'tap' ? 'tap' : 'hold'}, layer ${this.thLayer}`);
+        }
+
         return el('div', { class: 'nape-section' },
-            el('h3', { text: `Tap / hold — layer ${this.layer}` }),
+            el('h3', { text: 'Tap / hold' }),
             el('p', { class: 'hint' },
                 'Give one button two meanings: a tap sends one key, holding it sends another. '
-                + 'Shown for the layer the device is on right now. A row only takes effect '
-                + 'if that key is set to the tap/hold keycode — greyed rows are not wired up yet.'),
-            ...rows);
+                + 'This table is per layer and per key. A row only takes effect if that key '
+                + 'is set to the tap/hold keycode — greyed rows are not wired up yet. For a '
+                + 'tap/hold on any key without a table entry, assign a Tap/hold keycode in '
+                + 'the Keymap tab instead.'),
+            layerBar,
+            ...rows,
+            pickerHost);
     }
 
     _dpi() {

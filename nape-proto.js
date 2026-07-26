@@ -92,7 +92,55 @@ export const KC = {
     gestureHold: 0x5229,  // MO(9)
 };
 
-export const QK = { to: 0x5200, mo: 0x5220, df: 0x5240, tg: 0x5260, osl: 0x5280, kb: 0x7E00 };
+export const QK = {
+    modTap: 0x2000, modTapMax: 0x3FFF,     // MT(mods, kc): hold = mods, tap = kc
+    layerTap: 0x4000, layerTapMax: 0x4FFF, // LT(layer, kc): hold = layer, tap = kc
+    to: 0x5200, mo: 0x5220, df: 0x5240, tg: 0x5260, osl: 0x5280,
+    macro: 0x7700, macroMax: 0x777F,
+    kb: 0x7E00,
+};
+
+// Modifier bits as QMK packs them into a keycode's high byte. Bit 4 selects the
+// right-hand variant of whatever is set in bits 0-3.
+export const MOD_BITS = [
+    { bit: 0x01, name: 'Ctrl' }, { bit: 0x02, name: 'Shift' },
+    { bit: 0x04, name: 'Alt' }, { bit: 0x08, name: 'Gui' },
+];
+export const MOD_RIGHT = 0x10;
+
+/** MT(mods, kc) — hold for the modifiers, tap for the key. */
+export function encodeModTap(mods, kc) {
+    return QK.modTap | ((mods & 0x1F) << 8) | (kc & 0xFF);
+}
+
+/** LT(layer, kc) — hold for the layer, tap for the key. */
+export function encodeLayerTap(layer, kc) {
+    return QK.layerTap | ((layer & 0x0F) << 8) | (kc & 0xFF);
+}
+
+export function encodeMacro(index) { return QK.macro | (index & 0x7F); }
+
+/** Decompose a keycode into { kind, ... } for editors. */
+export function decodeKeycode(kc) {
+    if (kc >= QK.modTap && kc <= QK.modTapMax) {
+        return { kind: 'modTap', mods: (kc >> 8) & 0x1F, base: kc & 0xFF };
+    }
+    if (kc >= QK.layerTap && kc <= QK.layerTapMax) {
+        return { kind: 'layerTap', layer: (kc >> 8) & 0x0F, base: kc & 0xFF };
+    }
+    if (kc >= QK.macro && kc <= QK.macroMax) return { kind: 'macro', index: kc & 0x7F };
+    if (kc >= QK.kb && kc <= QK.kb + 0xFF) return { kind: 'device', index: kc - QK.kb };
+    for (const [base, name] of [[QK.to, 'to'], [QK.mo, 'mo'], [QK.df, 'df'],
+        [QK.tg, 'tg'], [QK.osl, 'osl']]) {
+        if (kc >= base && kc <= base + 0x1F) return { kind: name, layer: kc - base };
+    }
+    return { kind: 'basic', mods: (kc >> 8) & 0x1F, base: kc & 0xFF };
+}
+
+export function modsLabel(mods) {
+    const side = (mods & MOD_RIGHT) ? 'R' : '';
+    return MOD_BITS.filter((m) => mods & m.bit).map((m) => side + m.name).join('+');
+}
 
 // Label table lifted from the Launcher bundle's own keycode->i18n map, which is
 // the only published description of this device's CUSTOM(n) space.
@@ -115,6 +163,13 @@ const BASE_LABELS = {
 /** Human label for a Nape keycode. */
 export function napeKeyLabel(kc) {
     if (kc in BASE_LABELS) return BASE_LABELS[kc];
+    if (kc >= QK.macro && kc <= QK.macroMax) return `Macro ${kc & 0x7F}`;
+    if (kc >= QK.modTap && kc <= QK.modTapMax) {
+        return `${basicKeyName(kc & 0xFF)} / hold ${modsLabel((kc >> 8) & 0x1F) || 'mod'}`;
+    }
+    if (kc >= QK.layerTap && kc <= QK.layerTapMax) {
+        return `${basicKeyName(kc & 0xFF)} / hold L${(kc >> 8) & 0x0F}`;
+    }
     if (kc === KC.gestureHold) return 'Gesture (hold)';
     if (kc === KC.scrollHold) return 'Scroll (hold)';
     if (kc === KC.scrollToggle) return 'Scroll (toggle)';
@@ -127,7 +182,34 @@ export function napeKeyLabel(kc) {
         const n = kc - QK.kb;
         return CUSTOM_LABELS[n] ?? `Device key ${n}`;
     }
+    if (kc && (kc & 0xFF00) && (kc & 0x1F00) === (kc & 0xFF00)) {
+        const m = modsLabel((kc >> 8) & 0x1F);
+        if (m) return `${m}+${basicKeyName(kc & 0xFF)}`;
+    }
+    if (kc <= 0xFF) return basicKeyName(kc);
     return `0x${kc.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+/** HID usage -> readable name. Shared by every editor so labels never diverge. */
+export const BASIC_KEYS = [
+    { kc: 0x0000, name: '(none)' },
+    ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((c, i) => ({ kc: 0x04 + i, name: c })),
+    ...'1234567890'.split('').map((c, i) => ({ kc: 0x1E + i, name: c })),
+    { kc: 0x0028, name: 'Enter' }, { kc: 0x0029, name: 'Escape' },
+    { kc: 0x002A, name: 'Backspace' }, { kc: 0x002B, name: 'Tab' },
+    { kc: 0x002C, name: 'Space' }, { kc: 0x002D, name: '-' }, { kc: 0x002E, name: '=' },
+    { kc: 0x0036, name: ',' }, { kc: 0x0037, name: '.' }, { kc: 0x0038, name: '/' },
+    { kc: 0x004C, name: 'Delete' }, { kc: 0x004A, name: 'Home' }, { kc: 0x004D, name: 'End' },
+    { kc: 0x004B, name: 'Page Up' }, { kc: 0x004E, name: 'Page Down' },
+    { kc: 0x004F, name: '→ Right' }, { kc: 0x0050, name: '← Left' },
+    { kc: 0x0051, name: '↓ Down' }, { kc: 0x0052, name: '↑ Up' },
+    ...Array.from({ length: 12 }, (_, i) => ({ kc: 0x3A + i, name: `F${i + 1}` })),
+    { kc: 0x00D1, name: 'Left click' }, { kc: 0x00D2, name: 'Right click' },
+    { kc: 0x00D3, name: 'Middle click' }, { kc: 0x00D4, name: 'Back' }, { kc: 0x00D5, name: 'Forward' },
+];
+
+export function basicKeyName(kc) {
+    return BASIC_KEYS.find((k) => k.kc === kc)?.name ?? `0x${kc.toString(16).padStart(2, '0')}`;
 }
 
 /** Keycodes offered in the picker, grouped. */
