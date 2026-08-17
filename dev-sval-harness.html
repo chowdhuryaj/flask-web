@@ -1,0 +1,123 @@
+<!doctype html>
+<!--
+  Dev harness for the Svalboard v12-v17 tabs — renders them against a FAKE
+  device, with no hardware and no WebHID.
+
+  Why this exists: the offline templates cover 'adept' and 'nlkb16' only, so the
+  Svalboard-gated surfaces (Super Leader, snippets, Cyclotab, alt-repeat
+  behaviour, two-ball gestures, teleport, corner combos) had no way to be
+  rendered before touching a real board. A render-time typo in one of those tabs
+  used to be discoverable only by flashing and clicking.
+
+  This proves the tabs BUILD and read the channels they claim. It proves nothing
+  about the wire format — the fake answers whatever the shape suggests. Real
+  values still have to be verified on hardware.
+
+  Open it at /dev-sval-harness.html on the dev server; the console line at the
+  bottom is the pass/fail.
+-->
+<meta charset="utf-8">
+<title>Flask dev harness — Svalboard tabs</title>
+<link rel="stylesheet" href="styles.css?v=34">
+<style>
+  body { padding: 12px; }
+  h2 { margin: 18px 0 6px; font-size: 14px; }
+  #result { position: sticky; top: 0; padding: 8px; font: 12px/1.4 monospace;
+            background: var(--surface2); border: 1px solid var(--border); z-index: 9; }
+</style>
+<div id="result">running…</div>
+<div id="mounts"></div>
+
+<script type="module">
+import { capabilities } from './caps.js?v=34';
+import { CH, V } from './flaskproto.js?v=34';
+import { TypingTab } from './typing-tab.js?v=34';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=34';
+import { CornerTab } from './corner-tab.js?v=34';
+import { MouseTab } from './mouse-tab.js?v=34';
+import { setDeviceCustomKeys } from './keycodes.js?v=34';
+
+/** Plausible-but-fake device. Returns a value for every id rather than
+ * throwing, so a tab that reads something it shouldn't still renders — the
+ * point here is finding crashes, not validating gating. */
+class FakeFlask {
+    constructor() { this.reads = new Set(); this.writes = []; }
+    async getU16(ch, id) {
+        this.reads.add(`${ch.toString(16)}.${id.toString(16)}`);
+        if (ch === CH.corner && id === V.ccDefCount) return 60;
+        if (ch === CH.snippets && id === V.snipKeyCount) return 16;
+        if (ch === CH.leader && id === V.slLiveCount) return 2;
+        if (ch === CH.leader && id === V.slTimeout) return 1200;
+        if (ch === CH.teleport && id === V.tpCurrent) return 0;
+        if (id === 0x01) return 1;
+        return 100;
+    }
+    async getI16(ch, id) { return this.getU16(ch, id); }
+    async setU16(ch, id, v) { this.writes.push([ch, id, v]); return v; }
+    async setI16(ch, id, v) { return this.setU16(ch, id, v); }
+    async save() {}
+    async getBytes(ch, id, payload) {
+        this.reads.add(`${ch.toString(16)}.${id.toString(16)}b`);
+        if (ch === CH.corner && id === V.ccDef) return [payload[0], 0x09, 0x0A, 0];
+        if (ch === CH.corner && id === V.ccLayers) return [payload[0], 0x00, 0x03];
+        if (ch === CH.corner && id === V.ccOut) return [payload[0], payload[1], 0x00, 0x04];
+        if (ch === CH.rgbMap) return [payload[0], payload[1], 0, 0, 0];
+        return [...payload, 0, 0];
+    }
+    async setBytes(ch, id, payload) { this.writes.push([ch, id, payload]); return payload; }
+    async getSnippet(i) { return i < 3 ? `snippet ${i + 1} text` : ''; }
+    async setSnippet() {}
+}
+
+const lines = [];
+const mounts = document.getElementById('mounts');
+
+async function mount(label, Ctor, app) {
+    const h = document.createElement('h2');
+    h.textContent = label;
+    mounts.append(h);
+    try {
+        const tab = new Ctor(app);
+        mounts.append(tab.root);
+        await tab.load();
+        const cards = tab.root.querySelectorAll('.card').length;
+        lines.push(`OK   ${label} — ${cards} card(s)`);
+    } catch (e) {
+        lines.push(`FAIL ${label} — ${e.message}`);
+        console.error(label, e);
+    }
+}
+
+const flask = new FakeFlask();
+// A Svalboard-ish custom-keycode overlay so labels render as names, not hex.
+setDeviceCustomKeys([
+    { name: 'Select Word', title: 'select word', shortName: 'SelW' },
+    { name: 'Snippet 1', title: 'snippet 1', shortName: 'Snp1' },
+]);
+const appFor = (version) => ({
+    flask,
+    family: 'svalboard',
+    caps: capabilities('svalboard', version),
+    layerCount: 16,
+    profile: { keys: [], layerNames: [], decorations: [] },
+});
+
+const v17 = appFor(17);
+await mount('Typing — Svalboard v17 (Super Leader, snippets, Cyclotab, alt-repeat)', TypingTab, v17);
+await mount('Mouse Chords — Svalboard v17 (two balls, defer click)', ChordsTab, v17);
+await mount('Corner Combos — Svalboard v17', CornerTab, v17);
+await mount('Mouse — Svalboard v17 (teleport, wide auto-mouse threshold)', MouseTab, v17);
+
+// Regression side: the pre-v12 shapes the same files still have to serve.
+const v11 = appFor(11);
+await mount('Typing — Svalboard v11 (original 8-sequence leader)', TypingTab, v11);
+await mount('Gestures — Adept v11 (latched sets, restricted picker)', GesturesTab,
+    { ...appFor(11), family: 'adept', caps: capabilities('adept', 11) });
+
+const failed = lines.filter((l) => l.startsWith('FAIL'));
+const el = document.getElementById('result');
+el.textContent = `${failed.length ? 'FAILURES' : 'all tabs rendered'}\n${lines.join('\n')}`;
+el.style.whiteSpace = 'pre';
+el.style.color = failed.length ? 'var(--danger)' : 'var(--ok)';
+console.log(lines.join('\n'));
+</script>

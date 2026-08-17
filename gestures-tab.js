@@ -1,14 +1,19 @@
 // Gestures (Adept/Sval) + Mouse (wheel) Chords tabs. Ports of
 // AdeptCompanion GesturesTab.swift / MouseChordsTab.swift.
-// Both slot families fire via tap_code16 in firmware — basic keycodes and
-// C()/S()/A()/G() combos only; no macros, layer keys, or QK_KB customs.
+//
+// Slot keycode range depends on the firmware: up to Svalboard v15 both families
+// fired via tap_code16, which MANGLED everything above basic+mods, so the picker
+// restricted. From v16 they fire through vial_keycode_tap and the whole range
+// works — hence caps.gestureAnyKeycode rather than a blanket restriction.
 
 import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=34';
 import { kcCell, makePickerHost } from './picker.js?v=34';
-import { CH, V, slot, GESTURE_DIRS, GESTURE_SETS, WC_BUTTONS } from './flaskproto.js?v=34';
+import {
+    CH, CH_BALL_LEFT, V, slot, GESTURE_DIRS, GESTURE_SETS, WC_BUTTONS,
+} from './flaskproto.js?v=34';
 
 const TAPPABLE = (kc) => kc > 0 && kc <= 0x1FFF; // basic + QK_MODS range
-const TAP_NOTE = 'Gesture/chord slots fire via tap_code16 — basic keys + modifier combos only';
+const TAP_NOTE = 'On this firmware gesture slots fire via tap_code16 — basic keys + modifier combos only';
 
 function slotGrid({ title, rows, rowLabel, getKc, onPick }) {
     const table = el('div', { style: 'overflow-x:auto' });
@@ -42,7 +47,11 @@ export class GesturesTab {
         }
         this.ratchet = await flask.getU16(CH.gestures, V.gesturesRatchetStep);
         this.active = await flask.getU16(CH.gestures, V.gesturesActiveSet);
-        this.picker = makePickerHost({ layerCount: this.app.layerCount, restrict: TAPPABLE, note: TAP_NOTE });
+        this.picker = makePickerHost({
+            layerCount: this.app.layerCount,
+            restrict: this.app.caps.gestureAnyKeycode ? null : TAPPABLE,
+            note: TAP_NOTE,
+        });
         this.render();
     }
 
@@ -84,51 +93,132 @@ export class GesturesTab {
     }
 }
 
+/**
+ * Ball gestures: hold a button, roll a ball, fire a keycode.
+ *
+ * TWO INDEPENDENT TABLES on the Svalboard since v15 — 0x1C the left/scroll
+ * ball, 0x27 the right/cursor ball — carrying identical value ids, so one
+ * editor drives either by channel. The Adept has one ball and only ever serves
+ * 0x1C. Each side is loaded on first view; loading both up front is 128 round
+ * trips for a table the user may never open.
+ */
 export class ChordsTab {
-    constructor(app) { this.app = app; this.root = el('div'); }
+    constructor(app) {
+        this.app = app;
+        this.root = el('div');
+        this.side = 0;
+        this.sides = {};
+    }
 
-    async load() {
+    _ch(side) { return side === 0 ? CH_BALL_LEFT : CH.ballGesturesRight; }
+
+    async _loadSide(side) {
         const { flask } = this.app;
-        this.enabled = await flask.getU16(CH.wheelChords, V.wcEnabled);
-        this.step = await flask.getU16(CH.wheelChords, V.wcStep);
-        this.holdMs = await flask.getU16(CH.wheelChords, V.wcHoldMs);
-        this.slots = [];
+        const ch = this._ch(side);
+        const st = {
+            enabled: await flask.getU16(ch, V.wcEnabled),
+            step: await flask.getU16(ch, V.wcStep),
+            holdMs: await flask.getU16(ch, V.wcHoldMs),
+            slots: [],
+        };
         for (let b = 0; b < WC_BUTTONS; b++) {
             const dirs = [];
-            for (let dir = 0; dir < 8; dir++) dirs.push(await flask.getU16(CH.wheelChords, slot.wheelChord(b, dir)));
-            this.slots.push(dirs);
+            for (let dir = 0; dir < 8; dir++) dirs.push(await flask.getU16(ch, slot.wheelChord(b, dir)));
+            st.slots.push(dirs);
         }
-        this.picker = makePickerHost({ layerCount: this.app.layerCount, restrict: TAPPABLE, note: TAP_NOTE });
+        this.sides[side] = st;
+    }
+
+    async load() {
+        const { flask, caps } = this.app;
+        await this._loadSide(0);
+        // Deferred click is NOT per-side despite living on both channels — one
+        // physical button cannot defer on one ball and not the other, so both
+        // channels back the same firmware flag.
+        if (caps.deferredClick) this.defer = await flask.getU16(CH_BALL_LEFT, V.wcDeferClick);
+        this.picker = makePickerHost({
+            layerCount: this.app.layerCount,
+            restrict: caps.gestureAnyKeycode ? null : TAPPABLE,
+            note: TAP_NOTE,
+        });
         this.render();
     }
 
     async setSlot(b, dir, kc) {
         try {
-            await this.app.flask.setU16(CH.wheelChords, slot.wheelChord(b, dir), kc);
-            this.slots[b][dir] = kc;
+            await this.app.flask.setU16(this._ch(this.side), slot.wheelChord(b, dir), kc);
+            this.sides[this.side].slots[b][dir] = kc;
             this.render();
         } catch (e) { toast(`Write failed: ${e.message}`, true); }
     }
 
+    async _switchSide(side) {
+        if (!this.sides[side]) {
+            try { await this._loadSide(side); }
+            catch (e) { toast(`Read failed: ${e.message}`, true); return; }
+        }
+        this.side = side;
+        this.render();
+    }
+
     render() {
-        const { flask } = this.app;
-        const c = card('Mouse chords', 'hold a button + roll the ball → keycode (click still clicks)',
-            toggleRow({ label: 'Enabled', value: this.enabled,
-                onChange: (v) => flask.setU16(CH.wheelChords, V.wcEnabled, v ? 1 : 0) }),
-            sliderRow({ label: 'Step (counts)', hint: 'ball travel per fire', min: 50, max: 2000, step: 25,
-                value: this.step,
-                onChange: (v) => flask.setU16(CH.wheelChords, V.wcStep, v) }),
-            sliderRow({ label: 'Hold grace (ms)', min: 0, max: 1000, step: 10,
-                value: this.holdMs,
-                onChange: (v) => flask.setU16(CH.wheelChords, V.wcHoldMs, v) }),
+        const { flask, caps } = this.app;
+        const st = this.sides[this.side];
+        const ch = this._ch(this.side);
+        const c = card('Mouse chords', 'hold a button + roll the ball → keycode (click still clicks)');
+
+        if (caps.rightBallGestures) {
+            c.append(selectRow({
+                label: 'Ball', hint: 'each ball has its own independent table',
+                value: this.side,
+                options: [{ value: 0, label: 'Left / scroll ball' },
+                    { value: 1, label: 'Right / cursor ball' }],
+                onChange: (v) => this._switchSide(Number(v)),
+            }));
+        }
+
+        c.append(
+            toggleRow({
+                label: 'Enabled', value: st.enabled,
+                onChange: (v) => flask.setU16(ch, V.wcEnabled, v ? 1 : 0),
+            }),
+            sliderRow({
+                label: 'Step (counts)', hint: 'ball travel per fire', min: 50, max: 2000, step: 25,
+                value: st.step,
+                onChange: (v) => flask.setU16(ch, V.wcStep, v),
+            }),
+            sliderRow({
+                label: 'Hold grace (ms)', min: 0, max: 1000, step: 10,
+                value: st.holdMs,
+                onChange: (v) => flask.setU16(ch, V.wcHoldMs, v),
+            }));
+
+        if (caps.deferredClick) {
+            c.append(toggleRow({
+                label: 'Defer the click', hint: 'both balls — the click belongs to the button, not a ball',
+                value: this.defer,
+                onChange: async (v) => {
+                    const echoed = await flask.setU16(ch, V.wcDeferClick, v ? 1 : 0);
+                    this.defer = echoed;
+                    return echoed;
+                },
+            }));
+        }
+
+        c.append(
             slotGrid({
                 title: '', rows: WC_BUTTONS,
                 rowLabel: (r) => `BTN${r + 1}`,
-                getKc: (r, dir) => this.slots[r][dir],
+                getKc: (r, dir) => st.slots[r][dir],
                 onPick: (r, dir) => this.picker.request((kc) => this.setSlot(r, dir, kc)),
             }),
-            el('div', { class: 'note faint', text: 'Motion is swallowed only while the held button has at least one bound direction.' }),
-            saveBar(() => flask.save(CH.wheelChords)));
+            el('div', { class: 'note faint', text: 'Motion is swallowed only while the held button has at least one bound direction on this ball.' }),
+            // Saves BOTH channels when there are two: the deferred-click flag is
+            // shared, so a one-channel save could leave it unpersisted.
+            saveBar(async () => {
+                await flask.save(CH_BALL_LEFT);
+                if (caps.rightBallGestures) await flask.save(CH.ballGesturesRight);
+            }));
         this.root.replaceChildren(c, this.picker.card);
     }
 }

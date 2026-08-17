@@ -42,6 +42,7 @@ import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorks
 import { MacrosTab } from './macros-tab.js?v=34';
 import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=34';
 import { GesturesTab, ChordsTab } from './gestures-tab.js?v=34';
+import { CornerTab } from './corner-tab.js?v=34';
 import { RgbTab } from './rgb-tab.js?v=34';
 import { DisplayTab } from './display-tab.js?v=34';
 import { exportVil, importVil, downloadText } from './vil.js?v=34';
@@ -428,6 +429,10 @@ function buildTabs() {
             ctor: isZmkFamily(app.family) ? ZmkGesturesTab : GesturesTab });
     }
     if (app.caps.wheelChords) TABS.push({ id: 'chords', label: 'Mouse Chords', ctor: ChordsTab });
+    // Positional corner combos (0x28, Svalboard v17+). A separate tab from
+    // 'combos' above on purpose: those are Vial's keycode-matched combos, these
+    // match switch POSITIONS and carry one output per layer.
+    if (app.caps.cornerCombos) TABS.push({ id: 'corner', label: 'Corner Combos', ctor: CornerTab });
     if (app.caps.mouse) TABS.push({ id: 'mouse', label: 'Mouse', ctor: MouseTab });
     if (app.caps.typing) TABS.push({ id: 'typing', label: 'Typing', ctor: TypingTab });
     if (app.caps.rgbMap) {
