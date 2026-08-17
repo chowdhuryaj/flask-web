@@ -12,8 +12,8 @@
 // has its own (v8 today). A raw `version >= N` compare across families is
 // WRONG — always gate here.
 
-import { isZmkFamily, zmkCapabilities } from './zmk.js?v=33';
-import { isNapeFamily, napeCapabilities } from './nape.js?v=33';
+import { isZmkFamily, zmkCapabilities } from './zmk.js?v=34';
+import { isNapeFamily, napeCapabilities } from './nape.js?v=34';
 
 export function capabilities(family, version) {
     if (isZmkFamily(family)) return zmkCapabilities(family, version);
