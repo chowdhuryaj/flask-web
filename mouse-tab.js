@@ -3,10 +3,11 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=18';
-import { CH, V, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
-         CPI_MIN, CPI_MAX, CPI_STEP } from './flaskproto.js?v=18';
-import { renderKeyboardSVG } from './keymap-tab.js?v=18';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=19';
+import { CH, V, slot, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
+         CPI_MIN, CPI_MAX, CPI_STEP,
+         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=19';
+import { renderKeyboardSVG } from './keymap-tab.js?v=19';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -52,10 +53,136 @@ export function accelCurve(initial) {
     return svg;
 }
 
+/** Plain-language read of a per-mille coordinate, so a row of percentages
+ * isn't the only thing to reason about. */
+function describeTarget(x, y) {
+    const px = x / 10, py = y / 10;
+    const h = px < 20 ? 'far left'
+        : px < 40 ? 'left monitor / left half'
+            : px < 60 ? 'centre'
+                : px < 80 ? 'right monitor / right half' : 'far right';
+    return h + (py < 35 ? ', top' : py > 65 ? ', bottom' : '');
+}
+
 export class MouseTab {
     constructor(app) {
         this.app = app; // { flask, caps, family }
         this.root = el('div');
+    }
+
+    /**
+     * Firmware-side cursor teleport (channel 0x26, Svalboard v12+).
+     *
+     * Coordinates are per-mille of the VIRTUAL DESKTOP, not of one screen: on a
+     * two-monitor span 250 is the middle of the left monitor.
+     *
+     * HOST MODE IS READ-ONLY HERE, deliberately. Since v15 the firmware can hand
+     * the warp to a host app (which knows the real monitor layout, so jumps can
+     * cross displays) — but a browser cannot move the OS cursor, so this app must
+     * never send the heartbeat (0x06) or ack an event frame (0x08). Doing either
+     * would latch host mode onto a host that cannot warp. The v16 firmware only
+     * goes live once an ack proves delivery, so staying silent leaves it on the
+     * digitizer path, which is the correct outcome from a browser. Crossing
+     * monitors needs the macOS Flask app.
+     */
+    async _teleportCard() {
+        const { flask, caps } = this.app;
+        const g = (ch, id) => flask.getU16(ch, id);
+        const c = card('Cursor teleport', 'jump the cursor to a fixed point',
+            el('div', { class: 'note faint' },
+                'Coordinates are percentages of your WHOLE desktop, not of one screen — on a '
+                + 'two-monitor setup 25% is the middle of the left monitor. This cannot centre '
+                + 'the cursor on the window you just tabbed to; the keyboard can\'t see window '
+                + 'positions.'),
+            toggleRow({
+                label: 'Enabled', value: await g(CH.teleport, V.tpEnabled),
+                onChange: (v) => flask.setU16(CH.teleport, V.tpEnabled, v ? 1 : 0),
+            }));
+
+        if (caps.teleportHostMode) {
+            const hostMode = await g(CH.teleport, V.tpHostMode);
+            const proven = await g(CH.teleport, V.tpSelfTest).catch(() => 0);
+            c.append(el('div', { class: 'row' },
+                el('span', { class: 'lbl' }, 'Host-side jumps',
+                    el('span', { class: 'hint', text: 'needed to cross monitors — macOS Flask app only' })),
+                el('span', { style: 'flex:1' }),
+                el('span', { class: 'muted', text: hostMode ? (proven ? 'on, proven' : 'on, not proven') : 'off' })));
+            c.append(el('div', { class: 'note faint' },
+                hostMode && !proven
+                    ? 'Host mode is on but nothing has proven it can receive the keyboard\'s event '
+                      + 'frames, so jumps are using the keyboard\'s own absolute pointer — which the '
+                      + 'OS confines to one display. Run the macOS Flask app, or turn host mode off '
+                      + 'there, to get the full desktop.'
+                    : 'A browser cannot move the OS cursor, so this page never claims host mode. '
+                      + 'Jumps use the keyboard\'s absolute pointer, which the OS confines to a '
+                      + 'single display.'));
+        }
+
+        const current = await g(CH.teleport, V.tpCurrent).catch(() => 0xFF);
+        for (let t = 0; t < TELEPORT_TARGETS; t++) {
+            const x = await g(CH.teleport, slot.teleportX(t));
+            const y = await g(CH.teleport, slot.teleportY(t));
+            const isSet = x !== TELEPORT_UNSET && y !== TELEPORT_UNSET;
+            const row = el('div', { class: 'row' },
+                el('span', { class: 'faint', style: 'width:28px', text: `T${t + 1}${current === t ? '•' : ''}` }));
+
+            if (isSet) {
+                const mk = (axis, value) => {
+                    const inp = el('input', {
+                        type: 'number', min: 0, max: 100, step: 1,
+                        value: Math.round(value / 10), style: 'width:60px',
+                    });
+                    inp.addEventListener('change', async () => {
+                        const pm = Math.max(0, Math.min(100, Number(inp.value))) * 10;
+                        try {
+                            const id = axis === 'x' ? slot.teleportX(t) : slot.teleportY(t);
+                            const echoed = await flask.setU16(CH.teleport, id, pm);
+                            inp.value = Math.round(echoed / 10);
+                        } catch (e) { toast(`Write failed: ${e.message}`, true); }
+                    });
+                    return el('span', { style: 'display:flex; gap:2px; align-items:center' },
+                        el('span', { class: 'hint', text: axis.toUpperCase() }), inp, '%');
+                };
+                row.append(mk('x', x), mk('y', y),
+                    el('span', { class: 'muted', text: describeTarget(x, y) }),
+                    el('span', { style: 'flex:1' }),
+                    el('button', {
+                        class: 'btn small', text: '✕', title: 'clear — stepping will skip it',
+                        onclick: async () => {
+                            // Clearing writes the unset sentinel, NOT 0 — zero is
+                            // the top-left corner, a perfectly valid target.
+                            await flask.setU16(CH.teleport, slot.teleportX(t), TELEPORT_UNSET);
+                            await flask.setU16(CH.teleport, slot.teleportY(t), TELEPORT_UNSET);
+                            await this.load();
+                        },
+                    }));
+            } else {
+                row.append(el('span', { class: 'muted', text: 'unset' }),
+                    el('span', { style: 'flex:1' }),
+                    el('button', {
+                        class: 'btn small', text: 'Set to centre',
+                        onclick: async () => {
+                            const mid = TELEPORT_SCALE / 2;
+                            await flask.setU16(CH.teleport, slot.teleportX(t), mid);
+                            await flask.setU16(CH.teleport, slot.teleportY(t), mid);
+                            await this.load();
+                        },
+                    }));
+            }
+            c.append(row);
+        }
+
+        c.append(
+            sliderRow({
+                label: 'Cursor handoff (ms)',
+                hint: 'how long the keyboard holds the absolute pointer before the ball takes over',
+                min: 1, max: 1000, step: 1,
+                value: await g(CH.teleport, V.tpHoldMs),
+                onChange: (v) => flask.setU16(CH.teleport, V.tpHoldMs, v),
+            }),
+            el('div', { class: 'note faint', text: 'Bind TpL / TpR to step through the targets in order, or Tp1–Tp4 to jump straight to one.' }),
+            saveBar(() => flask.save(CH.teleport)));
+        return c;
     }
 
     async load() {
@@ -354,12 +481,26 @@ export class MouseTab {
                     value: await g(CH.autoMouse, V.amTimeout),
                     onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, v) }));
             }
-            am.append(
-                sliderRow({ label: 'Threshold (counts)',
+            if (caps.autoMouseWideThreshold) {
+                // Svalboard: a SPEED gate — cursor-ball counts inside a
+                // ~50-100 ms window, so a resting hand's slow drift never
+                // reaches it. Needs a far wider range than the Adept's
+                // per-burst accumulator. At 2000 CPI, 1 mm of ball travel ≈ 79
+                // counts, which is the only unit anyone can actually feel.
+                am.append(sliderRow({
+                    label: 'Threshold (counts)',
+                    hint: 'ball speed before the layer opens; scrolling never opens it',
+                    min: 0, max: 2040, step: 8,
+                    value: await g(CH.autoMouse, V.amThreshold),
+                    format: (v) => v === 0 ? 'any motion' : `${v} (~${(v / 79).toFixed(1)} mm)`,
+                    onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }));
+            } else {
+                am.append(sliderRow({ label: 'Threshold (counts)',
                     hint: caps.autoMouseLatch ? 'ball travel before the layer triggers; 0 = any motion' : undefined,
                     min: 0, max: caps.autoMouseLatch ? 200 : 60, step: 1,
                     value: await g(CH.autoMouse, V.amThreshold),
                     onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }));
+            }
             if (caps.autoMouseExtend) {
                 am.append(toggleRow({
                     label: 'Keys extend the timeout',
@@ -410,6 +551,9 @@ export class MouseTab {
                 saveBar(() => flask.save(CH.autoscroll)));
             cardsRow.append(as);
         }
+
+        // ---- cursor teleport (0x26) ----
+        if (caps.teleport) cardsRow.append(await this._teleportCard());
 
         // ---- health / freeze diagnostic ----
         if (caps.diag) {

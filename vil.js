@@ -12,15 +12,16 @@
 // ("KC_A") are skipped and counted (no qmk_id table here).
 
 import { CH, V, slot, GESTURE_SETS, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS,
-         WC_BUTTONS, NLKB } from './flaskproto.js?v=18';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=18';
-import { encoderCount } from './profiles.js?v=18';
+         WC_BUTTONS, NLKB, SL_SEQS, SL_OUT_POS, SNIPPET_COUNT, SNIPPET_KEYS,
+         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=19';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=19';
+import { encoderCount } from './profiles.js?v=19';
 
 // ---------- tuning dump spec (mirrors AppModel.tuningDumpSpec) ----------
 // Replayed in THIS order on restore: DPI index ids come before raw-CPI ids
 // so a nonzero CPI re-arms raw mode last and wins.
 
-function dumpSpec() {
+function dumpSpec(caps = {}) {
     const spec = [];
     spec.push([CH.accel, [1, 2, 3, 4, 5]]);
     const gestures = [V.gesturesRatchetStep];
@@ -36,16 +37,59 @@ function dumpSpec() {
     spec.push([CH.customShift, csk]);
     spec.push([CH.selectWord, [V.selectWordMac]]);
     spec.push([CH.sentenceCase, [V.sentenceCaseEnabled]]);
+    // Leader: one channel, two shapes. Super Leader is 16 sequences of 7 slots
+    // (5 keys + kind + output); the original is 8 of 6 (5 keys + output). Dump
+    // the shape the DEVICE serves — sweeping the wider one on an 8-sequence
+    // board would carry ids it answers with garbage rather than a failure.
     const leader = [V.leaderTimeout];
-    for (let seq = 0; seq < LEADER_SEQS; seq++)
-        for (let pos = 0; pos <= LEADER_KEYS; pos++) leader.push(slot.leader(seq, pos));
+    if (caps.superLeader) {
+        for (let seq = 0; seq < SL_SEQS; seq++)
+            for (let pos = 0; pos <= SL_OUT_POS; pos++) leader.push(slot.superLeader(seq, pos));
+    } else {
+        for (let seq = 0; seq < LEADER_SEQS; seq++)
+            for (let pos = 0; pos <= LEADER_KEYS; pos++) leader.push(slot.leader(seq, pos));
+    }
     spec.push([CH.leader, leader]);
     spec.push([CH.autoscroll, [V.asInverted, V.asSpeedScale, V.asDeadzone, V.asRange, V.asStopOnKey]]);
     spec.push([CH.autoMouse, [V.amEnabled, V.amTimeout, V.amThreshold, V.amLayer]]);
-    const chords = [V.wcEnabled, V.wcStep, V.wcHoldMs];
-    for (let b = 0; b < WC_BUTTONS; b++)
-        for (let d = 0; d < 8; d++) chords.push(slot.wheelChord(b, d));
-    spec.push([CH.wheelChords, chords]);
+    const ballSlots = (extra) => {
+        const ids = [V.wcEnabled, V.wcStep, V.wcHoldMs, ...extra];
+        for (let b = 0; b < WC_BUTTONS; b++)
+            for (let d = 0; d < 8; d++) ids.push(slot.wheelChord(b, d));
+        return ids;
+    };
+    spec.push([CH.wheelChords, ballSlots(caps.deferredClick ? [V.wcDeferClick] : [])]);
+    // 0x23-0x28 are double-booked with the ZMK line (see flaskproto.js CH), so
+    // every one of these is gated on a Svalboard-only capability. A blind sweep
+    // would read an Imprint's combo/macro tables and file them under keys a
+    // Svalboard restore would replay as Cyclotab and snippets.
+    if (caps.rightBallGestures) spec.push([CH.ballGesturesRight, ballSlots([])]);
+    if (caps.cyclotab) {
+        const cyc = [V.cycEnabled, V.cycTimeout];
+        for (let i = 0; i < CYCLOTAB_KEYS; i++) cyc.push(slot.cyclotabKey(i));
+        spec.push([CH.cyclotab, cyc]);
+    }
+    if (caps.snippets) {
+        // Targets only — the snippet TEXT is payload-addressed and cannot ride
+        // a u16 map, so it travels in the flask_snippets extension key below.
+        const snip = [];
+        for (let k = 0; k < SNIPPET_KEYS; k++) snip.push(slot.snippetTarget(k));
+        spec.push([CH.snippets, snip]);
+    }
+    if (caps.altRepeatBehaviour) {
+        spec.push([CH.altRepeat, [V.arepChain, V.arepStaleMs, V.arepDefaultOut]]);
+    }
+    if (caps.teleport) {
+        const tp = [V.tpEnabled, V.tpHoldMs];
+        if (caps.teleportHostMode) tp.push(V.tpHostMode);
+        for (let t = 0; t < TELEPORT_TARGETS; t++) tp.push(slot.teleportX(t), slot.teleportY(t));
+        spec.push([CH.teleport, tp]);
+    }
+    if (caps.cornerCombos) {
+        // Geometry is firmware-baked and the per-(def, layer) outputs are
+        // payload-addressed — those go in flask_corner below.
+        spec.push([CH.corner, [V.ccEnabled, V.ccTerm]]);
+    }
     spec.push([CH.os, [V.osFollow, V.osMac]]);
     spec.push([CH.numWord, [V.nwTimeout, V.nwLayer]]);
     const cl = [];
@@ -145,7 +189,7 @@ export async function exportVil(app) {
         for (const [k, t] of Object.entries(app.offlineWs?.tunables ?? {}))
             tunings[k.replace(':', '.')] = t.val;
     } else if (app.caps.flask) {
-        for (const [ch, ids] of dumpSpec()) {
+        for (const [ch, ids] of dumpSpec(app.caps)) {
             for (const id of ids) {
                 try { tunings[`${ch}.${id}`] = await app.flask.getU16(ch, id); }
                 catch { /* id not served */ }
@@ -167,6 +211,36 @@ export async function exportVil(app) {
                 map.push(leds);
             }
             data.flask_rgbmap = map;
+        } catch { /* leave out */ }
+    }
+
+    // Snippet text (Svalboard v12+). Payload-addressed and chunked, so it can't
+    // ride flask_tunings — its own key, same spirit as flask_rgbmap.
+    if (app.caps.snippets && !app.offline) {
+        try {
+            const texts = [];
+            for (let i = 0; i < SNIPPET_COUNT; i++) texts.push(await app.flask.getSnippet(i));
+            if (texts.some((t) => t)) data.flask_snippets = texts;
+        } catch { /* leave out */ }
+    }
+
+    // Corner-combo outputs (Svalboard v17+). ONLY entries a layer owns — the
+    // resolved value on an inheriting layer is not a binding, and writing it
+    // back would turn every borrowed chord into an explicit override.
+    if (app.caps.cornerCombos && !app.offline) {
+        try {
+            const defCount = await app.flask.getU16(CH.corner, V.ccDefCount);
+            const outputs = [];
+            for (let def = 0; def < defCount; def++) {
+                const mask = await app.flask.getBytes(CH.corner, V.ccLayers, [def], 1);
+                const own = ((mask[1] ?? 0) << 8) | (mask[2] ?? 0);
+                for (let layer = 0; layer < 16; layer++) {
+                    if (!(own & (1 << layer))) continue;
+                    const r = await app.flask.getBytes(CH.corner, V.ccOut, [def, layer], 2);
+                    outputs.push([def, layer, ((r[2] ?? 0) << 8) | (r[3] ?? 0)]);
+                }
+            }
+            if (outputs.length) data.flask_corner = outputs;
         } catch { /* leave out */ }
     }
 
@@ -320,7 +394,7 @@ export async function importVil(app, text) {
     const tunings = json.flask_tunings ?? {};
     if (Object.keys(tunings).length && (app.caps.flask || app.offline)) {
         const touched = new Set();
-        for (const [ch, ids] of dumpSpec()) {
+        for (const [ch, ids] of dumpSpec(app.caps)) {
             for (const id of ids) {
                 const value = tunings[`${ch}.${id}`];
                 if (typeof value !== 'number') continue;
@@ -331,7 +405,39 @@ export async function importVil(app, text) {
                 } catch { /* id not served */ }
             }
         }
+        // NEVER save the corner channel. Its SETs persist themselves, and a
+        // channel save writes the whole ~1.9 KB corner block — on the RP2040
+        // that window (flash writes run with XIP disabled) hard-wedged the
+        // board on 2026-08-14. Same rule as corner-tab.js.
+        touched.delete(CH.corner);
         for (const ch of touched) { try { await app.flask.save(ch); } catch { /* no-op */ } }
+    }
+
+    // Snippet text (own key — payload-addressed, so it never rode flask_tunings).
+    if (Array.isArray(json.flask_snippets) && app.caps.snippets && !app.offline) {
+        for (let i = 0; i < Math.min(json.flask_snippets.length, SNIPPET_COUNT); i++) {
+            const text = json.flask_snippets[i];
+            if (typeof text !== 'string') continue;
+            try { await app.flask.setSnippet(i, text); stats.applied++; }
+            catch { /* leave the slot as it was */ }
+        }
+        try { await app.flask.save(CH.snippets); } catch { /* no-op */ }
+    }
+
+    // Corner-combo outputs. Only owned entries were exported, so replaying them
+    // restores the inheritance pattern too — anything not listed stays inherited.
+    if (Array.isArray(json.flask_corner) && app.caps.cornerCombos && !app.offline) {
+        for (const entry of json.flask_corner) {
+            if (!Array.isArray(entry) || entry.length < 3) continue;
+            const [def, layer, kc] = entry.map(Number);
+            if (!Number.isFinite(def) || def >= CC.total || layer > 15) continue;
+            try {
+                // No save — the SET persists this entry itself (see above).
+                await app.flask.setBytes(CH.corner, V.ccOut,
+                    [def, layer, (kc >> 8) & 0xFF, kc & 0xFF], 2);
+                stats.applied++;
+            } catch { /* def not served */ }
+        }
     }
 
     // RGB map.

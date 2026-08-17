@@ -9,11 +9,11 @@
 // entries, never the whole snapshot, so a template workspace can't wipe a
 // real keymap.
 
-import { el, modal, toast } from './ui.js?v=18';
-import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=18';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=18';
-import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=18';
-import { describe } from './keycodes.js?v=18';
+import { el, modal, toast } from './ui.js?v=19';
+import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=19';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=19';
+import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=19';
+import { describe } from './keycodes.js?v=19';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';
@@ -28,6 +28,14 @@ const LIVE_SET = new Set([
     `${CH.gestures}:2`,     // active-set latch toggle
     `${CH.display}:7`,      // raw panel cmd inject
     `${CH.display}:8`,      // panel re-init
+    // Svalboard v12+. These are all on channels double-booked with the ZMK line
+    // (see flaskproto.js CH), but a workspace is one family, so the decimal key
+    // is unambiguous inside it.
+    `${CH.corner}:5`,       // corner misfire counter reset
+    `${CH.corner}:6`,       // corner chord capture arm
+    `${CH.teleport}:6`,     // teleport host heartbeat (this app never sends it)
+    `${CH.teleport}:7`,     // teleport self-test
+    `${CH.teleport}:8`,     // teleport host ack
 ]);
 
 // ---------- storage ----------

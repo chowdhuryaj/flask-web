@@ -24,11 +24,23 @@ that is the only place the worlds meet.
 
 | Line | Devices | Keymap surface | Tuning | Protocol today |
 |---|---|---|---|---|
-| **QMK / Vial** | Ploopy Adept, Svalboard, NLKB16-02, any Vial board | Vial over raw HID (0xFF60) | Flask channels | Adept **v11**, Svalboard **v11**, NLKB16 **v8** |
+| **QMK / Vial** | Ploopy Adept, Svalboard, NLKB16-02, any Vial board | Vial over raw HID (0xFF60) | Flask channels | Adept **v11**, Svalboard **v17**, NLKB16 **v8** |
 | **ZMK** | Cyboard Imprint | ZMK Studio RPC over WebSerial | Flask channels (zmk-flask-modules) | Imprint **v16** |
 
 Each family versions its **own** protocol line — a raw `version >= N`
 compare across families is wrong. Gate in `caps.js` / `zmkCapabilities`.
+The Svalboard's line **left the Adept's at v12** and the two are no longer
+comparable; the Adept and NLKB16 are frozen where they are, because the desktop
+app dropped both devices on 2026-08-14. In `caps.js` anything past v11 gates on
+`family === 'svalboard'` (the `sval(n)` helper), never on `trackball`.
+
+⚠ **Channels 0x23–0x28 are double-booked across the two lines** — the QMK line
+(Cyclotab, snippets, alt-repeat, teleport, right-ball gestures, corner combos)
+and the ZMK line (key state, combos, macros, scroll snap, ball swap, tap dance)
+allocated them independently. Both name sets live in `flaskproto.js`'s `CH`
+because they never coexist on one device. Name the constant from the line you
+are on, keep every call behind a caps gate, and build anything that enumerates
+channels generically (`vil.js` `dumpSpec`, `offline.js` `LIVE_SET`) per-family.
 
 ## QMK line
 
@@ -38,7 +50,16 @@ compare across families is wrong. Gate in `caps.js` / `zmkCapabilities`.
   smoothing, drag scroll, shake-to-toggle, auto-mouse, autoscroll, freeze
   diagnostic.
 - **Typing tab** — custom shift keys, select word, sentence case, leader
-  sequences, OS-aware shortcuts, num word.
+  sequences, OS-aware shortcuts, num word. On a Svalboard v12+ the leader
+  section becomes **Super Leader** (16 sequences, each output either a keycode
+  or a whole text snippet) and the tab gains the **snippet pool** (16 × 63
+  chars, payload-addressed and chunked), **Cyclotab**, and **alt-repeat
+  behaviour** (chaining + stale-input default).
+- **Corner Combos** (Svalboard v17+) — positional chords matched on (row, col)
+  with one output per layer and KC_TRNS-style inheritance from the layer below;
+  laid out cluster × chord, the same order the firmware and `.vil` files use.
+  This channel has **no Save** — its SETs persist themselves, and a channel save
+  wedges the board.
 - **QMK Settings** — tapping/auto-shift/combo/mouse-keys QSIDs.
 - **Macros** — action-chip editor (text/tap/down/up/delay), whole-buffer
   save with unlock gate + verify re-read (locked writes are silently
@@ -46,8 +67,16 @@ compare across families is wrong. Gate in `caps.js` / `zmkCapabilities`.
 - **Tap Dance / Combos / Key Overrides** — Vial dynamic entries; combos
   include per-combo layer masks (Flask channel 0x20) where supported.
   Entry writes need no unlock (unlike macros).
-- **Gestures & Mouse Chords** (trackballs) — 8×8 slot grids; the picker
-  vetoes anything tap_code16 can't fire (basic + mod combos only).
+- **Gestures & Mouse Chords** (trackballs) — 8×8 slot grids. Latched gesture
+  **sets** (0x11) are an Adept/pre-v15 feature; the Svalboard dropped them at
+  v15, when Mouse Chords grew a **second independent ball table** (0x27) and,
+  at v16, a shared deferred-click flag. Before Svalboard v16 the picker vetoes
+  anything `tap_code16` can't fire (basic + mod combos); from v16 slots go
+  through `vial_keycode_tap` and the whole range is allowed.
+- **Cursor teleport** (Svalboard v12+, in the Mouse tab) — 8 absolute targets in
+  per-mille of the **virtual desktop**. Host mode is shown read-only: a browser
+  can't warp the OS cursor, so this app never heartbeats or acks, which leaves
+  the firmware correctly on its digitizer path.
 - **RGB painter + effect engine** (NLKB16) — per-layer HSV map (channel
   0x21, payload-addressed) plus stock VialRGB modes via raw frames.
 - **Display tab** (NLKB16) — widgets per big line, custom text, idle
@@ -141,15 +170,29 @@ Two different things are called "desktop" here:
 - **`desktop/`** — an Electron wrapper around *this* code. Parity is
   structural: it serves the same files, so it can't drift. A packaged build
   carries a snapshot (`Resources/web`), so rebuild to pick up changes.
-- **The Flask macOS app** (Swift, `AdeptCompanion`) — a separate codebase
-  and the source of truth the QMK protocol layer was ported from. It is
-  **QMK-only**; the whole ZMK line above has no desktop counterpart. As of
-  the last recorded sync (2026-07-07) the web app covered everything in it
-  except the Build tab (compile + flash needs local disk) and the matrix
-  tester, and added offline workspaces, preflight, and diagnostics on top.
-  Styling flows web → desktop (`PipetteTheme.swift` transcribes
-  `styles.css`). That app is not in this repo — verify current parity
-  against its own tree.
+- **The Flask macOS app** (Swift, `AdeptCompanion`) — a separate codebase and
+  the source of truth the QMK protocol layer was ported from. It is **QMK-only,
+  and since 2026-08-14 Svalboard-only**: it dropped the Adept and the NLKB16-02.
+  So parity means *Svalboard feature coverage*, not "the same app" — this app
+  keeps all three QMK families plus the whole ZMK line, which has no desktop
+  counterpart. Styling flows web → desktop (`PipetteTheme.swift` transcribes
+  `styles.css`). That app is not in this repo — verify current parity against
+  its own tree.
+
+  **Sync state (2026-08-17).** The desktop ran the Svalboard line 11 → 17 while
+  this app sat at 11, so it was mis-driving a v17 board. Closed: expected
+  version, the v12–v17 capability gates, Super Leader, the snippet pool,
+  Cyclotab, alt-repeat behaviour, cursor teleport, per-ball gesture tables with
+  deferred click, corner combos, and the widened auto-mouse threshold. **Ported
+  but not yet hardware-verified.** Two deliberate divergences: teleport host mode
+  is read-only here (see above), and corner combos are a cluster × chord table
+  rather than chips on the keymap canvas.
+
+  Still desktop-only: the Build tab (compile + flash needs local disk), the Bench
+  tab, and the app-side `MouseTeleporter` (which needs the real NSScreen layout).
+  Still missing on both: a Vial **alt-repeat entry** editor here — the rules the
+  0x25 knobs modify are readable/writable (`vialclient.js`, `.vil`) but have no
+  UI, so they can only be edited via a `.vil` round trip today.
 
 ## Architecture
 
@@ -194,7 +237,9 @@ firmware serves over HID).
 | `zmk-offline.js` | Device-less Imprint workspace (Flask frames + a Studio client stand-in) |
 | `zmk-*-codec.js` | Pure slot/step frame codecs (combos, macros, csk, tapdance, typed outputs) |
 | `zmk-keymap-tab.js`, `zmk-combos-tab.js`, `zmk-macros-tab.js`, `zmk-tapdance-tab.js`, `zmk-shift-tab.js`, `zmk-leader-tab.js`, `zmk-gestures-tab.js`, `zmk-rgb-tab.js`, `zmk-modes-tab.js`, `zmk-test-tab.js` | Tabs |
+| `corner-tab.js` | Corner combos (0x28) — positional chords, per-layer outputs with inheritance |
 | `zmk-studio-test.mjs` | Offline vector suite (node) |
+| `dev-sval-harness.html` | Renders the Svalboard v12–v17 tabs against a fake device |
 
 QMK protocol semantics are ported from the Swift app's `AdeptCore`
 (HIDClient/AdeptProtocol/VialProtocol/VialClient/VialDefinition/KeycodeDB) —
@@ -214,9 +259,15 @@ varints, bindings, slot frames, keymap diff, capture helpers). The pure
 codec files import nothing and never touch `window`/`localStorage` at module
 scope, precisely so node can import them — keep it that way.
 
+`/dev-sval-harness.html` renders the Svalboard v12–v17 tabs against a fake
+device, no hardware and no WebHID. The offline templates cover `adept` and
+`nlkb16` only, so those tabs otherwise had no way to be rendered before
+flashing a board. It proves they **build** and read the channels they claim; it
+proves nothing about the wire format, which still needs hardware.
+
 When releasing, bump the `?v=N` stamps on module imports and the stylesheet
 link — GitHub Pages' CDN caches hard. `main.js` carries its own counter in
-`index.html` (currently imports `?v=18`, entry `main.js?v=20`).
+`index.html` (currently imports `?v=19`, entry `main.js?v=21`).
 
 ## Hard-won rules (do not "simplify" these away)
 

@@ -17,11 +17,29 @@ export const VIDPID = {
 };
 
 // Per-family protocol version lines — INDEPENDENT; never compare across.
-export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 11, nlkb16: 8 };
+// The Svalboard's line left the Adept's at v12 (2026-08-08) and ran to v17
+// (2026-08-14, corner combos). The Adept and NLKB16 are frozen where they are:
+// the desktop app dropped both devices, so nothing advances those numbers.
+export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 17, nlkb16: 8 };
 
 // VIA custom-value command IDs (routed to the keymap by VIA_CUSTOM_LIGHTING_ENABLE).
 export const CMD = { set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
 
+// ⚠ 0x23-0x28 ARE DOUBLE-BOOKED across the two firmware lines.
+//
+// The QMK line (Svalboard v12-v17) and the ZMK line (Imprint v5-v15) allocated
+// the same channel numbers independently, for unrelated features. Both sets of
+// names live here because they never coexist on one device: a connection is one
+// family, and every consumer is behind a caps.js gate that only one family can
+// pass. The rule that keeps that true —
+//
+//   NEVER read a channel constant a device's family doesn't serve. Gate the
+//   call site on caps, and name the constant from the line you are on
+//   (CH.snippets in a Svalboard path, CH.combos in an Imprint path), so the
+//   line is legible at the call site and not just in this table.
+//
+// Anything that enumerates channels generically (vil.js's spec, offline.js's
+// LIVE_SET) must therefore be built per-family too — see the caps checks there.
 export const CH = {
     meta: 0x00,
     accel: 0x10, gestures: 0x11, wiggle: 0x12, smoothing: 0x13,
@@ -29,6 +47,14 @@ export const CH = {
     customShift: 0x16, selectWord: 0x17, sentenceCase: 0x18, leader: 0x19,
     autoscroll: 0x1A, autoMouse: 0x1B, wheelChords: 0x1C, os: 0x1D,
     numWord: 0x1E, diag: 0x1F, comboLayers: 0x20, rgbMap: 0x21, display: 0x22,
+    // --- QMK line (Svalboard) ---
+    cyclotab: 0x23,     // v12+: Alt-Tab / Cmd-Tab modifier swapper
+    snippets: 0x24,     // v12+: 16-slot text pool (Super Leader + SNIP keys)
+    altRepeat: 0x25,    // v13+: alt-repeat chaining + stale-input default
+    teleport: 0x26,     // v12+: absolute cursor jumps (digitizer or host warp)
+    ballGesturesRight: 0x27, // v15+: second ball-gesture table (cursor ball)
+    corner: 0x28,       // v17+: positional corner combos
+    // --- ZMK line (Imprint) ---
     keyState: 0x23, // ZMK line v5+: pressed-position bitmap (HUD press feed)
     combos: 0x24,   // ZMK line v7+: flask_combos runtime combo slots
     macros: 0x25,   // ZMK line v8+: flask_macros runtime macro steps
@@ -37,6 +63,10 @@ export const CH = {
     tapDance: 0x28, // ZMK line v14+: flask_tapdance runtime tap dances
     scrollScale: 0x29, // ZMK line v15+: flask_scrollscale live scroll speed
 };
+
+/// The left/scroll ball's gesture table. Same value ids as
+/// CH.ballGesturesRight, so one editor drives either by channel.
+export const CH_BALL_LEFT = CH.wheelChords;
 
 export const V = {
     // meta
@@ -83,6 +113,35 @@ export const V = {
     leaderTimeout: 0x01,
     leaderSlotCount: 0x02, leaderKeys: 0x03, leaderEnabled: 0x04,
     leaderSlot: 0x50,
+    // Super Leader (Svalboard v12+) — SAME channel 0x19 and the same stride-8
+    // slot addressing, but the slots MEAN something else: 16 sequences instead
+    // of 8, and pos 5 is an output KIND with the output itself at pos 6. Branch
+    // on caps.superLeader before reading either shape; timeout also reclamps
+    // (200-10000 here vs 100-2000 on the original).
+    slTimeout: 0x01,
+    slLiveCount: 0x02, // RO: sequences the firmware considers firable
+    // Text snippets (0x24, Svalboard v12+). count/len/keyCount are u16;
+    // the per-slot text at 0x10+i is PAYLOAD-ADDRESSED and chunked
+    // ([chunk, 16 chars] each way) because 64 bytes exceed one 29-byte payload.
+    snipCount: 0x01, snipLen: 0x02, snipChunkSize: 0x03, snipKeyCount: 0x04,
+    // Alt-repeat behaviour (0x25, Svalboard v13+). Layered on VIAL'S OWN
+    // dynamic alt-repeat table — there is no separate rule table here.
+    arepChain: 0x01, arepStaleMs: 0x02, arepDefaultOut: 0x03,
+    // Cyclotab (0x23, Svalboard v12+). The hotkey slots hold ordinary mod+key
+    // keycodes, so arming it costs no custom keycode — putting one in the
+    // layout is what arms it.
+    cycEnabled: 0x01, cycTimeout: 0x02,
+    // Cursor teleport (0x26, Svalboard v12+).
+    tpEnabled: 0x01, tpHoldMs: 0x02, tpCount: 0x03, tpCurrent: 0x04,
+    tpHostMode: 0x05,  // v15: prefer a host-side warp while proven
+    tpHeartbeat: 0x06, // v15: SET = "a host app is here"; GET = host mode live?
+    tpSelfTest: 0x07,  // v16: SET emits one event frame; GET = host proven?
+    tpHostAck: 0x08,   // v16: SET acks a received frame (latches host mode)
+    // Corner combos (0x28, Svalboard v17+). enabled/term/counts/misfires/
+    // capture are u16; def/out/layers are PAYLOAD-ADDRESSED byte frames.
+    ccEnabled: 0x01, ccTerm: 0x02, ccDefCount: 0x03, ccOutCount: 0x04,
+    ccMisfires: 0x05, ccCapture: 0x06, ccCaptureBase: 0x08,
+    ccDef: 0x10, ccOut: 0x11, ccLayers: 0x12,
     // autoscroll
     asInverted: 0x01, asSpeedScale: 0x02, asDeadzone: 0x03, asRange: 0x04,
     asState: 0x05,     // live: GET signed level / ±100 jogging; SET force-stops
@@ -97,8 +156,13 @@ export const V = {
     // benched default, 200 = twice as fast. One knob drives both axes so
     // their base ratio (16 horizontal : 12 vertical on the Imprint) holds.
     scrollSpeedPct: 0x01,
-    // wheel chords
+    // wheel chords / ball gestures (0x1C left ball, 0x27 right ball — identical ids)
     wcEnabled: 0x01, wcStep: 0x02, wcHoldMs: 0x03,
+    // v16: withhold a gesture-configured button's press until the hold resolves
+    // into click / drag / gesture. NOT per-side despite living on both channels
+    // — one physical button cannot defer on one ball and not the other, so both
+    // channels back the same flag.
+    wcDeferClick: 0x04,
     // OS shortcuts
     osFollow: 0x01, osMac: 0x02, osDetected: 0x03,
     // num word
@@ -180,10 +244,18 @@ export const slot = {
     cskKey(i) { return 0x10 + i; },
     cskShift(i) { return 0x30 + i; },
     leader(seq, pos) { return 0x10 + seq * 8 + pos; }, // pos 0-4 keys, 5 output
+    // Super Leader shares the stride, so the same arithmetic; pos 5 = output
+    // kind, pos 6 = keycode or snippet index.
+    superLeader(seq, pos) { return 0x10 + seq * 8 + pos; },
     wheelChord(button, dir) { return 0x10 + button * 8 + dir; },
     comboMask(i) { return 0x10 + i; },
     dispWidget(line) { return 0x20 + line; },
     dispCustom(line) { return 0x30 + line; },
+    snippet(i) { return 0x10 + i; },          // payload-addressed text chunks
+    snippetTarget(key) { return 0x40 + key; }, // which snippet a SNIP key types
+    cyclotabKey(i) { return 0x10 + i; },
+    teleportX(t) { return 0x10 + t; },
+    teleportY(t) { return 0x20 + t; },
 };
 
 export const GESTURE_DIRS = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
@@ -192,6 +264,61 @@ export const CSK_SLOTS = 16;
 export const LEADER_SEQS = 8;
 export const LEADER_KEYS = 5;
 export const WC_BUTTONS = 8;
+
+// ---------- Svalboard v12-v17 shapes ----------
+
+export const SL_SEQS = 16;      // Super Leader sequences
+export const SL_KEYS = 5;       // keys per sequence
+export const SL_KIND_POS = 5;   // slot 5 = output kind
+export const SL_OUT_POS = 6;    // slot 6 = keycode, or snippet index
+/** Mirrors enum flask_output_kind — shared by Super Leader and alt-repeat rules. */
+export const OUTPUT_KIND = { keycode: 0, snippet: 1 };
+
+export const SNIPPET_COUNT = 16;
+export const SNIPPET_LEN = 64;   // buffer incl. NUL, so 63 usable characters
+export const SNIPPET_CHUNK = 16; // chars per payload-addressed frame
+export const SNIPPET_KEYS = 16;  // SNIP keycodes (4 before v15)
+
+export const CYCLOTAB_KEYS = 4;
+
+export const TELEPORT_TARGETS = 8;
+/** Full scale: 1000 = right/bottom edge of the VIRTUAL DESKTOP, not one screen. */
+export const TELEPORT_SCALE = 1000;
+/** Unset sentinel — 0 would read as the top-left corner, a real position. */
+export const TELEPORT_UNSET = 0xFFFF;
+
+// Corner-combo def index layout, mirroring the firmware's corner_seed.h. This
+// ordering is a wire contract shared with .vil files — never reorder it.
+export const CC = {
+    maxKeys: 2, // three-key chords were dropped 2026-08-14
+    fingerClusters: 8, fingerChords: 6,
+    thumbClusters: 2, thumbChords: 6,
+    thumbBase: 48, // fingerClusters * fingerChords
+    total: 60,
+    posNone: 0xFF,
+    clusterNames: ['L index', 'L middle', 'L ring', 'L pinky',
+        'R index', 'R middle', 'R ring', 'R pinky'],
+    fingerChordNames: ['North + East', 'East + South', 'South + West',
+        'West + North', 'Center + South', 'South + DblSouth'],
+    thumbChordNames: ['L + Esc', 'R + L', 'R + Esc', 'R + Del', 'R + Bspc', 'Del + Bspc'],
+};
+
+/** Switch positions pack as (row << 3) | col on the wire. */
+export const ccRow = (p) => p >> 3;
+export const ccCol = (p) => p & 0x07;
+
+/** Human label for a def index, e.g. "L index · North + East". */
+export function ccDefName(def) {
+    if (def < CC.thumbBase) {
+        const cluster = Math.floor(def / CC.fingerChords), chord = def % CC.fingerChords;
+        if (cluster >= CC.clusterNames.length || chord >= CC.fingerChordNames.length) return `Chord ${def}`;
+        return `${CC.clusterNames[cluster]} · ${CC.fingerChordNames[chord]}`;
+    }
+    const t = Math.floor((def - CC.thumbBase) / CC.thumbChords);
+    const chord = (def - CC.thumbBase) % CC.thumbChords;
+    if (t >= CC.thumbClusters || chord >= CC.thumbChordNames.length) return `Chord ${def}`;
+    return `${t === 0 ? 'L thumb' : 'R thumb'} · ${CC.thumbChordNames[chord]}`;
+}
 
 // Mirrors MADROMYS_DPI_OPTIONS (Adept keymap config.h).
 export const ADEPT_DPI_OPTIONS = [400, 600, 800, 1200, 1600];
@@ -282,6 +409,32 @@ export class FlaskProto {
         const r = await this.hid.request([CMD.set, channel, valueID, ...payload], echoBytes);
         if (r[0] !== CMD.set) throw new Error('unhandled');
         return r.slice(3);
+    }
+
+    /** Reads one text snippet (channel 0x24, Svalboard v12+). A 64-byte buffer
+     * does not fit in a 29-byte payload, so this costs SNIPPET_LEN/SNIPPET_CHUNK
+     * round trips; each frame is [chunk index, chars...] both ways. Text ends at
+     * the first NUL. */
+    async getSnippet(index) {
+        const bytes = [];
+        for (let chunk = 0; chunk < SNIPPET_LEN / SNIPPET_CHUNK; chunk++) {
+            const r = await this.getBytes(CH.snippets, slot.snippet(index), [chunk], 1);
+            bytes.push(...r.slice(1, 1 + SNIPPET_CHUNK));
+        }
+        const end = bytes.indexOf(0);
+        return new TextDecoder().decode(new Uint8Array(end < 0 ? bytes : bytes.slice(0, end)));
+    }
+
+    /** Writes one snippet, NUL-terminated and zero-padded to the full buffer so
+     * a shorter string never leaves the old tail behind. */
+    async setSnippet(index, text) {
+        const utf8 = Array.from(new TextEncoder().encode(text)).slice(0, SNIPPET_LEN - 1);
+        while (utf8.length < SNIPPET_LEN) utf8.push(0);
+        for (let chunk = 0; chunk < SNIPPET_LEN / SNIPPET_CHUNK; chunk++) {
+            const start = chunk * SNIPPET_CHUNK;
+            await this.setBytes(CH.snippets, slot.snippet(index),
+                [chunk, ...utf8.slice(start, start + SNIPPET_CHUNK)], 1);
+        }
     }
 
     /** Flask handshake: protocol version, or null if firmware is plain Vial. */
