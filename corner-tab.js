@@ -15,9 +15,9 @@
 // chord), which is also the .vil wire order — a chord is found by the finger it
 // belongs to rather than by hunting the board picture.
 
-import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=19';
-import { kcCell, makePickerHost } from './picker.js?v=19';
-import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=19';
+import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=34';
+import { kcCell, makePickerHost } from './picker.js?v=34';
+import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=34';
 
 /** Layer inherits again when the entry is cleared — KC_TRNS is how the
  * firmware spells "no entry of my own here". */
