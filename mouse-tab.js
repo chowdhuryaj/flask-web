@@ -3,11 +3,11 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=37';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=38';
 import { CH, V, slot, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
          CPI_MIN, CPI_MAX, CPI_STEP,
-         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=37';
-import { renderKeyboardSVG } from './keymap-tab.js?v=37';
+         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=38';
+import { renderKeyboardSVG } from './keymap-tab.js?v=38';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -571,6 +571,36 @@ export class MouseTab {
                 }),
                 saveBar(() => flask.save(CH.autoscroll)));
             cardsRow.append(as);
+        }
+
+        // ---- mouse buttons (0x29) ----
+        if (caps.mouseButtons) {
+            const locked = await g(CH.mouseButtons, V.mbLockMask).catch(() => 0);
+            cardsRow.append(card('Mouse buttons', 'double click + click lock',
+                sliderRow({
+                    label: 'Double-click gap (ms)',
+                    hint: 'too short and the host reads one click; too long and it reads two',
+                    min: 10, max: 500, step: 5,
+                    value: await g(CH.mouseButtons, V.mbDoubleGap),
+                    onChange: (v) => flask.setU16(CH.mouseButtons, V.mbDoubleGap, v),
+                }),
+                el('div', { class: 'row' },
+                    el('span', { class: 'lbl' }, 'Latched buttons',
+                        el('span', { class: 'hint', text: 'click lock holds these down until pressed again' })),
+                    el('span', { style: 'flex:1' }),
+                    el('span', { class: 'mono', text: locked
+                        ? [1, 2, 3, 4, 5].filter((b) => locked & (1 << (b - 1))).map((b) => `BTN${b}`).join(' ')
+                        : 'none' }),
+                    el('button', {
+                        class: 'btn small', text: 'Release all',
+                        title: 'Rescue — frees any button click lock left held',
+                        onclick: async () => {
+                            try { await flask.setU16(CH.mouseButtons, V.mbLockMask, 0); toast('Released'); }
+                            catch (e) { toast(e.message, true); }
+                        },
+                    })),
+                el('div', { class: 'note faint', text: 'Assign MsDbL/MsDbM and ClkL1–ClkL5 from the keymap picker. ClkUn releases everything from the keyboard itself.' }),
+                saveBar(() => flask.save(CH.mouseButtons))));
         }
 
         // ---- cursor teleport (0x26) ----

@@ -13,9 +13,9 @@
 
 import { CH, V, slot, GESTURE_SETS, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS,
          WC_BUTTONS, NLKB, SL_SEQS, SL_OUT_POS, SNIPPET_COUNT, SNIPPET_KEYS,
-         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=37';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=37';
-import { encoderCount } from './profiles.js?v=37';
+         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=38';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=38';
+import { encoderCount } from './profiles.js?v=38';
 
 // ---------- tuning dump spec (mirrors AppModel.tuningDumpSpec) ----------
 // Replayed in THIS order on restore: DPI index ids come before raw-CPI ids
@@ -85,6 +85,7 @@ function dumpSpec(caps = {}) {
         for (let t = 0; t < TELEPORT_TARGETS; t++) tp.push(slot.teleportX(t), slot.teleportY(t));
         spec.push([CH.teleport, tp]);
     }
+    if (caps.mouseButtons) spec.push([CH.mouseButtons, [V.mbDoubleGap]]);
     if (caps.cornerCombos) {
         // Geometry is firmware-baked and the per-(def, layer) outputs are
         // payload-addressed — those go in flask_corner below.

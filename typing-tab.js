@@ -8,13 +8,13 @@
 // re-read-everything-after-each-pick shape cost 3 round trips per slot; Super
 // Leader alone is 16 sequences x 7 slots, which made it unusable.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=37';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=38';
 import {
     CH, V, slot, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS, osName,
     SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS, OUTPUT_KIND,
     SNIPPET_COUNT, SNIPPET_LEN, SNIPPET_KEYS, CYCLOTAB_KEYS,
-} from './flaskproto.js?v=37';
-import { kcCell, makePickerHost } from './picker.js?v=37';
+} from './flaskproto.js?v=38';
+import { kcCell, makePickerHost } from './picker.js?v=38';
 
 /** "3: Regards," — what a snippet reads as in a dropdown. */
 function snippetLabel(index, text) {

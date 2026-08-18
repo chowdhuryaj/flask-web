@@ -9,11 +9,11 @@
 // entries, never the whole snapshot, so a template workspace can't wipe a
 // real keymap.
 
-import { el, modal, toast } from './ui.js?v=37';
-import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=37';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=37';
-import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=37';
-import { describe } from './keycodes.js?v=37';
+import { el, modal, toast } from './ui.js?v=38';
+import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=38';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=38';
+import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=38';
+import { describe } from './keycodes.js?v=38';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';
@@ -36,6 +36,7 @@ const LIVE_SET = new Set([
     `${CH.teleport}:6`,     // teleport host heartbeat (this app never sends it)
     `${CH.teleport}:7`,     // teleport self-test
     `${CH.teleport}:8`,     // teleport host ack
+    `${CH.mouseButtons}:2`, // click-lock latch release (live rescue, not a setting)
 ]);
 
 // ---------- storage ----------

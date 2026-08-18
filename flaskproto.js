@@ -61,6 +61,7 @@ export const CH = {
     teleport: 0x26,     // v12+: absolute cursor jumps (digitizer or host warp)
     ballGesturesRight: 0x27, // v15+: second ball-gesture table (cursor ball)
     corner: 0x28,       // v17+: positional corner combos
+    mouseButtons: 0x29, // v20+: double-click gap + click-lock latch
     // --- ZMK line (Imprint) ---
     keyState: 0x23, // ZMK line v5+: pressed-position bitmap (HUD press feed)
     combos: 0x24,   // ZMK line v7+: flask_combos runtime combo slots
@@ -151,6 +152,10 @@ export const V = {
     tpHostAck: 0x08,   // v16: SET acks a received frame (latches host mode)
     // Corner combos (0x28, Svalboard v17+). enabled/term/counts/misfires/
     // capture are u16; def/out/layers are PAYLOAD-ADDRESSED byte frames.
+    // Mouse-button behaviours (0x29, Svalboard v20+). The latch mask is LIVE
+    // state: GET reads which buttons are held, and ANY set releases them all —
+    // the firmware deliberately refuses to latch a button from the host.
+    mbDoubleGap: 0x01, mbLockMask: 0x02,
     ccEnabled: 0x01, ccTerm: 0x02, ccDefCount: 0x03, ccOutCount: 0x04,
     ccMisfires: 0x05, ccCapture: 0x06, ccCaptureBase: 0x08,
     ccDef: 0x10, ccOut: 0x11, ccLayers: 0x12,
