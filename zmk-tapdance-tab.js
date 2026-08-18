@@ -9,16 +9,16 @@
 // tapping term ("behavior modification settings" — timing, AJ 2026-07-12);
 // term 0 = the firmware default 200 ms.
 
-import { el, card, toggleRow, modal, toast } from './ui.js?v=46';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=46';
-import { CH, V } from './flaskproto.js?v=46';
-import { pickUsage } from './zmk-combos-tab.js?v=46';
-import { usageCap, usageLabel, zmkBehaviors } from './zmk-keycodes.js?v=46';
-import { buildZmkPicker } from './zmk-keymap-tab.js?v=46';
+import { el, card, toggleRow, modal, toast } from './ui.js?v=47';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=47';
+import { CH, V } from './flaskproto.js?v=47';
+import { pickUsage } from './zmk-combos-tab.js?v=47';
+import { usageCap, usageLabel, zmkBehaviors } from './zmk-keycodes.js?v=47';
+import { buildZmkPicker } from './zmk-keymap-tab.js?v=47';
 import {
     TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg,
     tdDanceLength, tdSlotIsEmpty,
-} from './zmk-tapdance-codec.js?v=46';
+} from './zmk-tapdance-codec.js?v=47';
 
 const TAP_WORDS = ['Single tap', 'Double tap', 'Triple tap', 'Quad tap',
     '5 taps', '6 taps', '7 taps', '8 taps'];

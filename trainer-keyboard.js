@@ -11,6 +11,8 @@
 // POSITION WEIGHT that lets "keyboard order" unlock the keys your fingers rest
 // on before the ones they have to reach for.
 
+const SPACE_CP = 32;
+
 /** QMK basic keycode → the character it produces unshifted. */
 const KEYCODE_CHAR = new Map();
 {
@@ -58,12 +60,17 @@ export function keyboardFromKeymap(profile, keymap, layers = [0, 1]) {
         for (const key of profile.keys) {
             const kc = tappedKeycode(grid[key.row]?.[key.col] ?? 0);
             const ch = KEYCODE_CHAR.get(kc);
-            if (ch == null || ch === ' ') continue;
+            if (ch == null) continue;
             const cp = ch.codePointAt(0);
             if (!position.has(cp)) position.set(cp, key);
         }
     }
-    if (position.size === 0) return null;
+    // Space is a POSITION but never a LETTER. The live board has to be able to
+    // point at the space key — it is most of what a lesson asks you to press —
+    // but an alphabet containing " " would put it in play as a drillable
+    // character, rank it by confidence, and gate every unlock behind it.
+    const codePoints = new Set([...position.keys()].filter((cp) => cp !== SPACE_CP));
+    if (codePoints.size === 0) return null;
 
     // Position weight, from geometry rather than a per-device table.
     //
@@ -95,13 +102,13 @@ export function keyboardFromKeymap(profile, keymap, layers = [0, 1]) {
     }
 
     return {
-        codePoints: new Set(position.keys()),
+        codePoints,
         positionOf: (cp) => position.get(cp) ?? null,
         weightOf: (cp) => weights.get(cp) ?? 0,
         /** Reverse lookup for the heatmap: "row,col" → codepoint. */
         charAt: (row, col) => {
             for (const [cp, key] of position) {
-                if (key.row === row && key.col === col) return cp;
+                if (cp !== SPACE_CP && key.row === row && key.col === col) return cp;
             }
             return null;
         },

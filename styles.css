@@ -845,6 +845,7 @@ body.hud-electron a { -webkit-app-region: no-drag; }
 
 @media (prefers-reduced-motion: reduce) {
     .layer-chip, .keycap-btn, .macro-bar-fill { transition: none; }
+    .tr-board .kb-svg .keycap { transition: none; }
 }
 
 /* Shared keycode picker */
@@ -945,6 +946,28 @@ body.hud-electron a { -webkit-app-region: no-drag; }
     color: var(--text); font-variant-numeric: tabular-nums; line-height: var(--lh-tight);
 }
 .tr-stat i { font-style: normal; font-size: var(--fs-xs); color: var(--muted); }
+
+/* The live board under the text. Three highlight states, and the source order
+   below IS the precedence: a physically-held key beats the next-key cue, which
+   beats the key just left behind. */
+.tr-board { margin: var(--sp-6) 0 0; }
+.tr-board:empty { display: none; }
+.tr-board-bar {
+    display: flex; align-items: center; gap: var(--sp-3);
+    margin-bottom: var(--sp-3); flex-wrap: wrap;
+}
+.tr-board-layer {
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    color: var(--accent-text); background: var(--accent-bg);
+    border: 1px solid var(--accent); border-radius: var(--r-full);
+    padding: 1px var(--sp-3);
+}
+.tr-board .kb-svg .keycap { transition: fill .12s ease, stroke .12s ease; }
+/* --surface2 IS --keycap in the dark palette, so a "grey it out" fill has to
+   come from the border ramp to be visible at all. */
+.tr-board .kb-svg .keycap.tr-prev { fill: var(--border2); stroke: var(--faint); }
+.tr-board .kb-svg .keycap.tr-next { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 2.5; }
+.tr-board .kb-svg .keycap.pressed { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 2.5; }
 
 /* Letters in play. The fill IS the confidence — a letter is full when it has
    been typed at the target speed, and a new one waits for all of them. */

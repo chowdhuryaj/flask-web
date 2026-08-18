@@ -2,51 +2,51 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=46';
-import { diag } from './diag.js?v=46';
-import { FlaskHID } from './webhid.js?v=46';
-import { renderPreflight } from './preflight.js?v=46';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=46';
+import { el, toast, modal } from './ui.js?v=47';
+import { diag } from './diag.js?v=47';
+import { FlaskHID } from './webhid.js?v=47';
+import { renderPreflight } from './preflight.js?v=47';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=47';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=46';
-import { VialClient } from './vialclient.js?v=46';
-import { parseDefinition } from './vialdef.js?v=46';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=46';
-import { loadNapeDevice, isNapeFamily } from './nape.js?v=46';
-import { NapeKeymapTab } from './nape-keymap-tab.js?v=46';
-import { NapeSettingsTab } from './nape-settings-tab.js?v=46';
-import { NapeMacrosTab } from './nape-macros-tab.js?v=46';
-import { capabilities } from './caps.js?v=46';
-import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=46';
-import { KeymapTab } from './keymap-tab.js?v=46';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=46';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=46';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=46';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=46';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=46';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=46';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=46';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=46';
-import { ZmkTestTab } from './zmk-test-tab.js?v=46';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=46';
-import { MouseTab } from './mouse-tab.js?v=46';
-import { TypingTab } from './typing-tab.js?v=46';
-import { SettingsTab } from './settings-tab.js?v=46';
-import { HUD } from './hud.js?v=46';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=46';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=47';
+import { VialClient } from './vialclient.js?v=47';
+import { parseDefinition } from './vialdef.js?v=47';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=47';
+import { loadNapeDevice, isNapeFamily } from './nape.js?v=47';
+import { NapeKeymapTab } from './nape-keymap-tab.js?v=47';
+import { NapeSettingsTab } from './nape-settings-tab.js?v=47';
+import { NapeMacrosTab } from './nape-macros-tab.js?v=47';
+import { capabilities } from './caps.js?v=47';
+import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=47';
+import { KeymapTab } from './keymap-tab.js?v=47';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=47';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=47';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=47';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=47';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=47';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=47';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=47';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=47';
+import { ZmkTestTab } from './zmk-test-tab.js?v=47';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=47';
+import { MouseTab } from './mouse-tab.js?v=47';
+import { TypingTab } from './typing-tab.js?v=47';
+import { SettingsTab } from './settings-tab.js?v=47';
+import { HUD } from './hud.js?v=47';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=47';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=46';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=47';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=46';
-import { MacrosTab } from './macros-tab.js?v=46';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=46';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=46';
-import { CornerTab } from './corner-tab.js?v=46';
-import { RgbTab } from './rgb-tab.js?v=46';
-import { DisplayTab } from './display-tab.js?v=46';
-import { TrainerTab } from './trainer-tab.js?v=46';
-import { exportVil, importVil, downloadText } from './vil.js?v=46';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=47';
+import { MacrosTab } from './macros-tab.js?v=47';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=47';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=47';
+import { CornerTab } from './corner-tab.js?v=47';
+import { RgbTab } from './rgb-tab.js?v=47';
+import { DisplayTab } from './display-tab.js?v=47';
+import { TrainerTab } from './trainer-tab.js?v=47';
+import { exportVil, importVil, downloadText } from './vil.js?v=47';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -55,6 +55,21 @@ const THEME_VARS = ['bg', 'surface', 'surface2', 'text', 'muted', 'faint', 'bord
     'keycap', 'keycap-border'];
 const THEMES = {
     classic: { label: 'Classic (auto light/dark)' },
+    // keybr.com's own inks, sampled from the running site (2026-08-18) rather
+    // than eyeballed: --primary/--secondary/--accent and their ramps. Mirrors
+    // AdeptCompanion's Pipette.Theme, which is the default there.
+    //
+    // ok/danger in the dark entry are keybr's #448154/#9b4545 LIGHTENED. keybr
+    // shows those on its page background; here they carry badge text on a
+    // tinted chip, where the originals land near 2.6:1.
+    keybrDark: {
+        label: 'keybr Dark',
+        vars: { bg: '#2b2b2b', surface: '#333333', surface2: '#404040', text: '#b8b3b3', muted: '#9f9999', faint: '#747070', border: '#404040', border2: '#4d4d4d', accent: '#867f7f', 'accent-bg': '#4d4d4d', 'accent-text': '#e4e0e0', ok: '#6dbe83', 'ok-bg': '#24402c', warn: '#e0a94f', 'warn-bg': '#3a2d14', danger: '#d77b7b', 'danger-bg': '#3e2222', keycap: '#404040', 'keycap-border': '#4d4d4d' },
+    },
+    keybrLight: {
+        label: 'keybr Light',
+        vars: { bg: '#f4f0f0', surface: '#ffffff', surface2: '#faf9f9', text: '#282640', muted: '#514e63', faint: '#7a7786', border: '#e9e1e1', border2: '#ded3d3', accent: '#3d475c', 'accent-bg': '#e3e6ed', 'accent-text': '#292f3d', ok: '#2a7e21', 'ok-bg': '#e6f1e4', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#a1464e', 'danger-bg': '#f7e8e9', keycap: '#ffffff', 'keycap-border': '#e9e1e1' },
+    },
     light: {
         label: 'Light',
         vars: { bg: '#f5f5f4', surface: '#ffffff', surface2: '#fafaf9', text: '#1c1c1a', muted: '#6b6b66', faint: '#9a9a93', border: '#e2e2dd', border2: '#cfcfc8', accent: '#2563eb', 'accent-bg': '#e8f0fe', 'accent-text': '#14458a', ok: '#15803d', 'ok-bg': '#e7f6ec', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#b42318', 'danger-bg': '#fdeceb', keycap: '#ffffff', 'keycap-border': '#cfcfc8' },
