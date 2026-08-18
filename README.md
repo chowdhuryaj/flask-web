@@ -162,6 +162,21 @@ tabs are a different app wearing the same chrome.
   The check names which one happened; the active probe separates a policy
   block from a missing device by timing, since a blocked `requestDevice`
   returns empty without ever painting a chooser.
+- **Typing trainer** — an adaptive trainer in the shape of
+  [keybr.com](https://keybr.com): it starts you on six letters, measures your
+  speed *per key*, and unlocks the next letter only once every letter already in
+  play has been typed at the target speed. Text is generated from a 4-gram
+  Markov model over a 4000-word English corpus, so the lessons read like words
+  without being words you can anticipate; whichever key you are worst at appears
+  in every one of them. Lesson types: Guided, Word list, Numbers, Custom text.
+  Progress lives in localStorage and exports as JSON the Flask macOS app reads.
+
+  With a keyboard connected it does two things a browser typing site cannot:
+  the alphabet comes off your actual **keymap** (a remapped board is described
+  correctly, and "keyboard order" unlocks the keys your fingers rest on first),
+  and per-key speed is painted as a **heatmap on the real board geometry**. It
+  also runs with nothing connected — there is an entry for it on the landing
+  page.
 - **Themes** — Classic (auto light/dark), Light, Dark, Nord, Dracula,
   Solarized; zoom 80–150%.
 
@@ -235,6 +250,13 @@ firmware serves over HID).
 | `keycodes.js` | Keycode DB: naming, composition, categories, device-custom overlay |
 | `ui.js`, `colorpicker.js`, `picker.js`, `hud.js` | Shared UI: widgets, HSV picker, keycode picker, HUD |
 | `diag.js`, `preflight.js` | Black-box diagnostics ring; environment preflight |
+| `trainer-model.js` | Typing trainer: 4-gram phonetic model, seeded RNG, letter filter |
+| `trainer-stats.js` | Per-key speed/confidence (EMA), learning-rate fit, daily goal, storage |
+| `trainer-lesson.js` | The guided unlock algorithm + text generation per lesson type |
+| `trainer-textinput.js` | Keystroke state machine: hits, typos, replace/skip recovery |
+| `trainer-keyboard.js` | Keymap → alphabet + per-key position weights |
+| `trainer-words.js` | Vendored 4000-word frequency corpus (public-domain sources) |
+| `trainer-tab.js` | Trainer UI: practice surface, letter chips, progress charts, heatmap |
 
 **QMK / Vial line**
 
