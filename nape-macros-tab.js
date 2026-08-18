@@ -5,8 +5,8 @@
 // whole buffer is rewritten every save. Escapes recorded by Keychron's app are
 // preserved verbatim rather than reinterpreted (see macroToText).
 
-import { el, toast } from './ui.js?v=45';
-import { macroToText, macroFromText } from './nape-proto.js?v=45';
+import { el, toast } from './ui.js?v=46';
+import { macroToText, macroFromText } from './nape-proto.js?v=46';
 
 export class NapeMacrosTab {
     constructor(app) {

@@ -4,9 +4,9 @@
 // any Vial keyboard's self-served definition. ZMK devices are profiled by
 // zmk.js (zmkProfile) — this file only delegates identification/labels.
 
-import { VIDPID } from './flaskproto.js?v=45';
-import { zmkFamilyCandidate, ZMK_FAMILY_LABELS } from './zmk.js?v=45';
-import { napeFamilyCandidate, NAPE_FAMILY_LABELS } from './nape.js?v=45';
+import { VIDPID } from './flaskproto.js?v=46';
+import { zmkFamilyCandidate, ZMK_FAMILY_LABELS } from './zmk.js?v=46';
+import { napeFamilyCandidate, NAPE_FAMILY_LABELS } from './nape.js?v=46';
 
 // Adept geometry mirrors keyboards/ploopyco/madromys/info.json (key units).
 const ADEPT_KEYS = [
