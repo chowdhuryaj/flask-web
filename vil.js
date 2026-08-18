@@ -13,9 +13,9 @@
 
 import { CH, V, slot, GESTURE_SETS, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS,
          WC_BUTTONS, NLKB, SL_SEQS, SL_OUT_POS, SNIPPET_COUNT, SNIPPET_KEYS,
-         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=34';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=34';
-import { encoderCount } from './profiles.js?v=34';
+         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=35';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=35';
+import { encoderCount } from './profiles.js?v=35';
 
 // ---------- tuning dump spec (mirrors AppModel.tuningDumpSpec) ----------
 // Replayed in THIS order on restore: DPI index ids come before raw-CPI ids
@@ -224,20 +224,32 @@ export async function exportVil(app) {
         } catch { /* leave out */ }
     }
 
-    // Corner-combo outputs (Svalboard v17+). ONLY entries a layer owns — the
-    // resolved value on an inheriting layer is not a binding, and writing it
-    // back would turn every borrowed chord into an explicit override.
+    // Corner-combo outputs (Svalboard v17+), as [def, layer, keycode] triples.
+    //
+    // Two shapes, because v19 made outputs universal. Per-layer firmware
+    // exports ONLY the entries a layer owns — the resolved value on an
+    // inheriting layer is not a binding, and writing it back would turn every
+    // borrowed chord into an explicit override. Universal firmware has one
+    // binding per chord, so it exports exactly one triple per bound chord;
+    // walking the layer mask there would emit sixteen identical rows, since
+    // 0x12 answers 0xFFFF for anything bound.
     if (app.caps.cornerCombos && !app.offline) {
         try {
             const defCount = await app.flask.getU16(CH.corner, V.ccDefCount);
             const outputs = [];
             for (let def = 0; def < defCount; def++) {
-                const mask = await app.flask.getBytes(CH.corner, V.ccLayers, [def], 1);
-                const own = ((mask[1] ?? 0) << 8) | (mask[2] ?? 0);
-                for (let layer = 0; layer < 16; layer++) {
-                    if (!(own & (1 << layer))) continue;
-                    const r = await app.flask.getBytes(CH.corner, V.ccOut, [def, layer], 2);
-                    outputs.push([def, layer, ((r[2] ?? 0) << 8) | (r[3] ?? 0)]);
+                if (app.caps.cornerPerLayer) {
+                    const mask = await app.flask.getBytes(CH.corner, V.ccLayers, [def], 1);
+                    const own = ((mask[1] ?? 0) << 8) | (mask[2] ?? 0);
+                    for (let layer = 0; layer < 16; layer++) {
+                        if (!(own & (1 << layer))) continue;
+                        const r = await app.flask.getBytes(CH.corner, V.ccOut, [def, layer], 2);
+                        outputs.push([def, layer, ((r[2] ?? 0) << 8) | (r[3] ?? 0)]);
+                    }
+                } else {
+                    const r = await app.flask.getBytes(CH.corner, V.ccOut, [def, 0], 2);
+                    const kc = ((r[2] ?? 0) << 8) | (r[3] ?? 0);
+                    if (kc) outputs.push([def, 0, kc]);
                 }
             }
             if (outputs.length) data.flask_corner = outputs;
@@ -427,7 +439,23 @@ export async function importVil(app, text) {
     // Corner-combo outputs. Only owned entries were exported, so replaying them
     // restores the inheritance pattern too — anything not listed stays inherited.
     if (Array.isArray(json.flask_corner) && app.caps.cornerCombos && !app.offline) {
-        for (const entry of json.flask_corner) {
+        // A file written by per-layer firmware can carry several rows for one
+        // chord. Universal firmware keeps one binding per chord, so replaying
+        // them all would let whichever row happened to be last win. Take the
+        // LOWEST layer's binding — under the old inheritance model that was the
+        // base every other layer fell back to.
+        let rows = json.flask_corner;
+        if (!app.caps.cornerPerLayer) {
+            const lowest = new Map();
+            for (const e of rows) {
+                if (!Array.isArray(e) || e.length < 3) continue;
+                const [def, layer] = [Number(e[0]), Number(e[1])];
+                const prev = lowest.get(def);
+                if (!prev || layer < Number(prev[1])) lowest.set(def, e);
+            }
+            rows = [...lowest.values()];
+        }
+        for (const entry of rows) {
             if (!Array.isArray(entry) || entry.length < 3) continue;
             const [def, layer, kc] = entry.map(Number);
             if (!Number.isFinite(def) || def >= CC.total || layer > 15) continue;

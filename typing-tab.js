@@ -8,13 +8,13 @@
 // re-read-everything-after-each-pick shape cost 3 round trips per slot; Super
 // Leader alone is 16 sequences x 7 slots, which made it unusable.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=34';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=35';
 import {
     CH, V, slot, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS, osName,
     SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS, OUTPUT_KIND,
     SNIPPET_COUNT, SNIPPET_LEN, SNIPPET_KEYS, CYCLOTAB_KEYS,
-} from './flaskproto.js?v=34';
-import { kcCell, makePickerHost } from './picker.js?v=34';
+} from './flaskproto.js?v=35';
+import { kcCell, makePickerHost } from './picker.js?v=35';
 
 /** "3: Regards," — what a snippet reads as in a dropdown. */
 function snippetLabel(index, text) {
@@ -85,10 +85,11 @@ export class TypingTab {
             s.leaderTimeout = await g(CH.leader, V.leaderTimeout);
         }
 
-        // ---- snippet pool ----
+        // ---- snippet pool (Svalboard v12-v17 only) ----
+        // Removed from the firmware at v18: the board stored no snippet text
+        // and none of its keycodes were bound. Still read on an older board so
+        // this app keeps working against one.
         if (caps.snippets) {
-            // How many SNIP keycodes this firmware actually serves (4 before
-            // v15, 16 after) — trust the device over the constant.
             s.snipKeyCount = Math.min(SNIPPET_KEYS,
                 await g(CH.snippets, V.snipKeyCount).catch(() => SNIPPET_KEYS));
             s.snippets = [];
@@ -290,21 +291,26 @@ export class TypingTab {
             })));
             row.append('→');
 
-            const kindSel = el('select', {},
-                el('option', { value: OUTPUT_KIND.keycode, text: 'Key' }),
-                el('option', { value: OUTPUT_KIND.snippet, text: 'Text' }));
-            kindSel.value = String(q.kind);
-            kindSel.addEventListener('change', async () => {
-                try {
-                    q.kind = await flask.setU16(CH.leader,
-                        slot.superLeader(seq, SL_KIND_POS), Number(kindSel.value));
-                    // The output slot means something different now, so the
-                    // stale value would render as a nonsense keycode/index.
-                    q.out = await flask.setU16(CH.leader, slot.superLeader(seq, SL_OUT_POS), 0);
-                    this.render();
-                } catch (e) { toast(`Write failed: ${e.message}`, true); }
-            });
-            row.append(kindSel);
+            // The Key/Text switch only exists while the board has a snippet
+            // pool to point "Text" at. From v18 a sequence has exactly one kind
+            // of output, so offering the choice would be offering nothing.
+            if (caps.snippets) {
+                const kindSel = el('select', {},
+                    el('option', { value: OUTPUT_KIND.keycode, text: 'Key' }),
+                    el('option', { value: OUTPUT_KIND.snippet, text: 'Text' }));
+                kindSel.value = String(q.kind);
+                kindSel.addEventListener('change', async () => {
+                    try {
+                        q.kind = await flask.setU16(CH.leader,
+                            slot.superLeader(seq, SL_KIND_POS), Number(kindSel.value));
+                        // The output slot means something different now, so the
+                        // stale value would render as a nonsense keycode/index.
+                        q.out = await flask.setU16(CH.leader, slot.superLeader(seq, SL_OUT_POS), 0);
+                        this.render();
+                    } catch (e) { toast(`Write failed: ${e.message}`, true); }
+                });
+                row.append(kindSel);
+            }
 
             if (q.kind === OUTPUT_KIND.snippet && caps.snippets) {
                 const snipSel = el('select', { style: 'max-width:190px' },

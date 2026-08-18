@@ -9,14 +9,14 @@
 // Port of AdeptCompanion AppModel.swift has* props — that file is the
 // QMK gating source of truth. Each QMK firmware family versions its OWN
 // Flask protocol line, and they no longer even run in step: the Svalboard's
-// left the Adept's at v12 and is at v17 today, while the Adept stays at v11 and
+// left the Adept's at v12 and is at v19 today, while the Adept stays at v11 and
 // the NLKB16-02 at v8 (the desktop app dropped both those devices 2026-08-14, so
 // nothing advances their numbers). A raw `version >= N` compare across families
 // is WRONG — always gate here, and for anything past v11 gate on
 // `family === 'svalboard'` explicitly rather than on `trackball`.
 
-import { isZmkFamily, zmkCapabilities } from './zmk.js?v=34';
-import { isNapeFamily, napeCapabilities } from './nape.js?v=34';
+import { isZmkFamily, zmkCapabilities } from './zmk.js?v=35';
+import { isNapeFamily, napeCapabilities } from './nape.js?v=35';
 
 export function capabilities(family, version) {
     if (isZmkFamily(family)) return zmkCapabilities(family, version);
@@ -39,9 +39,13 @@ export function capabilities(family, version) {
         vial: true,
         // Mouse/pointing tuning.
         mouse: flask && trackball,
-        accel: flask && trackball,
+        // Acceleration (0x10) and smoothing (0x13) were REMOVED from the
+        // Svalboard at v18 — they had shipped disabled and were still disabled
+        // on the board, so they were pipeline stages that changed nothing. The
+        // Adept keeps both, which is why these are per-family rather than gone.
+        accel: flask && (family === 'adept' || (family === 'svalboard' && v < 18)),
+        smoothing: flask && (family === 'adept' || (family === 'svalboard' && v < 18)),
         dpi: flask && trackball,
-        smoothing: flask && trackball,
         // Drag scroll (0x15): trackballs. Knob shapes: per-axis divisors
         // (Adept), emit-window tuning (Sval).
         drag: flask && trackball,
@@ -80,23 +84,30 @@ export function capabilities(family, version) {
         // merely reveal extra controls — reading the old shape off a v12+ board
         // returns kinds where it expects keycodes.
         superLeader: sval(12),
-        // Text snippet pool (0x24), the string outputs Super Leader points at.
-        snippets: sval(12),
+        // Text snippet pool (0x24) — REMOVED at v18. The board held no snippet
+        // text and none of its 16 keycodes were bound anywhere in the layout.
+        // Super Leader survives with keycode-only outputs.
+        snippets: sval(12) && v < 18,
         // Cyclotab (0x23), the Alt-Tab / Cmd-Tab modifier swapper.
         cyclotab: sval(12),
-        // Cursor teleport (0x26). Needs DIGITIZER_ENABLE in the firmware, so
-        // absence on a v12+ board means it was built without it.
-        teleport: sval(12),
-        // Host-side warp (0x26/0x05-0x08 + the 0xFB event frame). Surfaced
-        // read-only in the browser: WebHID cannot move the OS cursor, so this
-        // app must never heartbeat or ack — see mouse-tab.js.
-        teleportHostMode: sval(15),
+        // Cursor teleport (0x26) — REMOVED at v18, along with the HID digitizer
+        // it needed and the 0xFB event frame. None of its six keycodes had ever
+        // been bound, so it was unreachable, while the digitizer stayed
+        // enumerated and competed with the trackball for the cursor.
+        teleport: sval(12) && v < 18,
+        teleportHostMode: sval(15) && v < 18,
         // Alt-repeat chaining + stale-input default (0x25), layered on Vial's
         // own dynamic alt-repeat table.
         altRepeatBehaviour: sval(13),
-        // Positional corner combos (0x28): matched on (row, col) with one
-        // output per layer, unlike Vial's combos which match keycodes.
+        // Positional corner combos (0x28): matched on (row, col) rather than on
+        // keycodes, unlike Vial's own combos.
         cornerCombos: sval(17),
+        // v19 made those outputs UNIVERSAL — one keycode per chord on every
+        // layer, no per-layer entries and no inheritance. Removing the layer
+        // dimension is also what fixed a chord bound to a layer switch leaking
+        // its own member keys. Below v19 the editor still needs its layer
+        // selector and its inherited-vs-owned rendering.
+        cornerPerLayer: sval(17) && v < 19,
         // Autoscroll (0x1A): trackballs v5+; NLKB16 v4+ (stepped only, no jog).
         autoscroll: flask && (nlkb ? v >= 4 : v >= 5),
         autoscrollJog: flask && trackball && v >= 5,

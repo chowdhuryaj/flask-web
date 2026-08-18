@@ -15,9 +15,14 @@
 // chord), which is also the .vil wire order — a chord is found by the finger it
 // belongs to rather than by hunting the board picture.
 
-import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=34';
-import { kcCell, makePickerHost } from './picker.js?v=34';
-import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=34';
+import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=35';
+import { kcCell, makePickerHost } from './picker.js?v=35';
+import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=35';
+
+/** Which layer the wire frames are addressed with when outputs are universal.
+ * The [def, layer] shape survived v19 for compatibility; the firmware ignores
+ * the byte, so anything consistent works and 0 is the honest choice. */
+const UNIVERSAL_LAYER = 0;
 
 /** Layer inherits again when the entry is cleared — KC_TRNS is how the
  * firmware spells "no entry of my own here". */
@@ -121,9 +126,12 @@ export class CornerTab {
             });
         }
         const kc = this.outputs[this.layer]?.[def] ?? 0;
-        const own = this._isOwn(def, this.layer);
+        // Universal outputs (v19+) have no owned-vs-inherited distinction: a
+        // chord is bound or it isn't, and it means the same on every layer.
+        const perLayer = this.app.caps.cornerPerLayer;
+        const own = perLayer ? this._isOwn(def, this.layer) : kc !== 0;
         const unbound = kc === 0 && !own;
-        const inherited = !own && !unbound;
+        const inherited = perLayer && !own && !unbound;
         const where = members.map((p) => `r${ccRow(p)}c${ccCol(p)}`).join(' + ');
         const title = `${ccDefName(def)} (${where})`
             + (unbound ? ' — unassigned, click to bind'
@@ -162,10 +170,16 @@ export class CornerTab {
         const { flask } = this.app;
         const c = card('Corner combos', 'press two switches in one cluster together',
             el('div', { class: 'note faint' },
-                'Positional chords: the keyboard matches WHERE you pressed, not what those keys '
-                + 'send, so a chord keeps working when you remap the keys under it. Each chord has '
-                + 'one output per layer, and a layer with no output of its own inherits from the '
-                + 'layer below — pick ▽ (Transparent) to hand a layer back to inheritance.'),
+                this.app.caps.cornerPerLayer
+                    ? 'Positional chords: the keyboard matches WHERE you pressed, not what those '
+                      + 'keys send, so a chord keeps working when you remap the keys under it. Each '
+                      + 'chord has one output per layer, and a layer with no output of its own '
+                      + 'inherits from the layer below — pick ▽ (Transparent) to hand a layer back '
+                      + 'to inheritance.'
+                    : 'Positional chords: the keyboard matches WHERE you pressed, not what those '
+                      + 'keys send, so a chord keeps working when you remap the keys under it. One '
+                      + 'output per chord, the same on every layer — pick ▽ (Transparent) to '
+                      + 'unbind it.'),
             toggleRow({
                 label: 'Enabled', value: this.enabled,
                 onChange: async (v) => {
@@ -194,13 +208,15 @@ export class CornerTab {
                         } catch (e) { toast(e.message, true); }
                     },
                 })),
-            selectRow({
-                label: 'Layer', hint: 'outputs below are for this layer',
-                value: this.layer,
-                options: Array.from({ length: this.app.layerCount || 16 }, (_, i) =>
-                    ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` })),
-                onChange: (v) => this._switchLayer(Number(v)),
-            }),
+            this.app.caps.cornerPerLayer
+                ? selectRow({
+                    label: 'Layer', hint: 'outputs below are for this layer',
+                    value: this.layer,
+                    options: Array.from({ length: this.app.layerCount || 16 }, (_, i) =>
+                        ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` })),
+                    onChange: (v) => this._switchLayer(Number(v)),
+                })
+                : null,
             this._grid('Finger', CC.clusterNames, CC.fingerChordNames, 0),
             this._grid('Thumb', ['L thumb', 'R thumb'], CC.thumbChordNames, CC.thumbBase),
             // Deliberately NO save bar — see the comment in _set().

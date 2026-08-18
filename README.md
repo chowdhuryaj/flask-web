@@ -24,7 +24,7 @@ that is the only place the worlds meet.
 
 | Line | Devices | Keymap surface | Tuning | Protocol today |
 |---|---|---|---|---|
-| **QMK / Vial** | Ploopy Adept, Svalboard, NLKB16-02, any Vial board | Vial over raw HID (0xFF60) | Flask channels | Adept **v11**, Svalboard **v17**, NLKB16 **v8** |
+| **QMK / Vial** | Ploopy Adept, Svalboard, NLKB16-02, any Vial board | Vial over raw HID (0xFF60) | Flask channels | Adept **v11**, Svalboard **v19**, NLKB16 **v8** |
 | **ZMK** | Cyboard Imprint | ZMK Studio RPC over WebSerial | Flask channels (zmk-flask-modules) | Imprint **v16** |
 
 Each family versions its **own** protocol line — a raw `version >= N`
@@ -46,20 +46,22 @@ channels generically (`vil.js` `dumpSpec`, `offline.js` `LIVE_SET`) per-family.
 
 - **Keymap editor** — layers, per-key assignment, LT/MT/layer-op composer,
   encoder rotation slots, custom device keycodes read live from the board.
-- **Mouse tab** (Adept/Svalboard) — acceleration, DPI (table + raw CPI),
-  smoothing, drag scroll, shake-to-toggle, auto-mouse, autoscroll, freeze
-  diagnostic.
+- **Mouse tab** (Adept/Svalboard) — DPI (table + raw CPI), drag scroll,
+  shake-to-toggle, auto-mouse, autoscroll, freeze diagnostic. **Acceleration and
+  smoothing are Adept-only from Svalboard v18** — both had shipped disabled and
+  were still disabled on the board, so the firmware dropped them.
 - **Typing tab** — custom shift keys, select word, sentence case, leader
   sequences, OS-aware shortcuts, num word. On a Svalboard v12+ the leader
-  section becomes **Super Leader** (16 sequences, each output either a keycode
-  or a whole text snippet) and the tab gains the **snippet pool** (16 × 63
-  chars, payload-addressed and chunked), **Cyclotab**, and **alt-repeat
-  behaviour** (chaining + stale-input default).
-- **Corner Combos** (Svalboard v17+) — positional chords matched on (row, col)
-  with one output per layer and KC_TRNS-style inheritance from the layer below;
+  section becomes **Super Leader** (16 sequences) and the tab gains **Cyclotab**
+  and **alt-repeat behaviour** (chaining + stale-input default). A **snippet
+  pool** (16 × 63 chars) and per-sequence Key/Text outputs exist on v12–v17
+  only; v18 removed them, so on a current board a sequence outputs a keycode.
+- **Corner Combos** (Svalboard v17+) — positional chords matched on (row, col),
   laid out cluster × chord, the same order the firmware and `.vil` files use.
-  This channel has **no Save** — its SETs persist themselves, and a channel save
-  wedges the board.
+  **From v19 outputs are universal**: one keycode per chord on every layer, so
+  the editor drops its layer selector. On v17–v18 it keeps the selector and the
+  inherited-vs-owned rendering. This channel has **no Save** — its SETs persist
+  themselves, and a channel save wedges the board.
 - **QMK Settings** — tapping/auto-shift/combo/mouse-keys QSIDs.
 - **Macros** — action-chip editor (text/tap/down/up/delay), whole-buffer
   save with unlock gate + verify re-read (locked writes are silently
@@ -73,10 +75,10 @@ channels generically (`vil.js` `dumpSpec`, `offline.js` `LIVE_SET`) per-family.
   at v16, a shared deferred-click flag. Before Svalboard v16 the picker vetoes
   anything `tap_code16` can't fire (basic + mod combos); from v16 slots go
   through `vial_keycode_tap` and the whole range is allowed.
-- **Cursor teleport** (Svalboard v12+, in the Mouse tab) — 8 absolute targets in
-  per-mille of the **virtual desktop**. Host mode is shown read-only: a browser
-  can't warp the OS cursor, so this app never heartbeats or acks, which leaves
-  the firmware correctly on its digitizer path.
+- **Cursor teleport** (Svalboard v12–v17 only, in the Mouse tab) — 8 absolute
+  targets in per-mille of the **virtual desktop**. Removed from the firmware at
+  v18; the card is gated off there. Host mode was always shown read-only: a
+  browser can't warp the OS cursor, so this app never heartbeats or acks.
 - **RGB painter + effect engine** (NLKB16) — per-layer HSV map (channel
   0x21, payload-addressed) plus stock VialRGB modes via raw frames.
 - **Display tab** (NLKB16) — widgets per big line, custom text, idle
@@ -180,13 +182,23 @@ Two different things are called "desktop" here:
   its own tree.
 
   **Sync state (2026-08-17).** The desktop ran the Svalboard line 11 → 17 while
-  this app sat at 11, so it was mis-driving a v17 board. Closed: expected
-  version, the v12–v17 capability gates, Super Leader, the snippet pool,
-  Cyclotab, alt-repeat behaviour, cursor teleport, per-ball gesture tables with
-  deferred click, corner combos, and the widened auto-mouse threshold. **Ported
-  but not yet hardware-verified.** Two deliberate divergences: teleport host mode
-  is read-only here (see above), and corner combos are a cluster × chord table
-  rather than chips on the keymap canvas.
+  this app sat at 11, so it was mis-driving a v17 board. That gap is closed, and
+  the firmware then went further the same day:
+
+  - **v18** removed four channels — acceleration `0x10`, smoothing `0x13`, text
+    snippets `0x24`, cursor teleport `0x26` — and fixed a Windows-only scroll
+    bug (an axis lock that latched on the first scroll after boot and never
+    released, because the only code path that cleared it ran solely while
+    scrolling).
+  - **v19** made corner-combo outputs **universal**: one keycode per chord on
+    every layer, no per-layer entries and no inheritance. That also fixed a
+    chord bound to a layer switch leaking its own member keys.
+
+  Both are reflected here: those cards no longer render on a v18+ Svalboard, and
+  the corner editor drops its layer selector on v19+. The gates are per-family
+  and per-version, not deletions — the **Adept keeps acceleration and
+  smoothing**, and a Svalboard still on v17 still gets the full old surface.
+  **Firmware built and validated, not yet flashed.**
 
   Still desktop-only: the Build tab (compile + flash needs local disk), the Bench
   tab, and the app-side `MouseTeleporter` (which needs the real NSScreen layout).
@@ -267,7 +279,7 @@ proves nothing about the wire format, which still needs hardware.
 
 When releasing, bump the `?v=N` stamps on module imports and the stylesheet
 link — GitHub Pages' CDN caches hard. `main.js` carries its own counter in
-`index.html` (currently imports `?v=19`, entry `main.js?v=21`).
+`index.html` (currently imports `?v=35`, entry `main.js?v=35`).
 
 ## Hard-won rules (do not "simplify" these away)
 

@@ -17,10 +17,16 @@ export const VIDPID = {
 };
 
 // Per-family protocol version lines — INDEPENDENT; never compare across.
-// The Svalboard's line left the Adept's at v12 (2026-08-08) and ran to v17
-// (2026-08-14, corner combos). The Adept and NLKB16 are frozen where they are:
-// the desktop app dropped both devices, so nothing advances those numbers.
-export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 17, nlkb16: 8 };
+// The Svalboard's line left the Adept's at v12 (2026-08-08), ran to v17
+// (corner combos), then v18 REMOVED four channels — accel 0x10, smoothing
+// 0x13, snippets 0x24, teleport 0x26 — and v19 made corner-combo outputs
+// universal. The Adept and NLKB16 are frozen where they are: the desktop app
+// dropped both devices, so nothing advances those numbers.
+//
+// A removed channel answers id_unhandled, which this app already reads as
+// "device lacks this feature" — so an older build degrades rather than breaks.
+// The caps gates exist so the UI stops OFFERING what the board no longer has.
+export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 19, nlkb16: 8 };
 
 // VIA custom-value command IDs (routed to the keymap by VIA_CUSTOM_LIGHTING_ENABLE).
 export const CMD = { set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
