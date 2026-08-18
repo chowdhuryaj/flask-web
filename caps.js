@@ -108,8 +108,11 @@ export function capabilities(family, version) {
         // its own member keys. Below v19 the editor still needs its layer
         // selector and its inherited-vs-owned rendering.
         cornerPerLayer: sval(17) && v < 19,
-        // v22: corner slot-budget diagnostics (0x28/0x07, 0x09).
-        cornerSlotDiag: sval(22),
+        // v23: corner slot-budget diagnostics (0x28/0x0B unplaced, 0x0C slots
+        // used). Gated at 23, not 22: on a v22 board unplaced sat on 0x07,
+        // which is the fire counter, so the readout was the number of times a
+        // chord had been PRESSED and the alarm fired on normal use.
+        cornerSlotDiag: sval(23),
         // Mouse-button behaviours (0x29): double click + click lock (v20).
         mouseButtons: sval(20),
         // Hi-res scroll mode (0x15/0x08, v21). The board advertised the HID
