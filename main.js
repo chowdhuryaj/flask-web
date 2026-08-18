@@ -125,6 +125,10 @@ async function connectFlow(device) {
     connecting = true;
     try {
         if (app.offline) exitOffline(); // restore the real clients first
+        // Leaving the standalone trainer: without this, buildTabs takes its
+        // trainer-only early return and a fully connected keyboard comes up
+        // with the Trainer tab and nothing else.
+        app.trainerOnly = false;
         try {
             await app.hid.open(device);
         } catch (e) {
@@ -322,6 +326,7 @@ function disconnectUI() {
 // ---------- offline mode ----------
 
 function startOffline(key, family) {
+    app.trainerOnly = false;    // same trap as connectFlow's
     const zmk = isZmkFamily(family);
     const ws = loadWorkspace(key) ?? (zmk ? createZmkTemplate(family) : createTemplate(family));
     ws._notify = updateOfflineBanner; // dropped by JSON.stringify on persist
@@ -504,6 +509,9 @@ function renderTabStrip() {
 /** Landing → trainer, with no keyboard involved. */
 async function startTrainer() {
     app.trainerOnly = true;
+    // The landing is hidden and there is no offline banner here, so without a
+    // way out the trainer is a dead end that only a page reload escapes.
+    app.exitTrainer = () => { app.trainerOnly = false; disconnectUI(); };
     app.family = 'generic';
     app.caps = capabilities('generic', null);
     app.profile = null;

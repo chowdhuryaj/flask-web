@@ -277,7 +277,11 @@ export function dailyStats(results, goalMinutes) {
     const goalMs = goalMinutes * 60000;
     // Streak counts back from today, and from yesterday when today is still
     // empty — an unfinished today must not read as a broken streak.
-    const met = new Set(list.filter((d) => d.time >= goalMs).map((d) => d.key));
+    // A day counts only against a goal that exists. Without the `goalMs > 0`
+    // half, every day with any practice at all met a zero goal, so the card
+    // reported an N-day streak directly under the words "daily goal off" — and
+    // disagreed with the desktop app, which reads the same file.
+    const met = new Set(list.filter((d) => goalMs > 0 && d.time >= goalMs).map((d) => d.key));
     let streak = 0;
     const cursor = new Date();
     if (!met.has(dayKey(cursor.getTime()))) cursor.setDate(cursor.getDate() - 1);

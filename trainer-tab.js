@@ -107,6 +107,13 @@ export class TrainerTab {
     }
 
     newLesson() {
+        // Recomputed here, not just at load: the Keymap tab writes remapped
+        // keycodes straight into app.keymap, and a snapshot taken once would
+        // keep teaching letters the board no longer has. Pure arithmetic over
+        // the cached keymap — no device traffic.
+        if (this.app?.keymap && this.app?.profile?.keys) {
+            this.keyboard = keyboardFromKeymap(this.app.profile, this.app.keymap);
+        }
         const keyStatsMap = this.keyStatsMap;
         this.lesson = makeLesson({
             settings: this.settings,
@@ -260,6 +267,14 @@ export class TrainerTab {
             this.typeStrip,
             el('span', { class: 'tr-bar-gap' }),
             this.targetEl,
+            // Only in the standalone trainer: with a keyboard connected the
+            // other tabs are the way out.
+            this.app?.trainerOnly
+                ? el('button', {
+                    class: 'btn small', text: 'Close trainer',
+                    title: 'Back to the device list',
+                    onclick: () => this.app.exitTrainer?.(),
+                }) : null,
             el('button', {
                 class: 'btn small', text: 'New text', title: 'Esc does the same',
                 onclick: () => this.restart(),
