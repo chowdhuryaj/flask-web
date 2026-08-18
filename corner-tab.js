@@ -15,9 +15,9 @@
 // chord), which is also the .vil wire order — a chord is found by the finger it
 // belongs to rather than by hunting the board picture.
 
-import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=48';
-import { kcCell, makePickerHost } from './picker.js?v=48';
-import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=48';
+import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=49';
+import { kcCell, makePickerHost } from './picker.js?v=49';
+import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=49';
 
 /** Which layer the wire frames are addressed with when outputs are universal.
  * The [def, layer] shape survived v19 for compatibility; the firmware ignores
@@ -172,7 +172,7 @@ export class CornerTab {
 
     render() {
         const { flask } = this.app;
-        const c = card('Corner combos', 'press two switches in one cluster together',
+        const c = card('Chords', 'press two switches in one cluster together',
             el('div', { class: 'note faint' },
                 this.app.caps.cornerPerLayer
                     ? 'Positional chords: the keyboard matches WHERE you pressed, not what those '
@@ -218,9 +218,13 @@ export class CornerTab {
             // history.
             this.unplaced
                 ? el('div', { class: 'note', style: 'color:var(--danger)' },
-                    `${this.unplaced} chord(s) could not be given a combo slot — `
-                    + `${this.slotsUsed}/64 are in use, and those chords will NOT fire. `
-                    + 'Unbind some chords to free slots.')
+                    `${this.unplaced} chord(s) will NOT fire. `
+                    // Since chords resolve through one reference layer they cost
+                    // one slot each, so exhaustion is now the unlikely cause and
+                    // an empty reference layer is the likely one. Lead with that.
+                    + 'Either layer 1 has nothing (or KC_TRNS) under one of their '
+                    + 'keys — chords are defined there and read from there on every '
+                    + `layer — or the budget ran out (${this.slotsUsed}/64 slots used).`)
                 : (this.app.caps.cornerSlotDiag
                     ? el('div', { class: 'note faint', text: `${this.slotsUsed}/64 combo slots used.` })
                     : null),

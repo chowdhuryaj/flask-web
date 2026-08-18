@@ -3,11 +3,11 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=48';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=49';
 import { CH, V, slot, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
          CPI_MIN, CPI_MAX, CPI_STEP,
-         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=48';
-import { renderKeyboardSVG } from './keymap-tab.js?v=48';
+         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=49';
+import { renderKeyboardSVG } from './keymap-tab.js?v=49';
 
 const pct = (v) => (v / 100).toFixed(2);
 

@@ -9,11 +9,11 @@
 // so they go on ANY key of ANY layer with ANY tap key — unlike CUSTOM(41),
 // which needs a matching entry in the per-(layer,column) tap-hold table.
 
-import { el } from './ui.js?v=48';
+import { el } from './ui.js?v=49';
 import {
     KC, QK, MOD_BITS, MOD_RIGHT, BASIC_KEYS, basicKeyName, napeKeyLabel,
     encodeModTap, encodeLayerTap, encodeMacro, decodeKeycode, modsLabel,
-} from './nape-proto.js?v=48';
+} from './nape-proto.js?v=49';
 
 const custom = (n) => QK.kb + n;
 
