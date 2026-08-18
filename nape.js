@@ -5,7 +5,7 @@
 // profiles.js, caps.js and main.js each delegate here with a single line, the
 // same way they delegate to zmk.js for the ZMK line.
 
-import { NAPE_VIDPID, NAPE_KEYS, NAPE_LAYERS, NapeClient, napeKeyLabel } from './nape-proto.js?v=35';
+import { NAPE_VIDPID, NAPE_KEYS, NAPE_LAYERS, NapeClient, napeKeyLabel } from './nape-proto.js?v=36';
 
 export const NAPE_FAMILY_LABELS = { nape: 'Keychron Nape Pro' };
 

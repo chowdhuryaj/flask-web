@@ -182,6 +182,20 @@ export function setDeviceCustomKeys(customKeycodes) {
 
 export function deviceCustoms() { return [...deviceCustomKeys.values()]; }
 
+// How many Vial macro slots the connected board has. The picker needs a COUNT,
+// not a range: QK_MACRO spans 128 codes but a board serves 16 or so, and
+// offering the other 112 would be offering keys that do nothing.
+let deviceMacroCount = 0;
+
+export function setDeviceMacroCount(count) {
+    deviceMacroCount = Math.max(0, Math.min(R.macroMax - R.macroBase + 1, count | 0));
+}
+
+export function macroKeys() {
+    return Array.from({ length: deviceMacroCount }, (_, i) =>
+        K(R.macroBase + i, `Macro ${i}`, `M${i}`, 'Plays this Vial macro — record it in the Macros tab.'));
+}
+
 export function lookup(kc) {
     return deviceCustomKeys.get(kc) || flatLookup.get(kc) || null;
 }
@@ -291,6 +305,7 @@ export const PICKER_CATEGORIES = [
     { id: 'intl', label: 'Intl', keys: () => intlKeys },
     { id: 'quantum', label: 'Quantum', keys: () => quantumKeys },
     { id: 'rgb', label: 'RGB', keys: () => rgbKeys },
+    { id: 'macro', label: 'Macros', keys: () => macroKeys() },
     { id: 'custom', label: 'Device', keys: () => deviceCustoms() },
     { id: 'special', label: 'Special', keys: () => specialKeys },
 ];

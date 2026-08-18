@@ -2,50 +2,50 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=35';
-import { diag } from './diag.js?v=35';
-import { FlaskHID } from './webhid.js?v=35';
-import { renderPreflight } from './preflight.js?v=35';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=35';
+import { el, toast, modal } from './ui.js?v=36';
+import { diag } from './diag.js?v=36';
+import { FlaskHID } from './webhid.js?v=36';
+import { renderPreflight } from './preflight.js?v=36';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=36';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=35';
-import { VialClient } from './vialclient.js?v=35';
-import { parseDefinition } from './vialdef.js?v=35';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=35';
-import { loadNapeDevice, isNapeFamily } from './nape.js?v=35';
-import { NapeKeymapTab } from './nape-keymap-tab.js?v=35';
-import { NapeSettingsTab } from './nape-settings-tab.js?v=35';
-import { NapeMacrosTab } from './nape-macros-tab.js?v=35';
-import { capabilities } from './caps.js?v=35';
-import { setDeviceCustomKeys } from './keycodes.js?v=35';
-import { KeymapTab } from './keymap-tab.js?v=35';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=35';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=35';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=35';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=35';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=35';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=35';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=35';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=35';
-import { ZmkTestTab } from './zmk-test-tab.js?v=35';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=35';
-import { MouseTab } from './mouse-tab.js?v=35';
-import { TypingTab } from './typing-tab.js?v=35';
-import { SettingsTab } from './settings-tab.js?v=35';
-import { HUD } from './hud.js?v=35';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=35';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=36';
+import { VialClient } from './vialclient.js?v=36';
+import { parseDefinition } from './vialdef.js?v=36';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=36';
+import { loadNapeDevice, isNapeFamily } from './nape.js?v=36';
+import { NapeKeymapTab } from './nape-keymap-tab.js?v=36';
+import { NapeSettingsTab } from './nape-settings-tab.js?v=36';
+import { NapeMacrosTab } from './nape-macros-tab.js?v=36';
+import { capabilities } from './caps.js?v=36';
+import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=36';
+import { KeymapTab } from './keymap-tab.js?v=36';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=36';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=36';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=36';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=36';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=36';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=36';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=36';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=36';
+import { ZmkTestTab } from './zmk-test-tab.js?v=36';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=36';
+import { MouseTab } from './mouse-tab.js?v=36';
+import { TypingTab } from './typing-tab.js?v=36';
+import { SettingsTab } from './settings-tab.js?v=36';
+import { HUD } from './hud.js?v=36';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=36';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=35';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=36';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=35';
-import { MacrosTab } from './macros-tab.js?v=35';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=35';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=35';
-import { CornerTab } from './corner-tab.js?v=35';
-import { RgbTab } from './rgb-tab.js?v=35';
-import { DisplayTab } from './display-tab.js?v=35';
-import { exportVil, importVil, downloadText } from './vil.js?v=35';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=36';
+import { MacrosTab } from './macros-tab.js?v=36';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=36';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=36';
+import { CornerTab } from './corner-tab.js?v=36';
+import { RgbTab } from './rgb-tab.js?v=36';
+import { DisplayTab } from './display-tab.js?v=36';
+import { exportVil, importVil, downloadText } from './vil.js?v=36';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -189,6 +189,10 @@ async function loadDevice(device) {
     // 3. Profile + keycode overlay.
     app.profile = buildProfile(app.family, definition, app.layerCount);
     setDeviceCustomKeys(definition.customKeycodes);
+    // Macro keycodes are only offerable once we know how many slots the board
+    // actually has — QK_MACRO is 128 wide and boards serve a fraction of it.
+    try { setDeviceMacroCount(await app.vial.macroCount()); }
+    catch { setDeviceMacroCount(0); }
 
     // 4. Unlock state (for HUD pressed keys + macro editing later).
     try { app.unlocked = (await app.vial.unlockStatus()).unlocked; }
@@ -333,6 +337,7 @@ function startOffline(key, family) {
         app.unlocked = false;
     }
     setDeviceCustomKeys(ws.profile.customKeycodes || []);
+    setDeviceMacroCount(ws.macros?.count ?? 0);
 
     $('landing').style.display = 'none';
     $('main-tabs').style.display = '';
