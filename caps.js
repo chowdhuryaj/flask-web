@@ -15,8 +15,8 @@
 // is WRONG — always gate here, and for anything past v11 gate on
 // `family === 'svalboard'` explicitly rather than on `trackball`.
 
-import { isZmkFamily, zmkCapabilities } from './zmk.js?v=40';
-import { isNapeFamily, napeCapabilities } from './nape.js?v=40';
+import { isZmkFamily, zmkCapabilities } from './zmk.js?v=41';
+import { isNapeFamily, napeCapabilities } from './nape.js?v=41';
 
 export function capabilities(family, version) {
     if (isZmkFamily(family)) return zmkCapabilities(family, version);
@@ -108,6 +108,8 @@ export function capabilities(family, version) {
         // its own member keys. Below v19 the editor still needs its layer
         // selector and its inherited-vs-owned rendering.
         cornerPerLayer: sval(17) && v < 19,
+        // v22: corner slot-budget diagnostics (0x28/0x07, 0x09).
+        cornerSlotDiag: sval(22),
         // Mouse-button behaviours (0x29): double click + click lock (v20).
         mouseButtons: sval(20),
         // Hi-res scroll mode (0x15/0x08, v21). The board advertised the HID

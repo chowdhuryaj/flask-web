@@ -15,9 +15,9 @@
 // chord), which is also the .vil wire order — a chord is found by the finger it
 // belongs to rather than by hunting the board picture.
 
-import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=40';
-import { kcCell, makePickerHost } from './picker.js?v=40';
-import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=40';
+import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=41';
+import { kcCell, makePickerHost } from './picker.js?v=41';
+import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=41';
 
 /** Which layer the wire frames are addressed with when outputs are universal.
  * The [def, layer] shape survived v19 for compatibility; the firmware ignores
@@ -44,6 +44,10 @@ export class CornerTab {
         this.enabled = (await g(V.ccEnabled)) !== 0;
         this.termMs = await g(V.ccTerm);
         this.misfires = await g(V.ccMisfires).catch(() => 0);
+        if (this.app.caps.cornerSlotDiag) {
+            this.unplaced = await g(V.ccUnplaced).catch(() => 0);
+            this.slotsUsed = await g(V.ccSlotsUsed).catch(() => 0);
+        }
 
         // Geometry + own-entry masks are layer-independent, so they load once.
         this.defs = [];
@@ -208,6 +212,18 @@ export class CornerTab {
                         } catch (e) { toast(e.message, true); }
                     },
                 })),
+            // A chord with no combo slot does nothing, and looks exactly like a
+            // chord that is broken. Say it out loud rather than leaving it to be
+            // debugged from the symptom — on this board that symptom has a
+            // history.
+            this.unplaced
+                ? el('div', { class: 'note', style: 'color:var(--danger)' },
+                    `${this.unplaced} chord(s) could not be given a combo slot — `
+                    + `${this.slotsUsed}/64 are in use, and those chords will NOT fire. `
+                    + 'Unbind some chords to free slots.')
+                : (this.app.caps.cornerSlotDiag
+                    ? el('div', { class: 'note faint', text: `${this.slotsUsed}/64 combo slots used.` })
+                    : null),
             this.app.caps.cornerPerLayer
                 ? selectRow({
                     label: 'Layer', hint: 'outputs below are for this layer',

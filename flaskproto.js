@@ -27,7 +27,7 @@ export const VIDPID = {
 // A removed channel answers id_unhandled, which this app already reads as
 // "device lacks this feature" — so an older build degrades rather than breaks.
 // The caps gates exist so the UI stops OFFERING what the board no longer has.
-export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 21, nlkb16: 8 };
+export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 22, nlkb16: 8 };
 
 // VIA custom-value command IDs (routed to the keymap by VIA_CUSTOM_LIGHTING_ENABLE).
 export const CMD = { set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
@@ -158,6 +158,9 @@ export const V = {
     mbDoubleGap: 0x01, mbLockMask: 0x02,
     ccEnabled: 0x01, ccTerm: 0x02, ccDefCount: 0x03, ccOutCount: 0x04,
     ccMisfires: 0x05, ccCapture: 0x06, ccCaptureBase: 0x08,
+    // v22 RO: chords that got NO combo slot (the 64-slot budget ran out), and
+    // slots in use. Nonzero unplaced means some chord is silently dead.
+    ccUnplaced: 0x07, ccSlotsUsed: 0x09,
     ccDef: 0x10, ccOut: 0x11, ccLayers: 0x12,
     // autoscroll
     asInverted: 0x01, asSpeedScale: 0x02, asDeadzone: 0x03, asRange: 0x04,
