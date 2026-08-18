@@ -6,7 +6,7 @@
 // enforced — Keychron shuffles the keymap between releases, so a restore across
 // versions is the user's call, made with the mismatch shown to them.
 
-import { NAPE_KEYS, NAPE_LAYERS, NAPE_COMBO_SLOTS } from './nape-proto.js?v=36';
+import { NAPE_KEYS, NAPE_LAYERS, NAPE_COMBO_SLOTS } from './nape-proto.js?v=37';
 
 export const NAPE_EXPORT_VERSION = 1;
 

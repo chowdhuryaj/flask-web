@@ -15,8 +15,8 @@
 // is WRONG — always gate here, and for anything past v11 gate on
 // `family === 'svalboard'` explicitly rather than on `trackball`.
 
-import { isZmkFamily, zmkCapabilities } from './zmk.js?v=36';
-import { isNapeFamily, napeCapabilities } from './nape.js?v=36';
+import { isZmkFamily, zmkCapabilities } from './zmk.js?v=37';
+import { isNapeFamily, napeCapabilities } from './nape.js?v=37';
 
 export function capabilities(family, version) {
     if (isZmkFamily(family)) return zmkCapabilities(family, version);
@@ -108,6 +108,12 @@ export function capabilities(family, version) {
         // its own member keys. Below v19 the editor still needs its layer
         // selector and its inherited-vs-owned rendering.
         cornerPerLayer: sval(17) && v < 19,
+        // Mouse-button behaviours (0x29): double click + click lock (v20).
+        mouseButtons: sval(20),
+        // Hi-res scroll mode (0x15/0x08, v21). The board advertised the HID
+        // Resolution Multiplier long before this, but nothing multiplied by it
+        // — which is why Windows scrolling was unusable while macOS was fine.
+        hiresScroll: sval(21),
         // Autoscroll (0x1A): trackballs v5+; NLKB16 v4+ (stepped only, no jog).
         autoscroll: flask && (nlkb ? v >= 4 : v >= 5),
         autoscrollJog: flask && trackball && v >= 5,

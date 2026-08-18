@@ -3,11 +3,11 @@
 // those files, but the firmware clamps are authoritative (clamp-echo).
 // Float params ride the wire ×100 (accel, smoothing factor).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=36';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=37';
 import { CH, V, slot, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
          CPI_MIN, CPI_MAX, CPI_STEP,
-         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=36';
-import { renderKeyboardSVG } from './keymap-tab.js?v=36';
+         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=37';
+import { renderKeyboardSVG } from './keymap-tab.js?v=37';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -417,6 +417,27 @@ export class MouseTab {
                 sliderRow({ label: 'Max notches/report', min: 1, max: 30, step: 1,
                     value: await g(CH.dragScroll, V.dragMaxNotches),
                     onChange: (v) => flask.setU16(CH.dragScroll, V.dragMaxNotches, v) }));
+        }
+        if (caps.hiresScroll) {
+            const active = await g(CH.dragScroll, V.dragHiresActive).catch(() => 0);
+            drag.append(
+                selectRow({
+                    label: 'High-res scroll',
+                    hint: 'fine-grained wheel steps instead of whole detents',
+                    value: await g(CH.dragScroll, V.dragHiresMode),
+                    options: [
+                        { value: 2, label: 'Follow the OS (recommended)' },
+                        { value: 1, label: 'Always on' },
+                        { value: 0, label: 'Off — whole detents' },
+                    ],
+                    onChange: (v) => flask.setU16(CH.dragScroll, V.dragHiresMode, Number(v)),
+                }),
+                el('div', { class: 'note faint' },
+                    `Currently ${active ? 'ON' : 'off'} for this host. `
+                    + 'Windows and Linux turn the HID resolution multiplier on and expect fine '
+                    + 'steps; macOS leaves it off and reads every step as a whole detent. The '
+                    + 'keyboard cannot see which the host chose — that is why this is a setting. '
+                    + 'If scrolling is wildly too fast, set Off; if it barely moves, set Always on.'));
         }
         if (caps.dragRescue) {
             drag.append(el('button', {

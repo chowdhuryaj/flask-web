@@ -2,50 +2,50 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=36';
-import { diag } from './diag.js?v=36';
-import { FlaskHID } from './webhid.js?v=36';
-import { renderPreflight } from './preflight.js?v=36';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=36';
+import { el, toast, modal } from './ui.js?v=37';
+import { diag } from './diag.js?v=37';
+import { FlaskHID } from './webhid.js?v=37';
+import { renderPreflight } from './preflight.js?v=37';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=37';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=36';
-import { VialClient } from './vialclient.js?v=36';
-import { parseDefinition } from './vialdef.js?v=36';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=36';
-import { loadNapeDevice, isNapeFamily } from './nape.js?v=36';
-import { NapeKeymapTab } from './nape-keymap-tab.js?v=36';
-import { NapeSettingsTab } from './nape-settings-tab.js?v=36';
-import { NapeMacrosTab } from './nape-macros-tab.js?v=36';
-import { capabilities } from './caps.js?v=36';
-import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=36';
-import { KeymapTab } from './keymap-tab.js?v=36';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=36';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=36';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=36';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=36';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=36';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=36';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=36';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=36';
-import { ZmkTestTab } from './zmk-test-tab.js?v=36';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=36';
-import { MouseTab } from './mouse-tab.js?v=36';
-import { TypingTab } from './typing-tab.js?v=36';
-import { SettingsTab } from './settings-tab.js?v=36';
-import { HUD } from './hud.js?v=36';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=36';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=37';
+import { VialClient } from './vialclient.js?v=37';
+import { parseDefinition } from './vialdef.js?v=37';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=37';
+import { loadNapeDevice, isNapeFamily } from './nape.js?v=37';
+import { NapeKeymapTab } from './nape-keymap-tab.js?v=37';
+import { NapeSettingsTab } from './nape-settings-tab.js?v=37';
+import { NapeMacrosTab } from './nape-macros-tab.js?v=37';
+import { capabilities } from './caps.js?v=37';
+import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=37';
+import { KeymapTab } from './keymap-tab.js?v=37';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=37';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=37';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=37';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=37';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=37';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=37';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=37';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=37';
+import { ZmkTestTab } from './zmk-test-tab.js?v=37';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=37';
+import { MouseTab } from './mouse-tab.js?v=37';
+import { TypingTab } from './typing-tab.js?v=37';
+import { SettingsTab } from './settings-tab.js?v=37';
+import { HUD } from './hud.js?v=37';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=37';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=36';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=37';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=36';
-import { MacrosTab } from './macros-tab.js?v=36';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=36';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=36';
-import { CornerTab } from './corner-tab.js?v=36';
-import { RgbTab } from './rgb-tab.js?v=36';
-import { DisplayTab } from './display-tab.js?v=36';
-import { exportVil, importVil, downloadText } from './vil.js?v=36';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=37';
+import { MacrosTab } from './macros-tab.js?v=37';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=37';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=37';
+import { CornerTab } from './corner-tab.js?v=37';
+import { RgbTab } from './rgb-tab.js?v=37';
+import { DisplayTab } from './display-tab.js?v=37';
+import { exportVil, importVil, downloadText } from './vil.js?v=37';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 

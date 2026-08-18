@@ -19,14 +19,15 @@ export const VIDPID = {
 // Per-family protocol version lines — INDEPENDENT; never compare across.
 // The Svalboard's line left the Adept's at v12 (2026-08-08), ran to v17
 // (corner combos), then v18 REMOVED four channels — accel 0x10, smoothing
-// 0x13, snippets 0x24, teleport 0x26 — and v19 made corner-combo outputs
-// universal. The Adept and NLKB16 are frozen where they are: the desktop app
+// 0x13, snippets 0x24, teleport 0x26 — v19 made corner-combo outputs
+// universal, v20 added mouse-button behaviours (0x29), and v21 finally
+// honoured high-resolution scroll (0x15/0x08). The Adept and NLKB16 are frozen where they are: the desktop app
 // dropped both devices, so nothing advances those numbers.
 //
 // A removed channel answers id_unhandled, which this app already reads as
 // "device lacks this feature" — so an older build degrades rather than breaks.
 // The caps gates exist so the UI stops OFFERING what the board no longer has.
-export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 19, nlkb16: 8 };
+export const EXPECTED_PROTOCOL = { adept: 11, svalboard: 21, nlkb16: 8 };
 
 // VIA custom-value command IDs (routed to the keymap by VIA_CUSTOM_LIGHTING_ENABLE).
 export const CMD = { set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
@@ -103,6 +104,11 @@ export const V = {
     dragDivH: 0x01, dragDivV: 0x02, dragInverted: 0x03,
     dragActive: 0x04, // live: GET diagnostic, SET force on/off — never persisted
     dragInterval: 0x06, dragMaxNotches: 0x07, // Sval extensions
+    // v21: hi-res scroll. A MODE (0 off / 1 on / 2 follow OS) rather than a
+    // toggle — the firmware cannot see whether the host enabled the HID
+    // Resolution Multiplier, and guessing wrong scrolls 120x too far or 1/120th
+    // too little. 0x09 is read-only: what "follow" resolves to right now.
+    dragHiresMode: 0x08, dragHiresActive: 0x09,
     dragInvertX: 0x0A, // retired (was ZMK-line only; no current family exposes it)
     // custom shift keys — 0x01/0x02 shared with QMK; 0x50 is the ZMK-line
     // v14 slot frame [slot, base u32 BE, shifted u32 BE] (ZMK keymap

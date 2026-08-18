@@ -24,7 +24,7 @@ that is the only place the worlds meet.
 
 | Line | Devices | Keymap surface | Tuning | Protocol today |
 |---|---|---|---|---|
-| **QMK / Vial** | Ploopy Adept, Svalboard, NLKB16-02, any Vial board | Vial over raw HID (0xFF60) | Flask channels | Adept **v11**, Svalboard **v19**, NLKB16 **v8** |
+| **QMK / Vial** | Ploopy Adept, Svalboard, NLKB16-02, any Vial board | Vial over raw HID (0xFF60) | Flask channels | Adept **v11**, Svalboard **v21**, NLKB16 **v8** |
 | **ZMK** | Cyboard Imprint | ZMK Studio RPC over WebSerial | Flask channels (zmk-flask-modules) | Imprint **v16** |
 
 Each family versions its **own** protocol line — a raw `version >= N`
@@ -193,6 +193,16 @@ Two different things are called "desktop" here:
   - **v19** made corner-combo outputs **universal**: one keycode per chord on
     every layer, no per-layer entries and no inheritance. That also fixed a
     chord bound to a layer switch leaking its own member keys.
+  - **v20** added mouse-button behaviours on `0x29`: double click, and click
+    lock (latch a button held like a layer toggle, so a drag needs no held
+    switch), plus a release-everything rescue key.
+  - **v21** finally **honoured high-resolution scroll**. The board had
+    advertised the HID Resolution Multiplier for a long time while emitting
+    whole detents, so a host that enabled hi-res was told a detent is 120 units
+    and then sent 3 — Windows enables it, macOS does not, which is what made
+    scrolling unusable on one and fine on the other. The Mouse tab gets a
+    three-way mode (off / on / follow the OS) because the firmware cannot see
+    the host's choice.
 
   Both are reflected here: those cards no longer render on a v18+ Svalboard, and
   the corner editor drops its layer selector on v19+. The gates are per-family
@@ -279,7 +289,7 @@ proves nothing about the wire format, which still needs hardware.
 
 When releasing, bump the `?v=N` stamps on module imports and the stylesheet
 link — GitHub Pages' CDN caches hard. `main.js` carries its own counter in
-`index.html` (currently imports `?v=35`, entry `main.js?v=35`).
+`index.html` (currently imports `?v=37`, entry `main.js?v=37`).
 
 ## Hard-won rules (do not "simplify" these away)
 

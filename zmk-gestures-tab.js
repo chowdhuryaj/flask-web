@@ -11,13 +11,13 @@
 // and the board render with the physical trackballs sits above the editor
 // (both balls stroke gestures).
 
-import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel } from './ui.js?v=36';
-import { CH, V } from './flaskproto.js?v=36';
-import { renderKeyboardSVG } from './keymap-tab.js?v=36';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=36';
-import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=36';
+import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel } from './ui.js?v=37';
+import { CH, V } from './flaskproto.js?v=37';
+import { renderKeyboardSVG } from './keymap-tab.js?v=37';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=37';
+import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=37';
 import { OUTPUT_ACTION, GESTURE_DIR_LABELS, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=36';
+    from './zmk-output-codec.js?v=37';
 
 // Compass placement: direction index (E SE S SW W NW N NE) → grid cell.
 // 3x3 grid, center = the legend.

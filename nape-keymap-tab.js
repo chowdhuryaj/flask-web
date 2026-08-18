@@ -10,11 +10,11 @@
 // labelled by index until named at the bench, because guessing it once already
 // produced a wrong map.
 
-import { el, toast } from './ui.js?v=36';
-import { renderKeyboardSVG } from './keymap-tab.js?v=36';
-import { KC, napeKeyLabel, setScrollMode } from './nape-proto.js?v=36';
-import { buildKeycodePicker } from './nape-keypicker.js?v=36';
-import { napeProfile, saveKeyName, napeColLabel } from './nape.js?v=36';
+import { el, toast } from './ui.js?v=37';
+import { renderKeyboardSVG } from './keymap-tab.js?v=37';
+import { KC, napeKeyLabel, setScrollMode } from './nape-proto.js?v=37';
+import { buildKeycodePicker } from './nape-keypicker.js?v=37';
+import { napeProfile, saveKeyName, napeColLabel } from './nape.js?v=37';
 
 export class NapeKeymapTab {
     constructor(app) {

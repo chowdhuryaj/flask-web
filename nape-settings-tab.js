@@ -5,11 +5,11 @@
 // write exactly what their app writes, and nothing here touches the radio,
 // the bootloader, or whole-device config.
 
-import { el, toast } from './ui.js?v=36';
-import { KC, NAPE_COMBO_SLOTS, NAPE_LAYERS, napeKeyLabel } from './nape-proto.js?v=36';
-import { buildKeycodePicker } from './nape-keypicker.js?v=36';
-import { buildNapeExport, applyNapeImport, downloadNapeExport } from './nape-export.js?v=36';
-import { napeVisibleCols, napeColLabel } from './nape.js?v=36';
+import { el, toast } from './ui.js?v=37';
+import { KC, NAPE_COMBO_SLOTS, NAPE_LAYERS, napeKeyLabel } from './nape-proto.js?v=37';
+import { buildKeycodePicker } from './nape-keypicker.js?v=37';
+import { buildNapeExport, applyNapeImport, downloadNapeExport } from './nape-export.js?v=37';
+import { napeVisibleCols, napeColLabel } from './nape.js?v=37';
 
 const ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
