@@ -12,16 +12,16 @@
 // Works with no device connected at all — the trainer is reachable from the
 // landing page, where it behaves like any other typing site over a-z.
 
-import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=44';
-import { PhoneticModel, randomSeed } from './trainer-model.js?v=44';
+import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=45';
+import { PhoneticModel, randomSeed } from './trainer-model.js?v=45';
 import {
     TrainerStore, makeResult, makeKeyStatsMap, learningRate, dailyStats,
     summaryStats, cpmToWpm, wpmToCpm, timeToSpeed,
-} from './trainer-stats.js?v=44';
-import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=44';
-import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=44';
-import { keyboardFromKeymap } from './trainer-keyboard.js?v=44';
-import { renderKeyboardSVG } from './keymap-tab.js?v=44';
+} from './trainer-stats.js?v=45';
+import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=45';
+import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=45';
+import { keyboardFromKeymap } from './trainer-keyboard.js?v=45';
+import { renderKeyboardSVG } from './keymap-tab.js?v=45';
 
 /** Attr → the class that colours one character of the lesson text. */
 const ATTR_CLASS = {
@@ -67,6 +67,8 @@ export class TrainerTab {
         this.unlocked = null;
         this.showProfile = false;
         this.showSettings = false;
+        /// Why there is no board picture, when there is none.
+        this.keyboardNote = null;
     }
 
     async load() {
@@ -86,17 +88,30 @@ export class TrainerTab {
      */
     async #readKeyboard() {
         const { app } = this;
-        if (app?.profile?.keys == null || app.vial == null) return;
+        if (app?.profile?.keys == null || app.vial == null) {
+            this.keyboardNote = 'No keyboard connected. Connect one and the trainer '
+                + 'reads its alphabet off your real keymap and paints per-key speed '
+                + 'onto the board.';
+            return;
+        }
         try {
             if (app.keymap == null) {
                 app.keymap = await app.vial.readKeymap(
                     app.layerCount, app.profile.matrixRows, app.profile.matrixCols);
             }
             this.keyboard = keyboardFromKeymap(app.profile, app.keymap);
+            // An absent heatmap has to be explainable. A board whose base layers
+            // hold no letters at all — a macro pad, a trackball — is a real and
+            // fine answer, but only if the panel says so instead of hiding.
+            this.keyboardNote = this.keyboard ? null
+                : `No letter keys found on ${app.profile.name}'s first two layers, `
+                  + 'so there is no layout to paint.';
         } catch (e) {
             // A trainer that refuses to open because a keymap read failed would
-            // be worse than one without a heatmap.
+            // be worse than one without a heatmap — but it must not go quiet.
             console.warn('trainer: keymap unavailable', e);
+            this.keyboardNote = `Could not read the keymap: ${e.message}. `
+                + 'The lessons still work; only the board picture is missing.';
         }
     }
 
@@ -674,7 +689,8 @@ export class TrainerTab {
         if (results.length === 0) {
             this.profileEl.replaceChildren(card('Progress', 'nothing recorded yet',
                 el('p', { class: 'faint' },
-                    'Finish a lesson and this fills with your speed history, a per-letter breakdown, and — with a keyboard connected — a heatmap on the real board.')));
+                    'Finish a lesson and this fills with your speed history, a per-letter breakdown, and — with a keyboard connected — a heatmap on the real board.'),
+                this.keyboardNote ? el('p', { class: 'faint tr-hint', text: this.keyboardNote }) : null));
             return;
         }
         const sum = summaryStats(results);
@@ -701,10 +717,12 @@ export class TrainerTab {
                         : null)),
             card('Letters', 'confidence 1.00 is the target speed — the gate a new letter waits behind',
                 this.#keyTable(keys)),
-            ...(this.keyboard && this.app?.profile
-                ? [card('On the board', 'per-key speed painted onto your layout',
-                    this.#heatmap())]
-                : []));
+            this.keyboard && this.app?.profile
+                ? card('On the board', 'per-key speed painted onto your layout',
+                    this.#heatmap())
+                : card('On the board', 'not available',
+                    el('p', { class: 'faint tr-hint', text: this.keyboardNote
+                        ?? 'No keymap available yet.' })));
 
         if (this.settings.dailyGoal > 0) {
             const bar = this.profileEl.querySelector('.tr-goal span');

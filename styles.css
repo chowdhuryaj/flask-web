@@ -1043,6 +1043,12 @@ body.hud-electron a { -webkit-app-region: no-drag; }
 .tr-swatch { width: 12px; height: 12px; border-radius: 3px; }
 .tr-swatch.plain { background: var(--keycap); border: 1px solid var(--keycap-border); }
 
+/* The panels sit under the letter chips, which have no bottom margin of their
+   own — without this the Progress cards butt straight up against the keys. The
+   :not(:empty) keeps a closed panel from leaving a gap behind. */
+.tr-settings-slot:not(:empty),
+.tr-profile-slot:not(:empty) { display: block; margin-top: var(--sp-7); }
+
 .tr-row-block { align-items: flex-start; }
 .tr-custom {
     flex: 1 1 260px; padding: var(--sp-3); font-family: var(--font-mono);
