@@ -15,8 +15,8 @@
 // is WRONG — always gate here, and for anything past v11 gate on
 // `family === 'svalboard'` explicitly rather than on `trackball`.
 
-import { isZmkFamily, zmkCapabilities } from './zmk.js?v=39';
-import { isNapeFamily, napeCapabilities } from './nape.js?v=39';
+import { isZmkFamily, zmkCapabilities } from './zmk.js?v=40';
+import { isNapeFamily, napeCapabilities } from './nape.js?v=40';
 
 export function capabilities(family, version) {
     if (isZmkFamily(family)) return zmkCapabilities(family, version);

@@ -7,23 +7,23 @@
 // Reuses the shared renderKeyboardSVG via profile-carried label functions
 // (bindings are {behaviorId,param1,param2} objects, not QMK ints).
 
-import { el, toast, card, SAVE_STATE } from './ui.js?v=39';
-import { renderKeyboardSVG } from './keymap-tab.js?v=39';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=39';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=39';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=39';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=39';
-import { ZMK_VIDPID } from './zmk.js?v=39';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=39';
+import { el, toast, card, SAVE_STATE } from './ui.js?v=40';
+import { renderKeyboardSVG } from './keymap-tab.js?v=40';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=40';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=40';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=40';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=40';
+import { ZMK_VIDPID } from './zmk.js?v=40';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=40';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=39';
+} from './zmk-keycodes.js?v=40';
 // Circular with zmk-combos-tab (it imports buildZmkPicker for behavior
 // combo outputs) — safe: both sides export hoisted declarations and
 // neither calls the other at module-eval time.
-import { pickUsage, MODS } from './zmk-combos-tab.js?v=39';
+import { pickUsage, MODS } from './zmk-combos-tab.js?v=40';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so

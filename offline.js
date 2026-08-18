@@ -9,11 +9,11 @@
 // entries, never the whole snapshot, so a template workspace can't wipe a
 // real keymap.
 
-import { el, modal, toast } from './ui.js?v=39';
-import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=39';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=39';
-import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=39';
-import { describe } from './keycodes.js?v=39';
+import { el, modal, toast } from './ui.js?v=40';
+import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=40';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=40';
+import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=40';
+import { describe } from './keycodes.js?v=40';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';
@@ -354,6 +354,8 @@ export function describeChanges(ws, profile) {
  */
 export async function syncWorkspace(app, ws) {
     const fail = [];
+    // Entries the DEVICE does not serve — dropped rather than retried forever.
+    const dropped = [];
     let applied = 0, clamped = 0;
 
     for (const [k, kc] of Object.entries(ws.dirty.km)) {
@@ -384,7 +386,22 @@ export async function syncWorkspace(app, ws) {
             ws.tunables[k] = { op: t.op, val: echo };
             touched.add(ch);
             delete ws.dirty.tun[k]; applied++;
-        } catch (e) { fail.push(`${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}: ${e.message}`); }
+        } catch (e) {
+            // "unhandled" means the DEVICE does not serve this id — the
+            // firmware answered id_unhandled. Retrying it on every connect
+            // forever is pointless, and it leaves a pending count that can
+            // never reach zero: exactly what happens to a workspace journaled
+            // against v17 once the board is flashed to v21, where accel,
+            // smoothing, snippets and teleport no longer exist. Drop those and
+            // report them separately. A timeout or transport error is a
+            // DIFFERENT failure and stays queued, because that one is transient.
+            if (e.message === 'unhandled') {
+                delete ws.dirty.tun[k];
+                dropped.push(`${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}`);
+            } else {
+                fail.push(`${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}: ${e.message}`);
+            }
+        }
     }
     for (const ch of touched) {
         try { await app.flask.save(ch); } catch { /* DPI-style no-op channels */ }
@@ -451,7 +468,7 @@ export async function syncWorkspace(app, ws) {
     if (dispTouched) { try { await app.flask.save(CH.display); } catch { /* no-op */ } }
 
     saveWorkspace(ws);
-    return { applied, clamped, failures: fail };
+    return { applied, clamped, failures: fail, dropped };
 }
 
 /**
@@ -465,9 +482,17 @@ export async function maybeSyncOffline(app, device) {
     if (!ws || !pendingCount(ws)) return;
 
     const run = async () => {
-        const { applied, clamped, failures } = await syncWorkspace(app, ws);
+        const { applied, clamped, failures, dropped } = await syncWorkspace(app, ws);
         let msg = `Applied ${applied} offline change${applied === 1 ? '' : 's'}`;
         if (clamped) msg += ` (${clamped} clamped by firmware)`;
+        // Dropped is not a failure: the firmware simply no longer has that
+        // feature (a workspace journaled before the board lost a channel).
+        // Say so once and clear them, rather than reporting the same
+        // never-appliable entries on every single connect.
+        if (dropped.length) {
+            console.info('offline sync dropped (device no longer serves):', dropped);
+            msg += ` (${dropped.length} dropped — firmware no longer has them)`;
+        }
         if (failures.length) {
             console.warn('offline sync failures:', failures);
             toast(`${msg} — ${failures.length} failed, still queued`, true);

@@ -12,15 +12,15 @@
 //   - Mouse + scroll tester: pointer speed/peak, buttons, wheel notches and
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
-import { el, card, toast } from './ui.js?v=39';
-import { CH, V } from './flaskproto.js?v=39';
-import { diag } from './diag.js?v=39';
+import { el, card, toast } from './ui.js?v=40';
+import { CH, V } from './flaskproto.js?v=40';
+import { diag } from './diag.js?v=40';
 import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION,
          encodeComboSlotV3, decodeComboSlotV3 }
-    from './zmk-combos-codec.js?v=39';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=39';
+    from './zmk-combos-codec.js?v=40';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=40';
 import { TD_ACTION, encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=39';
+    from './zmk-tapdance-codec.js?v=40';
 
 const now = () => performance.now();
 
