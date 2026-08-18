@@ -45,6 +45,7 @@ import { GesturesTab, ChordsTab } from './gestures-tab.js?v=41';
 import { CornerTab } from './corner-tab.js?v=41';
 import { RgbTab } from './rgb-tab.js?v=41';
 import { DisplayTab } from './display-tab.js?v=41';
+import { TrainerTab } from './trainer-tab.js?v=41';
 import { exportVil, importVil, downloadText } from './vil.js?v=41';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
@@ -104,6 +105,9 @@ const app = {
     onHudLockClick: null,
     offline: false,
     offlineWs: null,
+    // Standalone typing trainer: opened from the landing page with no keyboard
+    // attached. Suppresses every device tab (see buildTabs).
+    trainerOnly: false,
 };
 app.flask = new FlaskProto(app.hid);
 app.vial = new VialClient(app.hid);
@@ -300,6 +304,7 @@ function disconnectUI() {
     app.hud.close();
     app.protocolVersion = null;
     app.profile = null;
+    app.trainerOnly = false;
     $('status-pill').classList.remove('connected');
     $('status-text').textContent = 'Not connected';
     $('proto-warn').style.display = 'none';
@@ -416,6 +421,15 @@ function renderOfflineList() {
 
 function buildTabs() {
     TABS.length = 0;
+    // Standalone trainer: no device, so no device tabs. This has to be an
+    // explicit gate rather than an absent capability — caps.vial is
+    // unconditionally true for every QMK family, the placeholder 'generic'
+    // included, so the Vial tabs below would all appear over a null client.
+    if (app.trainerOnly) {
+        TABS.push({ id: 'trainer', label: 'Typing trainer', ctor: TrainerTab });
+        renderTabStrip();
+        return;
+    }
     if (app.caps.zmkStudio) TABS.push({ id: 'zmk-keymap', label: 'Keymap', ctor: ZmkKeymapTab });
     if (app.caps.nape) {
         TABS.push({ id: 'nape-keymap', label: 'Keymap', ctor: NapeKeymapTab });
@@ -440,6 +454,10 @@ function buildTabs() {
     if (app.caps.cornerCombos) TABS.push({ id: 'corner', label: 'Corner Combos', ctor: CornerTab });
     if (app.caps.mouse) TABS.push({ id: 'mouse', label: 'Mouse', ctor: MouseTab });
     if (app.caps.typing) TABS.push({ id: 'typing', label: 'Typing', ctor: TypingTab });
+    // Adaptive typing trainer. Needs no capability at all — it runs on browser
+    // key events — but a connected board makes it better: the alphabet comes off
+    // the real keymap and the per-key heatmap lands on the real geometry.
+    TABS.push({ id: 'trainer', label: 'Trainer', ctor: TrainerTab });
     if (app.caps.rgbMap) {
         TABS.push({ id: 'rgb', label: 'RGB',
             ctor: isZmkFamily(app.family) ? ZmkRgbTab : RgbTab });
@@ -466,6 +484,11 @@ function buildTabs() {
     if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
     if (app.caps.vial) TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
 
+    renderTabStrip();
+}
+
+/** Tab strip + one panel per tab, instantiated but not yet loaded. */
+function renderTabStrip() {
     const nav = $('main-tabs');
     nav.replaceChildren(...TABS.map((t) =>
         el('button', { text: t.label, 'data-tab': t.id, onclick: () => showTab(t.id) })));
@@ -476,6 +499,20 @@ function buildTabs() {
         t.panel = el('div', { class: 'panel', 'data-panel': t.id }, t.instance.root);
         return t.panel;
     }));
+}
+
+/** Landing → trainer, with no keyboard involved. */
+async function startTrainer() {
+    app.trainerOnly = true;
+    app.family = 'generic';
+    app.caps = capabilities('generic', null);
+    app.profile = null;
+    app.keymap = null;
+    $('landing').style.display = 'none';
+    $('main-tabs').style.display = '';
+    $('status-text').textContent = 'Typing trainer';
+    buildTabs();
+    await showTab('trainer');
 }
 
 async function showTab(id) {
@@ -549,6 +586,7 @@ function init() {
         host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
     $('preflight-btn').addEventListener('click', showPreflight);
+    $('trainer-btn').addEventListener('click', startTrainer);
     $('unsupported-why').addEventListener('click', showPreflight);
 
     // No WebHID (Firefox/Safari, or a non-HTTPS origin): connecting is off,
