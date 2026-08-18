@@ -3,10 +3,10 @@
 // KeyOverrideView.swift over the LE codecs in vialproto.js. Entry writes
 // need NO unlock (unlike macros).
 
-import { el, card, toast, toggleRow, saveBar } from './ui.js?v=38';
-import { kcCell, makePickerHost } from './picker.js?v=38';
-import { TapDance, Combo, KeyOverride } from './vialproto.js?v=38';
-import { CH, slot } from './flaskproto.js?v=38';
+import { el, card, toast, toggleRow, saveBar } from './ui.js?v=39';
+import { kcCell, makePickerHost } from './picker.js?v=39';
+import { TapDance, Combo, KeyOverride } from './vialproto.js?v=39';
+import { CH, slot } from './flaskproto.js?v=39';
 
 // How many blank rows to show past the last used slot.
 const SPARE_ROWS = 3;

@@ -19,22 +19,22 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=38';
+import { CH, V } from './flaskproto.js?v=39';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities,
-         ZMK_TRACKBALLS } from './zmk.js?v=38';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=38';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=38';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=38';
+         ZMK_TRACKBALLS } from './zmk.js?v=39';
+import { OfflineFlask, saveWorkspace } from './offline.js?v=39';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=39';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=39';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=38';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=38';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=39';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=39';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=38';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=38';
+    from './zmk-tapdance-codec.js?v=39';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=39';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=38';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=39';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
 

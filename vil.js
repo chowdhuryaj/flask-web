@@ -13,9 +13,9 @@
 
 import { CH, V, slot, GESTURE_SETS, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS,
          WC_BUTTONS, NLKB, SL_SEQS, SL_OUT_POS, SNIPPET_COUNT, SNIPPET_KEYS,
-         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=38';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=38';
-import { encoderCount } from './profiles.js?v=38';
+         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=39';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=39';
+import { encoderCount } from './profiles.js?v=39';
 
 // ---------- tuning dump spec (mirrors AppModel.tuningDumpSpec) ----------
 // Replayed in THIS order on restore: DPI index ids come before raw-CPI ids
@@ -31,7 +31,11 @@ function dumpSpec(caps = {}) {
     spec.push([CH.wiggle, [1, 2, 3, 4, 5, 6, 7]]);
     spec.push([CH.smoothing, [1, 2, 3]]);
     spec.push([CH.dpi, [V.dpiIndex, V.svalDpiLeft, V.svalDpiRight, V.dpiCpi, V.svalDpiLeftCpi, V.svalDpiRightCpi]]);
-    spec.push([CH.dragScroll, [V.dragDivH, V.dragDivV, V.dragInverted, V.dragInterval, V.dragMaxNotches]]);
+    // dragHiresMode rides here too: it is a persisted per-host preference, and
+    // a .vil restored after a reflash should not silently drop it back to the
+    // default. The live-only ids (dragActive, dragHiresActive) stay out.
+    spec.push([CH.dragScroll, [V.dragDivH, V.dragDivV, V.dragInverted, V.dragInterval,
+        V.dragMaxNotches, ...(caps.hiresScroll ? [V.dragHiresMode] : [])]]);
     const csk = [V.cskEnabled];
     for (let s = 0; s < CSK_SLOTS; s++) csk.push(slot.cskKey(s), slot.cskShift(s));
     spec.push([CH.customShift, csk]);
