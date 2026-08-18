@@ -12,16 +12,16 @@
 // Works with no device connected at all — the trainer is reachable from the
 // landing page, where it behaves like any other typing site over a-z.
 
-import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=41';
-import { PhoneticModel, randomSeed } from './trainer-model.js?v=41';
+import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=44';
+import { PhoneticModel, randomSeed } from './trainer-model.js?v=44';
 import {
     TrainerStore, makeResult, makeKeyStatsMap, learningRate, dailyStats,
     summaryStats, cpmToWpm, wpmToCpm, timeToSpeed,
-} from './trainer-stats.js?v=41';
-import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=41';
-import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=41';
-import { keyboardFromKeymap } from './trainer-keyboard.js?v=41';
-import { renderKeyboardSVG } from './keymap-tab.js?v=41';
+} from './trainer-stats.js?v=44';
+import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=44';
+import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=44';
+import { keyboardFromKeymap } from './trainer-keyboard.js?v=44';
+import { renderKeyboardSVG } from './keymap-tab.js?v=44';
 
 /** Attr → the class that colours one character of the lesson text. */
 const ATTR_CLASS = {

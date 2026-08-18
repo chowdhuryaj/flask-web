@@ -6,11 +6,11 @@
 // restricted. From v16 they fire through vial_keycode_tap and the whole range
 // works — hence caps.gestureAnyKeycode rather than a blanket restriction.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=41';
-import { kcCell, makePickerHost } from './picker.js?v=41';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=44';
+import { kcCell, makePickerHost } from './picker.js?v=44';
 import {
     CH, CH_BALL_LEFT, V, slot, GESTURE_DIRS, GESTURE_SETS, WC_BUTTONS,
-} from './flaskproto.js?v=41';
+} from './flaskproto.js?v=44';
 
 const TAPPABLE = (kc) => kc > 0 && kc <= 0x1FFF; // basic + QK_MODS range
 const TAP_NOTE = 'On this firmware gesture slots fire via tap_code16 — basic keys + modifier combos only';
