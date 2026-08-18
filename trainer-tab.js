@@ -12,17 +12,17 @@
 // Works with no device connected at all — the trainer is reachable from the
 // landing page, where it behaves like any other typing site over a-z.
 
-import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=47';
-import { PhoneticModel, randomSeed } from './trainer-model.js?v=47';
+import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=48';
+import { PhoneticModel, randomSeed } from './trainer-model.js?v=48';
 import {
     TrainerStore, makeResult, makeKeyStatsMap, learningRate, dailyStats,
     summaryStats, cpmToWpm, wpmToCpm, timeToSpeed,
-} from './trainer-stats.js?v=47';
-import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=47';
-import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=47';
-import { keyboardFromKeymap } from './trainer-keyboard.js?v=47';
-import { renderKeyboardSVG } from './keymap-tab.js?v=47';
-import { CH, V } from './flaskproto.js?v=47';
+} from './trainer-stats.js?v=48';
+import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=48';
+import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=48';
+import { keyboardFromKeymap } from './trainer-keyboard.js?v=48';
+import { renderKeyboardSVG } from './keymap-tab.js?v=48';
+import { CH, V } from './flaskproto.js?v=48';
 
 /** Attr → the class that colours one character of the lesson text. */
 const ATTR_CLASS = {
@@ -150,6 +150,7 @@ export class TrainerTab {
         this.renderText();
         this.renderKeys();
         this.renderLive();
+        this.renderSummary();
     }
 
     /** Esc, or the toolbar button: throw the current text away for a new one. */
@@ -185,6 +186,7 @@ export class TrainerTab {
         this.renderKeys();
         this.renderLive();
         this.renderResult();
+        this.renderSummary();
         if (this.showProfile) this.renderProfile();
     }
 
@@ -253,6 +255,7 @@ export class TrainerTab {
         this.liveEl = el('div', { class: 'tr-live' });
         this.keysEl = el('div', { class: 'tr-keys' });
         this.boardEl = el('div', { class: 'tr-board' });
+        this.summaryEl = el('div', { class: 'tr-summary' });
         this.resultEl = el('div', { class: 'tr-result-slot' });
         this.profileEl = el('div', { class: 'tr-profile-slot' });
         this.settingsEl = el('div', { class: 'tr-settings-slot' });
@@ -265,6 +268,7 @@ export class TrainerTab {
                 this.liveEl),
             this.boardEl,
             this.keysEl,
+            this.summaryEl,
             this.resultEl,
             this.settingsEl,
             this.profileEl);
@@ -285,10 +289,6 @@ export class TrainerTab {
             class: 'btn small', text: 'Settings',
             onclick: () => this.#toggle('showSettings'),
         });
-        this.profileBtn = el('button', {
-            class: 'btn small', text: 'Progress',
-            onclick: () => this.#toggle('showProfile'),
-        });
         return el('div', { class: 'tr-bar' },
             this.typeStrip,
             el('span', { class: 'tr-bar-gap' }),
@@ -305,8 +305,7 @@ export class TrainerTab {
                 class: 'btn small', text: 'New text', title: 'Esc does the same',
                 onclick: () => this.restart(),
             }),
-            this.settingsBtn,
-            this.profileBtn);
+            this.settingsBtn);
     }
 
     /**
@@ -319,10 +318,9 @@ export class TrainerTab {
         this.#syncToolbar();
         if (which === 'showSettings') {
             if (this.showSettings) this.renderSettings(); else this.settingsEl.replaceChildren();
-        } else if (this.showProfile) {
-            this.renderProfile();
         } else {
-            this.profileEl.replaceChildren();
+            if (this.showProfile) this.renderProfile(); else this.profileEl.replaceChildren();
+            this.renderSummary();   // the strip owns the open/close button
         }
     }
 
@@ -332,7 +330,6 @@ export class TrainerTab {
         }
         this.targetEl.textContent = `target ${fmtWpm(this.settings.targetSpeed)} wpm`;
         this.settingsBtn.classList.toggle('primary', this.showSettings);
-        this.profileBtn.classList.toggle('primary', this.showProfile);
     }
 
     #set(key, value) {
@@ -343,6 +340,7 @@ export class TrainerTab {
         this.#syncToolbar();
         this.newLesson();
         this.renderResult();
+        this.renderSummary();
         if (this.showSettings) this.renderSettings();
         if (this.showProfile) this.renderProfile();
         this.textEl.focus();
@@ -654,6 +652,7 @@ export class TrainerTab {
                             this.unlocked = null;
                             this.newLesson();
                             this.renderResult();
+            this.renderSummary();
                             if (this.showProfile) this.renderProfile();
                             this.renderSettings();
                             toast('Trainer progress reset');
@@ -848,6 +847,88 @@ export class TrainerTab {
     }
 
     /** The heatmap — per-key speed on the real board geometry. */
+    // ------------------------------------------------------- permanent progress
+
+    /**
+     * Your history, always on screen (2026-08-18).
+     *
+     * It used to live entirely behind a "Progress" button, which meant the one
+     * number the whole trainer exists to move — are you getting faster? — cost
+     * a click to see and a click to dismiss, every session. The strip carries
+     * the answer; the button on its right opens the charts, the per-letter
+     * table and the board heatmap for when you want the detail.
+     */
+    renderSummary() {
+        const results = this.store.results;
+        const openBtn = el('button', {
+            class: `btn small${this.showProfile ? ' primary' : ''}`,
+            text: this.showProfile ? 'Hide detail' : 'Full progress',
+            title: 'Speed history, per-letter confidence, and your per-key speed painted on the board',
+            onclick: () => this.#toggle('showProfile'),
+        });
+        // replaceChildren() is not el(): it turns a null argument into the
+        // literal text "null" rather than dropping it. Everything below is
+        // filtered before it goes in.
+        const put = (...nodes) => this.summaryEl.replaceChildren(...nodes.filter(Boolean));
+        if (results.length === 0) {
+            put(el('span', {
+                class: 'tr-hint',
+                text: 'Finish a lesson and your speed history, streak and per-letter breakdown start here.',
+            }),
+            el('span', { class: 'tr-bar-gap' }),
+            openBtn);
+            return;
+        }
+        const sum = summaryStats(results);
+        const daily = dailyStats(results, this.settings.dailyGoal);
+        const stat = (value, label, title) => el('span', { class: 'tr-sum-stat', title },
+            el('b', { text: value }), el('i', { text: label }));
+        put(
+            this.#sparkline(results),
+            stat(fmtWpm(sum.speed), 'wpm overall', 'Every lesson you have finished, together'),
+            stat(fmtWpm(sum.bestSpeed), 'best'),
+            stat(String(results.length), results.length === 1 ? 'lesson' : 'lessons'),
+            // A streak of zero is not a statistic, it is an empty slot. The
+            // goal progress is the useful number until there is one.
+            this.settings.dailyGoal > 0 && daily.streak > 0
+                ? stat(String(daily.streak), daily.streak === 1 ? 'day streak' : 'day streak',
+                    `${fmtDur(daily.today.time)} of ${this.settings.dailyGoal} min today`)
+                : null,
+            this.settings.dailyGoal > 0 && daily.streak === 0
+                ? stat(fmtDur(daily.today.time), `of ${this.settings.dailyGoal} min today`)
+                : null,
+            el('span', { class: 'tr-bar-gap' }),
+            openBtn);
+    }
+
+    /** Recent speed at a glance. The full chart is one click away. */
+    #sparkline(results) {
+        const W = 104;
+        const H = 26;
+        const recent = results.slice(-40).map((r) => cpmToWpm(r.speed));
+        if (recent.length < 2) return null;
+        const lo = Math.min(...recent);
+        const hi = Math.max(...recent);
+        const span = hi - lo || 1;
+        const points = recent.map((v, i) => {
+            const x = (i / (recent.length - 1)) * (W - 2) + 1;
+            const y = H - 2 - ((v - lo) / span) * (H - 4);
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+        const svg = svgEl('svg', {
+            class: 'tr-spark', width: W, height: H, viewBox: `0 0 ${W} ${H}`,
+        });
+        svg.append(
+            svgEl('polyline', {
+                points, fill: 'none', stroke: 'var(--accent)',
+                'stroke-width': '1.5', 'stroke-linejoin': 'round',
+            }),
+            svgEl('title', {
+                text: `Last ${recent.length} lessons: ${Math.round(lo)}–${Math.round(hi)} wpm`,
+            }));
+        return svg;
+    }
+
     // --------------------------------------------------------- the live board
 
     /**

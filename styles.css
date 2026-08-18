@@ -223,19 +223,45 @@ input[type="range"] { accent-color: var(--accent); }
 
 /* ---------- main tabs ---------- */
 
+/* Two rows: what KIND of thing you want, then which one. Seventeen tabs in a
+   single scrolling row meant the far end cost a hunt before the click. */
 nav.tabs {
   display: flex;
-  gap: var(--sp-1);
+  flex-direction: column;
   padding: 0 var(--sp-6);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+.tab-groups, .tab-row {
+  display: flex;
+  gap: var(--sp-1);
   overflow-x: auto;
   scrollbar-width: none;
 }
-nav.tabs::-webkit-scrollbar { display: none; }
+.tab-groups::-webkit-scrollbar, .tab-row::-webkit-scrollbar { display: none; }
+.tab-groups { padding-top: var(--sp-3); }
+.tab-groups button {
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  transition: color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+.tab-groups button:hover { color: var(--text); }
+.tab-groups button.active {
+  color: var(--accent-text);
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  font-weight: var(--fw-sb);
+}
 
-nav.tabs button {
-  padding: var(--sp-5) var(--sp-5);
+.tab-row button {
+  padding: var(--sp-4) var(--sp-5);
   border: none;
   background: none;
   cursor: pointer;
@@ -246,8 +272,8 @@ nav.tabs button {
   transition: color var(--dur-fast) var(--ease-out),
               border-color var(--dur-fast) var(--ease-out);
 }
-nav.tabs button:hover { color: var(--text); }
-nav.tabs button.active {
+.tab-row button:hover { color: var(--text); }
+.tab-row button.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
   font-weight: var(--fw-sb);
@@ -946,6 +972,21 @@ body.hud-electron a { -webkit-app-region: no-drag; }
     color: var(--text); font-variant-numeric: tabular-nums; line-height: var(--lh-tight);
 }
 .tr-stat i { font-style: normal; font-size: var(--fs-xs); color: var(--muted); }
+
+/* Permanent progress. The one number the trainer exists to move should not
+   cost a click to see. */
+.tr-summary {
+    display: flex; align-items: center; gap: var(--sp-4);
+    flex-wrap: wrap; margin: var(--sp-5) 0 0;
+    padding-top: var(--sp-4); border-top: 1px solid var(--border);
+}
+.tr-sum-stat { display: flex; align-items: baseline; gap: var(--sp-2); }
+.tr-sum-stat b {
+    font-family: var(--font-mono); font-size: var(--fs-md); font-weight: var(--fw-sb);
+    color: var(--text); font-variant-numeric: tabular-nums;
+}
+.tr-sum-stat i { font-style: normal; font-size: var(--fs-xs); color: var(--muted); }
+.tr-spark { display: block; overflow: visible; }
 
 /* The live board under the text. Three highlight states, and the source order
    below IS the precedence: a physically-held key beats the next-key cue, which

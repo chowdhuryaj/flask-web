@@ -2,51 +2,51 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=47';
-import { diag } from './diag.js?v=47';
-import { FlaskHID } from './webhid.js?v=47';
-import { renderPreflight } from './preflight.js?v=47';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=47';
+import { el, toast, modal } from './ui.js?v=48';
+import { diag } from './diag.js?v=48';
+import { FlaskHID } from './webhid.js?v=48';
+import { renderPreflight } from './preflight.js?v=48';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=48';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=47';
-import { VialClient } from './vialclient.js?v=47';
-import { parseDefinition } from './vialdef.js?v=47';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=47';
-import { loadNapeDevice, isNapeFamily } from './nape.js?v=47';
-import { NapeKeymapTab } from './nape-keymap-tab.js?v=47';
-import { NapeSettingsTab } from './nape-settings-tab.js?v=47';
-import { NapeMacrosTab } from './nape-macros-tab.js?v=47';
-import { capabilities } from './caps.js?v=47';
-import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=47';
-import { KeymapTab } from './keymap-tab.js?v=47';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=47';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=47';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=47';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=47';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=47';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=47';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=47';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=47';
-import { ZmkTestTab } from './zmk-test-tab.js?v=47';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=47';
-import { MouseTab } from './mouse-tab.js?v=47';
-import { TypingTab } from './typing-tab.js?v=47';
-import { SettingsTab } from './settings-tab.js?v=47';
-import { HUD } from './hud.js?v=47';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=47';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=48';
+import { VialClient } from './vialclient.js?v=48';
+import { parseDefinition } from './vialdef.js?v=48';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=48';
+import { loadNapeDevice, isNapeFamily } from './nape.js?v=48';
+import { NapeKeymapTab } from './nape-keymap-tab.js?v=48';
+import { NapeSettingsTab } from './nape-settings-tab.js?v=48';
+import { NapeMacrosTab } from './nape-macros-tab.js?v=48';
+import { capabilities } from './caps.js?v=48';
+import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=48';
+import { KeymapTab } from './keymap-tab.js?v=48';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=48';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=48';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=48';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=48';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=48';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=48';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=48';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=48';
+import { ZmkTestTab } from './zmk-test-tab.js?v=48';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=48';
+import { MouseTab } from './mouse-tab.js?v=48';
+import { TypingTab } from './typing-tab.js?v=48';
+import { SettingsTab } from './settings-tab.js?v=48';
+import { HUD } from './hud.js?v=48';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=48';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=47';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=48';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=47';
-import { MacrosTab } from './macros-tab.js?v=47';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=47';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=47';
-import { CornerTab } from './corner-tab.js?v=47';
-import { RgbTab } from './rgb-tab.js?v=47';
-import { DisplayTab } from './display-tab.js?v=47';
-import { TrainerTab } from './trainer-tab.js?v=47';
-import { exportVil, importVil, downloadText } from './vil.js?v=47';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=48';
+import { MacrosTab } from './macros-tab.js?v=48';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=48';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=48';
+import { CornerTab } from './corner-tab.js?v=48';
+import { RgbTab } from './rgb-tab.js?v=48';
+import { DisplayTab } from './display-tab.js?v=48';
+import { TrainerTab } from './trainer-tab.js?v=48';
+import { exportVil, importVil, downloadText } from './vil.js?v=48';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -123,6 +123,8 @@ const app = {
     // Standalone typing trainer: opened from the landing page with no keyboard
     // attached. Suppresses every device tab (see buildTabs).
     trainerOnly: false,
+    /// Which tab group's row is showing (see TAB_GROUPS).
+    tabGroup: 'keys',
 };
 app.flask = new FlaskProto(app.hid);
 app.vial = new VialClient(app.hid);
@@ -507,12 +509,72 @@ function buildTabs() {
     renderTabStrip();
 }
 
-/** Tab strip + one panel per tab, instantiated but not yet loaded. */
-function renderTabStrip() {
-    const nav = $('main-tabs');
-    nav.replaceChildren(...TABS.map((t) =>
-        el('button', { text: t.label, 'data-tab': t.id, onclick: () => showTab(t.id) })));
+/**
+ * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the
+ * two apps group the same way and muscle memory carries between them.
+ *
+ * The split is by what you are DOING, not by which protocol answers:
+ * keys = pasting a keycode; behaviour = what a key or chord DOES;
+ * device = tuning or administering the board; trainer = practising.
+ */
+const TAB_GROUPS = [
+    { id: 'keys', label: 'Keys' },
+    { id: 'behaviour', label: 'Behaviour' },
+    { id: 'device', label: 'Device' },
+    { id: 'trainer', label: 'Trainer' },
+];
 
+const GROUP_OF = {
+    keymap: 'keys', 'zmk-keymap': 'keys', 'nape-keymap': 'keys',
+    macros: 'behaviour', tapdance: 'behaviour', combos: 'behaviour',
+    overrides: 'behaviour', corner: 'behaviour', chords: 'behaviour',
+    'zmk-combos': 'behaviour', 'zmk-macros': 'behaviour',
+    'zmk-tapdance': 'behaviour', 'zmk-shift': 'behaviour',
+    'zmk-leader': 'behaviour', 'nape-macros': 'behaviour',
+    gestures: 'device', mouse: 'device', typing: 'device', rgb: 'device',
+    display: 'device', settings: 'device', 'zmk-modes': 'device',
+    'zmk-test': 'device', 'nape-settings': 'device',
+    trainer: 'trainer',
+};
+
+const groupOf = (id) => GROUP_OF[id] ?? 'device';
+
+/**
+ * The nav only. Deliberately separate from renderTabStrip: that one
+ * re-instantiates every panel, and a group click must not throw away the
+ * state of every open tab to change which row of buttons is showing.
+ */
+function renderTabNav() {
+    const nav = $('main-tabs');
+    // Groups present on THIS device — an empty chip would be a dead end.
+    const present = new Set(TABS.map((t) => groupOf(t.id)));
+    const groups = TAB_GROUPS.filter((g) => present.has(g.id));
+    if (!groups.some((g) => g.id === app.tabGroup)) {
+        app.tabGroup = groups[0]?.id ?? 'keys';
+    }
+    const inGroup = TABS.filter((t) => groupOf(t.id) === app.tabGroup);
+
+    const groupRow = el('div', { class: 'tab-groups' },
+        ...groups.map((g) => el('button', {
+            class: g.id === app.tabGroup ? 'active' : '',
+            text: g.label,
+            onclick: () => {
+                const first = TABS.find((t) => groupOf(t.id) === g.id);
+                if (first) showTab(first.id);
+            },
+        })));
+    // A group of one is its own tab — a single-item strip under a chip that
+    // already says the same word is pure noise.
+    const tabRow = inGroup.length > 1
+        ? el('div', { class: 'tab-row' }, ...inGroup.map((t) =>
+            el('button', { text: t.label, 'data-tab': t.id, onclick: () => showTab(t.id) })))
+        : null;
+    nav.replaceChildren(...[groupRow, tabRow].filter(Boolean));
+}
+
+/** Nav + one panel per tab, instantiated but not yet loaded. */
+function renderTabStrip() {
+    renderTabNav();
     const panels = $('panels');
     panels.replaceChildren(...TABS.map((t) => {
         t.instance = new t.ctor(app);
@@ -539,10 +601,15 @@ async function startTrainer() {
 }
 
 async function showTab(id) {
+    // The chip row follows the tab, never the other way round: a tab opened
+    // from anywhere else (startTrainer, a group click) must not leave its own
+    // group chip unlit.
+    app.tabGroup = groupOf(id);
+    renderTabNav();
     for (const t of TABS) {
         t.panel.classList.toggle('active', t.id === id);
     }
-    for (const b of $('main-tabs').children) {
+    for (const b of $('main-tabs').querySelectorAll('button[data-tab]')) {
         b.classList.toggle('active', b.dataset.tab === id);
     }
     const tab = TABS.find((t) => t.id === id);

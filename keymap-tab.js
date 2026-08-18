@@ -2,10 +2,10 @@
 // SVG rendering pattern from AlooMapper's renderDiagram; geometry from
 // profiles.js (key units × UNIT px).
 
-import { el, svgEl, toast, card } from './ui.js?v=47';
-import { capLabel, hoverText } from './keycodes.js?v=47';
-import { buildPicker } from './picker.js?v=47';
-import { encoderCount } from './profiles.js?v=47';
+import { el, svgEl, toast, card } from './ui.js?v=48';
+import { capLabel, hoverText } from './keycodes.js?v=48';
+import { buildPicker } from './picker.js?v=48';
+import { encoderCount } from './profiles.js?v=48';
 
 const UNIT = 56;
 const GAP = 3;
@@ -14,6 +14,7 @@ export class KeymapTab {
     constructor(app) {
         this.app = app;             // { vial, profile, keymap, layerCount }
         this.layer = 0;
+        this.showEmptyLayers = false;
         this.selected = null;       // {kind:'key',row,col} | {kind:'enc',index,cw}
         this.root = el('div');
     }
@@ -68,7 +69,7 @@ export class KeymapTab {
             onPick: (kc) => this.assign(kc),
         });
         this.root.replaceChildren(
-            card(app.profile.name, `${app.layerCount} layers`,
+            card(app.profile.name, `${this.#usedLayers().length} of ${app.layerCount} layers in use`,
                 this.strip, this.boardWrap,
                 el('div', { class: 'faint', style: 'margin-top:6px; font-size:12px' },
                     'Click a key, then pick a keycode. Writes are live — no save step.'),
@@ -78,14 +79,47 @@ export class KeymapTab {
         this.renderBoard();
     }
 
+    /**
+     * Layers with something on them, plus layer 0 and whatever is open.
+     *
+     * Computed from the LIVE keymap, never hardcoded — the baked default drifts
+     * from EEPROM between re-bakes. KC_NO (0x0000) and KC_TRNS (0x0001) are
+     * "nothing here"; anything else counts.
+     *
+     * Twin of AppModel.nonEmptyLayers() in AdeptCompanion.
+     */
+    #usedLayers() {
+        const { app } = this;
+        const out = [];
+        for (let l = 0; l < app.layerCount; l++) {
+            const grid = app.keymap?.[l];
+            const used = grid?.some((row) => row.some((kc) => kc !== 0x0000 && kc !== 0x0001));
+            if (used || l === 0 || l === this.layer) out.push(l);
+        }
+        return out.length ? out : [0];
+    }
+
     renderStrip() {
         const { app } = this;
-        this.strip.replaceChildren(...app.profile.layerNames.slice(0, app.layerCount).map((name, i) =>
-            el('button', {
+        // Sixteen tabs of which ten are blank is ten places the eye has to
+        // rule out. The empty ones are one click away when you want to build
+        // on them, and invisible when you don't.
+        const shown = this.showEmptyLayers
+            ? [...Array(app.layerCount).keys()]
+            : this.#usedLayers();
+        const buried = app.layerCount - shown.length;
+        this.strip.replaceChildren(
+            ...shown.map((i) => el('button', {
                 class: i === this.layer ? 'shown' : '',
-                text: name,
+                text: app.profile.layerNames[i] ?? `Layer ${i}`,
                 onclick: () => { this.layer = i; this.selected = null; this.renderStrip(); this.renderBoard(); },
-            })));
+            })),
+            buried > 0 ? el('button', {
+                class: 'faint',
+                text: `+${buried} empty`,
+                title: 'Layers with nothing assigned yet. Show them to start building one.',
+                onclick: () => { this.showEmptyLayers = true; this.renderStrip(); },
+            }) : null);
     }
 
     renderBoard() {
