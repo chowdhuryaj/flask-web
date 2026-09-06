@@ -53,9 +53,37 @@ import { exportVil, importVil, downloadText } from './vil.js?v=49';
 
 const THEME_VARS = ['bg', 'surface', 'surface2', 'text', 'muted', 'faint', 'border', 'border2',
     'accent', 'accent-bg', 'accent-text', 'ok', 'ok-bg', 'warn', 'warn-bg', 'danger', 'danger-bg',
-    'keycap', 'keycap-border'];
+    'keycap', 'keycap-border',
+    // Optional appearance tokens travel with the existing root-style/HUD copy.
+    // Removing them restores every older theme's existing CSS fallback.
+    'header-bg', 'header-text', 'header-muted', 'header-border',
+    'header-control', 'header-control-hover', 'header-control-border', 'header-focus',
+    'header-pill-bg', 'header-shadow', 'panel-shadow', 'key-finish', 'key-svg-finish'];
 const THEMES = {
     classic: { label: 'Classic (auto light/dark)' },
+    layoutStudio: {
+        label: 'Layout Studio',
+        // The selected concept's finish on the existing interface. No new
+        // navigation, geometry, editor model, or default-theme behavior.
+        vars: {
+            bg: '#e9e7e1', surface: '#faf9f5', surface2: '#f2f1ec',
+            text: '#171a20', muted: '#596473', faint: '#596473',
+            border: '#cbc9c1', border2: '#9a9ea5', accent: '#174ea6',
+            'accent-bg': '#e2ebfa', 'accent-text': '#103b7c',
+            ok: '#17633b', 'ok-bg': '#e4f4ea', warn: '#895000',
+            'warn-bg': '#fff1d9', danger: '#8c2521', 'danger-bg': '#fbe9e7',
+            keycap: '#ffffff', 'keycap-border': '#8d929b',
+            'header-bg': '#20242b', 'header-text': '#f8f7f3',
+            'header-muted': '#c8cdd5', 'header-border': '#626c7a',
+            'header-control': '#303741', 'header-control-hover': '#424b58',
+            'header-control-border': '#7c8898', 'header-focus': '#aacbff',
+            'header-pill-bg': '#303741',
+            'header-shadow': '0 3px 14px rgb(31 35 41 / 0.18)',
+            'panel-shadow': '0 5px 18px rgb(31 35 41 / 0.08)',
+            'key-finish': 'inset 0 -2px 0 rgb(141 146 155 / 0.32)',
+            'key-svg-finish': 'drop-shadow(0 1px 0 rgb(141 146 155 / 0.45))',
+        },
+    },
     // keybr.com's own inks, sampled from the running site (2026-08-18) rather
     // than eyeballed: --primary/--secondary/--accent and their ramps. Mirrors
     // AdeptCompanion's Pipette.Theme, which is the default there.

@@ -1,0 +1,12 @@
+[
+  {
+    "antipattern": "layout-transition",
+    "name": "Layout property animation",
+    "description": "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "/Users/aj/Flask-Svalboard/flask-web/styles.css",
+    "line": 900,
+    "snippet": "transition: width"
+  }
+]

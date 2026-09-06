@@ -1,0 +1,12 @@
+{
+  "checks": 74,
+  "result": "PASS",
+  "viewports": [
+    "1440x1000",
+    "900x1000",
+    "390x844"
+  ],
+  "legacyThemesCompared": 8,
+  "fixtureKey": "layout-studio-visual-test-20260905",
+  "hardwareDisabled": true
+}

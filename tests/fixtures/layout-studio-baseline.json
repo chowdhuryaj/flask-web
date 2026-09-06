@@ -1,0 +1,111 @@
+{
+  "groups": [
+    "Keys",
+    "Behaviour",
+    "Device",
+    "Trainer"
+  ],
+  "tabs": [],
+  "geometry": "<svg class=\"kb-svg\" width=\"1408\" height=\"456\" viewBox=\"0 0 1408 456\"><rect class=\"keycap\" x=\"200\" y=\"4\" width=\"53\" height=\"53\" rx=\"5\"><title>3,3\nV (0x0019)</title></rect><text x=\"226.5\" y=\"34.5\" text-anchor=\"middle\">V</text><text class=\"keyname\" x=\"226.5\" y=\"52\" text-anchor=\"middle\">3,3</text><rect class=\"keycap\" x=\"396\" y=\"4\" width=\"53\" height=\"53\" rx=\"5\"><title>2,3\nP (0x0013)</title></rect><text x=\"422.5\" y=\"34.5\" text-anchor=\"middle\">P</text><text class=\"keyname\" x=\"422.5\" y=\"52\" text-anchor=\"middle\">2,3</text><rect class=\"keycap\" x=\"956\" y=\"4\" width=\"53\" height=\"53\" rx=\"5\"><title>7,3\nT (0x0017)</title></rect><text x=\"982.5\" y=\"34.5\" text-anchor=\"middle\">T</text><text class=\"keyname\" x=\"982.5\" y=\"52\" text-anchor=\"middle\">7,3</text><rect class=\"keycap\" x=\"1152\" y=\"4\" width=\"53\" height=\"53\" rx=\"5\"><title>8,3\nZ (0x001D)</title></rect><text x=\"1178.5\" y=\"34.5\" text-anchor=\"middle\">Z</text><text class=\"keyname\" x=\"1178.5\" y=\"52\" text-anchor=\"middle\">8,3</text><rect class=\"keycap\" x=\"144\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>3,4\nW (0x001A)</title></rect><text x=\"170.5\" y=\"90.5\" text-anchor=\"middle\">W</text><text class=\"keyname\" x=\"170.5\" y=\"108\" text-anchor=\"middle\">3,4</text><rect class=\"keycap\" x=\"200\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>3,2\nU (0x0018)</title></rect><text x=\"226.5\" y=\"90.5\" text-anchor=\"middle\">U</text><text class=\"keyname\" x=\"226.5\" y=\"108\" text-anchor=\"middle\">3,2</text><rect class=\"keycap\" x=\"256\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>3,1\nT (0x0017)</title></rect><text x=\"282.5\" y=\"90.5\" text-anchor=\"middle\">T</text><text class=\"keyname\" x=\"282.5\" y=\"108\" text-anchor=\"middle\">3,1</text><rect class=\"keycap\" x=\"340\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>2,4\nQ (0x0014)</title></rect><text x=\"366.5\" y=\"90.5\" text-anchor=\"middle\">Q</text><text class=\"keyname\" x=\"366.5\" y=\"108\" text-anchor=\"middle\">2,4</text><rect class=\"keycap\" x=\"396\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>2,2\nO (0x0012)</title></rect><text x=\"422.5\" y=\"90.5\" text-anchor=\"middle\">O</text><text class=\"keyname\" x=\"422.5\" y=\"108\" text-anchor=\"middle\">2,2</text><rect class=\"keycap\" x=\"452\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>2,1\nN (0x0011)</title></rect><text x=\"478.5\" y=\"90.5\" text-anchor=\"middle\">N</text><text class=\"keyname\" x=\"478.5\" y=\"108\" text-anchor=\"middle\">2,1</text><rect class=\"keycap\" x=\"900\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>7,4\nU (0x0018)</title></rect><text x=\"926.5\" y=\"90.5\" text-anchor=\"middle\">U</text><text class=\"keyname\" x=\"926.5\" y=\"108\" text-anchor=\"middle\">7,4</text><rect class=\"keycap\" x=\"956\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>7,2\nS (0x0016)</title></rect><text x=\"982.5\" y=\"90.5\" text-anchor=\"middle\">S</text><text class=\"keyname\" x=\"982.5\" y=\"108\" text-anchor=\"middle\">7,2</text><rect class=\"keycap\" x=\"1012\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>7,1\nR (0x0015)</title></rect><text x=\"1038.5\" y=\"90.5\" text-anchor=\"middle\">R</text><text class=\"keyname\" x=\"1038.5\" y=\"108\" text-anchor=\"middle\">7,1</text><rect class=\"keycap\" x=\"1096\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>8,4\nA (0x0004)</title></rect><text x=\"1122.5\" y=\"90.5\" text-anchor=\"middle\">A</text><text class=\"keyname\" x=\"1122.5\" y=\"108\" text-anchor=\"middle\">8,4</text><rect class=\"keycap\" x=\"1152\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>8,2\nY (0x001C)</title></rect><text x=\"1178.5\" y=\"90.5\" text-anchor=\"middle\">Y</text><text class=\"keyname\" x=\"1178.5\" y=\"108\" text-anchor=\"middle\">8,2</text><rect class=\"keycap\" x=\"1208\" y=\"60\" width=\"53\" height=\"53\" rx=\"5\"><title>8,1\nX (0x001B)</title></rect><text x=\"1234.5\" y=\"90.5\" text-anchor=\"middle\">X</text><text class=\"keyname\" x=\"1234.5\" y=\"108\" text-anchor=\"middle\">8,1</text><rect class=\"keycap\" x=\"60\" y=\"88\" width=\"53\" height=\"53\" rx=\"5\"><title>4,3\nB (0x0005)</title></rect><text x=\"86.5\" y=\"118.5\" text-anchor=\"middle\">B</text><text class=\"keyname\" x=\"86.5\" y=\"136\" text-anchor=\"middle\">4,3</text><rect class=\"keycap\" x=\"536\" y=\"88\" width=\"53\" height=\"53\" rx=\"5\"><title>1,3\nJ (0x000D)</title></rect><text x=\"562.5\" y=\"118.5\" text-anchor=\"middle\">J</text><text class=\"keyname\" x=\"562.5\" y=\"136\" text-anchor=\"middle\">1,3</text><rect class=\"keycap\" x=\"816\" y=\"88\" width=\"53\" height=\"53\" rx=\"5\"><title>6,3\nN (0x0011)</title></rect><text x=\"842.5\" y=\"118.5\" text-anchor=\"middle\">N</text><text class=\"keyname\" x=\"842.5\" y=\"136\" text-anchor=\"middle\">6,3</text><rect class=\"keycap\" x=\"1292\" y=\"88\" width=\"53\" height=\"53\" rx=\"5\"><title>9,3\nF (0x0009)</title></rect><text x=\"1318.5\" y=\"118.5\" text-anchor=\"middle\">F</text><text class=\"keyname\" x=\"1318.5\" y=\"136\" text-anchor=\"middle\">9,3</text><rect class=\"keycap\" x=\"200\" y=\"116\" width=\"53\" height=\"53\" rx=\"5\"><title>3,0\nS (0x0016)</title></rect><text x=\"226.5\" y=\"146.5\" text-anchor=\"middle\">S</text><text class=\"keyname\" x=\"226.5\" y=\"164\" text-anchor=\"middle\">3,0</text><rect class=\"keycap\" x=\"396\" y=\"116\" width=\"53\" height=\"53\" rx=\"5\"><title>2,0\nM (0x0010)</title></rect><text x=\"422.5\" y=\"146.5\" text-anchor=\"middle\">M</text><text class=\"keyname\" x=\"422.5\" y=\"164\" text-anchor=\"middle\">2,0</text><rect class=\"keycap\" x=\"956\" y=\"116\" width=\"53\" height=\"53\" rx=\"5\"><title>7,0\nQ (0x0014)</title></rect><text x=\"982.5\" y=\"146.5\" text-anchor=\"middle\">Q</text><text class=\"keyname\" x=\"982.5\" y=\"164\" text-anchor=\"middle\">7,0</text><rect class=\"keycap\" x=\"1152\" y=\"116\" width=\"53\" height=\"53\" rx=\"5\"><title>8,0\nW (0x001A)</title></rect><text x=\"1178.5\" y=\"146.5\" text-anchor=\"middle\">W</text><text class=\"keyname\" x=\"1178.5\" y=\"164\" text-anchor=\"middle\">8,0</text><rect class=\"keycap\" x=\"4\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>4,4\nC (0x0006)</title></rect><text x=\"30.5\" y=\"174.5\" text-anchor=\"middle\">C</text><text class=\"keyname\" x=\"30.5\" y=\"192\" text-anchor=\"middle\">4,4</text><rect class=\"keycap\" x=\"60\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>4,2\nA (0x0004)</title></rect><text x=\"86.5\" y=\"174.5\" text-anchor=\"middle\">A</text><text class=\"keyname\" x=\"86.5\" y=\"192\" text-anchor=\"middle\">4,2</text><rect class=\"keycap\" x=\"116\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>4,1\nZ (0x001D)</title></rect><text x=\"142.5\" y=\"174.5\" text-anchor=\"middle\">Z</text><text class=\"keyname\" x=\"142.5\" y=\"192\" text-anchor=\"middle\">4,1</text><rect class=\"keycap\" x=\"480\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>1,4\nK (0x000E)</title></rect><text x=\"506.5\" y=\"174.5\" text-anchor=\"middle\">K</text><text class=\"keyname\" x=\"506.5\" y=\"192\" text-anchor=\"middle\">1,4</text><rect class=\"keycap\" x=\"536\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>1,2\nI (0x000C)</title></rect><text x=\"562.5\" y=\"174.5\" text-anchor=\"middle\">I</text><text class=\"keyname\" x=\"562.5\" y=\"192\" text-anchor=\"middle\">1,2</text><rect class=\"keycap\" x=\"592\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>1,1\nH (0x000B)</title></rect><text x=\"618.5\" y=\"174.5\" text-anchor=\"middle\">H</text><text class=\"keyname\" x=\"618.5\" y=\"192\" text-anchor=\"middle\">1,1</text><rect class=\"keycap\" x=\"760\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>6,4\nO (0x0012)</title></rect><text x=\"786.5\" y=\"174.5\" text-anchor=\"middle\">O</text><text class=\"keyname\" x=\"786.5\" y=\"192\" text-anchor=\"middle\">6,4</text><rect class=\"keycap\" x=\"816\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>6,2\nM (0x0010)</title></rect><text x=\"842.5\" y=\"174.5\" text-anchor=\"middle\">M</text><text class=\"keyname\" x=\"842.5\" y=\"192\" text-anchor=\"middle\">6,2</text><rect class=\"keycap\" x=\"872\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>6,1\nL (0x000F)</title></rect><text x=\"898.5\" y=\"174.5\" text-anchor=\"middle\">L</text><text class=\"keyname\" x=\"898.5\" y=\"192\" text-anchor=\"middle\">6,1</text><rect class=\"keycap\" x=\"1236\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>9,4\nG (0x000A)</title></rect><text x=\"1262.5\" y=\"174.5\" text-anchor=\"middle\">G</text><text class=\"keyname\" x=\"1262.5\" y=\"192\" text-anchor=\"middle\">9,4</text><rect class=\"keycap\" x=\"1292\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>9,2\nE (0x0008)</title></rect><text x=\"1318.5\" y=\"174.5\" text-anchor=\"middle\">E</text><text class=\"keyname\" x=\"1318.5\" y=\"192\" text-anchor=\"middle\">9,2</text><rect class=\"keycap\" x=\"1348\" y=\"144\" width=\"53\" height=\"53\" rx=\"5\"><title>9,1\nD (0x0007)</title></rect><text x=\"1374.5\" y=\"174.5\" text-anchor=\"middle\">D</text><text class=\"keyname\" x=\"1374.5\" y=\"192\" text-anchor=\"middle\">9,1</text><rect class=\"keycap\" x=\"200\" y=\"172\" width=\"53\" height=\"53\" rx=\"5\"><title>3,5\nX (0x001B)</title></rect><text x=\"226.5\" y=\"202.5\" text-anchor=\"middle\">X</text><text class=\"keyname\" x=\"226.5\" y=\"220\" text-anchor=\"middle\">3,5</text><rect class=\"keycap\" x=\"396\" y=\"172\" width=\"53\" height=\"53\" rx=\"5\"><title>2,5\nR (0x0015)</title></rect><text x=\"422.5\" y=\"202.5\" text-anchor=\"middle\">R</text><text class=\"keyname\" x=\"422.5\" y=\"220\" text-anchor=\"middle\">2,5</text><rect class=\"keycap\" x=\"956\" y=\"172\" width=\"53\" height=\"53\" rx=\"5\"><title>7,5\nV (0x0019)</title></rect><text x=\"982.5\" y=\"202.5\" text-anchor=\"middle\">V</text><text class=\"keyname\" x=\"982.5\" y=\"220\" text-anchor=\"middle\">7,5</text><rect class=\"keycap\" x=\"1152\" y=\"172\" width=\"53\" height=\"53\" rx=\"5\"><title>8,5\nB (0x0005)</title></rect><text x=\"1178.5\" y=\"202.5\" text-anchor=\"middle\">B</text><text class=\"keyname\" x=\"1178.5\" y=\"220\" text-anchor=\"middle\">8,5</text><rect class=\"keycap\" x=\"60\" y=\"200\" width=\"53\" height=\"53\" rx=\"5\"><title>4,0\nY (0x001C)</title></rect><text x=\"86.5\" y=\"230.5\" text-anchor=\"middle\">Y</text><text class=\"keyname\" x=\"86.5\" y=\"248\" text-anchor=\"middle\">4,0</text><rect class=\"keycap\" x=\"536\" y=\"200\" width=\"53\" height=\"53\" rx=\"5\"><title>1,0\nG (0x000A)</title></rect><text x=\"562.5\" y=\"230.5\" text-anchor=\"middle\">G</text><text class=\"keyname\" x=\"562.5\" y=\"248\" text-anchor=\"middle\">1,0</text><rect class=\"keycap\" x=\"816\" y=\"200\" width=\"53\" height=\"53\" rx=\"5\"><title>6,0\nK (0x000E)</title></rect><text x=\"842.5\" y=\"230.5\" text-anchor=\"middle\">K</text><text class=\"keyname\" x=\"842.5\" y=\"248\" text-anchor=\"middle\">6,0</text><rect class=\"keycap\" x=\"1292\" y=\"200\" width=\"53\" height=\"53\" rx=\"5\"><title>9,0\nC (0x0006)</title></rect><text x=\"1318.5\" y=\"230.5\" text-anchor=\"middle\">C</text><text class=\"keyname\" x=\"1318.5\" y=\"248\" text-anchor=\"middle\">9,0</text><rect class=\"keycap\" x=\"60\" y=\"256\" width=\"53\" height=\"53\" rx=\"5\"><title>4,5\nD (0x0007)</title></rect><text x=\"86.5\" y=\"286.5\" text-anchor=\"middle\">D</text><text class=\"keyname\" x=\"86.5\" y=\"304\" text-anchor=\"middle\">4,5</text><rect class=\"keycap\" x=\"536\" y=\"256\" width=\"53\" height=\"53\" rx=\"5\"><title>1,5\nL (0x000F)</title></rect><text x=\"562.5\" y=\"286.5\" text-anchor=\"middle\">L</text><text class=\"keyname\" x=\"562.5\" y=\"304\" text-anchor=\"middle\">1,5</text><rect class=\"keycap\" x=\"816\" y=\"256\" width=\"53\" height=\"53\" rx=\"5\"><title>6,5\nP (0x0013)</title></rect><text x=\"842.5\" y=\"286.5\" text-anchor=\"middle\">P</text><text class=\"keyname\" x=\"842.5\" y=\"304\" text-anchor=\"middle\">6,5</text><rect class=\"keycap\" x=\"1292\" y=\"256\" width=\"53\" height=\"53\" rx=\"5\"><title>9,5\nH (0x000B)</title></rect><text x=\"1318.5\" y=\"286.5\" text-anchor=\"middle\">H</text><text class=\"keyname\" x=\"1318.5\" y=\"304\" text-anchor=\"middle\">9,5</text><rect class=\"keycap\" x=\"446.40000000000003\" y=\"340\" width=\"81\" height=\"53\" rx=\"5\"><title>0,3\nD (0x0007)</title></rect><text x=\"486.90000000000003\" y=\"370.5\" text-anchor=\"middle\">D</text><text class=\"keyname\" x=\"486.90000000000003\" y=\"388\" text-anchor=\"middle\">0,3</text><rect class=\"keycap\" x=\"536\" y=\"340\" width=\"53\" height=\"53\" rx=\"5\"><title>0,5\nF (0x0009)</title></rect><text x=\"562.5\" y=\"370.5\" text-anchor=\"middle\">F</text><text class=\"keyname\" x=\"562.5\" y=\"388\" text-anchor=\"middle\">0,5</text><rect class=\"keycap\" x=\"597.6\" y=\"340\" width=\"81\" height=\"53\" rx=\"5\"><title>0,1\nB (0x0005)</title></rect><text x=\"638.1\" y=\"370.5\" text-anchor=\"middle\">B</text><text class=\"keyname\" x=\"638.1\" y=\"388\" text-anchor=\"middle\">0,1</text><rect class=\"keycap\" x=\"726.4\" y=\"340\" width=\"81\" height=\"53\" rx=\"5\"><title>5,1\nF (0x0009)</title></rect><text x=\"766.9\" y=\"370.5\" text-anchor=\"middle\">F</text><text class=\"keyname\" x=\"766.9\" y=\"388\" text-anchor=\"middle\">5,1</text><rect class=\"keycap\" x=\"816\" y=\"340\" width=\"53\" height=\"53\" rx=\"5\"><title>5,5\nJ (0x000D)</title></rect><text x=\"842.5\" y=\"370.5\" text-anchor=\"middle\">J</text><text class=\"keyname\" x=\"842.5\" y=\"388\" text-anchor=\"middle\">5,5</text><rect class=\"keycap\" x=\"877.6\" y=\"340\" width=\"81\" height=\"53\" rx=\"5\"><title>5,3\nH (0x000B)</title></rect><text x=\"918.1\" y=\"370.5\" text-anchor=\"middle\">H</text><text class=\"keyname\" x=\"918.1\" y=\"388\" text-anchor=\"middle\">5,3</text><rect class=\"keycap\" x=\"418.40000000000003\" y=\"396\" width=\"109\" height=\"53\" rx=\"5\"><title>0,4\nE (0x0008)</title></rect><text x=\"472.90000000000003\" y=\"426.5\" text-anchor=\"middle\">E</text><text class=\"keyname\" x=\"472.90000000000003\" y=\"444\" text-anchor=\"middle\">0,4</text><rect class=\"keycap\" x=\"536\" y=\"396\" width=\"53\" height=\"53\" rx=\"5\"><title>0,2\nC (0x0006)</title></rect><text x=\"562.5\" y=\"426.5\" text-anchor=\"middle\">C</text><text class=\"keyname\" x=\"562.5\" y=\"444\" text-anchor=\"middle\">0,2</text><rect class=\"keycap\" x=\"597.6\" y=\"396\" width=\"81\" height=\"53\" rx=\"5\"><title>0,0\nA (0x0004)</title></rect><text x=\"638.1\" y=\"426.5\" text-anchor=\"middle\">A</text><text class=\"keyname\" x=\"638.1\" y=\"444\" text-anchor=\"middle\">0,0</text><rect class=\"keycap\" x=\"726.4\" y=\"396\" width=\"81\" height=\"53\" rx=\"5\"><title>5,0\nE (0x0008)</title></rect><text x=\"766.9\" y=\"426.5\" text-anchor=\"middle\">E</text><text class=\"keyname\" x=\"766.9\" y=\"444\" text-anchor=\"middle\">5,0</text><rect class=\"keycap\" x=\"816\" y=\"396\" width=\"53\" height=\"53\" rx=\"5\"><title>5,2\nG (0x000A)</title></rect><text x=\"842.5\" y=\"426.5\" text-anchor=\"middle\">G</text><text class=\"keyname\" x=\"842.5\" y=\"444\" text-anchor=\"middle\">5,2</text><rect class=\"keycap\" x=\"877.6\" y=\"396\" width=\"109\" height=\"53\" rx=\"5\"><title>5,4\nI (0x000C)</title></rect><text x=\"932.1\" y=\"426.5\" text-anchor=\"middle\">I</text><text class=\"keyname\" x=\"932.1\" y=\"444\" text-anchor=\"middle\">5,4</text></svg>",
+  "header": [
+    {
+      "tag": "H1",
+      "id": "",
+      "text": "⚗️ Flask"
+    },
+    {
+      "tag": "SPAN",
+      "id": "status-pill",
+      "text": "Offline — Svalboard visual fixture"
+    },
+    {
+      "tag": "SPAN",
+      "id": "proto-warn",
+      "text": ""
+    },
+    {
+      "tag": "SPAN",
+      "id": "",
+      "text": ""
+    },
+    {
+      "tag": "BUTTON",
+      "id": "hud-btn",
+      "text": "HUD"
+    },
+    {
+      "tag": "BUTTON",
+      "id": "diag-btn",
+      "text": "🐞"
+    },
+    {
+      "tag": "BUTTON",
+      "id": "lock-btn",
+      "text": ""
+    },
+    {
+      "tag": "BUTTON",
+      "id": "vil-save",
+      "text": "Save .vil"
+    },
+    {
+      "tag": "BUTTON",
+      "id": "vil-load",
+      "text": "Load .vil"
+    },
+    {
+      "tag": "INPUT",
+      "id": "vil-file",
+      "text": ""
+    },
+    {
+      "tag": "SELECT",
+      "id": "theme-sel",
+      "text": "themes"
+    },
+    {
+      "tag": "SELECT",
+      "id": "zoom-sel",
+      "text": "\n      80%90%\n      100%110%\n      125%150%\n    "
+    },
+    {
+      "tag": "BUTTON",
+      "id": "connect-btn",
+      "text": "Connect"
+    }
+  ],
+  "themeOptions": [
+    [
+      "classic",
+      "Classic (auto light/dark)"
+    ],
+    [
+      "keybrDark",
+      "keybr Dark"
+    ],
+    [
+      "keybrLight",
+      "keybr Light"
+    ],
+    [
+      "light",
+      "Light"
+    ],
+    [
+      "dark",
+      "Dark"
+    ],
+    [
+      "nord",
+      "Nord"
+    ],
+    [
+      "dracula",
+      "Dracula"
+    ],
+    [
+      "solarized",
+      "Solarized Light"
+    ]
+  ]
+}

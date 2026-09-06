@@ -15,6 +15,10 @@ first — two editors talking to one keyboard interleave HID responses.
 (macOS DMG, Windows portable zip) that bundles its own Chromium, so WebHID
 and WebSerial work with no Chrome install. See [desktop/README.md](desktop/README.md).
 
+## Layout Studio appearance
+
+Choose **Layout Studio** in the existing Theme menu for warm paper surfaces and cobalt accents. Navigation, editing workflows, keyboard geometry, saved themes and zoom remain familiar. [Scope and local verification](docs/LAYOUT-STUDIO.md).
+
 ## Two firmware lines
 
 The app serves two different firmwares, and they share almost nothing but
