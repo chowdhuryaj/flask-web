@@ -13,9 +13,21 @@ export async function decompressXZ(bytes) {
     if (!magic.every((m, i) => bytes[i] === m)) {
         throw new Error('definition payload is not XZ (bad magic)');
     }
-    const stream = new Blob([bytes]).stream();
-    const buf = await new Response(new XzReadableStream(stream)).arrayBuffer();
-    return new Uint8Array(buf);
+    const reader = new XzReadableStream(new Blob([bytes]).stream()).getReader();
+    const limit = 8 * 1024 * 1024;
+    const output = new Uint8Array(limit);
+    let length = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (length + value.byteLength > limit) {
+            await reader.cancel().catch(() => {});
+            throw new Error('definition exceeds 8 MiB decompressed limit');
+        }
+        output.set(value, length);
+        length += value.byteLength;
+    }
+    return output.slice(0, length);
 }
 
 /**

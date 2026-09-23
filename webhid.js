@@ -80,11 +80,13 @@ export class FlaskHID extends EventTarget {
     async close() {
         const dev = this.device;
         this.device = null;
+        if (dev) dev.oninputreport = null;
         this._rejectPending(new HIDError('notConnected', 'Device closed'));
         if (dev?.opened) { try { await dev.close(); } catch { /* already gone */ } }
     }
 
     _handleDisconnect() {
+        if (this.device) this.device.oninputreport = null;
         this.device = null;
         diag.log('hid-disconnect', 'device gone (event, or dead handle after a failed write)');
         this._rejectPending(new HIDError('notConnected', 'Device disconnected'));
@@ -101,6 +103,7 @@ export class FlaskHID extends EventTarget {
     }
 
     _onInputReport(e) {
+        if (e.device !== this.device) return;
         const bytes = new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength);
         // No pending, or not the answer we're waiting for (late reply after a
         // timeout, Vial-GUI traffic) → drop silently. This drop-while-idle is

@@ -61,6 +61,10 @@ export class VialClient {
      *  chunks with BE offset (quantum/via.c id_dynamic_keymap_get_buffer). */
     async readKeymap(layers, rows, cols) {
         const totalBytes = layers * rows * cols * 2;
+        if (![layers, rows, cols].every((n) => Number.isSafeInteger(n) && n > 0)
+            || !Number.isSafeInteger(totalBytes) || totalBytes > 0x10000) {
+            throw new Error('invalid keymap dimensions or size (max 65536 bytes)');
+        }
         const raw = new Uint8Array(totalBytes);
         let offset = 0;
         while (offset < totalBytes) {

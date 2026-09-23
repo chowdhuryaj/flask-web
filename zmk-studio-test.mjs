@@ -3,6 +3,8 @@
 // zmk-studio-ts-client test/framing.spec.ts + a hand-worked request example;
 // they pin today's wire format so schema drift is detectable.
 
+import { rejects } from 'node:assert/strict';
+
 import {
     FRAME_SOF, FRAME_ESC, FRAME_EOF,
     encodeFrame, FrameDecoder,
@@ -906,7 +908,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     const reply = (bytes) => {
         const buf = new Uint8Array(32);
         buf.set(bytes);
-        hid._onInputReport({ data: new DataView(buf.buffer) });
+        hid._onInputReport({ device: hid.device, data: new DataView(buf.buffer) });
     };
     const tick = () => new Promise((r) => setImmediate(r));
     // Combos slot GET [0x08, 0x24, 0x10, slot] with echoBytes 1.
@@ -919,8 +921,36 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     // echoBytes 0 keeps the old semantics: any same-(channel, value) reply.
     const p0 = hid.request([0x08, 0x24, 0x02], 0);
     await tick();
+    const old = { opened: true };
+    hid._onInputReport({ device: old, data: new DataView(new Uint8Array([0x08, 0x24, 0x02, 0, 99]).buffer) });
+    eq(!!hid._pending, true, 'old device report is ignored');
     reply([0x08, 0x24, 0x02, 0, 64]);
     eq((await p0)[4], 64, 'echoBytes 0 = legacy channel/value match');
+}
+
+{
+    const { VialClient } = await import('./vialclient.js');
+    const vial = new VialClient({ rawCommand: async () => { throw Error('unexpected HID read'); } });
+    for (const dims of [[0, 1, 1], [1, 1.5, 1], [255, 255, 255]]) {
+        await rejects(() => vial.readKeymap(...dims), /invalid keymap dimensions or size/);
+    }
+}
+
+{
+    let cancelled = false;
+    globalThis.window = { 'xz-decompress': { XzReadableStream: class {
+        constructor() {
+            return new ReadableStream({
+                pull(controller) { controller.enqueue(new Uint8Array(8 * 1024 * 1024 + 1)); },
+                cancel() { cancelled = true; },
+            });
+        }
+    } } };
+    const { decompressXZ } = await import('./vialdef.js');
+    await rejects(() => decompressXZ(new Uint8Array([0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00])),
+        /definition exceeds 8 MiB decompressed limit/);
+    eq(cancelled, true, 'oversized definition cancels decoder');
+    delete globalThis.window;
 }
 
 // ---- client-side slot names (zmk.js — bench-5 rename ask) ----

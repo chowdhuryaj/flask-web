@@ -205,14 +205,22 @@ async function connectFlow(device) {
 /** Reconnect target: the remembered device, or (while editing offline) any
  * device of the workspace's family — shared by the hotplug event and the
  * poll below. */
+let ambiguousReconnectShown = false;
 function reconnectCandidate(devices) {
     const last = localStorage.getItem('flask-last-device');
-    return devices.find((d) => {
+    const matches = devices.filter((d) => {
         const key = `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}`;
         const offlineMatch = app.offline
             && familyOf(d.vendorId, d.productId) === app.offlineWs?.family;
         return last === key || offlineMatch;
     });
+    if (matches.length > 1) {
+        if (!ambiguousReconnectShown) toast('Multiple matching keyboards found — choose one with Connect', true);
+        ambiguousReconnectShown = true;
+        return null;
+    }
+    ambiguousReconnectShown = false;
+    return matches[0];
 }
 
 async function loadDevice(device) {
@@ -835,17 +843,20 @@ function init() {
         toast('Keyboard disconnected', true);
         disconnectUI();
     });
-    app.hid.addEventListener('deviceavailable', async (e) => {
+    app.hid.addEventListener('deviceavailable', async () => {
         // Replug of a previously-granted device: silent reconnect if it's
         // the one we were using (or nothing is connected). While editing
         // offline, a plug-in of the SAME family also connects — that's the
         // moment the queued changes apply.
         if (app.hid.connected || connecting) return;
-        if (reconnectCandidate([e.detail])) {
-            diag.log('reconnect', 'replug event — reattaching');
-            toast('Reconnecting…');
-            await connectFlow(e.detail);
-        }
+        try {
+            const match = reconnectCandidate(await FlaskHID.grantedDevices());
+            if (match) {
+                diag.log('reconnect', 'replug event — reattaching');
+                toast('Reconnecting…');
+                await connectFlow(match);
+            }
+        } catch (e) { console.warn('Hotplug reconnect failed:', e); }
     });
 
     // Event-independent reconnect: an unclean re-enumeration (keyboard
@@ -894,11 +905,12 @@ function init() {
         await refreshDeviceList();
         const last = localStorage.getItem('flask-last-device');
         if (!last) return;
-        const granted = await FlaskHID.grantedDevices();
-        const match = granted.find((d) =>
-            `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}` === last);
+        const match = reconnectCandidate(await FlaskHID.grantedDevices());
         if (match) await connectFlow(match);
-    })();
+    })().catch((e) => {
+        console.error('Startup reconnect failed:', e);
+        toast(`Startup reconnect failed: ${e.message}`, true);
+    });
 }
 
 init();

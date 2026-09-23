@@ -25,6 +25,22 @@ const https = require('https');
 const net = require('net');
 const path = require('path');
 
+function logFailure(kind, error) {
+    const line = `${new Date().toISOString()} ${kind}: ${error?.stack || error}\n`;
+    try {
+        const dir = app.getPath('logs');
+        fs.mkdirSync(dir, { recursive: true });
+        fs.appendFileSync(path.join(dir, 'flask-desktop.log'), line);
+    } catch (e) { console.error('Failed to write desktop log:', e); }
+    console.error(line.trimEnd());
+}
+
+process.on('uncaughtException', (e) => {
+    logFailure('uncaughtException', e);
+    app.exit(1);
+});
+process.on('unhandledRejection', (e) => logFailure('unhandledRejection', e));
+
 // Dev run serves the repo checkout (this file's parent). The PACKAGED app
 // (electron-builder) carries the web files as extraResources under
 // Resources/web — __dirname points inside app.asar there, so '..' would
@@ -126,17 +142,25 @@ function wireDeviceSelection(ses) {
     // WebHID — the Flask tuning protocol (raw HID 0xFF60/0x61).
     ses.on('select-hid-device', (event, details, callback) => {
         event.preventDefault();
-        const d = pickDevice(details.deviceList, 'HID',
-            (x) => x.name || `${x.vendorId?.toString(16)}:${x.productId?.toString(16)}`);
-        callback(d ? d.deviceId : undefined);
+        let id;
+        try {
+            const d = pickDevice(details.deviceList, 'HID',
+                (x) => x.name || `${x.vendorId?.toString(16)}:${x.productId?.toString(16)}`);
+            id = d?.deviceId;
+        } catch (e) { logFailure('HID picker', e); }
+        callback(id);
     });
 
     // WebSerial — ZMK Studio RPC (studio-rpc-usb-uart CDC port).
     ses.on('select-serial-port', (event, portList, webContents, callback) => {
         event.preventDefault();
-        const p = pickDevice(portList, 'serial',
-            (x) => x.displayName || x.portName || x.portId);
-        callback(p ? p.portId : '');
+        let id = '';
+        try {
+            const p = pickDevice(portList, 'serial',
+                (x) => x.displayName || x.portName || x.portId);
+            id = p?.portId || '';
+        } catch (e) { logFailure('serial picker', e); }
+        callback(id);
     });
 
     // Local single-user tool: allow the web-device APIs outright, and
@@ -250,6 +274,8 @@ async function start() {
         title: 'Flask',
         backgroundColor: '#1a1a1a',
     });
+    win.webContents.on('render-process-gone', (event, details) =>
+        logFailure('render-process-gone', `${details.reason} exitCode=${details.exitCode}`));
 
     // The HUD opens `window.open('about:blank', 'flask-hud', …)` here
     // (Document PiP's requestWindow never settles under Electron). Style
