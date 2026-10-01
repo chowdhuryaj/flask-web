@@ -17,7 +17,7 @@
 // after its Studio load; before that a numeric position fallback renders.
 
 import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=49';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=49';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=50';
 import { CH, V } from './flaskproto.js?v=49';
 import { renderKeyboardSVG } from './keymap-tab.js?v=49';
 import {

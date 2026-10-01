@@ -10,7 +10,7 @@
 // term 0 = the firmware default 200 ms.
 
 import { el, card, toggleRow, modal, toast } from './ui.js?v=49';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=49';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=50';
 import { CH, V } from './flaskproto.js?v=49';
 import { pickUsage } from './zmk-combos-tab.js?v=49';
 import { usageCap, usageLabel, zmkBehaviors } from './zmk-keycodes.js?v=49';

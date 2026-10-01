@@ -1187,4 +1187,58 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(zmkFamilyMismatch('totem', 'imprint') !== null, true, 'totem file refused on imprint');
 }
 
+// ---- totem offline preview: shared layout, generated default, no drift ----
+{
+    const { createZmkTemplate, ZMK_TEMPLATE_FAMILIES, ZmkOfflineFlask, OfflineStudioClient }
+        = await import('./zmk-offline.js');
+    const { TOTEM_GEOM } = await import('./zmk-totem-layout.js');
+    const { TOTEM_DEFAULT } = await import('./zmk-totem-default.js');
+    const { zmkProfile, zmkCapabilities, ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js');
+    eq(ZMK_TEMPLATE_FAMILIES.includes('totem'), true, 'totem offline template listed');
+    eq(TOTEM_GEOM.length, 38, 'totem layout has 38 keys');
+    const ws = createZmkTemplate('totem');
+    ws._notify = () => {};
+    eq(ws.protocolVersion, ZMK_EXPECTED_PROTOCOL.totem, 'offline totem protocol version');
+    eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 38), true, 'every offline totem layer has 38 bindings');
+    eq(ws.profile.keys.length, 38, 'offline totem profile has 38 keys');
+    // Same positions online (profile) and offline (profile + Studio layout).
+    const xy = (ks) => JSON.stringify(ks.map((k) => [k.x, k.y]));
+    eq(xy(ws.profile.keys), xy(zmkProfile('totem').keys), 'offline and online totem key positions match');
+    const flask = new ZmkOfflineFlask(ws);
+    const studio = new OfflineStudioClient(ws);
+    eq(xy((await studio.getPhysicalLayouts()).layouts[0].keys), xy(TOTEM_GEOM), 'sim Studio layout = shared layout');
+    eq(await flask.getU16(0x00, 0x03), 5, 'offline totem answers meta family 5');
+    const im = createZmkTemplate('imprint');
+    im._notify = () => {};
+    eq(await new ZmkOfflineFlask(im).getU16(0x00, 0x03), 4, 'offline imprint still answers meta family 4');
+    eq(im.zmk.keymap.layers[0].bindings.length, 70, 'offline imprint still 70 positions');
+    // Hidden exactly as online: pointing/RGB caps off, none of their tunables seeded.
+    const caps = zmkCapabilities(ws.family, ws.protocolVersion);
+    eq(caps.mouse || caps.rgbMap || caps.gestures, false, 'offline totem caps hide pointing/RGB');
+    const { CH: CHn } = await import('./flaskproto.js');
+    const banned = [CHn.autoscroll, CHn.accel, CHn.scrollSnap, CHn.scrollScale, CHn.gestures,
+        CHn.ballSwap, CHn.autoMouse, CHn.rgbMap].map(String);
+    eq(Object.keys(ws.tunables).some((k) => banned.includes(k.split(':')[0])), false, 'no pointing/RGB tunables seeded for totem');
+    eq(Object.keys(ws.tunables).length > 0, true, 'totem still seeds combos/macros/leader tunables');
+    eq(Object.keys(im.tunables).length > Object.keys(ws.tunables).length, true, 'imprint seeds more tunables than totem');
+
+    // Generated default must match the firmware keymap (skipped, loudly,
+    // while config/totem.keymap does not exist yet).
+    const { generate, parseKeymap, KEYMAP_PATH } = await import('./gen-totem-default.mjs');
+    const { existsSync, readFileSync } = await import('node:fs');
+    const fx = parseKeymap(readFileSync(new URL('./tests/fixtures/totem-sample.keymap', import.meta.url), 'utf8'));
+    eq(fx.layers.length, 2, 'generator parses fixture layers');
+    eq(JSON.stringify(fx.layers[0].bindings[2]), '["mt",225,4]', 'generator maps &mt LSHFT A');
+    eq(fx.unsupported[0], '&foo', 'generator reports unsupported behaviors');
+    if (existsSync(KEYMAP_PATH)) {
+        const src = readFileSync(KEYMAP_PATH, 'utf8');
+        const onDisk = readFileSync(new URL('./zmk-totem-default.js', import.meta.url), 'utf8');
+        eq(onDisk === generate(src, 'config/totem.keymap'), true,
+            'zmk-totem-default.js is stale vs totem.keymap — run: node gen-totem-default.mjs');
+    } else {
+        eq(TOTEM_DEFAULT.placeholder, true, 'no totem.keymap yet, default must be the placeholder');
+        console.log('zmk-studio-test: NOTE totem.keymap missing — default is a PLACEHOLDER, staleness check pending');
+    }
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

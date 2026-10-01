@@ -1,0 +1,13 @@
+/ {
+    behaviors { hm: homerow { compatible = "zmk,behavior-hold-tap"; }; };
+    keymap {
+        compatible = "zmk,keymap";
+        base {
+            display-name = "Base";
+            bindings = <
+                &kp Q &kp W &mt LSHFT A &lt 1 SPACE &trans &none &mo 1 &foo 3
+            >;
+        };
+        nav { bindings = < &kp N1 &tog 0 &kp F13 >; };
+    };
+};

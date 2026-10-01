@@ -8,7 +8,7 @@ import { FlaskHID } from './webhid.js?v=49';
 import { renderPreflight } from './preflight.js?v=49';
 import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=49';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=49';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=50';
 import { VialClient } from './vialclient.js?v=49';
 import { parseDefinition } from './vialdef.js?v=49';
 import { buildProfile, familyOf, familyLabel } from './profiles.js?v=49';
@@ -36,7 +36,7 @@ import { SettingsTab } from './settings-tab.js?v=49';
 import { HUD } from './hud.js?v=49';
 import { runUnlockFlow, lockKeyboard } from './unlock.js?v=49';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=49';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=50';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
          maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=49';

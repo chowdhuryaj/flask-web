@@ -11,6 +11,7 @@
 
 import { CH, V } from './flaskproto.js?v=49';
 import { diag } from './diag.js?v=49';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=49';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -26,7 +27,7 @@ export const ZMK_FAMILIES = ['imprint', 'totem'];
 // (so no accel/scroll/gesture/autoscroll/automouse/ballswap channels — the
 // firmware answers them "unhandled") and no LED strip assumed. There is no
 // capability probe for the strip, so RGB is simply off for totem.
-const ZMK_HARDWARE = {
+export const ZMK_HARDWARE = {
     imprint: { pointing: true, rgb: true },
     totem: { pointing: false, rgb: false },
 };
@@ -247,7 +248,12 @@ export function zmkProfile(family) {
         name: ZMK_FAMILY_LABELS[family],
         matrixRows: 0,
         matrixCols: 0,
-        keys: [],
+        // totem: the shared layout (zmk-totem-layout.js) — the same positions
+        // the offline preview serves; Studio's own layout replaces it after
+        // load. imprint stays empty (unchanged).
+        keys: family === 'totem'
+            ? TOTEM_GEOM.map((k, i) => ({ row: 0, col: i, pos: i, label: `Key ${i}`, x: k.x, y: k.y, w: 1, h: 1 }))
+            : [],
         encoderKeys: [],
         // Imprint: mirrors config/imprint.keymap layer order (Cyboard-ZMK repo);
         // cosmetic only — the ZMK keymap tab republishes the device's real

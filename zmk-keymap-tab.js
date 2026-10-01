@@ -10,10 +10,10 @@
 import { el, toast, card, SAVE_STATE } from './ui.js?v=49';
 import { renderKeyboardSVG } from './keymap-tab.js?v=49';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=49';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=49';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=50';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=49';
 import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=49';
-import { ZMK_VIDPID, zmkFamilyMismatch } from './zmk.js?v=49';
+import { ZMK_VIDPID, zmkFamilyMismatch } from './zmk.js?v=50';
 import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=49';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,

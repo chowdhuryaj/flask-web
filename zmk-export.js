@@ -10,7 +10,7 @@
 // importing v10 into v9 skips leader/gestures.
 
 import { CH, V } from './flaskproto.js?v=49';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=49';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=50';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,

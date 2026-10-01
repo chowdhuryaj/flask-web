@@ -5,7 +5,7 @@
 // zmk.js (zmkProfile) — this file only delegates identification/labels.
 
 import { VIDPID } from './flaskproto.js?v=49';
-import { zmkFamilyCandidate, ZMK_FAMILY_LABELS } from './zmk.js?v=49';
+import { zmkFamilyCandidate, ZMK_FAMILY_LABELS } from './zmk.js?v=50';
 import { napeFamilyCandidate, NAPE_FAMILY_LABELS } from './nape.js?v=49';
 
 // Adept geometry mirrors keyboards/ploopyco/madromys/info.json (key units).

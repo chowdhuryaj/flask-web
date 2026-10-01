@@ -20,8 +20,10 @@
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
 import { CH, V } from './flaskproto.js?v=49';
-import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, zmkCapabilities,
-         ZMK_TRACKBALLS } from './zmk.js?v=49';
+import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=50';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=49';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=49';
 import { OfflineFlask, saveWorkspace } from './offline.js?v=49';
 import { LOCK_UNLOCKED } from './zmk-studio.js?v=49';
 import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=49';
@@ -36,7 +38,7 @@ import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-cod
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
          encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=49';
 
-export const ZMK_TEMPLATE_FAMILIES = ['imprint'];
+export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 
 const IMPRINT = {
     positions: 70,
@@ -56,6 +58,17 @@ const IMPRINT = {
     tdSlots: 16,
     tdTaps: 4,
 };
+
+// Per-family sizes. TOTEM: 38 positions, no LED strip (rgb 0); the runtime
+// slot capacities are Kconfig on real hardware, so the sim keeps imprint's.
+const FAMILY_DIMS = {
+    imprint: IMPRINT,
+    totem: { ...IMPRINT, positions: TOTEM_GEOM.length, rgbLayers: 0, rgbLeds: 0 },
+};
+const dims = (family) => FAMILY_DIMS[family] ?? IMPRINT;
+const geomFor = (family) => (family === 'totem' ? TOTEM_GEOM : IMPRINT_GEOM);
+const familyCode = (family) =>
+    Number(Object.keys(ZMK_FAMILY_CODES).find((c) => ZMK_FAMILY_CODES[c] === family));
 
 // Firmware-seeded default gesture sets (input_processor_flask_gestures.c
 // gesture_set_defaults): E SE S SW W NW N NE. kb page 0x07, consumer 0x0C;
@@ -368,14 +381,49 @@ function buildDefaultLayers() {
     return layers;
 }
 
+// TOTEM default keymap: generated from the firmware's totem.keymap
+// (gen-totem-default.mjs → zmk-totem-default.js) — never hand-written.
+function buildTotemLayers() {
+    const hid = (c) => kpParam(c);
+    const conv = (b) => {
+        switch (b[0]) {
+            case 'kp': return bind(B['Key Press'], hid(b[1]));
+            case 'mo': return bind(B['Momentary Layer'], b[1]);
+            case 'to': return bind(B['To Layer'], b[1]);
+            case 'tog': return bind(B['Toggle Layer'], b[1]);
+            case 'sl': return bind(B['Sticky Layer'], b[1]);
+            case 'lt': return bind(B['Layer-Tap'], b[1], hid(b[2]));
+            case 'mt': return bind(B['Mod-Tap'], hid(b[1]), hid(b[2]));
+            case 'none': return NO();
+            default: return TR();
+        }
+    };
+    const n = TOTEM_GEOM.length;
+    return TOTEM_DEFAULT.layers.map((l, id) => {
+        const bindings = l.bindings.map(conv);
+        if (bindings.length !== n) {
+            throw new Error(`zmk-offline: totem layer ${l.name} has ${bindings.length} bindings (want ${n})`);
+        }
+        return { id, name: l.name, bindings };
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Template workspace
 
 /** Firmware-default tunable values, set-if-absent so a stored older
  * workspace picks up ids added by later protocol versions without
  * clobbering the user's saved values. */
-function seedImprintTunables(tun) {
-    const seed = (ch, id, val) => { tun[`${ch}:${id}`] ??= { op: 'u16', val }; };
+function seedImprintTunables(tun, family = 'imprint') {
+    const hw = ZMK_HARDWARE[family] ?? ZMK_HARDWARE.imprint;
+    // totem: no pointing/RGB channels — its preview journals none of them.
+    const POINTING = [CH.autoscroll, CH.accel, CH.scrollSnap, CH.scrollScale, CH.gestures,
+        CH.ballSwap, CH.autoMouse];
+    const seed = (ch, id, val) => {
+        if (!hw.pointing && POINTING.includes(ch)) return;
+        if (!hw.rgb && ch === CH.rgbMap) return;
+        tun[`${ch}:${id}`] ??= { op: 'u16', val };
+    };
     seed(CH.autoscroll, V.asInverted, 0);
     seed(CH.autoscroll, V.asSpeedScale, 100);
     seed(CH.autoscroll, V.asStopOnKey, 1);
@@ -442,14 +490,14 @@ function seedImprintTunables(tun) {
 }
 
 export function createZmkTemplate(family) {
-    if (family !== 'imprint') throw new Error(`no ZMK template for family "${family}"`);
-    const layers = buildDefaultLayers();
+    if (!FAMILY_DIMS[family]) throw new Error(`no ZMK template for family "${family}"`);
+    const layers = family === 'totem' ? buildTotemLayers() : buildDefaultLayers();
     const keymap = { layers, availableLayers: 0, maxLayerNameLength: 20 };
     const version = ZMK_EXPECTED_PROTOCOL[family];
 
     // Firmware defaults, so the tuning cards open with real values.
     const tun = {};
-    seedImprintTunables(tun);
+    seedImprintTunables(tun, family);
 
     return {
         v: 1, key: family, family,
@@ -461,7 +509,7 @@ export function createZmkTemplate(family) {
             family,
             name: ZMK_FAMILY_LABELS[family],
             matrixRows: 0, matrixCols: 0,
-            keys: IMPRINT_GEOM.map((k, i) => ({
+            keys: geomFor(family).map((k, i) => ({
                 row: 0, col: i, pos: i, label: `Key ${i}`,
                 x: k.x, y: k.y, w: k.w ?? 1, h: k.h ?? 1,
             })),
@@ -482,20 +530,20 @@ export function createZmkTemplate(family) {
             unsaved: false,
             // v14: the imported devicetree combos ARE the boot table.
             combos: defaultCombos(),
-            macros: Array.from({ length: IMPRINT.macroSlots }, () =>
-                Array.from({ length: IMPRINT.macroSteps }, () => ({ action: MACRO_ACTION.empty, param: 0 }))),
-            rgb: Array.from({ length: IMPRINT.rgbLayers }, () =>
-                Array.from({ length: IMPRINT.rgbLeds }, () => [0, 0, 0])),
-            leader: Array.from({ length: IMPRINT.leaderSlots },
+            macros: Array.from({ length: dims(family).macroSlots }, () =>
+                Array.from({ length: dims(family).macroSteps }, () => ({ action: MACRO_ACTION.empty, param: 0 }))),
+            rgb: Array.from({ length: dims(family).rgbLayers }, () =>
+                Array.from({ length: dims(family).rgbLeds }, () => [0, 0, 0])),
+            leader: Array.from({ length: dims(family).leaderSlots },
                 () => ({ positions: [], action: 0, param: 0 })),
             gestures: defaultGestureSets(),
             // v12 runtime LED order (LED index → keymap position).
-            ledOrder: Array.from({ length: IMPRINT.rgbLeds }, (_, i) => i),
+            ledOrder: Array.from({ length: dims(family).rgbLeds }, (_, i) => i),
             // v14: custom shift pairs + tap dances (boot empty).
-            csk: Array.from({ length: IMPRINT.cskSlots }, () => ({ base: 0, shifted: 0 })),
-            tapdance: Array.from({ length: IMPRINT.tdSlots }, () => ({
+            csk: Array.from({ length: dims(family).cskSlots }, () => ({ base: 0, shifted: 0 })),
+            tapdance: Array.from({ length: dims(family).tdSlots }, () => ({
                 termMs: 0,
-                taps: Array.from({ length: IMPRINT.tdTaps }, () =>
+                taps: Array.from({ length: dims(family).tdTaps }, () =>
                     ({ action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 })),
             })),
         },
@@ -530,7 +578,7 @@ export function normalizeZmkWorkspace(ws) {
         const storedVersion = ws.protocolVersion ?? 0;
         if (storedVersion < expected) ws.protocolVersion = expected;
         ws.tunables ??= {};
-        seedImprintTunables(ws.tunables);
+        seedImprintTunables(ws.tunables, ws.family);
         // v14 "firmware update" semantics for combos: the real device DROPS
         // pre-v14 saved slots and boots the imported devicetree defaults —
         // a stored older workspace does the same (mirrors flask_combos
@@ -548,37 +596,37 @@ export function normalizeZmkWorkspace(ws) {
             t.layer ??= COMBO_LAYER_ANY;
             return t;
         });
-        while (ws.zmk.combos.length < IMPRINT.comboSlots) {
+        while (ws.zmk.combos.length < dims(ws.family).comboSlots) {
             ws.zmk.combos.push(emptyComboV3());
         }
-        ws.zmk.ledOrder ??= Array.from({ length: IMPRINT.rgbLeds }, (_, i) => i);
-        while (ws.zmk.macros.length < IMPRINT.macroSlots) {
+        ws.zmk.ledOrder ??= Array.from({ length: dims(ws.family).rgbLeds }, (_, i) => i);
+        while (ws.zmk.macros.length < dims(ws.family).macroSlots) {
             ws.zmk.macros.push([]);
         }
         for (const slot of ws.zmk.macros) {
-            while (slot.length < IMPRINT.macroSteps) {
+            while (slot.length < dims(ws.family).macroSteps) {
                 slot.push({ action: MACRO_ACTION.empty, param: 0 });
             }
         }
         // v10: leader + gesture tables (gestures seed the firmware defaults
         // — the device ships sets 0-3 populated).
-        ws.zmk.leader ??= Array.from({ length: IMPRINT.leaderSlots },
+        ws.zmk.leader ??= Array.from({ length: dims(ws.family).leaderSlots },
             () => ({ positions: [], action: 0, param: 0 }));
-        while (ws.zmk.leader.length < IMPRINT.leaderSlots) {
+        while (ws.zmk.leader.length < dims(ws.family).leaderSlots) {
             ws.zmk.leader.push({ positions: [], action: 0, param: 0 });
         }
         ws.zmk.gestures ??= defaultGestureSets();
-        while (ws.zmk.gestures.length < IMPRINT.gestureSets) {
+        while (ws.zmk.gestures.length < dims(ws.family).gestureSets) {
             ws.zmk.gestures.push(Array.from({ length: 8 }, () => ({ action: 0, param: 0 })));
         }
         // v14: leader capacity 16→32 + csk/tapdance tables.
-        while (ws.zmk.leader.length < IMPRINT.leaderSlots) {
+        while (ws.zmk.leader.length < dims(ws.family).leaderSlots) {
             ws.zmk.leader.push({ positions: [], action: 0, param: 0 });
         }
-        ws.zmk.csk ??= Array.from({ length: IMPRINT.cskSlots }, () => ({ base: 0, shifted: 0 }));
-        ws.zmk.tapdance ??= Array.from({ length: IMPRINT.tdSlots }, () => ({
+        ws.zmk.csk ??= Array.from({ length: dims(ws.family).cskSlots }, () => ({ base: 0, shifted: 0 }));
+        ws.zmk.tapdance ??= Array.from({ length: dims(ws.family).tdSlots }, () => ({
             termMs: 0,
-            taps: Array.from({ length: IMPRINT.tdTaps }, () =>
+            taps: Array.from({ length: dims(ws.family).tdTaps }, () =>
                 ({ action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 })),
         }));
     }
@@ -617,23 +665,23 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.meta) {
             if (id === V.metaProtocolVersion) return this.ws.protocolVersion;
             if (id === V.metaActiveLayer) return 0;
-            if (id === V.metaFamily) return 4; // imprint
+            if (id === V.metaFamily) return familyCode(this.ws.family);
             return 0;
         }
         if (ch === CH.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
         if (ch === CH.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
         if (ch === CH.rgbMap && id === V.rgbmapSplitLink) return 1; // sim halves always linked
         if (ch === CH.combos && id === V.combosSlotCount) return this.ws.zmk.combos.length;
-        if (ch === CH.combos && id === V.combosKeys) return IMPRINT.comboKeys;
+        if (ch === CH.combos && id === V.combosKeys) return dims(this.ws.family).comboKeys;
         if (ch === CH.macros && id === V.macrosSlotCount) return this.ws.zmk.macros.length;
         if (ch === CH.macros && id === V.macrosStepCount) return this.ws.zmk.macros[0].length;
         if (ch === CH.macros && id === V.macrosState) return 0; // never "playing"
         if (ch === CH.leader && id === V.leaderSlotCount) return this.ws.zmk.leader.length;
-        if (ch === CH.leader && id === V.leaderKeys) return IMPRINT.leaderKeys;
+        if (ch === CH.leader && id === V.leaderKeys) return dims(this.ws.family).leaderKeys;
         if (ch === CH.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
         if (ch === CH.customShift && id === V.cskSlotCount) return this.ws.zmk.csk.length;
         if (ch === CH.tapDance && id === V.tdSlotCount) return this.ws.zmk.tapdance.length;
-        if (ch === CH.tapDance && id === V.tdTaps) return IMPRINT.tdTaps;
+        if (ch === CH.tapDance && id === V.tdTaps) return dims(this.ws.family).tdTaps;
         // Ball swap "effective" is live-only (base XOR momentary holds) —
         // the sim has no held keys, so it always equals the base state.
         if (ch === CH.ballSwap && id === V.bswapEffective) {
@@ -696,17 +744,17 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.combos && id === V.combosSlot) {
             const slot = payload[0] ?? 0;
             const s = zmk.combos[slot] ?? comboSlotToTyped({ positions: [], usage: 0 });
-            return encodeComboSlot(slot, comboTypedToLegacy(s), IMPRINT.comboKeys);
+            return encodeComboSlot(slot, comboTypedToLegacy(s), dims(this.ws.family).comboKeys);
         }
         if (ch === CH.combos && id === V.combosSlotV2) {
             const slot = payload[0] ?? 0;
             const s = zmk.combos[slot] ?? emptyComboV3();
-            return encodeComboSlotV2(slot, s, IMPRINT.comboKeys);
+            return encodeComboSlotV2(slot, s, dims(this.ws.family).comboKeys);
         }
         if (ch === CH.combos && id === V.combosSlotV3) {
             const slot = payload[0] ?? 0;
             const s = zmk.combos[slot] ?? emptyComboV3();
-            return encodeComboSlotV3(slot, s, IMPRINT.comboKeys);
+            return encodeComboSlotV3(slot, s, dims(this.ws.family).comboKeys);
         }
         if (ch === CH.customShift && id === V.cskSlot) {
             const slot = payload[0] ?? 0;
@@ -738,7 +786,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.leader && id === V.leaderSlot) {
             const seq = payload[0] ?? 0;
             const s = zmk.leader[seq] ?? { positions: [], action: 0, param: 0 };
-            return encodeLeaderSlot(seq, s, IMPRINT.leaderKeys);
+            return encodeLeaderSlot(seq, s, dims(this.ws.family).leaderKeys);
         }
         if (ch === CH.gestures && id === V.gesturesSlot) {
             const [set, dir] = payload;
@@ -771,24 +819,24 @@ export class ZmkOfflineFlask extends OfflineFlask {
             return payload;
         }
         if (ch === CH.combos && id === V.combosSlot) {
-            const decoded = decodeComboSlot(payload, IMPRINT.comboKeys);
+            const decoded = decodeComboSlot(payload, dims(this.ws.family).comboKeys);
             const slot = decoded.slot;
             if (!zmk.combos[slot]) return payload;
             // Firmware normalization: positions must exist on the board.
             const positions = decoded.positions
-                .filter((p) => p >= 0 && p < IMPRINT.positions)
-                .slice(0, IMPRINT.comboKeys);
+                .filter((p) => p >= 0 && p < dims(this.ws.family).positions)
+                .slice(0, dims(this.ws.family).comboKeys);
             zmk.combos[slot] = comboSlotToTyped({ slot, positions, usage: decoded.usage });
             this.ws.zmkDirty.combo[slot] = true;
             saveWorkspace(this.ws);
-            return encodeComboSlot(slot, comboTypedToLegacy(zmk.combos[slot]), IMPRINT.comboKeys);
+            return encodeComboSlot(slot, comboTypedToLegacy(zmk.combos[slot]), dims(this.ws.family).comboKeys);
         }
         if (ch === CH.combos && id === V.combosSlotV2) {
-            const d = decodeComboSlotV2(payload, IMPRINT.comboKeys);
+            const d = decodeComboSlotV2(payload, dims(this.ws.family).comboKeys);
             if (!zmk.combos[d.slot]) return payload;
             const positions = d.positions
-                .filter((p) => p >= 0 && p < IMPRINT.positions)
-                .slice(0, IMPRINT.comboKeys);
+                .filter((p) => p >= 0 && p < dims(this.ws.family).positions)
+                .slice(0, dims(this.ws.family).comboKeys);
             // Firmware normalization (flask_combos_slot_set): bad action
             // → none; usage without a usage → none; non-behavior slots
             // zero the behavior id / param2.
@@ -808,14 +856,14 @@ export class ZmkOfflineFlask extends OfflineFlask {
                 layer: keep.layer ?? COMBO_LAYER_ANY };
             this.ws.zmkDirty.combo[d.slot] = true;
             saveWorkspace(this.ws);
-            return encodeComboSlotV2(d.slot, zmk.combos[d.slot], IMPRINT.comboKeys);
+            return encodeComboSlotV2(d.slot, zmk.combos[d.slot], dims(this.ws.family).comboKeys);
         }
         if (ch === CH.combos && id === V.combosSlotV3) {
-            const d = decodeComboSlotV3(payload, IMPRINT.comboKeys);
+            const d = decodeComboSlotV3(payload, dims(this.ws.family).comboKeys);
             if (!zmk.combos[d.slot]) return payload;
             const positions = d.positions
-                .filter((p) => p >= 0 && p < IMPRINT.positions)
-                .slice(0, IMPRINT.comboKeys);
+                .filter((p) => p >= 0 && p < dims(this.ws.family).positions)
+                .slice(0, dims(this.ws.family).comboKeys);
             // Firmware normalization (flask_combos_slot_set, v14): action
             // rules as v2; timeout clamps to 10..2000 when nonzero; an
             // emptied slot zeroes its timing and resets the layer gate.
@@ -835,7 +883,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
                 timeoutMs, priorIdleMs, layer };
             this.ws.zmkDirty.combo[d.slot] = true;
             saveWorkspace(this.ws);
-            return encodeComboSlotV3(d.slot, zmk.combos[d.slot], IMPRINT.comboKeys);
+            return encodeComboSlotV3(d.slot, zmk.combos[d.slot], dims(this.ws.family).comboKeys);
         }
         if (ch === CH.customShift && id === V.cskSlot) {
             const d = decodeCskSlot(payload);
@@ -847,7 +895,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         }
         if (ch === CH.tapDance && id === V.tdStep) {
             const d = decodeTdStep(payload);
-            if (!zmk.tapdance[d.slot] || d.tap >= IMPRINT.tdTaps) return payload;
+            if (!zmk.tapdance[d.slot] || d.tap >= dims(this.ws.family).tdTaps) return payload;
             // Firmware normalization (flask_tapdance_output_set).
             let { action, behaviorId, param1, param2 } = d;
             if (action > TD_ACTION.behavior) action = TD_ACTION.none;
@@ -891,18 +939,18 @@ export class ZmkOfflineFlask extends OfflineFlask {
             return encodeMacroStep(step.slot, step.step, norm);
         }
         if (ch === CH.leader && id === V.leaderSlot) {
-            const d = decodeLeaderSlot(payload, IMPRINT.leaderKeys);
+            const d = decodeLeaderSlot(payload, dims(this.ws.family).leaderKeys);
             if (!zmk.leader[d.seq]) return payload;
             // Firmware normalization: valid board positions, leading prefix,
             // unknown actions empty.
             const positions = d.positions
-                .filter((p) => p >= 0 && p < IMPRINT.positions)
-                .slice(0, IMPRINT.leaderKeys);
+                .filter((p) => p >= 0 && p < dims(this.ws.family).positions)
+                .slice(0, dims(this.ws.family).leaderKeys);
             const action = d.action > 2 ? 0 : d.action;
             zmk.leader[d.seq] = { positions, action, param: action ? d.param : 0 };
             this.ws.zmkDirty.leaderSlot[d.seq] = true;
             saveWorkspace(this.ws);
-            return encodeLeaderSlot(d.seq, zmk.leader[d.seq], IMPRINT.leaderKeys);
+            return encodeLeaderSlot(d.seq, zmk.leader[d.seq], dims(this.ws.family).leaderKeys);
         }
         if (ch === CH.gestures && id === V.gesturesSlot) {
             const d = decodeGestureSlot(payload);
@@ -949,8 +997,8 @@ export class OfflineStudioClient extends EventTarget {
         return {
             activeLayoutIndex: 0,
             layouts: [{
-                name: 'Imprint',
-                keys: IMPRINT_GEOM.map((k) => ({ x: k.x, y: k.y, w: k.w ?? 1, h: k.h ?? 1, r: 0, rx: 0, ry: 0 })),
+                name: this.ws.family === 'totem' ? 'TOTEM' : 'Imprint',
+                keys: geomFor(this.ws.family).map((k) => ({ x: k.x, y: k.y, w: k.w ?? 1, h: k.h ?? 1, r: 0, rx: 0, ry: 0 })),
             }],
         };
     }
@@ -1012,8 +1060,8 @@ export class OfflineStudioClient extends EventTarget {
         this.ws.zmk.pendingKeymap = {
             kind: 'flask-zmk-keymap',
             version: 1,
-            family: 'imprint',
-            device: 'Cyboard Imprint (ZMK) preview',
+            family: this.ws.family,
+            device: `${ZMK_FAMILY_LABELS[this.ws.family]} preview`,
             exported: new Date().toISOString(),
             layers: this.ws.zmk.keymapSaved.layers.map((l) => ({
                 name: l.name,
@@ -1053,7 +1101,7 @@ export class OfflineStudioClient extends EventTarget {
         const layer = {
             id: this.ws.zmk.nextLayerId++,
             name: '',
-            bindings: Array.from({ length: IMPRINT.positions }, TR),
+            bindings: Array.from({ length: dims(this.ws.family).positions }, TR),
         };
         km.layers.push(layer);
         km.availableLayers -= 1;
@@ -1163,7 +1211,7 @@ async function zmkSyncExtrasInner(app, ws) {
     for (const seq of Object.keys(ws.zmkDirty.leaderSlot)) {
         try {
             await app.flask.setBytes(CH.leader, V.leaderSlot,
-                encodeLeaderSlot(Number(seq), ws.zmk.leader[seq], IMPRINT.leaderKeys), 1);
+                encodeLeaderSlot(Number(seq), ws.zmk.leader[seq], dims(ws.family).leaderKeys), 1);
             delete ws.zmkDirty.leaderSlot[seq];
             applied++; touched = true;
         } catch (e) { fail.push(`leader ${seq}: ${e.message}`); }

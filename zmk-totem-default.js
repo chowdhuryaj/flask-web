@@ -1,0 +1,130 @@
+// PLACEHOLDER — config/totem.keymap did not exist yet. Regenerate with:
+//   node gen-totem-default.mjs
+// Binding forms: [kp,hid] [trans] [none] [mo|to|tog|sl,layer] [lt,layer,hid] [mt,holdHid,tapHid].
+export const TOTEM_DEFAULT = {
+ "source": null,
+ "sha256": null,
+ "placeholder": true,
+ "layers": [
+  {
+   "name": "Base",
+   "bindings": [
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ],
+    [
+     "trans"
+    ]
+   ]
+  }
+ ],
+ "unsupported": []
+};
