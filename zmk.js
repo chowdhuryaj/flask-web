@@ -11,7 +11,7 @@
 
 import { CH, V } from './flaskproto.js?v=49';
 import { diag } from './diag.js?v=49';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=49';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=50';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -252,7 +252,7 @@ export function zmkProfile(family) {
         // the offline preview serves; Studio's own layout replaces it after
         // load. imprint stays empty (unchanged).
         keys: family === 'totem'
-            ? TOTEM_GEOM.map((k, i) => ({ row: 0, col: i, pos: i, label: `Key ${i}`, x: k.x, y: k.y, w: 1, h: 1 }))
+            ? TOTEM_GEOM.map((k, i) => ({ row: 0, col: i, pos: i, label: `Key ${i}`, x: k.x, y: k.y, w: k.w, h: k.h }))
             : [],
         encoderKeys: [],
         // Imprint: mirrors config/imprint.keymap layer order (Cyboard-ZMK repo);

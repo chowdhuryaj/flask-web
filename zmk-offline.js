@@ -22,8 +22,8 @@
 import { CH, V } from './flaskproto.js?v=49';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
          zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=50';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=49';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=49';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=50';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=50';
 import { OfflineFlask, saveWorkspace } from './offline.js?v=49';
 import { LOCK_UNLOCKED } from './zmk-studio.js?v=49';
 import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=49';
@@ -381,32 +381,37 @@ function buildDefaultLayers() {
     return layers;
 }
 
-// TOTEM default keymap: generated from the firmware's totem.keymap
-// (gen-totem-default.mjs → zmk-totem-default.js) — never hand-written.
+// TOTEM: everything firmware-derived (behavior catalog, layers, default
+// combos) comes from gen-totem-default.mjs → zmk-totem-default.js; nothing
+// here is hand-written. Bindings are [behaviorId, param1, param2].
+const TOTEM_CATALOG = new Map(TOTEM_DEFAULT.behaviors.map((d) => [d.id, d]));
+const catalogFor = (family) => (family === 'totem' ? TOTEM_CATALOG : BEHAVIORS);
+const transparentFor = (family) => (family === 'totem'
+    ? [...TOTEM_CATALOG.values()].find((d) => d.displayName === 'Transparent').id
+    : B.Transparent);
+
 function buildTotemLayers() {
-    const hid = (c) => kpParam(c);
-    const conv = (b) => {
-        switch (b[0]) {
-            case 'kp': return bind(B['Key Press'], hid(b[1]));
-            case 'mo': return bind(B['Momentary Layer'], b[1]);
-            case 'to': return bind(B['To Layer'], b[1]);
-            case 'tog': return bind(B['Toggle Layer'], b[1]);
-            case 'sl': return bind(B['Sticky Layer'], b[1]);
-            case 'lt': return bind(B['Layer-Tap'], b[1], hid(b[2]));
-            case 'mt': return bind(B['Mod-Tap'], hid(b[1]), hid(b[2]));
-            case 'none': return NO();
-            default: return TR();
-        }
-    };
     const n = TOTEM_GEOM.length;
     return TOTEM_DEFAULT.layers.map((l, id) => {
-        const bindings = l.bindings.map(conv);
+        const bindings = l.bindings.map(([behaviorId, param1, param2]) => bind(behaviorId, param1, param2));
         if (bindings.length !== n) {
             throw new Error(`zmk-offline: totem layer ${l.name} has ${bindings.length} bindings (want ${n})`);
         }
         return { id, name: l.name, bindings };
     });
 }
+
+function totemCombos(family) {
+    return Array.from({ length: dims(family).comboSlots }, (_, i) => {
+        const c = TOTEM_DEFAULT.combos[i];
+        return c
+            ? { positions: [...c.positions], action: COMBO_ACTION.behavior, behaviorId: c.behaviorId,
+                param1: c.param1, param2: c.param2, timeoutMs: c.timeoutMs,
+                priorIdleMs: c.priorIdleMs, layer: c.layer ?? COMBO_LAYER_ANY }
+            : emptyComboV3();
+    });
+}
+const defaultCombosFor = (family) => (family === 'totem' ? totemCombos(family) : defaultCombos());
 
 // ---------------------------------------------------------------------------
 // Template workspace
@@ -529,7 +534,7 @@ export function createZmkTemplate(family) {
             nextLayerId: layers.length,
             unsaved: false,
             // v14: the imported devicetree combos ARE the boot table.
-            combos: defaultCombos(),
+            combos: defaultCombosFor(family),
             macros: Array.from({ length: dims(family).macroSlots }, () =>
                 Array.from({ length: dims(family).macroSteps }, () => ({ action: MACRO_ACTION.empty, param: 0 }))),
             rgb: Array.from({ length: dims(family).rgbLayers }, () =>
@@ -584,7 +589,7 @@ export function normalizeZmkWorkspace(ws) {
         // a stored older workspace does the same (mirrors flask_combos
         // settings restore; keeping old slots would shadow the defaults).
         if (storedVersion < 14) {
-            ws.zmk.combos = defaultCombos();
+            ws.zmk.combos = defaultCombosFor(ws.family);
             ws.zmkDirty.combo = {};
         }
         // v12: stored usage-only combos migrate to the typed shape; v14
@@ -997,17 +1002,17 @@ export class OfflineStudioClient extends EventTarget {
         return {
             activeLayoutIndex: 0,
             layouts: [{
-                name: this.ws.family === 'totem' ? 'TOTEM' : 'Imprint',
-                keys: geomFor(this.ws.family).map((k) => ({ x: k.x, y: k.y, w: k.w ?? 1, h: k.h ?? 1, r: 0, rx: 0, ry: 0 })),
+                name: this.ws.family === 'totem' ? TOTEM_LAYOUT.name : 'Imprint',
+                keys: geomFor(this.ws.family).map((k) => ({ x: k.x, y: k.y, w: k.w ?? 1, h: k.h ?? 1, r: k.r ?? 0, rx: k.rx ?? 0, ry: k.ry ?? 0 })),
             }],
         };
     }
 
     async getKeymap() { return structuredClone(this.ws.zmk.keymap); }
 
-    async listAllBehaviors() { return [...BEHAVIORS.keys()]; }
+    async listAllBehaviors() { return [...catalogFor(this.ws.family).keys()]; }
     async getBehaviorDetails(id) {
-        const d = BEHAVIORS.get(id);
+        const d = catalogFor(this.ws.family).get(id);
         if (!d) throw new Error(`unknown behavior ${id}`);
         return structuredClone(d);
     }
@@ -1017,7 +1022,7 @@ export class OfflineStudioClient extends EventTarget {
         if (!layer || keyPosition < 0 || keyPosition >= layer.bindings.length) {
             throw new Error('invalid location');
         }
-        const d = BEHAVIORS.get(binding.behaviorId);
+        const d = catalogFor(this.ws.family).get(binding.behaviorId);
         if (!d) throw new Error('INVALID_BEHAVIOR');
         // Firmware-faithful validation (zmk_behavior_validate_binding):
         // a behavior with no metadata at all is rejected outright
@@ -1066,7 +1071,7 @@ export class OfflineStudioClient extends EventTarget {
             layers: this.ws.zmk.keymapSaved.layers.map((l) => ({
                 name: l.name,
                 bindings: l.bindings.map((b) => ({
-                    behavior: BEHAVIORS.get(b.behaviorId)?.displayName ?? null,
+                    behavior: catalogFor(this.ws.family).get(b.behaviorId)?.displayName ?? null,
                     behaviorId: b.behaviorId,
                     param1: b.param1,
                     param2: b.param2,
@@ -1101,7 +1106,8 @@ export class OfflineStudioClient extends EventTarget {
         const layer = {
             id: this.ws.zmk.nextLayerId++,
             name: '',
-            bindings: Array.from({ length: dims(this.ws.family).positions }, TR),
+            bindings: Array.from({ length: dims(this.ws.family).positions },
+                () => bind(transparentFor(this.ws.family))),
         };
         km.layers.push(layer);
         km.availableLayers -= 1;

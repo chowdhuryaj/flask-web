@@ -1222,22 +1222,57 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(Object.keys(ws.tunables).length > 0, true, 'totem still seeds combos/macros/leader tunables');
     eq(Object.keys(im.tunables).length > Object.keys(ws.tunables).length, true, 'imprint seeds more tunables than totem');
 
-    // Generated default must match the firmware keymap (skipped, loudly,
-    // while config/totem.keymap does not exist yet).
-    const { generate, parseKeymap, KEYMAP_PATH } = await import('./gen-totem-default.mjs');
+    // Generator on a tiny inline fixture: modifier functions, defines, custom
+    // nodes (named / blank), combos with a layer filter, unsupported tracking.
+    const { generate, generateLayout, parseKeymap, parseLayout, FIRMWARE_ROOT } = await import('./gen-totem-default.mjs');
     const { existsSync, readFileSync } = await import('node:fs');
-    const fx = parseKeymap(readFileSync(new URL('./tests/fixtures/totem-sample.keymap', import.meta.url), 'utf8'));
-    eq(fx.layers.length, 2, 'generator parses fixture layers');
-    eq(JSON.stringify(fx.layers[0].bindings[2]), '["mt",225,4]', 'generator maps &mt LSHFT A');
-    eq(fx.unsupported[0], '&foo', 'generator reports unsupported behaviors');
-    if (existsSync(KEYMAP_PATH)) {
-        const src = readFileSync(KEYMAP_PATH, 'utf8');
-        const onDisk = readFileSync(new URL('./zmk-totem-default.js', import.meta.url), 'utf8');
-        eq(onDisk === generate(src, 'config/totem.keymap'), true,
-            'zmk-totem-default.js is stale vs totem.keymap — run: node gen-totem-default.mjs');
+    const { join } = await import('node:path');
+    const fx = parseKeymap(`
+#define L_B 0
+#define L_N 1
+/ {
+  behaviors {
+    named: named { compatible = "zmk,behavior-hold-tap"; display-name = "Named HT"; #binding-cells = <2>; bindings = <&mo>, <&kp>; };
+    blank: blank { compatible = "zmk,behavior-adaptive-key"; #binding-cells = <0>; };
+  };
+  flask_combos_defaults { compatible = "flask,combos-defaults";
+    c1 { bindings = <&kp LG(LS(Z))>; key-positions = <0 1>; timeout-ms = <35>; layers = <L_B>; };
+  };
+  keymap { compatible = "zmk,keymap";
+    base { bindings = <&kp EXCL &named L_N Q &blank &mt LC(X) LC(C) &nope &trans>; };
+  };
+};`);
+    const nm = (id) => fx.behaviors.find((d) => d.id === id);
+    const b0 = fx.layers[0].bindings;
+    eq(b0[0][1], ((0x07 << 16) | 0x1E | (0x02 << 24)) >>> 0, 'EXCL = LS(N1)');
+    eq(nm(b0[1][0]).displayName, 'Named HT', 'display-name is the device name');
+    eq(b0[1][1], 1, 'define resolved (L_N)');
+    eq(nm(b0[2][0]).displayName, '', 'node without display-name lists blank');
+    eq(nm(b0[2][0]).metadata.length, 0, 'third-party behavior is metadata-less');
+    eq(b0[3][1], ((0x07 << 16) | 0x1B | (0x01 << 24)) >>> 0, 'LC(X) carries the ctrl mod bit');
+    eq(fx.unsupported.length, 1, 'unknown behavior is reported');
+    eq(fx.combos[0].param1, ((0x07 << 16) | 0x1D | (0x0A << 24)) >>> 0, 'nested LG(LS(Z)) mods combine');
+    eq(fx.combos[0].layer, 0, 'combo layers = <L_B> -> layer 0');
+
+    // The shipped data: nothing untranslated, 38 positions everywhere, 27 combos.
+    eq(TOTEM_DEFAULT.unsupported.length, 0, 'totem keymap fully translated (unsupported is empty)');
+    eq(TOTEM_DEFAULT.layers.every((l) => l.bindings.length === 38), true, 'every totem layer has 38 bindings');
+    const ids = new Set(TOTEM_DEFAULT.behaviors.map((d) => d.id));
+    eq(TOTEM_DEFAULT.layers.every((l) => l.bindings.every((b) => ids.has(b[0]))), true, 'every binding names a catalog behavior');
+    eq(ws.zmk.combos.filter((c) => c.positions.length).length, TOTEM_DEFAULT.combos.length, 'offline combo slots seeded from the keymap defaults');
+
+    // Generated files must match the firmware (skipped, loudly, if the repo is absent).
+    const km = join(FIRMWARE_ROOT, 'config/totem.keymap');
+    const ly = join(FIRMWARE_ROOT, 'boards/shields/totem/totem.dtsi');
+    if (existsSync(km) && existsSync(ly)) {
+        const rd = (f) => readFileSync(f, 'utf8');
+        const here = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+        const STALE = 'is stale vs the firmware — run: node gen-totem-default.mjs';
+        eq(here('./zmk-totem-default.js') === generate(rd(km), 'config/totem.keymap'), true, `zmk-totem-default.js ${STALE}`);
+        eq(here('./zmk-totem-layout.js') === generateLayout(rd(ly), 'boards/shields/totem/totem.dtsi'), true, `zmk-totem-layout.js ${STALE}`);
+        eq(parseLayout(rd(ly)).keys.length, 38, 'firmware physical layout has 38 keys');
     } else {
-        eq(TOTEM_DEFAULT.placeholder, true, 'no totem.keymap yet, default must be the placeholder');
-        console.log('zmk-studio-test: NOTE totem.keymap missing — default is a PLACEHOLDER, staleness check pending');
+        console.log('zmk-studio-test: NOTE firmware repo missing — staleness checks skipped');
     }
 }
 
