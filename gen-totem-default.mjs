@@ -23,7 +23,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-export const FIRMWARE_ROOT = join(homedir(), 'Archive/ZMK-Flask/Totem-ZMK');
+export const FIRMWARE_ROOT = join(homedir(), 'dev/Input/Flask-Svalboard/Totem-ZMK');
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const OUT_DEFAULT = join(HERE, 'zmk-totem-default.js');
 export const OUT_LAYOUT = join(HERE, 'zmk-totem-layout.js');
