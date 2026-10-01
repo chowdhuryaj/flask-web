@@ -1137,4 +1137,54 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(bareUsage(kpParam(0x06)), kpParam(0x06), 'bareUsage is a no-op on a plain key');
 }
 
+// ---- totem family (38-key split, keys only) ----
+{
+    const { ZMK_FAMILY_CODES, ZMK_FAMILIES, ZMK_FAMILY_LABELS, ZMK_EXPECTED_PROTOCOL,
+            zmkCapabilities, zmkProfile, zmkFamilyCandidate, confirmZmkFamily,
+            zmkFamilyMismatch } = await import('./zmk.js');
+    eq(ZMK_FAMILY_CODES[5], 'totem', 'meta family code 5 = totem');
+    eq(ZMK_FAMILY_CODES[4], 'imprint', 'meta family code 4 stays imprint');
+    eq(ZMK_FAMILIES.includes('totem'), true, 'totem is a ZMK family');
+    eq(ZMK_FAMILY_LABELS.totem, 'TOTEM (ZMK)', 'totem label');
+    eq(ZMK_EXPECTED_PROTOCOL.totem, ZMK_EXPECTED_PROTOCOL.imprint, 'totem shares the imprint version line');
+    // Shared VID/PID stays a candidate (imprint); meta 0x03 decides 4 vs 5.
+    eq(zmkFamilyCandidate(0x1D50, 0x615E), 'imprint', 'VID/PID is only a candidate');
+    const fake = (code) => ({ getU16: async () => code });
+    eq(await confirmZmkFamily(fake(5), 'imprint'), 'totem', 'meta 5 resolves candidate to totem');
+    eq(await confirmZmkFamily(fake(4), 'imprint'), 'imprint', 'meta 4 resolves to imprint');
+    eq(await confirmZmkFamily({ getU16: async () => { throw new Error('x'); } }, 'imprint'),
+        'imprint', 'pre-family firmware keeps the candidate');
+
+    const v = ZMK_EXPECTED_PROTOCOL.imprint;
+    const tc = zmkCapabilities('totem', v);
+    for (const k of ['mouse', 'accel', 'scrollSnap', 'scrollSpeed', 'ballSwap', 'gestures',
+        'autoMouse', 'autoMouseLatch', 'autoMouseExtend', 'autoscroll', 'autoscrollStopOnKey',
+        'rgbMap', 'rgbBrightness', 'rgbIdleTimeout', 'rgbLedOrder', 'rgbEffects']) {
+        eq(tc[k], false, `totem caps.${k} off`);
+    }
+    for (const k of ['flask', 'zmkStudio', 'combos', 'macros', 'leader', 'customShift',
+        'tapDance', 'keyState', 'hudLayer']) {
+        eq(tc[k], true, `totem caps.${k} on`);
+    }
+    eq(zmkProfile('totem').name, 'TOTEM (ZMK)', 'totem profile name');
+    eq(zmkProfile('totem').decorations.length, 0, 'totem has no trackball decorations');
+
+    // Imprint unchanged: pointing + RGB caps still on at the current version.
+    const ic = zmkCapabilities('imprint', v);
+    for (const k of ['mouse', 'accel', 'scrollSnap', 'scrollSpeed', 'ballSwap', 'gestures',
+        'autoMouse', 'autoscroll', 'rgbMap', 'rgbBrightness', 'rgbIdleTimeout', 'rgbLedOrder',
+        'rgbEffects', 'combos', 'macros', 'leader', 'customShift', 'tapDance', 'keyState']) {
+        eq(ic[k], true, `imprint caps.${k} on at v${v}`);
+    }
+    eq(zmkCapabilities('imprint', null).mouse, false, 'imprint without Flask HID: no mouse');
+    eq(zmkProfile('imprint').decorations.length, 2, 'imprint keeps its two trackballs');
+
+    // Export/import family guard.
+    eq(zmkFamilyMismatch('imprint', 'imprint'), null, 'same family imports');
+    eq(zmkFamilyMismatch(undefined, 'imprint'), null, 'legacy file (no family) = imprint');
+    eq(/TOTEM \(ZMK\)/.test(zmkFamilyMismatch('imprint', 'totem')), true, 'imprint file refused on totem');
+    eq(zmkFamilyMismatch(undefined, 'totem') !== null, true, 'legacy file refused on totem');
+    eq(zmkFamilyMismatch('totem', 'imprint') !== null, true, 'totem file refused on imprint');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

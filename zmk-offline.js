@@ -1012,6 +1012,7 @@ export class OfflineStudioClient extends EventTarget {
         this.ws.zmk.pendingKeymap = {
             kind: 'flask-zmk-keymap',
             version: 1,
+            family: 'imprint',
             device: 'Cyboard Imprint (ZMK) preview',
             exported: new Date().toISOString(),
             layers: this.ws.zmk.keymapSaved.layers.map((l) => ({

@@ -13,7 +13,7 @@ import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=49';
 import { zmkApplyPendingKeymap } from './zmk-offline.js?v=49';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=49';
 import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=49';
-import { ZMK_VIDPID } from './zmk.js?v=49';
+import { ZMK_VIDPID, zmkFamilyMismatch } from './zmk.js?v=49';
 import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=49';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
@@ -540,6 +540,7 @@ export class ZmkKeymapTab {
         const data = {
             kind: 'flask-zmk-keymap',
             version: 2,
+            family: this.app?.profile?.family ?? this.app?.family,
             device: this.deviceName,
             exported: new Date().toISOString(),
             // Display name first-class: behavior ids can shift across
@@ -581,7 +582,9 @@ export class ZmkKeymapTab {
             toast('Not a JSON file', true);
             return;
         }
-        await this.applyKeymapData(data);
+        // null = refused (not a keymap export, or another family's file) —
+        // the module state must not land either.
+        if (await this.applyKeymapData(data) === null) return;
         // v2 files carry module state (tunables/RGB/slot tables) — apply it
         // through the Flask channels + SAVE. Auto-sync's queued keymaps never
         // carry this section (module edits ride their own journals).
@@ -606,6 +609,11 @@ export class ZmkKeymapTab {
     async applyKeymapData(data, { quiet = false } = {}) {
         if (data?.kind !== 'flask-zmk-keymap' || !Array.isArray(data.layers)) {
             toast('Not a flask ZMK keymap export', true);
+            return null;
+        }
+        const mismatch = zmkFamilyMismatch(data.family, this.app?.profile?.family ?? this.app?.family);
+        if (mismatch) {
+            toast(mismatch, true);
             return null;
         }
         const behaviors = zmkBehaviors();

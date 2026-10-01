@@ -108,6 +108,7 @@ export class ZmkModesTab {
         if (!mode || !kt) { toast('Open the Keymap tab first', true); return; }
         this._guard(async () => {
             const r = await kt.applyKeymapData(mode.data, { quiet: true });
+            if (r === null) return;   // refused (e.g. other family) — apply nothing
             let note = '';
             if (mode.data.flask && this.app?.flask && this.app?.caps?.flask) {
                 // save:false — this is the whole mechanic. Live on the device,
@@ -115,7 +116,6 @@ export class ZmkModesTab {
                 const f = await applyFlaskState(this.app, mode.data.flask, { save: false });
                 if (f.failures.length) note = ` (${f.failures.length} section(s) skipped)`;
             }
-            if (r === null) return;   // applyKeymapData already explained why
             toast(`"${mode.name}" applied live — Save to keep it${note}`);
         });
     }
