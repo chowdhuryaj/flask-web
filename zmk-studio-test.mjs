@@ -1142,7 +1142,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     const { ZMK_FAMILY_CODES, ZMK_FAMILIES, ZMK_FAMILY_LABELS, ZMK_EXPECTED_PROTOCOL,
             zmkCapabilities, zmkProfile, zmkFamilyCandidate, confirmZmkFamily,
             zmkFamilyMismatch } = await import('./zmk.js');
-    eq(ZMK_FAMILY_CODES[5], 'totem', 'meta family code 5 = totem');
+    eq(ZMK_FAMILY_CODES[6], 'totem', 'meta family code 6 = totem');
     eq(ZMK_FAMILY_CODES[4], 'imprint', 'meta family code 4 stays imprint');
     eq(ZMK_FAMILIES.includes('totem'), true, 'totem is a ZMK family');
     eq(ZMK_FAMILY_LABELS.totem, 'TOTEM (ZMK)', 'totem label');
@@ -1150,7 +1150,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     // Shared VID/PID stays a candidate (imprint); meta 0x03 decides 4 vs 5.
     eq(zmkFamilyCandidate(0x1D50, 0x615E), 'imprint', 'VID/PID is only a candidate');
     const fake = (code) => ({ getU16: async () => code });
-    eq(await confirmZmkFamily(fake(5), 'imprint'), 'totem', 'meta 5 resolves candidate to totem');
+    eq(await confirmZmkFamily(fake(6), 'imprint'), 'totem', 'meta 6 resolves candidate to totem');
     eq(await confirmZmkFamily(fake(4), 'imprint'), 'imprint', 'meta 4 resolves to imprint');
     eq(await confirmZmkFamily({ getU16: async () => { throw new Error('x'); } }, 'imprint'),
         'imprint', 'pre-family firmware keeps the candidate');
@@ -1207,7 +1207,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     const flask = new ZmkOfflineFlask(ws);
     const studio = new OfflineStudioClient(ws);
     eq(xy((await studio.getPhysicalLayouts()).layouts[0].keys), xy(TOTEM_GEOM), 'sim Studio layout = shared layout');
-    eq(await flask.getU16(0x00, 0x03), 5, 'offline totem answers meta family 5');
+    eq(await flask.getU16(0x00, 0x03), 6, 'offline totem answers meta family 6');
     const im = createZmkTemplate('imprint');
     im._notify = () => {};
     eq(await new ZmkOfflineFlask(im).getU16(0x00, 0x03), 4, 'offline imprint still answers meta family 4');

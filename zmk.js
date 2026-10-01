@@ -19,7 +19,7 @@ export const ZMK_VIDPID = { vid: 0x1D50, pid: 0x615E };
 
 // meta 0x03 family codes on the ZMK line. Codes 1-3 mirror the QMK family
 // names in the shared numbering but are never reported by a ZMK device.
-export const ZMK_FAMILY_CODES = { 4: 'imprint', 5: 'totem' };
+export const ZMK_FAMILY_CODES = { 4: 'imprint', 6: 'totem' };
 
 export const ZMK_FAMILIES = ['imprint', 'totem'];
 
