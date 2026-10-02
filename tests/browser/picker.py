@@ -80,7 +80,7 @@ def main():
         dock.locator('.bp-search').fill('')
 
         # Key 0 → Modifiers › Mod-tap, tap A, Fast → the sim gets Mod-Tap (fast 150).
-        page.locator('#panels .panel.active .kb-svg .keycap').first.click()
+        page.locator('.kb-svg .keycap').first.click()
         dock.locator('.bp-groups .chip', has_text='Modifiers').click()
         row = dock.locator('.bp-entry[data-entry="mod-tap"]')
         seg = row.locator('.bp-seg[aria-label="Timing"] .chip').all_inner_texts()

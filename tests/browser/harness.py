@@ -71,7 +71,7 @@ def open_workspace(page, label):
     page.goto(URL)
     page.locator('#offline-list .dev-item').filter(has_text=label).first.click()
     page.locator('#panels .panel.active').wait_for()
-    page.locator('#panels .panel.active .kb-svg .keycap').first.wait_for(timeout=10000)
+    page.locator('.kb-svg .keycap').first.wait_for(timeout=10000)
 
 
 def tab_ids(page):
