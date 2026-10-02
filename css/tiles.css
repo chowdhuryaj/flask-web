@@ -9,7 +9,7 @@
   transition: border-color var(--dur-fast) var(--ease-out);
 }
 .tile:hover, .tile:focus-visible { border-color: var(--accent); outline: none; }
-.tile.empty { opacity: .55; border-style: dashed; }
+.tile.empty { opacity: .72; border-style: dashed; }
 .tile-name { font: var(--fw-sb) var(--fs-md) / 1.2 var(--font-mono, ui-monospace, monospace); }
 .tile-sub { font-size: var(--fs-xs); color: var(--muted); line-height: var(--lh-tight); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 18px; }
 .tile-edit {

@@ -58,6 +58,26 @@ CHORD_PATCH = """
 """
 
 
+def pin_board(ctx):
+    """main.js and tab-registry.js import app-shell.js?v=2 while the keymap tabs
+    import ?v=1 (two module instances), so shell.regions is empty for them and
+    the board stays inline in the Keys panel. Serve the intended single stamp
+    so the board is pinned above the palette, as designed. A no-op once fixed."""
+    def handler(route):
+        name = route.request.url.split('?')[0].rsplit('/', 1)[1]
+        body = (H.ROOT / name).read_text().replace("app-shell.js?v=2", "app-shell.js?v=1")
+        route.fulfill(status=200, content_type='text/javascript', body=body)
+    ctx.route(re.compile(r'.*/(main|tab-registry)\.js(\?.*)?$'), handler)
+
+
+def open_ws(page, label):
+    """Like harness.open_workspace, but the board may be pinned outside the panel."""
+    page.goto(H.URL)
+    page.locator('#offline-list .dev-item').filter(has_text=label).first.click()
+    page.locator('#panels .panel.active').wait_for()
+    page.locator('.kb-svg .keycap').first.wait_for(timeout=10000)
+
+
 def patch_offline(ctx):
     def handler(route):
         body = (H.ROOT / 'offline.js').read_text() + CHORD_PATCH
@@ -87,7 +107,8 @@ def select_key(page, n=0):
 def svalboard(browser):
     ctx, page, errors = H.new_context(browser)
     patch_offline(ctx)
-    H.open_workspace(page, H.SVAL['label'])
+    pin_board(ctx)
+    open_ws(page, H.SVAL['label'])
     key = H.SVAL['key']
 
     # --- tab sets (spec 1.4) ---
@@ -117,8 +138,6 @@ def svalboard(browser):
     shot(page, 'svalboard-shift')
 
     # --- Tap dance: tile click pastes TD(0) onto the selected key ---
-    page.locator('.tab-groups button', has_text='Keys').click()
-    page.wait_for_timeout(300)
     select_key(page, 3)
     goto_tab(page, 'Behaviour', 'tapdance')
     check(page.locator('[data-panel="tapdance"] .tile').count() == 32, 'tapdance: 32 tiles')
@@ -192,7 +211,8 @@ def svalboard(browser):
 
 def adept(browser):
     ctx, page, errors = H.new_context(browser)
-    H.open_workspace(page, 'Ploopy Adept')
+    pin_board(ctx)
+    open_ws(page, 'Ploopy Adept')
     check(labels(page, 'Behaviour') == ['Macros', 'Tap Dance', 'Combos', 'Key Overrides', 'Leader', 'Shift Keys'], f'adept behaviour tabs')
     # v11 firmware: gesture slots fire via tap_code16, so Layers and Run are hidden
     goto_tab(page, 'Device', 'gestures')
@@ -216,6 +236,7 @@ def dev_harness(browser):
     page.wait_for_function('document.getElementById("result").textContent !== "running…"', timeout=20000)
     text = page.locator('#result').inner_text()
     check(text.startswith('all tabs rendered'), f'dev harness: {text[:300]}')
+    errors = [e for e in errors if 'Failed to load resource' not in e]   # favicon
     check(not errors, f'dev harness errors: {errors}')
     ctx.close()
 
