@@ -217,7 +217,7 @@ export function parseKeymap(src) {
     const byLabel = {};
     const add = (label, displayName, metadata) => {
         const id = behaviors.length + 1;
-        behaviors.push({ id, displayName, metadata });
+        behaviors.push({ id, displayName, metadata, node: label });
         byLabel[label] = id;
     };
     for (const [label, [name, md]] of Object.entries(STOCK)) add(label, name, md);
