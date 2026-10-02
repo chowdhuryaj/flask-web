@@ -504,3 +504,75 @@ export function downloadText(filename, text) {
     a.click();
     URL.revokeObjectURL(a.href);
 }
+
+// ---------- status bar "Save layout" / "Load" (spec 3.10) ----------
+// One pair of buttons, three file formats. Formats are unchanged from the
+// per-tab buttons they replace: .vil (QMK), keymap JSON v2 with `family`
+// (ZMK), flask-nape JSON (Nape). Non-QMK modules load on demand.
+
+/** Which file format the connected (or offline) board speaks. */
+export async function layoutLine(app) {
+    const family = app.profile?.family ?? app.family;
+    if (family === 'nape') return 'nape';
+    const { isZmkFamily } = await import('./zmk.js?v=51');
+    return isZmkFamily(family) ? 'zmk' : 'qmk';
+}
+
+/** Save layout. Returns {line, filename|null}; ZMK's keymap tab names and
+ * downloads its own file, so filename is null there. Throws on failure. */
+export async function saveLayoutFile(app) {
+    const line = await layoutLine(app);
+    if (line === 'qmk') {
+        const text = await exportVil(app);
+        const filename = `${(app.profile?.name ?? 'layout').replace(/[^\w-]+/g, '_')}.vil`;
+        downloadText(filename, text);
+        return { line, filename };
+    }
+    if (line === 'nape') {
+        const { buildNapeExport, downloadNapeExport } = await import('./nape-export.js?v=49');
+        downloadNapeExport(await buildNapeExport(app));
+        return { line, filename: null };
+    }
+    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=50');
+    const kt = zmkLiveKeymapTab();
+    if (!kt?.keymap) throw new Error('the keymap is still loading');
+    await kt.exportKeymap();
+    return { line, filename: null };
+}
+
+/** Load. Returns {line, message, warn}; message is null when the target
+ * module already toasted (ZMK). `ask(text) → bool` confirms a Nape firmware
+ * mismatch (default window.confirm). Throws on failure. */
+export async function loadLayoutFile(app, file, { ask = (t) => confirm(t) } = {}) {
+    const line = await layoutLine(app);
+    if (line === 'qmk') {
+        const stats = await importVil(app, await file.text());
+        let message = `Applied ${stats.applied} items`;
+        if (stats.skipped) message += `, ${stats.skipped} named keycodes skipped`;
+        if (stats.notes.length) message += ` — ${stats.notes.join('; ')}`;
+        return { line, message, warn: stats.notes.length > 0 };
+    }
+    if (line === 'nape') {
+        const { applyNapeImport } = await import('./nape-export.js?v=49');
+        let data;
+        try { data = JSON.parse(await file.text()); } catch { throw new Error('that file is not valid JSON'); }
+        if (data.firmware && data.firmware !== app.napeFirmware
+            && !ask(`This backup came from ${data.firmware}, the device runs ${app.napeFirmware}. `
+                + 'Keychron changes the stock keymap between releases. Restore anyway?')) {
+            return { line, message: 'Restore cancelled', warn: false };
+        }
+        const report = await applyNapeImport(app, data);
+        const bad = report.filter((r) => !r.ok);
+        return {
+            line, warn: bad.length > 0,
+            message: bad.length
+                ? `Restored with ${bad.length} problem(s): ${bad.map((b) => b.name).join(', ')}`
+                : `Restored: ${report.map((r) => r.name).join(', ')}`,
+        };
+    }
+    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=50');
+    const kt = zmkLiveKeymapTab();
+    if (!kt?.keymap) throw new Error('the keymap is still loading');
+    await kt.importKeymap(file);
+    return { line, message: null, warn: false };
+}

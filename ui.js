@@ -216,7 +216,7 @@ export function saveBar(onSave, note) {
 function announceEdit(node) {
     node.dispatchEvent(new CustomEvent('flask-edit', { bubbles: true }));
 }
-if (typeof document !== 'undefined') {
+if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('flask-edit', (e) => {
         const bar = e.target.closest?.('.card')?.querySelector('[data-reload-bar]');
         bar?.markEdited?.();
