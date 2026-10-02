@@ -39,15 +39,16 @@ export class HUD {
         // feel, bench 5 ask). The in-page overlay stays the last fallback.
         if (navigator.userAgent.includes('Electron')) {
             try {
-                const saved = JSON.parse(localStorage.getItem('flask-hud-window-frame') || 'null');
-                const feats = `popup,width=${saved?.w ?? 460},height=${saved?.h ?? 300}`
-                    + (saved ? `,left=${saved.x},top=${saved.y}` : '');
+                // Frame (size, position, corner snap) is owned by the main
+                // process (desktop/main.js writes hud-bounds.json); these
+                // features are only the first-run default.
+                const feats = 'popup,width=460,height=300';
                 const w = window.open('about:blank', 'flask-hud', feats);
                 if (w) {
                     this.win = w;
                     this._electronWin = true;
                     this._dressWindow(w);
-                    w.document.title = 'Flask HUD';
+                    w.document.title = 'Totem-Flask HUD';
                     // Frameless window: the whole HUD is the drag handle,
                     // controls opt out (app-region CSS in styles.css).
                     w.document.body.classList.add('hud-electron');
@@ -103,16 +104,6 @@ export class HUD {
         this.open = false;
         clearInterval(this._timer);
         this._timer = null;
-        // Electron popup: remember where AJ put it (window features on the
-        // next open — Electron persists nothing itself).
-        if (this._electronWin && this.win && !this.win.closed) {
-            try {
-                localStorage.setItem('flask-hud-window-frame', JSON.stringify({
-                    x: this.win.screenX, y: this.win.screenY,
-                    w: this.win.outerWidth, h: this.win.outerHeight,
-                }));
-            } catch { /* frame save is best-effort */ }
-        }
         try { this.win?.close(); } catch { /* already closed */ }
         this.win = null;
         this._electronWin = false;

@@ -1,8 +1,8 @@
 {
-  "name": "flask-desktop",
-  "productName": "Flask",
-  "version": "1.0.0",
-  "description": "Desktop wrapper for the Flask web configurator — bundled Chromium with WebHID + WebSerial, no Chrome install needed",
+  "name": "totem-flask-desktop",
+  "productName": "Totem-Flask",
+  "version": "2.0.0",
+  "description": "Totem-Flask: the Flask web configurator in its own Chromium (WebHID + WebSerial), installs next to the native Flask.app",
   "private": true,
   "main": "main.js",
   "author": "AJ Chowdhury",
@@ -10,21 +10,23 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --mac",
-    "dist:dir": "electron-builder --mac --dir",
-    "dist:win": "electron-builder --win"
+    "dist:dir": "electron-builder --mac --dir && codesign --force --deep -s - dist/mac-arm64/Totem-Flask.app",
+    "dist:win": "electron-builder --win",
+    "install-app": "sh install-app.sh"
   },
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "dev.aj.flask",
-    "productName": "Flask",
+    "appId": "dev.aj.totem-flask",
+    "productName": "Totem-Flask",
     "directories": {
       "output": "dist"
     },
     "files": [
       "main.js",
+      "preload.js",
       "package.json"
     ],
     "extraResources": [
@@ -35,25 +37,47 @@
           "*.js",
           "*.html",
           "*.css",
+          "css/**",
           "vendor/**",
           "!desktop/**",
           "!node_modules/**",
-          "!zmk-studio-test.mjs"
+          "!tests/**"
         ]
       }
     ],
     "mac": {
       "category": "public.app-category.utilities",
       "target": [
-        { "target": "dmg", "arch": ["arm64"] },
-        { "target": "zip", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
-      "identity": null
+      "identity": null,
+      "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "Totem-Flask talks to your keyboard over Bluetooth to read and change its settings.",
+        "NSBluetoothPeripheralUsageDescription": "Totem-Flask talks to your keyboard over Bluetooth to read and change its settings."
+      }
     },
     "win": {
       "target": [
-        { "target": "zip", "arch": ["x64"] }
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
-    }
+    },
+    "artifactName": "Totem-Flask-${version}-${arch}.${ext}"
   }
 }
