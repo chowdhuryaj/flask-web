@@ -271,16 +271,25 @@ const legacyAvailable = () => fs.existsSync(path.join(OLD_PROFILE, 'Local Storag
  * binary on the old profile (TOTEM_LEGACY_DUMP=<out.json>) loads that origin
  * hidden and dumps the flask-* localStorage keys; see runLegacyDump(). */
 function dumpLegacy(profileDir) {
+    // The child never opens the real old profile: it runs on a temp copy of
+    // just its Local Storage, so nothing it does can rewrite the 1.x data.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'totem-flask-legacy-'));
+    const out = path.join(tmp, 'dump.json');
+    try {
+        fs.cpSync(path.join(profileDir, 'Local Storage'), path.join(tmp, 'profile', 'Local Storage'), { recursive: true });
+    } catch (e) {
+        fs.rmSync(tmp, { recursive: true, force: true });
+        return Promise.reject(e);
+    }
     return new Promise((resolve, reject) => {
-        const out = path.join(os.tmpdir(), `totem-flask-legacy-${process.pid}.json`);
-        execFile(process.execPath, [`--user-data-dir=${profileDir}`], {
+        execFile(process.execPath, [`--user-data-dir=${path.join(tmp, 'profile')}`], {
             env: { ...process.env, TOTEM_LEGACY_DUMP: out }, timeout: 30000,
         }, (err) => {
-            try {
-                const data = JSON.parse(fs.readFileSync(out, 'utf8'));
-                fs.rmSync(out, { force: true });
-                resolve(data);
-            } catch (e) { reject(err || e); }
+            let data;
+            try { data = JSON.parse(fs.readFileSync(out, 'utf8')); }
+            catch (e) { data = { __error: (err || e).message }; }
+            fs.rmSync(tmp, { recursive: true, force: true });
+            if (data.__error) reject(new Error(data.__error)); else resolve(data);
         });
     });
 }
