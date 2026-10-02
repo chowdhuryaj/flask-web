@@ -699,6 +699,7 @@ export function discardOfflineQueued(ws) {
 // Flask frame stand-in
 
 export class ZmkOfflineFlask extends OfflineFlask {
+    line = 'zmk';
     constructor(ws) {
         super(ws);
         normalizeZmkWorkspace(ws);

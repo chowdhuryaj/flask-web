@@ -155,6 +155,7 @@ const CORNER_OFFLINE_MSG = 'chords are read-only offline (connect the keyboard t
 
 export class OfflineFlask {
     constructor(ws) { this.ws = ws; }
+    line = 'qmk';   // ZmkOfflineFlask: 'zmk' (0x28 is tap dance there)
 
     async getU16(ch, id) {
         if (ch === CH.corner && id === V.ccDefCount && this.ws.corner?.defs) return this.ws.corner.defs.length;
@@ -177,7 +178,7 @@ export class OfflineFlask {
     _journal(ch, id, op, val) {
         // Corner chords (0x28) persist on the SET itself; replaying one would
         // also SAVE 0x28 on reconnect, which wedges the Svalboard. Refuse.
-        if (ch === CH.corner) throw new Error(CORNER_OFFLINE_MSG);
+        if (ch === CH.corner && this.line !== 'zmk') throw new Error(CORNER_OFFLINE_MSG);
         const k = tk(ch, id);
         if (LIVE_SET.has(k) || ch === CH.meta) return; // transient — drop
         this.ws.tunables[k] = { op, val };
@@ -431,7 +432,7 @@ export async function syncWorkspace(app, ws) {
     }
     // Backstop: never SAVE the corner channel (wedges the Svalboard), even if
     // an old workspace journaled a 0x28 tunable before _journal refused it.
-    touched.delete(CH.corner);
+    if (app.flask.line !== 'zmk') touched.delete(CH.corner);   // ZMK 0x28 = tap dance
     for (const ch of touched) {
         try { await app.flask.save(ch); } catch { /* DPI-style no-op channels */ }
     }

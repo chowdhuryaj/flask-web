@@ -45,4 +45,13 @@ await p.save(CH.dpi); checks++;
 p.line = 'zmk';
 await p.save(CH.tapDance); checks++;   // ZMK 0x28 = tap dance, legit
 assert.deepEqual(sent.map((s) => s[1]), [CH.dpi, CH.tapDance]); checks++;
+// ZMK line keeps 0x28 (tap dance): replay still saves it there.
+ws.dirty.tun[`${CH.tapDance}:1`] = { op: 'u16', val: 1 };
+saved.length = 0;
+app.flask.line = 'zmk';
+await syncWorkspace(app, ws);
+assert.ok(saved.includes(CH.tapDance), 'ZMK replay saves 0x28 tap dance'); checks++;
+const { ZmkOfflineFlask } = await import('../zmk-offline.js?v=60');
+const { createZmkTemplate } = await import('../zmk-offline.js?v=60');
+await new ZmkOfflineFlask(createZmkTemplate('imprint')).setU16(CH.tapDance, 1, 1); checks++;
 console.log(`corner-save-guard-test: ${checks} checks OK`);
