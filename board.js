@@ -32,7 +32,6 @@
 import { el, svgEl, toast } from './ui.js?v=49';
 import { capLabel, hoverText } from './keycodes.js?v=49';
 import { capParts as catalogCapParts } from './behavior-catalog.js?v=1';
-import { openPicker } from './binding-picker.js?v=1';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 export const GAP = 5;
@@ -62,13 +61,14 @@ export function keyCorners(k) {
 /** Pixel layout for a set of items ({x,y,w,h,r?,rx?,ry?} in key units).
  * Rotated corners count toward the frame, so rotated thumbs stay inside. */
 export function layoutOf(items, scale = 1) {
-    let minX = 0, minY = 0, maxX = 1, maxY = 1;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const it of items) {
         for (const [px, py] of keyCorners(it)) {
             minX = Math.min(minX, px); minY = Math.min(minY, py);
             maxX = Math.max(maxX, px); maxY = Math.max(maxY, py);
         }
     }
+    if (!items.length) { minX = minY = 0; maxX = maxY = 1; }
     const unit = baseUnit(maxX - minX) * scale;
     const frame = (k) => {
         const w = k.w * unit - GAP, h = k.h * unit - GAP;
@@ -101,19 +101,27 @@ export function splitCap(label) {
     return { top: '', main: s };
 }
 
-function partsOf(value, profile, opts) {
-    if (opts.partsFor) return opts.partsFor(value);
+// Parentheses in a top label are a device display name chopped by an
+// abbreviation ("Hold-Tap L (live)" → "HL("). Drop them; the top line is a
+// hint, the full binding is in the caption.
+const cleanTop = (p) => ({ ...p, top: p.top.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim() });
+
+/** The stacked pair for one binding value: catalog split when WP3 provides
+ * one, else the label split at its last '·'. */
+export function capPartsOf(value, profile, opts = {}) {
+    if (opts.partsFor) return cleanTop(opts.partsFor(value));
     const adapter = profile.capAdapter ?? (profile.labelFor ? null : 'qmk');
     let label;
     if (adapter) {
         const p = catalogCapParts(value, adapter);
-        if (p?.top) return p;       // WP3's real split wins once it lands
+        if (p?.top) return cleanTop(p);       // WP3's real split wins once it lands
         label = p?.main ?? '';
     } else {
         label = profile.labelFor(value);
     }
-    return splitCap(label);
+    return cleanTop(splitCap(label));
 }
+const partsOf = capPartsOf;
 
 /** Fit `text` into maxW at font size fs: one line, else two lines split at a
  * space, else shrink to minScale × fs, else ellipsise. Glyph width is
@@ -470,6 +478,7 @@ class Board extends EventTarget {
         } else if (inline) {
             inline.replaceChildren(this.#barEl, this.#boardEl);
         }
+        this.refresh();
     }
 
     /** Hand over a device. Returns unbind(); rebinding the same adapter keeps
@@ -501,7 +510,8 @@ class Board extends EventTarget {
     }
 
     refresh() {
-        if (!hasDom() || !this.#barEl) return;
+        if (!hasDom()) return;
+        this.#ensureDom();
         this.#renderBar();
         this.#renderBoard();
     }
@@ -529,9 +539,17 @@ class Board extends EventTarget {
         const a = this.#a;
         this.#closePopover();
         const surface = sel.kind === 'enc' ? (a.encoderSurface ?? a.surface) : a.surface;
-        this.#popover = openPicker({
-            surface, host: 'popover', anchor, app: a.app, value: a.bindingAt(this.#layer, sel),
-            onPick: (v) => { this.#popover = null; this.assign(v, { advance: false }); },
+        const value = a.bindingAt(this.#layer, sel);
+        // Loaded on demand: binding-picker pulls in the legacy ZMK picker,
+        // which imports keymap-tab, which imports this file.
+        let closed = false, close = null;
+        this.#popover = () => { closed = true; close?.(); };
+        import('./binding-picker.js?v=1').then(({ openPicker }) => {
+            if (closed) return;
+            close = openPicker({
+                surface, host: 'popover', anchor, app: a.app, value,
+                onPick: (v) => { this.#popover = null; this.assign(v, { advance: false }); },
+            });
         });
     }
 
@@ -669,7 +687,7 @@ class Board extends EventTarget {
                 onclick: async () => { await hud.toggle(); this.#renderBar(); },
             }));
         }
-        this.#barEl.replaceChildren(...kids);
+        this.#barEl.replaceChildren(...kids.filter(Boolean));
     }
 
     #renderBoard() {

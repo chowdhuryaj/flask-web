@@ -7,7 +7,7 @@ import { el, toast, card } from './ui.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
 import { board, renderKeyboardSVG } from './board.js?v=1';
 import { shell } from './app-shell.js?v=1';
-import { encoderCount, setLayerName } from './profiles.js?v=49';
+import { encoderCount, setLayerName, applyStoredLayerNames } from './profiles.js?v=49';
 
 export { renderKeyboardSVG };
 
@@ -31,6 +31,7 @@ export class KeymapTab {
                 this.encoders.push(layer);
             }
         }
+        applyStoredLayerNames(app.profile);   // offline workspaces freeze a profile copy
         board.bind(this.adapter);
         this.render();
     }
