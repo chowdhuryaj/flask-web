@@ -20,7 +20,8 @@ export function typedOf(o) {
         behaviorId: o.behaviorId ?? 0, param2: (o.param2 ?? 0) >>> 0 };
 }
 
-/** Row-button text for a typed output ('' when none). */
+/** Row-button text for a typed output ('' when none). The ONE place the
+ * Behaviour tabs turn a binding into words: swap this for wp3b's helper. */
 export function outText(o, surface) {
     const v = typedOf(o);
     if (!v) return '';

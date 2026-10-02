@@ -83,6 +83,9 @@ def main():
         page.locator('.kb-svg .keycap').first.click()
         dock.locator('.bp-groups .chip', has_text='Modifiers').click()
         row = dock.locator('.bp-entry[data-entry="mod-tap"]')
+        # The offline sim serves flask_holdtap (0x2A) now, so the picker defaults to
+        # live timing; pick the compiled source to exercise the variant chips.
+        row.locator('.bp-seg[aria-label="Timing source"] .chip', has_text='Compiled timing').click()
         seg = row.locator('.bp-seg[aria-label="Timing"] .chip').all_inner_texts()
         check(seg == ['Fast · 150 ms', 'Standard · 200 ms', 'Slow · 300 ms'], f'timing chips {seg}')
         row.locator('.bp-ctl', has_text='Tap').locator('.bp-key').click()

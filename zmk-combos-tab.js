@@ -21,7 +21,7 @@ import {
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
-    comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo,
+    comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
 } from './zmk-combos-codec.js?v=49';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=50';
 import { blurClicks, pickOutput, outText, installSlotSummary } from './zmk-behaviour-common.js?v=1';
@@ -92,10 +92,21 @@ export class ZmkCombosTab {
         return !this.timed && this.app.profile?.family === 'totem' ? TOTEM_DEFAULT.combos : [];
     }
 
+    /** Output text for a slot. A compiled devicetree macro has no Studio
+     * name ("Unnamed behavior #47"), so say what it is from the keymap. */
+    outLabel(i) {
+        const s = this.slots[i];
+        const t = outText(s, 'zmk.comboOutput');
+        if (!/^Unnamed behavior/.test(t)) return t;
+        const dt = this.app.profile?.family === 'totem' ? TOTEM_DEFAULT.combos[i] : null;
+        return dt && comboPosKey(dt.positions) === comboPosKey(s.positions)
+            ? `${dt.name.replaceAll('_', ' ')} (compiled)` : 'Compiled behavior';
+    }
+
     duplicateText(dup) {
         if (dup.kind === 'default') return `the keymap's compiled combo ${dup.index}`;
         const s = this.slots[dup.index];
-        const out = outText(s, 'zmk.comboOutput');
+        const out = this.outLabel(dup.index);
         return `Combo ${dup.index} (${posText(s.positions)}${out ? ` → ${out}` : ''})`;
     }
 
@@ -314,7 +325,7 @@ export class ZmkCombosTab {
     comboCard(i) {
         const s = this.slots[i];
         const live = !comboSlotV2IsEmpty(s);
-        const out = outText(s, 'zmk.comboOutput');
+        const out = this.outLabel(i);
         const auto = s.positions.length
             ? `${posText(s.positions)} → ${out || '…'}` : `New combo`;
         const fam = this.app.profile?.family ?? 'imprint';
@@ -400,7 +411,11 @@ export class ZmkCombosTab {
                     class: 'btn primary', text: '＋ New combo', 'data-act': 'new',
                     onclick: () => this.addCombo(),
                 }),
-                el('span', { class: 'note faint', text: `${used} of ${this.slotCount} slots in use` })),
+                el('span', { class: 'note faint', text: `${used} of ${this.slotCount} slots in use` }),
+                this.timingCard ? el('button', {
+                    class: 'btn small', text: 'Hold timing ↓', title: 'per-key and combo hold-tap timing',
+                    onclick: () => this.timingCard.scrollIntoView({ block: 'start' }),
+                }) : null),
             this.bar);
 
         this.root.replaceChildren(controls,
