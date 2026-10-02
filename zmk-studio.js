@@ -397,6 +397,16 @@ const RPC_TIMEOUT_MS = 2000;
 const SAVE_TIMEOUT_MS = 5000;   // settings flash write can be slow
 const PROBE_TIMEOUT_MS = 800;   // silent CDC port: give up fast, try the next
 
+function readPortHint(key) {
+    try {
+        const v = localStorage.getItem(`flask-studio-port:${key}`);
+        return v === null ? null : (Number.isInteger(+v) && +v >= 0 ? +v : null);
+    } catch { return null; }
+}
+function savePortHint(key, i) {
+    try { localStorage.setItem(`flask-studio-port:${key}`, String(i)); } catch { /* best effort */ }
+}
+
 /**
  * events: 'lockstate' {detail: 0|1} · 'unsaved' {detail: bool} · 'disconnect'
  */
@@ -431,7 +441,7 @@ export class StudioClient extends EventTarget {
      * shows two) and only one speaks Studio, so every port is probed with
      * get_device_info before it is kept.
      */
-    async connect({ filters = [], requestIfNeeded = true } = {}) {
+    async connect({ filters = [], requestIfNeeded = true, verify = null, hintKey = '' } = {}) {
         if (!StudioClient.supported()) {
             throw new StudioError('unsupported', 'WebSerial is not supported in this browser');
         }
@@ -442,22 +452,74 @@ export class StudioClient extends EventTarget {
             return !filters.length || filters.some((f) =>
                 info.usbVendorId === f.usbVendorId && info.usbProductId === f.usbProductId);
         };
-        for (const p of (await navigator.serial.getPorts()).filter(matches)) {
-            try {
-                if (await this._openAndProbe(p)) return;
-            } catch { /* busy: try the next one */ }
+        this._wrongBoard = false;
+        const wrongBoard = () => new StudioError('wrongBoard',
+            'That serial port belongs to a different board than the connected keyboard');
+        const granted = (await navigator.serial.getPorts()).filter(matches);
+        if (granted.length && await this._connectGranted(granted, verify, hintKey)) return;
+        if (!requestIfNeeded) {
+            throw this._wrongBoard ? wrongBoard() : new StudioError('cancelled', 'No granted serial port');
         }
-        if (!requestIfNeeded) throw new StudioError('cancelled', 'No granted serial port');
         let port;
         try {
             port = await navigator.serial.requestPort({ filters });
         } catch {
             throw new StudioError('cancelled', 'No serial port selected');
         }
-        if (!(await this._openAndProbe(port))) {
+        if (!(await this._attempt(port, verify))) {
+            if (this._wrongBoard) throw wrongBoard();
             throw new StudioError('timeout',
                 'That port did not answer ZMK Studio. Connect again and pick the other one.');
         }
+    }
+
+    /** Granted ports, remembered one first (per `hintKey`). Otherwise the
+     * candidates are probed in parallel with throwaway clients and opened for
+     * real in the order they answer: a silent CDC port used to cost
+     * PROBE_TIMEOUT_MS each, in series. */
+    async _connectGranted(granted, verify, hintKey) {
+        let rest = granted.map((_, i) => i);
+        const hint = readPortHint(hintKey);
+        if (hint !== null && hint < rest.length) {
+            rest.splice(hint, 1);
+            if (await this._attempt(granted[hint], verify)) return true;
+        }
+        if (rest.length === 1) {
+            if (!(await this._attempt(granted[rest[0]], verify))) return false;
+            savePortHint(hintKey, rest[0]);
+            return true;
+        }
+        const probeOne = async (i) => {
+            const probe = new StudioClient();
+            try { return { i, ok: await probe._openAndProbe(granted[i]) }; }
+            catch { return { i, ok: false }; }
+            finally { await probe.disconnect().catch(() => {}); }
+        };
+        const tasks = new Map(rest.map((i) => [i, probeOne(i)]));
+        while (tasks.size) {
+            const { i, ok } = await Promise.race(tasks.values());
+            tasks.delete(i);
+            if (ok && await this._attempt(granted[i], verify)) { savePortHint(hintKey, i); return true; }
+        }
+        return false;
+    }
+
+    /** Open + probe `port`; then `verify(client)` (caller's board check). A port
+     * that answers but fails verify is closed and flagged `_wrongBoard`. */
+    async _attempt(port, verify) {
+        try {
+            if (!(await this._openAndProbe(port))) return false;
+        } catch { return false; }       // busy: try the next one
+        let good = true;
+        if (verify) {
+            try { good = (await verify(this)) !== false; } catch { good = false; }
+        }
+        if (good) return true;
+        this._wrongBoard = true;
+        diag.log('studio-open', 'port answers Studio but is not the connected board, closed');
+        this._closing = true;
+        await this._teardown();
+        return false;
     }
 
     /** Open `port` and check it answers Studio; closes it again if not. */
@@ -529,17 +591,18 @@ export class StudioClient extends EventTarget {
     }
 
     _onFrame(frame) {
-        let fields;
+        // One undecodable frame (outer or nested) is dropped; the pending
+        // request then times out normally. It must never reach _readLoop's
+        // catch, which would tear the whole port down as "port dropped".
         try {
-            fields = readFields(frame);
+            const fields = readFields(frame);
+            const rr = bytesOf(fields, RESP_REQUEST_RESPONSE);
+            if (rr) { this._onRequestResponse(rr); return; }
+            const notif = bytesOf(fields, RESP_NOTIFICATION);
+            if (notif) this._onNotification(notif);
         } catch (e) {
             console.warn('studio: undecodable frame dropped:', e.message);
-            return;
         }
-        const rr = bytesOf(fields, RESP_REQUEST_RESPONSE);
-        if (rr) { this._onRequestResponse(rr); return; }
-        const notif = bytesOf(fields, RESP_NOTIFICATION);
-        if (notif) this._onNotification(notif);
     }
 
     _onRequestResponse(bytes) {

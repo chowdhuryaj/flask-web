@@ -63,6 +63,9 @@
           ]
         }
       ],
+      "electronLanguages": [
+        "en"
+      ],
       "identity": null,
       "icon": "build/icon.icns",
       "extendInfo": {

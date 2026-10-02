@@ -137,6 +137,34 @@ eq(baseUnit(40), 48, 'unit never below 48');
     eq(b.selectedKey(), null);
 }
 
+// ---- WC-20: rapid assigns queue instead of being refused ----
+{
+    const keys = [0, 1, 2].map((c) => ({ row: 0, col: c, x: c, y: 0, w: 1, h: 1 }));
+    const map = [[10, 11, 12]];
+    let inflight = 0, maxInflight = 0;
+    const adapter = {
+        surface: 'zmk.key', app: {}, profile: { family: 'x', keys },
+        layers: () => [{ index: 0, name: 'L0', empty: false }],
+        bindingAt: (l, s) => map[l][s.col],
+        async write(l, s, v) {
+            inflight++; maxInflight = Math.max(maxInflight, inflight);
+            await new Promise((r) => setTimeout(r, 5));
+            map[l][s.col] = v; inflight--;
+        },
+        posOf: (s) => s.col,
+        selOf: (p) => (Number.isInteger(p) ? { kind: 'key', row: 0, col: p } : null),
+    };
+    const b = new Board();
+    b.bind(adapter);
+    b.select({ kind: 'key', row: 0, col: 0 });
+    const r = await Promise.all([b.assign(1), b.assign(2), b.assign(3)]);   // no await between: fast typing
+    eq(r, [true, true, true], 'all three queued assigns succeed');
+    eq(map[0], [1, 2, 3], 'each lands on the next key, in order');
+    eq(maxInflight, 1, 'writes never overlap');
+    await b.undo();
+    eq(map[0], [1, 2, 10 + 2], 'undo after a queued burst reverts the last key');
+}
+
 // ---- pickPositions ----
 {
     const keys = [0, 1, 2, 3].map((c) => ({ row: 0, col: c, x: c, y: 0, w: 1, h: 1 }));

@@ -157,19 +157,29 @@ export class HUD {
         const { app } = this;
         if (this._busy || !this.open || app.hid.paused || !app.hid.connected) return;
         this._busy = true;
+        let dirty = false;
         try {
-            if (app.caps.hudLayer) {
+            // Key bitmap first: a layer change needs a key press or release, so
+            // the layer GET only follows a changed bitmap, plus once a second
+            // for timed changes (one-shot, combo, tap dance). Halves the wire.
+            let changed = true;
+            if (app.readKeyState) {
+                // ZMK key-state bitmap, polled whenever the device offers it.
+                const next = await app.readKeyState();
+                changed = this._pressedDiffers(next);
+                if (changed) { this.pressed = next; dirty = true; }
+            }
+            const now = performance.now();
+            if (app.caps.hudLayer && (changed || now - (this._layerAt ?? 0) >= 1000)) {
+                this._layerAt = now;
                 const layer = await app.flask.getU16(CH.meta, V.metaActiveLayer);
                 if (layer !== this.liveLayer) {
                     this.liveLayer = layer;
                     if (!this.peek) this.shownLayer = layer;
-                    this.render();
+                    dirty = true;
                 }
             }
-            if (app.readKeyState) {
-                // ZMK key-state bitmap, polled whenever the device offers it.
-                this._applyPressed(await app.readKeyState());
-            }
+            if (dirty) this.render();
             const tick = this._tick++;
             // Live-action chips at ~4 Hz (every 4th tick, cheap GETs):
             // autoscroll level (0x1A/0x05 signed)
@@ -191,6 +201,7 @@ export class HUD {
                 }
             }
         } catch (e) {
+            if (dirty) this.render();   // bitmap already swapped in; don't lose the repaint
             // Transient — next tick retries. But log each DISTINCT failure
             // once: a silently-swallowed permanent error looks like a frozen
             // HUD (bench 2026-07-08: "layer stopped updating" was
@@ -203,11 +214,8 @@ export class HUD {
         this._busy = false;
     }
 
-    _applyPressed(next) {
-        if (next.size !== this.pressed.size || [...next].some((k) => !this.pressed.has(k))) {
-            this.pressed = next;
-            this.render();
-        }
+    _pressedDiffers(next) {
+        return next.size !== this.pressed.size || [...next].some((k) => !this.pressed.has(k));
     }
 
     // ---------- rendering ----------

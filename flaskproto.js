@@ -144,16 +144,23 @@ export class FlaskProto {
 
     /** Returns the value the firmware actually applied (clamp-echo). */
     async setU16(channel, valueID, value) {
+        if (!Number.isFinite(value)) throw new RangeError(`setU16: ${value} is not a number`);
         // Clamp in wire-width (u16) space BEFORE any narrowing — a bare i8
         // cast once wrapped 200 → −56 on hardware.
         const v = Math.max(0, Math.min(0xFFFF, Math.round(value))) & 0xFFFF;
-        const r = await this.hid.request([CMD.set, channel, valueID, v >> 8, v & 0xFF]);
+        // Live actions (macro play, autoscroll force-stop) must not be re-sent
+        // on a slow echo: the retry would fire the action twice.
+        const live = (channel === CH.macros && valueID === V.macrosState)
+            || (channel === CH.autoscroll && valueID === V.asState);
+        const r = await this.hid.request([CMD.set, channel, valueID, v >> 8, v & 0xFF], 0,
+            live ? { retries: 0 } : undefined);
         if (r[0] !== CMD.set) throw new Error('unhandled');
         return this._u16(r);
     }
 
     async setI16(channel, valueID, value) {
-        const wire = value & 0xFFFF;
+        if (!Number.isFinite(value)) throw new RangeError(`setI16: ${value} is not a number`);
+        const wire = Math.max(-0x8000, Math.min(0x7FFF, Math.round(value))) & 0xFFFF;
         const r = await this.hid.request([CMD.set, channel, valueID, wire >> 8, wire & 0xFF]);
         if (r[0] !== CMD.set) throw new Error('unhandled');
         return (this._u16(r) << 16) >> 16;

@@ -52,8 +52,11 @@ export class FlaskHID extends EventTarget {
     /** All previously-granted ZMK Flask raw-HID interfaces (no user gesture needed). */
     static async grantedDevices() {
         if (!navigator.hid) return [];
-        const devices = await navigator.hid.getDevices();
-        return devices.filter(isFlaskInterface);
+        // A policy-blocked page rejects here (SecurityError): "none granted".
+        try {
+            const devices = await navigator.hid.getDevices();
+            return devices.filter(isFlaskInterface);
+        } catch { return []; }
     }
 
     /** User-gesture connect: browser chooser filtered to the ZMK VID/PID's raw HID. */
