@@ -48,11 +48,10 @@ app menu keeps the item for later.
   `blob:`, `data:`, `about:` is cancelled; navigation off the app origin is
   blocked; `window.open` is denied except the HUD popup; `https` links open in
   the default browser. A CSP is sent with every file (`default-src 'self'`,
-  `script-src 'self' 'wasm-unsafe-eval'`, `object-src 'none'`).
+  `script-src 'self'`, `object-src 'none'`).
 - Devices: the chooser (`select-hid-device`, `select-serial-port`) and stored
   grants (`setDevicePermissionHandler`) only see allow-listed VID:PID.
-  HID: 1d50:615e (ZMK), 303a:4044 (Svalboard), 3434:0440 (Nape), 5043:5c47
-  (Adept), d020:1603 (NLKB16). Serial: 1d50:615e. Permissions are limited to
+  HID: 1d50:615e (ZMK: Totem, Imprint). Serial: 1d50:615e. Permissions are limited to
   `hid`, `serial`, `clipboard-sanitized-write`, for the app origin only.
 - `FLASK_NO_DEVICE=1` refuses every device grant and chooser; smoke runs imply it.
 - Single-instance lock (two instances would fight over one keyboard).

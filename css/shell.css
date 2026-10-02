@@ -21,16 +21,14 @@ body.in-app { overflow: hidden; }
 }
 .statusbar .spacer { flex: 1; }
 .sb-sep { color: color-mix(in srgb, var(--muted) 50%, transparent); }
-.sb-device, .sb-btn {
+.sb-device {
   border: none; background: none; cursor: pointer;
   padding: var(--sp-1) var(--sp-3);
   border-radius: var(--r-sm);
   font-size: var(--fs-sm); font-weight: var(--fw-md);
   color: var(--text);
 }
-.sb-btn { color: var(--muted); font-weight: 400; }
-.sb-btn.warn { color: var(--warn); }
-.sb-device:hover, .sb-btn:hover { background: var(--surface2); }
+.sb-device:hover { background: var(--surface2); }
 .sb-seg { display: inline-flex; align-items: center; gap: var(--sp-3); }
 .sb-seg.warn {
   padding: var(--sp-1) var(--sp-4);

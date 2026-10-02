@@ -34,15 +34,6 @@
 .kb-svg .key.sel .cap-holdband { fill: color-mix(in srgb, var(--accent) 36%, transparent); }
 .kb-svg .key.pressed .cap-mark { fill: #fff; }
 .kb-svg .keyname { fill: var(--faint); font-size: 8px; font-weight: 400; }
-.kb-svg .enc { cursor: pointer; outline: none; }
-.kb-svg .enc:focus-visible .enc-cap { stroke: var(--accent); stroke-width: 2; }
-
-/* Chord boxes: solid = owned on this layer, dashed = inherited. */
-.kb-svg .chord-box { cursor: pointer; outline: none; }
-.kb-svg .chord-box rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
-.kb-svg .chord-box.inherited rect { stroke-dasharray: 3 2; stroke: var(--muted); }
-.kb-svg .chord-box:hover rect, .kb-svg .chord-box:focus-visible rect { fill: var(--accent-bg); }
-.kb-svg .chord-box text { fill: var(--accent-text); font-size: 10px; }
 
 /* The board in the frame: scrolls sideways only when zoomed past the pane. */
 .bd-board { overflow-x: auto; padding: 4px 0; }

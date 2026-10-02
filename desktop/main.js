@@ -42,10 +42,6 @@ const ROOT = app.isPackaged ? path.join(process.resourcesPath, 'web') : path.joi
 // Keyboards this app may talk to (vendor:product, lower-case hex).
 const HID_ALLOW = new Set([
     '1d50:615e', // stock ZMK (Totem, Imprint)
-    '303a:4044', // Svalboard
-    '3434:0440', // Keychron Nape Pro
-    '5043:5c47', // Ploopy Adept
-    'd020:1603', // NLKB16-02
 ]);
 const SERIAL_ALLOW = new Set(['1d50:615e']); // ZMK Studio RPC (CDC)
 // HID ids arrive as numbers, serial ids as decimal strings ('7504') — Number() takes both.
@@ -70,13 +66,11 @@ const MIME = {
     '.png': 'image/png',
     '.ico': 'image/x-icon',
     '.woff2': 'font/woff2',
-    '.wasm': 'application/wasm',
 };
 
-// 'wasm-unsafe-eval': vialdef.js decompresses with xz-decompress (WebAssembly).
 const CSP = [
     "default-src 'self'",
-    "script-src 'self' 'wasm-unsafe-eval'",
+    "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "connect-src 'self' blob: data:",
