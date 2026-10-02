@@ -72,7 +72,7 @@ const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
     eq(catalog.capParts(b).top, ''); ok(catalog.capParts(b).main.trim().length > 0, 'zmk cap label');
     ok(catalog.capParts(0x04).main.length > 0, 'qmk cap label');
     eq(typedFromStudio(b, 1), { action: 1, param1: 0x70004 });
-    eq(typedFromStudio({ behaviorId: 51, param1: 3, param2: 0 }, 1), { action: 2, param1: 3 });
+    eq(typedFromStudio({ behaviorId: 54, param1: 3, param2: 0 }, 1), { action: 2, param1: 3 });
     eq(typedFromStudio({ behaviorId: 9, param1: 5, param2: 6 }, 1), { action: 3, behaviorId: 9, param1: 5, param2: 6 });
 }
 
@@ -108,6 +108,6 @@ const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
 {
     const named = (f) => JSON.parse(readFileSync(new URL(`./fixtures/${f}-behaviors.json`, import.meta.url)))
         .behaviors.filter((b) => b.displayName).length;
-    eq(named('totem'), 30, 'TOTEM named behaviors'); eq(named('imprint'), 37, 'Imprint named behaviors');
+    eq(named('totem'), 33, 'TOTEM named behaviors (30 + 3 live hold-taps, Totem-ZMK 69ac0ff)'); eq(named('imprint'), 37, 'Imprint named behaviors');
 }
 console.log(`contracts-test: ${checks} checks OK`);
