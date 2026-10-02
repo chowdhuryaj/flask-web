@@ -553,7 +553,7 @@ export class ZmkKeymapTab {
             // What's saved on the device is Flask's copy of record — the
             // auto-restore snapshot follows every successful save.
             this._writeSnapshot();
-            toast('Saved to keyboard');
+            toast(this.app?.offline ? 'Queued for the next connect' : 'Saved to keyboard');
             return true;
         } catch (e) {
             if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return false; }
@@ -908,6 +908,11 @@ export class ZmkKeymapTab {
             })] : []));
         this._updateSaveBar = () => {
             // Canonical live/saved vocabulary (spec §3.2, ui.js SAVE_STATE).
+            if (this.app?.offline) {   // nothing reaches a keyboard until it connects
+                bar.dataset.state = 'live';
+                note.textContent = 'Offline: edits queue until the keyboard connects';
+                return;
+            }
             bar.dataset.state = this.unsaved ? 'live' : 'saved';
             note.textContent = this.unsaved
                 ? 'Live — reverts on power-off · Save is in the status bar'
@@ -917,7 +922,8 @@ export class ZmkKeymapTab {
         const pickerHost = el('div');
         host.replaceChildren(bar,
             el('div', { class: 'faint', style: 'margin-top:6px; font-size:12px' },
-                'Click a key, then pick a binding; click it again for a popover. Writes apply immediately.'),
+                'Click a key, then pick a binding; click it again for a popover. '
+                + (this.app?.offline ? 'Edits queue until the keyboard connects.' : 'Writes apply immediately.')),
             pickerHost);
         this.closePicker?.();
         this.closePicker = openPicker({
