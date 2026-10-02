@@ -1,90 +1,96 @@
-# Flask desktop
+# Totem-Flask desktop
 
-Electron wrapper for the Flask web configurator — bundles its own Chromium,
-so WebHID (Flask tuning) and WebSerial (ZMK Studio RPC) work without a
-Chrome install.
+Electron wrapper for the Flask web configurator. It bundles its own Chromium,
+so WebHID (Flask tuning) and WebSerial (ZMK Studio RPC) work without Chrome.
 
-## Run
+Installs as `/Applications/Totem-Flask.app` (bundle id `dev.aj.totem-flask`,
+version 2.0.0) next to the native `Flask.app` (`com.aj.flask`), which stays.
+Both talk to one keyboard over HID, so close one before connecting in the
+other; Totem-Flask warns at launch if the native app is open.
 
-```
-cd desktop
-npm install     # once — downloads Electron's Chromium
-npm start
-```
-
-Serves the repo root on `http://localhost:8137/` with serve.py's no-cache
-headers; if serve.py is already listening there it reuses that server, so
-the browser tab and the app see the same code.
-
-## Device pickers
-
-Chrome's HID/serial chooser doesn't exist in Electron, so the wrapper
-answers selection itself: one matching device connects immediately; several
-bring up a native dialog. Previously connected keyboards are auto-granted —
-the landing page lists them without a prompt.
-
-## Install as a real Mac app (2026-07-12)
+## Run (dev) and build
 
 ```
 cd desktop
-npm install          # once — Electron + electron-builder
-npm run dist         # → dist/Flask-1.0.0-arm64.dmg (+ .zip)
+npm install
+npm start               # serves the checkout
+npm run dist:dir        # dist/mac-arm64/Totem-Flask.app (ad-hoc signed)
+npm run install-app     # AJ only: build + ditto into /Applications
 ```
 
-Open the DMG, drag **Flask.app** to Applications. The packaged app carries
-the whole web configurator inside (`Resources/web`) — no repo checkout, no
-serve.py needed; it serves itself on localhost:8137 (or an ephemeral port
-if that's taken).
+`npm start` on the bare Electron binary has no Bluetooth usage string, and
+macOS aborts it if WebSerial enumerates Bluetooth ports (crash 2026-10-01).
+Smoke-test the packaged `dist` app, not `npm start`.
 
-The app is **unsigned** (no Apple Developer cert): first launch needs
-right-click → Open (or `xattr -dr com.apple.quarantine /Applications/Flask.app`
-after copying).
+## Origin and storage
 
-### Updates
+The app is served from `totem-flask://app/` (privileged secure scheme, no
+port). That origin is fixed, so `localStorage` (offline workspaces, Modes,
+theme, restore snapshots) survives updates, and `npm start` and the packaged
+app share it. The userData dir is `~/Library/Application Support/Totem-Flask`.
 
-Flask ▸ **Check for Updates…** compares against the newest GitHub release
-of `chowdhuryaj/flask-web` and opens the download page when there's a newer
-one (a quiet check also runs a few seconds after launch). Publishing an
-update = bump `version` in this package.json, `npm run dist`, then:
+If the scheme ever lacks WebHID/WebSerial in a new Electron, fall back to a
+fixed port (spec 6.2 option a). Not needed on Electron 33.
 
-```
-gh release create v1.0.1 dist/Flask-1.0.1-arm64.dmg --title "Flask 1.0.1"
-```
+First launch offers "Import workspaces and Modes from Flask (desktop 1.x)"
+when `~/Library/Application Support/Flask` exists. It runs this binary on the
+old profile (`TOTEM_LEGACY_DUMP`), reads `flask*` localStorage keys from
+`http://localhost:8137`, and adds only keys Totem-Flask does not have. The
+app menu keeps the item for later.
 
-True in-place auto-update (electron-updater) needs the app code-signed —
-macOS refuses to swap unsigned bundles. If a Developer ID cert shows up
-later: set `mac.identity`, add `electron-updater`, keep the same release
-flow.
+## Security settings
+
+- `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`,
+  `webSecurity: true`, `webviewTag: false`, `will-attach-webview` blocked.
+- Preload (`preload.js`) exposes `window.totemFlask` (frozen):
+  `desktop: true` and `nativeFlaskRunning()`. Nothing else.
+- No remote content: every request not on `totem-flask:`, `devtools:`,
+  `blob:`, `data:`, `about:` is cancelled; navigation off the app origin is
+  blocked; `window.open` is denied except the HUD popup; `https` links open in
+  the default browser. A CSP is sent with every file (`default-src 'self'`,
+  `script-src 'self' 'wasm-unsafe-eval'`, `object-src 'none'`).
+- Devices: the chooser (`select-hid-device`, `select-serial-port`) and stored
+  grants (`setDevicePermissionHandler`) only see allow-listed VID:PID.
+  HID: 1d50:615e (ZMK), 303a:4044 (Svalboard), 3434:0440 (Nape), 5043:5c47
+  (Adept), d020:1603 (NLKB16). Serial: 1d50:615e. Permissions are limited to
+  `hid`, `serial`, `clipboard-sanitized-write`, for the app origin only.
+- `FLASK_NO_DEVICE=1` refuses every device grant and chooser; smoke runs imply it.
+- Single-instance lock (two instances would fight over one keyboard).
+- The main process still makes one outbound call: the GitHub release check.
+
+## HUD
+
+`hud.js` opens `window.open('about:blank', 'flask-hud')`, a same-origin popup
+that shares the renderer's HID session. `main.js` turns it into a frameless,
+transparent, vibrancy `hud` NSPanel (`type: 'panel'`, non-activating), always
+on top across Spaces and full screen. Corner snap (32 px, 12 px margin) and
+the saved frame (`hud-bounds.json` in userData) live in the main process.
+`TOTEM_NO_PANEL=1` switches to the `focusable: false` fallback. Plain browsers
+use Document PiP, then the in-page overlay (`css/hud.css`).
+
+## Updates
+
+Totem-Flask > **Check for Updates…** compares against the newest GitHub
+release of `chowdhuryaj/flask-web` and opens the download page. The app is
+unsigned (ad-hoc only), so there is no in-place update. On the build Mac use
+`npm run install-app`. The first launch of a copy that did not come through
+`install-app` needs right-click > Open, or
+`xattr -dr com.apple.quarantine /Applications/Totem-Flask.app`.
 
 ## Windows (portable, for the radiology workstation)
 
 ```
-npm run dist:win      # → dist/Flask-1.0.0-win.zip  (x64)
+npm run dist:win      # dist/Totem-Flask-2.0.0-x64.zip
 ```
 
-Extract the zip anywhere — a USB stick is the point — and run `Flask.exe`.
-No installer, no admin rights, nothing written outside the folder. It builds
-fine from macOS: electron-builder pulls the win32 Electron and, with no
-signing cert configured, skips the signtool step (it still downloads Wine on
-the way there — harmless, just slow the first time).
-
-`zip` rather than NSIS `portable` on purpose: NSIS needs Wine to actually
-*run*, and an installer is the wrong shape for a machine you can't install
-software on.
-
-**It may not run there, and that's expected.** The build is unsigned, so
-SmartScreen will warn ("Windows protected your PC" → More info → Run anyway),
-and a managed clinical box may block it outright via AppLocker/WDAC, or refuse
-USB mass storage. **None of that blocks the keyboard.** The Modes tab's "Make
-baseline" writes a mode into the keyboard's own flash, so the board boots into
-it with no app attached — carry the app if it runs, but don't depend on it.
+Extract anywhere and run `Totem-Flask.exe`. Unsigned: SmartScreen will warn,
+and a managed clinical box may block it. The Modes tab's "Make baseline"
+writes a mode into the keyboard's flash, so the board does not depend on the app.
 
 ## Notes
 
-- Local single-user tool: all web permissions are granted to the app
-  origin. Don't point it at remote URLs.
-- Dev runs (`npm start`) serve the repo checkout — edits show on reload.
-  Packaged runs serve their bundled copy — rebuild to pick up changes.
-- The app menu is built on every platform; Windows/Linux get the mac app
-  menu's items under File (hide/hideOthers/unhide are macOS-only roles).
-  `FLASK_SKIP_MENU=1` suppresses it for the smoke gate.
+- Dev runs serve the repo checkout (edits show on reload). Packaged runs
+  serve their bundled copy; rebuild to pick up changes.
+- `FLASK_SKIP_MENU=1` suppresses the menu.
+- `FLASK_DESKTOP_SMOKE=1 dist/mac-arm64/Totem-Flask.app/Contents/MacOS/Totem-Flask`
+  prints probe lines (hid/serial, HUD panel, snap, console errors) and exits.
