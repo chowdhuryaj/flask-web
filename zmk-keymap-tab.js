@@ -11,24 +11,24 @@
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
-import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=63';
-import { board } from './board.js?v=63';
-import { createDock } from './keymap-dock.js?v=63';
-import { createInspector } from './keymap-inspector.js?v=63';
-import { encode } from './behavior-catalog.js?v=63';
-import { shell } from './app-shell.js?v=63';
-import { saveState } from './save-state.js?v=63';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=63';
-import { zmkApplyPendingKeymap, seedWorkspaceFromDevice } from './zmk-offline.js?v=63';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=63';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=63';
-import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=63';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=63';
+import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=64';
+import { board } from './board.js?v=64';
+import { createDock } from './keymap-dock.js?v=64';
+import { createInspector } from './keymap-inspector.js?v=64';
+import { encode } from './behavior-catalog.js?v=64';
+import { shell } from './app-shell.js?v=64';
+import { saveState } from './save-state.js?v=64';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=64';
+import { zmkApplyPendingKeymap, queuedLayersMatch, seedWorkspaceFromDevice } from './zmk-offline.js?v=64';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=64';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=64';
+import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=64';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=64';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName, isZmkBinding,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=63';
+} from './zmk-keycodes.js?v=64';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -179,6 +179,7 @@ export class ZmkKeymapTab {
         try {
             this._layouts = await client.getPhysicalLayouts();
         } catch (e) {
+            this._layouts = null;
             if (e.kind === 'unlockRequired') return true;
             throw e;
         }
@@ -298,6 +299,12 @@ export class ZmkKeymapTab {
             // apply AND persist both landed — a saveChanges throw leaves it
             // queued (so "still queued" below is never a lie).
             const res = await zmkApplyPendingKeymap(this.app, async (data) => {
+                // Replay is by layer index: only safe when the keyboard still has
+                // the layers (ids and count) the unplugged copy was seeded from.
+                if (!queuedLayersMatch(this.app.zmkQueuedWs, this.keymap?.layers)) {
+                    toast("The keyboard's layers changed since going unplugged, so the queued keymap was not applied (still queued)", true);
+                    return { stopped: true };
+                }
                 const r = await this.applyKeymapData(data, { quiet: true });
                 if (r && !r.stopped && (r.wrote || r.renamed)) await this.saveChanges();
                 return r;

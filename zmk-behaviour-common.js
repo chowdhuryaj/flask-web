@@ -1,14 +1,14 @@
 // Shared bits of the ZMK Behaviour tabs (WP4a): the picker call, typed-value
 // plumbing, the click-blur guard, and app.slotSummary for WP3's slot chips.
 
-import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v=63';
-import { usageLabel } from './zmk-keycodes.js?v=63';
-import { decode, isRecursiveOutput } from './behavior-catalog.js?v=63';
+import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v=64';
+import { usageLabel } from './zmk-keycodes.js?v=64';
+import { decode, isRecursiveOutput } from './behavior-catalog.js?v=64';
 export { isRecursiveOutput };
-import { CH, V } from './flaskproto.js?v=63';
-import { decodeComboSlotV2, decodeComboSlotV3, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=63';
-import { decodeTdStep } from './zmk-tapdance-codec.js?v=63';
-import { decodeLeaderSlot } from './zmk-output-codec.js?v=63';
+import { CH, V } from './flaskproto.js?v=64';
+import { decodeComboSlotV2, decodeComboSlotV3, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=64';
+import { decodeTdStep } from './zmk-tapdance-codec.js?v=64';
+import { decodeLeaderSlot, decodeGestureSlot } from './zmk-output-codec.js?v=64';
 
 /** After ANY button click inside `root`, drop focus from it. A key-generated
  * Enter or Space (a combo firing Enter, say) would otherwise re-click the
@@ -141,6 +141,14 @@ export async function macroInUse(app, slot, { rules = [], fallback = [], skipRul
             }
         }
     }
+    if (caps?.gestures) {
+        const sets = (await dim(app, CH.gestures, V.gesturesSetCount)) || 8;
+        for (let s = 0; s < sets; s++) {
+            for (let d = 0; d < 8; d++) {
+                if (hit(decodeGestureSlot(await flask.getBytes(CH.gestures, V.gesturesSlot, [s, d], 2)))) return true;
+            }
+        }
+    }
     if (caps?.leader) {
         const n = await dim(app, CH.leader, V.leaderSlotCount);
         const keys = (await dim(app, CH.leader, V.leaderKeys)) || 8;
@@ -168,7 +176,7 @@ const macroBehavior = (o) => {
 
 async function liveKeymapLayers() {
     try {
-        const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=63');
+        const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=64');
         return zmkLiveKeymapTab()?.keymap?.layers ?? null;
     } catch { return null; }
 }

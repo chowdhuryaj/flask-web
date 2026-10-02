@@ -2,27 +2,27 @@
 // runs the post-connect load sequence (handshake, family confirm, offline
 // replay, tabs), drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=63';
-import { diag } from './diag.js?v=63';
-import { FlaskHID } from './webhid.js?v=63';
-import { renderPreflight } from './preflight.js?v=63';
-import { FlaskProto, CH, V } from './flaskproto.js?v=63';
+import { el, toast, modal } from './ui.js?v=64';
+import { diag } from './diag.js?v=64';
+import { FlaskHID } from './webhid.js?v=64';
+import { renderPreflight } from './preflight.js?v=64';
+import { FlaskProto, CH, V } from './flaskproto.js?v=64';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=63';
-import { CommandPalette } from './command-palette.js?v=63';
-import { HUD } from './hud.js?v=63';
+         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=64';
+import { CommandPalette } from './command-palette.js?v=64';
+import { HUD } from './hud.js?v=64';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
          zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
-         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=63';
-import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=63';
-import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=63';
-import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=63';
-import { shell } from './app-shell.js?v=63';
-import { installCaptions, setCaptionGroup } from './caption.js?v=63';
-import { saveState, discardMessage } from './save-state.js?v=63';
-import { board } from './board.js?v=63';
-import { attachHoldtap } from './behavior-catalog.js?v=63';
-import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=63';
+         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=64';
+import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=64';
+import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=64';
+import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=64';
+import { shell } from './app-shell.js?v=64';
+import { installCaptions, setCaptionGroup } from './caption.js?v=64';
+import { saveState, discardMessage } from './save-state.js?v=64';
+import { board } from './board.js?v=64';
+import { attachHoldtap } from './behavior-catalog.js?v=64';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=64';
 
 function downloadText(filename, text) {
     const a = document.createElement('a');
@@ -156,6 +156,8 @@ async function loadZmkDevice(device) {
     const gen = connectGen;
     const stale = () => gen !== connectGen || !app.hid.connected;
 
+    // Fresh client per connection: slot counts and hold-tap probes are memoized per client.
+    app.flask = new FlaskProto(app.hid);
     app.protocolVersion = await app.flask.handshake();
     if (stale()) return;
     if (app.protocolVersion == null) {

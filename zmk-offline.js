@@ -18,29 +18,29 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=63';
+import { CH, V } from './flaskproto.js?v=64';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=63';
-import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=63';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=63';
-import { isUnassignable } from './behavior-catalog.js?v=63';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=64';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=64';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=64';
+import { isUnassignable } from './behavior-catalog.js?v=64';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
-         describeChanges, BASE_PREFIX } from './offline.js?v=63';
-import { saveState } from './save-state.js?v=63';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=63';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=63';
+         describeChanges, BASE_PREFIX } from './offline.js?v=64';
+import { saveState } from './save-state.js?v=64';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=64';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=64';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=63';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=63';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=64';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=64';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=63';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=63';
+    from './zmk-tapdance-codec.js?v=64';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=64';
 import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
-         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=63';
+         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=64';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=63';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=64';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 
@@ -749,9 +749,10 @@ export function snapshotBase(ws) {
 function restoreBase(ws, withKeymap) {
     let b = null;
     try { b = JSON.parse(localStorage.getItem(BASE_PREFIX + ws.key)); } catch { /* none */ }
-    if (!b) return;
-    ws.tunables = b.tunables;
-    Object.assign(ws.zmk, b.zmk);
+    if (b) {
+        ws.tunables = b.tunables;
+        Object.assign(ws.zmk, b.zmk);
+    }
     // A device-seeded keymap goes back to the seed too when its edits were the queue.
     const seed = ws.zmk.seedBase;
     if (seed && withKeymap) {
@@ -1749,6 +1750,14 @@ function layersDrifted(ws) {
     const ids = (km) => (km?.layers ?? []).map((l) => l.id).join(',');
     const base = ws.zmk.seedBase;
     return !base || ids(ws.zmk.keymapSaved) !== ids(base);
+}
+
+/** True when the keyboard's live layers (ids and count) still match the layers
+ * the Unplugged workspace was seeded from, so a by-index replay is safe. */
+export function queuedLayersMatch(ws, liveLayers) {
+    const ids = (ls) => (ls ?? []).map((l) => l.id).join(',');
+    const base = ws?.zmk?.seedBase;
+    return !!base && ids(base.layers) === ids(liveLayers);
 }
 
 /** Consume the queued offline keymap once a real Studio session is ready:

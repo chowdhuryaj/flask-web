@@ -14,8 +14,8 @@ import harness as h  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 RELOAD_BAR = """async () => {
-  const ui = await import('./ui.js?v=63');
-  const { saveState } = await import('./save-state.js?v=63');
+  const ui = await import('./ui.js?v=64');
+  const { saveState } = await import('./save-state.js?v=64');
   saveState.reset();
   let saves = 0, reloads = 0;
   const bar = ui.reloadBar(0x05, { label: 'DPI', save: async () => { saves++; }, reload: async () => { reloads++; } });
@@ -60,7 +60,7 @@ def main():
 
         # ZMK tap dance 0x28 registers like any channel (it has a save step).
         res = page.evaluate("""async () => {
-          const { saveState } = await import('./save-state.js?v=63');
+          const { saveState } = await import('./save-state.js?v=64');
           saveState.reset();
           let r = 'no throw'; try { saveState.markDirty(0x28, 'tap dance', async () => {}); } catch (e) { r = e.message; }
           saveState.reset();
@@ -70,7 +70,7 @@ def main():
 
         # Save layout / Load (main.js drives these two on the live keymap tab):
         # v2 JSON with family, round trip.
-        EXPORT = "import('./zmk-keymap-tab.js?v=63').then(m => m.zmkLiveKeymapTab().exportKeymap())"
+        EXPORT = "import('./zmk-keymap-tab.js?v=64').then(m => m.zmkLiveKeymapTab().exportKeymap())"
         with page.expect_download() as dl:
             page.evaluate(EXPORT)
         path = dl.value.path()
@@ -79,7 +79,7 @@ def main():
               f'export header {[data.get("kind"), data.get("version"), data.get("family")]}')
         check(len(data.get('layers', [])) > 0, 'export has layers')
         page.evaluate("""async (text) => {
-          const m = await import('./zmk-keymap-tab.js?v=63');
+          const m = await import('./zmk-keymap-tab.js?v=64');
           await m.zmkLiveKeymapTab().importKeymap(new File([text], 'k.json'));
         }""", json.dumps(data))
         with page.expect_download() as dl2:

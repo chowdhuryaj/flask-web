@@ -18,12 +18,12 @@
 // Also exports renderKeyboardSVG, baseUnit, layoutOf, splitCap for the HUD,
 // trainer, RGB and tests.
 //
-// Import this file ONLY as './board.js?v=63': x.js and x.js?v=63 are two
+// Import this file ONLY as './board.js?v=64': x.js and x.js?v=64 are two
 // module instances and the singleton would split.
 
-import { el, svgEl, toast as uiToast } from './ui.js?v=63';
-import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=63';
-import { legendOf } from './legend.js?v=63';
+import { el, svgEl, toast as uiToast } from './ui.js?v=64';
+import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=64';
+import { legendOf } from './legend.js?v=64';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 /** dataTransfer type a palette tile drags: JSON of an adapter binding. */

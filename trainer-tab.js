@@ -5,14 +5,14 @@
 // It runs on browser key events and needs no device — it is reachable from the
 // landing page and as a tab, and behaves like any other typing site over a-z.
 
-import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=63';
-import { PhoneticModel, randomSeed } from './trainer-model.js?v=63';
+import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=64';
+import { PhoneticModel, randomSeed } from './trainer-model.js?v=64';
 import {
     TrainerStore, makeResult, makeKeyStatsMap, learningRate, dailyStats,
     summaryStats, cpmToWpm, wpmToCpm, timeToSpeed,
-} from './trainer-stats.js?v=63';
-import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=63';
-import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=63';
+} from './trainer-stats.js?v=64';
+import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=64';
+import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=64';
 
 /** Attr → the class that colours one character of the lesson text. */
 const ATTR_CLASS = {

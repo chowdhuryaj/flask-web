@@ -4,16 +4,16 @@
 // Everything that needs the keymap tab is imported lazily: the tab imports
 // zmk-export.js, so a static import here would be a cycle.
 
-import { exportKeymapText } from './zmk-dt-export.js?v=63';
-import { exportFlaskState } from './zmk-export.js?v=63';
-import { zmkBehaviors } from './zmk-keycodes.js?v=63';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=63';
-import { board, layoutOf, capPartsOf, htPartsOf, fitText } from './board.js?v=63';
-import { decodeHoldtapSlot, decodeHoldtapInfo } from './zmk-holdtap-codec.js?v=63';
+import { exportKeymapText } from './zmk-dt-export.js?v=64';
+import { exportFlaskState } from './zmk-export.js?v=64';
+import { zmkBehaviors } from './zmk-keycodes.js?v=64';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=64';
+import { board, layoutOf, capPartsOf, htPartsOf, fitText } from './board.js?v=64';
+import { decodeHoldtapSlot, decodeHoldtapInfo } from './zmk-holdtap-codec.js?v=64';
 
 const say = (msg, bad = false) => {
     if (typeof document === 'undefined') return;
-    import('./ui.js?v=63').then((m) => m.toast(msg, bad)).catch(() => {});
+    import('./ui.js?v=64').then((m) => m.toast(msg, bad)).catch(() => {});
 };
 
 // Hold timing for EVERY flask_holdtap slot (channel 0x2A): what the firmware
@@ -53,7 +53,7 @@ function totemNodeById(app) {
 
 /** Build the .keymap text from the live keymap tab. Returns { text, notExported, filename }. */
 export async function buildKeymapExport({ combos = 'flask' } = {}) {
-    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=63');
+    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=64');
     const kt = zmkLiveKeymapTab();
     if (!kt?.keymap) throw new Error('open a keyboard and its keymap first');
     const app = kt.app;

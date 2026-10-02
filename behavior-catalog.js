@@ -16,12 +16,12 @@
 //   code   a code from the entry's option list (media, mouse, lighting).
 //   timing ms (TIMING_PARAM).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=63';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=64';
 import {
     zmkBehaviors, zmkLayers, layerName, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
-} from './zmk-keycodes.js?v=63';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=63';
+} from './zmk-keycodes.js?v=64';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=64';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [

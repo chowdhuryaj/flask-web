@@ -9,23 +9,23 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=63';
-import { zmkBehaviors } from './zmk-keycodes.js?v=63';
-import { isRecursiveOutput } from './behavior-catalog.js?v=63';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=63';
+import { CH, V } from './flaskproto.js?v=64';
+import { zmkBehaviors } from './zmk-keycodes.js?v=64';
+import { isRecursiveOutput } from './behavior-catalog.js?v=64';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=64';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=63';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=63';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=63';
+         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=64';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=64';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=64';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=63';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=63';
+    from './zmk-output-codec.js?v=64';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=64';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=63';
+    from './zmk-tapdance-codec.js?v=64';
 import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
-    from './zmk-adaptive-codec.js?v=63';
+    from './zmk-adaptive-codec.js?v=64';
 
 /** Behavior ids shift between firmware builds and differ from the offline sim,
  * so a behavior output (action 3) is exported with its display name beside the
@@ -459,7 +459,7 @@ async function applyFlaskStateInner(app, data, save = true) {
             for (let t = 0; t < tapCap; t++) {
                 const o = slot.taps?.[t];
                 await flask.setBytes(CH.tapDance, V.tdStep,
-                    encodeTdStep(i, t, o && !isRecursiveOutput(o) ? out(o) : NO_OUT), 2);
+                    encodeTdStep(i, t, o ? ((x) => (isRecursiveOutput(x) ? NO_OUT : x))(out(o)) : NO_OUT), 2);
                 applied++;
             }
         }
@@ -471,7 +471,7 @@ async function applyFlaskStateInner(app, data, save = true) {
         const ruleCap = await flask.getU16(CH.adaptive, V.akRuleCount);
         const stepCap = await flask.getU16(CH.adaptive, V.akStepCount) || 6;
         for (let st = 0; st < Math.min(sets, s.fallback?.length ?? 0); st++) {
-            await flask.setBytes(CH.adaptive, V.akFallback, encodeAkFallback(st, isRecursiveOutput(s.fallback[st]) ? NO_OUT : out(s.fallback[st])), 1);
+            await flask.setBytes(CH.adaptive, V.akFallback, encodeAkFallback(st, ((x) => (isRecursiveOutput(x) ? NO_OUT : x))(out(s.fallback[st]))), 1);
             applied++;
         }
         // Device rules the file does not list are deleted, so the file is the whole table
@@ -488,7 +488,7 @@ async function applyFlaskStateInner(app, data, save = true) {
             if (r.index >= ruleCap || r.set >= sets) continue;
             await flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(r.index, r), 1);
             for (let st = 0; st < stepCap; st++) {
-                await flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(r.index, st, r.steps?.[st] && !isRecursiveOutput(r.steps[st]) ? out(r.steps[st]) : {}), 2);
+                await flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(r.index, st, r.steps?.[st] ? ((x) => (isRecursiveOutput(x) ? {} : x))(out(r.steps[st])) : {}), 2);
             }
             applied++;
         }
@@ -566,4 +566,4 @@ export async function saveFlaskChannels(app, channels) {
 }
 
 // window.flaskExportKeymap / window.flaskPrintLayers (side-effect import; see zmk-extras.js)
-import './zmk-extras.js?v=63';
+import './zmk-extras.js?v=64';

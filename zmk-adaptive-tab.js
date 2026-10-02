@@ -11,20 +11,20 @@
 // (and 0x25 when a text macro was created). Bind a set from Keys › Run ›
 // Adaptive key › set N.
 
-import { el, card, toggleRow, modal, toast, renameLabel, reloadBar } from './ui.js?v=63';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=63';
-import { CH, V } from './flaskproto.js?v=63';
-import { saveState } from './save-state.js?v=63';
+import { el, card, toggleRow, modal, toast, renameLabel, reloadBar } from './ui.js?v=64';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=64';
+import { CH, V } from './flaskproto.js?v=64';
+import { saveState } from './save-state.js?v=64';
 import {
     blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary,
     onSlotsChanged, announceSlots, draftSlots, dim, isRecursiveOutput, macroInUse,
-} from './zmk-behaviour-common.js?v=63';
-import { isModifierUsage } from './zmk-capture.js?v=63';
-import { MACRO_ACTION, encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=63';
+} from './zmk-behaviour-common.js?v=64';
+import { isModifierUsage } from './zmk-capture.js?v=64';
+import { MACRO_ACTION, encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=64';
 import {
     AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
     decodeAkFallback, encodeAkFallback, akSeqLength, akRuleIsEmpty, textToUsages, usagesToText,
-} from './zmk-adaptive-codec.js?v=63';
+} from './zmk-adaptive-codec.js?v=64';
 
 const STEP_SURFACE = 'zmk.adaptiveStep';
 const TRIG_SURFACE = 'zmk.adaptiveTrigger';
