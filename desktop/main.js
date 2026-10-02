@@ -114,6 +114,12 @@ function registerAppProtocol() {
 
 // ---- device access ---------------------------------------------------------
 
+/** Exact-origin test: a prefix match would also pass `totem-flask://app.evil/`. */
+function isAppUrl(u) {
+    // protocol+host, not .origin: non-special schemes report origin "null".
+    try { const x = new URL(u); return x.protocol === `${SCHEME}:` && x.host === 'app'; } catch { return false; }
+}
+
 /** One candidate auto-picks; several bring up a native chooser (first 8). */
 function pickDevice(list, kind, nameOf) {
     if (!list || list.length === 0) return null;
@@ -169,15 +175,15 @@ function wireSecurity(ses) {
 
     const allowed = (permission) => ['hid', 'serial', 'clipboard-sanitized-write'].includes(permission);
     ses.setPermissionCheckHandler((wc, permission, origin) =>
-        origin.startsWith(ORIGIN) && allowed(permission) && !(NO_DEVICE && ['hid', 'serial'].includes(permission)));
+        isAppUrl(origin) && allowed(permission) && !(NO_DEVICE && ['hid', 'serial'].includes(permission)));
     ses.setPermissionRequestHandler((wc, permission, cb, details) =>
-        cb((details.requestingUrl || '').startsWith(ORIGIN) && allowed(permission)
+        cb(isAppUrl(details.requestingUrl) && allowed(permission)
             && !(NO_DEVICE && ['hid', 'serial'].includes(permission))));
 }
 
 app.on('web-contents-created', (_e, contents) => {
     contents.on('will-attach-webview', (e) => e.preventDefault());
-    contents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN)) e.preventDefault(); });
+    contents.on('will-navigate', (e, url) => { if (!isAppUrl(url)) e.preventDefault(); });
 });
 
 // ---- HUD panel -------------------------------------------------------------
@@ -472,7 +478,7 @@ async function start() {
     if (!process.env.FLASK_SKIP_MENU) buildMenu(() => win);
     registerAppProtocol();
     wireSecurity(session.defaultSession);
-    ipcMain.handle('native-flask-running', (e) => (e.senderFrame.url.startsWith(ORIGIN) ? nativeFlaskRunning() : false));
+    ipcMain.handle('native-flask-running', (e) => (isAppUrl(e.senderFrame.url) ? nativeFlaskRunning() : false));
 
     win = new BrowserWindow({
         width: 1480,
@@ -491,7 +497,26 @@ async function start() {
             webSecurity: true,
             allowRunningInsecureContent: false,
             webviewTag: false,
+            // The HUD poll runs in this window's JS context; throttling would
+            // drop it to ~1 Hz while the main window is minimized.
+            backgroundThrottling: false,
         },
+    });
+    // Electron shows no beforeunload dialog: without this a page that cancels
+    // unload (save-state.js, unsaved edits) silently ignores close/quit/reload.
+    win.webContents.on('will-prevent-unload', (e) => {
+        const choice = dialog.showMessageBoxSync(win, {
+            type: 'warning', buttons: ['Cancel', 'Discard'], defaultId: 0, cancelId: 0,
+            message: 'Discard unsaved changes?',
+            detail: 'The keyboard has changes that are not saved yet.',
+        });
+        if (choice === 1) e.preventDefault();   // preventDefault = go ahead and unload
+    });
+    app.on('second-instance', () => {
+        if (win.isDestroyed()) return;
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
     });
     win.on('page-title-updated', (e) => e.preventDefault());
     win.on('closed', () => app.quit());

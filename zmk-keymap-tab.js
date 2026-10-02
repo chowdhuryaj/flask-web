@@ -23,6 +23,7 @@ import { zmkApplyPendingKeymap, seedWorkspaceFromDevice } from './zmk-offline.js
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=62';
 import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=62';
 import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=62';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=62';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName, isZmkBinding,
@@ -36,10 +37,46 @@ let sharedClient = null;
 let activeTabAbort = null;      // event listeners of the superseded instance
 let liveTab = null;             // the instance main.js currently has mounted
 
+// Key positions each family's Studio layout must report. WebSerial and WebHID
+// expose no USB serial number to the page, so this is the only cross-check
+// between the HID board and the CDC port Studio opened (WC-09).
+// ponytail: cannot tell two same-size boards apart; needs a serial from firmware.
+const FAMILY_KEY_COUNT = { totem: TOTEM_GEOM.length, imprint: 70 };
+
 function studioClient() {
-    if (!sharedClient) sharedClient = new StudioClient();
+    if (!sharedClient) {
+        sharedClient = new StudioClient();
+        // Whatever instance is mounted, a dropped port frees the page-wide lock.
+        sharedClient.addEventListener('disconnect', releaseSerialLock);
+    }
     return sharedClient;
 }
+
+// The 'flask-web-serial' tab lock is page-wide like sharedClient: tab
+// instances are discarded on reconnect with no dtor, so a per-instance hold
+// leaked and made "Connect ZMK Studio" a dead end until reload (WC-01).
+let serialLockHeld = false;
+let serialLockRelease = null;
+
+function acquireSerialLock() {
+    if (serialLockHeld) return Promise.resolve(true);
+    if (!globalThis.navigator?.locks) return Promise.resolve(true);
+    return new Promise((resolve) => {
+        navigator.locks.request('flask-web-serial', { ifAvailable: true }, (lock) => {
+            if (!lock) { resolve(false); return; }
+            serialLockHeld = true;
+            resolve(true);
+            return new Promise((release) => {
+                serialLockRelease = () => { serialLockHeld = false; serialLockRelease = null; release(); };
+            });
+        }).catch(() => resolve(true));
+    });
+}
+
+function releaseSerialLock() { serialLockRelease?.(); }
+
+/** Test hook: the lock state of this page. */
+export function _serialLockState() { return { held: serialLockHeld }; }
 
 /** The mounted keymap tab, or null before one exists. The Modes tab needs it
  * to apply and save the keymap half of a mode; module-scope for the same
@@ -65,7 +102,9 @@ export class ZmkKeymapTab {
         this.keyPressId = null;
         this.removedLayers = [];    // session undo stack for remove-layer
 
+        const prevTab = liveTab;
         liveTab = this;         // newest instance wins (see zmkLiveKeymapTab)
+        prevTab?.dispose();
         this.adapter = this._makeAdapter();
 
         // Rebind client events to THIS instance (abort the previous one's).
@@ -75,6 +114,15 @@ export class ZmkKeymapTab {
         this.client.addEventListener('lockstate', (e) => this._onLockState(e.detail), { signal });
         this.client.addEventListener('unsaved', (e) => this._setUnsaved(e.detail), { signal });
         this.client.addEventListener('disconnect', () => this._onSerialDisconnect(), { signal });
+    }
+
+    /** Called when a newer instance replaces this one (main.js rebuilds every
+     * tab on reconnect with no dtor): drop the board/window listeners it added. */
+    dispose() {
+        this._shortcutAbort?.abort();
+        this._setCapture(false);
+        this._dock?.dispose();
+        this._inspector?.dispose();
     }
 
     async load() {
@@ -98,7 +146,7 @@ export class ZmkKeymapTab {
     // ---- connection ----
 
     async _connect(requestIfNeeded) {
-        if (!(await this._acquireTabLock())) {
+        if (!(await acquireSerialLock())) {
             toast('ZMK Studio serial is in use by another flask-web tab', true);
             return;
         }
@@ -108,8 +156,11 @@ export class ZmkKeymapTab {
             await this.client.connect({
                 filters: [{ usbVendorId: ZMK_VIDPID.vid, usbProductId: ZMK_VIDPID.pid }],
                 requestIfNeeded,
+                hintKey: this._family() ?? '',
+                verify: this.app?.zmkStudioSim ? null : (c) => this._verifyPort(c),
             });
         } catch (e) {
+            if (!this.client.connected) releaseSerialLock();
             this.state = 'idle';
             this.render();
             if (e.kind === 'cancelled' && !requestIfNeeded) throw e;   // silent path stays silent
@@ -119,17 +170,24 @@ export class ZmkKeymapTab {
         await this._handshake();
     }
 
-    async _acquireTabLock() {
-        if (this._tabLockHeld) return true;
-        if (!navigator.locks) return true;
-        return new Promise((resolve) => {
-            navigator.locks.request('flask-web-serial', { ifAvailable: true }, (lock) => {
-                if (!lock) { resolve(false); return; }
-                this._tabLockHeld = true;
-                resolve(true);
-                return new Promise((release) => { this._releaseTabLock = () => { this._tabLockHeld = false; release(); }; });
-            }).catch(() => resolve(true));
-        });
+    /** Studio port check for connect(): the port must show this HID board's
+     * key count. Locked firmware can't answer yet, so it is accepted here and
+     * _loadEverything checks again after unlock. */
+    async _verifyPort(client) {
+        const want = this.app?.familyUnresolved ? null : FAMILY_KEY_COUNT[this._family()];
+        if (!want) return true;
+        try {
+            this._layouts = await client.getPhysicalLayouts();
+        } catch (e) {
+            if (e.kind === 'unlockRequired') return true;
+            throw e;
+        }
+        return this._layoutKeyCount(this._layouts) === want;
+    }
+
+    _layoutKeyCount(pl) {
+        const layout = pl.layouts[pl.activeLayoutIndex] ?? pl.layouts[0];
+        return layout?.keys?.length ?? 0;
     }
 
     async _handshake() {
@@ -163,9 +221,16 @@ export class ZmkKeymapTab {
         try {
             this.statusMsg = 'Reading physical layout…';
             this.render();
-            const pl = await this.client.getPhysicalLayouts();
+            const pl = this._layouts ?? await this.client.getPhysicalLayouts();
+            this._layouts = null;
             const layout = pl.layouts[pl.activeLayoutIndex] ?? pl.layouts[0];
             if (!layout?.keys?.length) throw new StudioError('decodeFailed', 'Device reported no key layout');
+            const want = this.app?.zmkStudioSim || this.app?.familyUnresolved ? null : FAMILY_KEY_COUNT[this._family()];
+            if (want && layout.keys.length !== want) {
+                // The serial port belongs to some other board: refuse, never seed or write it.
+                await this._refuseWrongBoard(layout.keys.length, want);
+                return;
+            }
             // Synthetic (row,col) identity: row 0, col = key position index —
             // exactly the key_position that set_layer_binding wants, and the
             // index into every layer's bindings[].
@@ -201,11 +266,23 @@ export class ZmkKeymapTab {
             board.bind(this.adapter);
             this.render();
             await this._applyQueuedOfflineKeymap();
-            await this._keymapSyncCheck();
+            // Unsaved edits on the device: the live keymap is not the saved one
+            // yet, so neither the restore dialog nor the Unplugged seed may use it (WC-11).
+            if (!this.unsaved) await this._keymapSyncCheck();
             this._seedUnplugged();
         } catch (e) {
             this._handleRpcError(e, 'Keymap load failed');
         }
+    }
+
+    async _refuseWrongBoard(got, want) {
+        const msg = `The Studio serial port is a different board (${got} keys, this ${this._family()} has ${want}). Unplug the other board or pick the right port.`;
+        try { await this.client.disconnect(); } catch { /* already closed */ }
+        releaseSerialLock();
+        this.keymap = null;
+        this.state = 'idle';
+        this.render();
+        toast(msg, true);
     }
 
     /** Offline-preview keymap auto-sync: the latest keymap SAVED in the
@@ -247,7 +324,8 @@ export class ZmkKeymapTab {
     }
 
     _writeSnapshot() {
-        if (this.app?.zmkStudioSim || !this.keymap) return;
+        // Only a SAVED keymap is the saved copy (WC-11).
+        if (this.app?.zmkStudioSim || !this.keymap || this.unsaved) return;
         try {
             localStorage.setItem(this._snapKey(), JSON.stringify({
                 savedAt: new Date().toISOString(),
@@ -262,7 +340,7 @@ export class ZmkKeymapTab {
      * Skipped for a guessed family and (inside the seeder) whenever the
      * workspace holds keymap edits that haven't synced yet. */
     _seedUnplugged() {
-        if (this.app?.zmkStudioSim || this.app?.familyUnresolved || !this.keymap) return;
+        if (this.app?.zmkStudioSim || this.app?.familyUnresolved || !this.keymap || this.unsaved) return;
         try {
             seedWorkspaceFromDevice(this._family(), {
                 layers: this.keymap.layers, behaviors: zmkBehaviors(),
@@ -325,7 +403,11 @@ export class ZmkKeymapTab {
             // A backdrop click removes the dialog without a choice.
             const obs = new MutationObserver(() => { if (back && !back.isConnected) done(null); });
             const keep = el('button', { class: 'btn primary', 'data-act': 'keep', text: 'Keep keyboard',
-                onclick: () => { this._writeSnapshot(); toast('Kept the keyboard\'s keymap; it is now the saved copy'); done('keep'); } });
+                onclick: () => {
+                    if (this.unsaved) toast('Unsaved edits on the keyboard: save them first, then this becomes the saved copy', true);
+                    else { this._writeSnapshot(); toast('Kept the keyboard\'s keymap; it is now the saved copy'); }
+                    done('keep');
+                } });
             const restore = el('button', { class: 'btn', 'data-act': 'restore', text: 'Restore saved copy',
                 onclick: async () => { done('restore'); await this._restoreSnapshot(snap, live); } });
             const show = el('button', { class: 'btn', 'data-act': 'diff', text: 'Show differences',
@@ -424,7 +506,7 @@ export class ZmkKeymapTab {
     }
 
     _onSerialDisconnect() {
-        this._releaseTabLock?.();
+        releaseSerialLock();
         this._setUnsaved(false);
         board.unbind(this.adapter);
         this.state = 'idle';

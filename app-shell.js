@@ -164,12 +164,16 @@ export function renderTabs({ tabs, active, onSelect, app, registry }) {
 
 // ---------- Device › Keyboard ----------
 
+let kbTabAbort = null;      // main.js rebuilds tabs without a dtor: newest instance wins
+
 export class KeyboardTab {
     constructor(app) {
         this.app = app;
         this.root = el('div', { class: 'kb-tab' });
         this._refresh = () => this.#syncAppearance();
-        appearance.addEventListener('appearance', this._refresh);
+        kbTabAbort?.abort();
+        kbTabAbort = new AbortController();
+        appearance.addEventListener('appearance', this._refresh, { signal: kbTabAbort.signal });
     }
 
     load() {

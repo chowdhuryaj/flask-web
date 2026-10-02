@@ -49,6 +49,7 @@ export function inspectorModel(binding, adapter = ADAPTER) {
 }
 
 export function createInspector({ app, dock }) {
+    const ac = new AbortController();     // board listeners die with the inspector
     const root = el('div', { class: 'insp', 'data-view': 'default' });
     // Local UI state that is not (yet) in the binding.
     let local = { pos: null, layer: null, kind: null, right: null };
@@ -372,10 +373,10 @@ export function createInspector({ app, dock }) {
         root.replaceChildren(...keyPanel(s));
     }
 
-    for (const ev of ['select', 'change', 'layer', 'history']) board.addEventListener(ev, render);
+    for (const ev of ['select', 'change', 'layer', 'history']) board.addEventListener(ev, render, { signal: ac.signal });
     // An edit changes what the bindings are; the timing card is per key, keep it,
     // but a new key or a layer jump clears it (render() resets via local.key).
-    board.addEventListener('select', () => { if (timing.pos !== sel()?.pos) timing = { pos: null, el: null, live: null, token: timing.token }; });
+    board.addEventListener('select', () => { if (timing.pos !== sel()?.pos) timing = { pos: null, el: null, live: null, token: timing.token }; }, { signal: ac.signal });
 
     return {
         root, render,
@@ -388,5 +389,6 @@ export function createInspector({ app, dock }) {
             return false;
         },
         stop() { stopPick?.(); },
+        dispose() { stopPick?.(); ac.abort(); },
     };
 }

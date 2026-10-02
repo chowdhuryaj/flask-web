@@ -358,7 +358,14 @@ class Board extends EventTarget {
     #barEl = null;
     #boardEl = null;
     #bannerEl = null;
-    #busy = false;
+    // Edits run one at a time, in call order. Fast type-to-assign used to be
+    // refused ("Still writing the last key") and lose keystrokes (WC-20).
+    #queue = Promise.resolve();
+    #serial(fn) {
+        const run = this.#queue.then(fn);
+        this.#queue = run.then(() => {}, () => {});
+        return run;
+    }
 
     // ---- public: contract ----
 
@@ -367,7 +374,9 @@ class Board extends EventTarget {
         return { layer: this.#layer, pos: this.#a.posOf(this.#sel) };
     }
 
-    async assign(binding, { advance = true } = {}) {
+    assign(binding, opts) { return this.#serial(() => this.#assign(binding, opts)); }
+
+    async #assign(binding, { advance = true } = {}) {
         const a = this.#a;
         if (!a || a.readOnly || this.#pick) return false;
         const sel = this.#sel;
@@ -448,7 +457,9 @@ class Board extends EventTarget {
 
     /** Write several keys as ONE undo step: [{pos, value}]. Stops at the
      * first refused write (already-written keys stay in the step). */
-    async assignMany(list) {
+    assignMany(list) { return this.#serial(() => this.#assignMany(list)); }
+
+    async #assignMany(list) {
         const a = this.#a;
         if (!a || a.readOnly || this.#pick || !list.length) return false;
         const layer = this.#layer;
@@ -519,8 +530,8 @@ class Board extends EventTarget {
     /** Re-measure the pane and rescale the board to it (the Fit button). */
     fit() { this.#measure(); }
 
-    async undo() { return this.#step(this.#undo, this.#redo, 'before'); }
-    async redo() { return this.#step(this.#redo, this.#undo, 'after'); }
+    undo() { return this.#serial(() => this.#step(this.#undo, this.#redo, 'before')); }
+    redo() { return this.#serial(() => this.#step(this.#redo, this.#undo, 'after')); }
 
     setZoom(f) {
         if (hasDom()) document.documentElement.style.setProperty(BOARD_ZOOM_VAR, String(f));
@@ -606,16 +617,12 @@ class Board extends EventTarget {
     }
 
     async #write(layer, sel, value) {
-        if (this.#busy) { toast('Still writing the last key. Pick again in a moment.', true); return false; }
-        this.#busy = true;
         try {
             const r = await this.#a.write(layer, sel, value);
             return r !== false;
         } catch (e) {
             toast(`Write failed: ${e.message}`, true);
             return false;
-        } finally {
-            this.#busy = false;
         }
     }
 

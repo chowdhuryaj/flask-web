@@ -198,6 +198,7 @@ export function createDock({ app, assign, tools = [] }) {
     let armed = 0;
     let target = null;          // {label, set({key, mods})} while the inspector wants a key
     let stopCapture = null;
+    const ac = new AbortController();     // board listeners die with the dock
     let open = true;
 
     const root = el('section', { class: 'dock', 'data-open': 'true', 'aria-label': 'Palette' });
@@ -338,8 +339,10 @@ export function createDock({ app, assign, tools = [] }) {
         get target() { return target; },
         setHint,
         stop() { stopCapture?.(); },
+        /** Drop the board listener; the owning tab calls this when it is replaced. */
+        dispose() { stopCapture?.(); ac.abort(); },
     };
-    board.addEventListener('select', setHint);
+    board.addEventListener('select', setHint, { signal: ac.signal });
     api.refresh();
     return api;
 }
