@@ -15,12 +15,14 @@
     "install-app": "sh install-app.sh"
   },
   "devDependencies": {
+    "@electron/fuses": "^1.8.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "dev.aj.totem-flask",
     "productName": "Totem-Flask",
+    "afterPack": "build/fuses.js",
     "directories": {
       "output": "dist"
     },
