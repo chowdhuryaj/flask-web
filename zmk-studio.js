@@ -395,6 +395,7 @@ export class StudioError extends Error {
 
 const RPC_TIMEOUT_MS = 2000;
 const SAVE_TIMEOUT_MS = 5000;   // settings flash write can be slow
+const PROBE_TIMEOUT_MS = 800;   // silent CDC port: give up fast, try the next
 
 /**
  * events: 'lockstate' {detail: 0|1} · 'unsaved' {detail: bool} · 'disconnect'
@@ -426,6 +427,9 @@ export class StudioClient extends EventTarget {
      * (zmk.js ZMK_VIDPID) to keep this module import-free.
      * Silent path first: an already-granted port matching a filter opens
      * without a user gesture; requestPort needs one.
+     * A board can expose several CDC ports with the same VID:PID (the Totem
+     * shows two) and only one speaks Studio, so every port is probed with
+     * get_device_info before it is kept.
      */
     async connect({ filters = [], requestIfNeeded = true } = {}) {
         if (!StudioClient.supported()) {
@@ -433,25 +437,31 @@ export class StudioClient extends EventTarget {
         }
         if (this.connected) return;
 
-        let port = null;
-        const granted = await navigator.serial.getPorts();
-        for (const p of granted) {
+        const matches = (p) => {
             const info = p.getInfo();
-            if (!filters.length || filters.some((f) =>
-                info.usbVendorId === f.usbVendorId && info.usbProductId === f.usbProductId)) {
-                port = p;
-                break;
-            }
-        }
-        if (!port) {
-            if (!requestIfNeeded) throw new StudioError('cancelled', 'No granted serial port');
+            return !filters.length || filters.some((f) =>
+                info.usbVendorId === f.usbVendorId && info.usbProductId === f.usbProductId);
+        };
+        for (const p of (await navigator.serial.getPorts()).filter(matches)) {
             try {
-                port = await navigator.serial.requestPort({ filters });
-            } catch {
-                throw new StudioError('cancelled', 'No serial port selected');
-            }
+                if (await this._openAndProbe(p)) return;
+            } catch { /* busy: try the next one */ }
         }
+        if (!requestIfNeeded) throw new StudioError('cancelled', 'No granted serial port');
+        let port;
+        try {
+            port = await navigator.serial.requestPort({ filters });
+        } catch {
+            throw new StudioError('cancelled', 'No serial port selected');
+        }
+        if (!(await this._openAndProbe(port))) {
+            throw new StudioError('timeout',
+                'That port did not answer ZMK Studio. Connect again and pick the other one.');
+        }
+    }
 
+    /** Open `port` and check it answers Studio; closes it again if not. */
+    async _openAndProbe(port) {
         try {
             await port.open({ baudRate: 12500 });   // CDC-ACM: value is ignored
         } catch (e) {
@@ -465,8 +475,17 @@ export class StudioClient extends EventTarget {
         this._writer = port.writable.getWriter();
         this._reader = port.readable.getReader();
         navigator.serial.addEventListener('disconnect', this._onSerialDisconnect);
-        diag.log('studio-open', 'serial port opened');
         this._readLoop();   // intentionally un-awaited
+        try {
+            await this._rpc(SUB_CORE, fVarint(CORE_GET_DEVICE_INFO, 1, true), { timeout: PROBE_TIMEOUT_MS });
+        } catch {
+            diag.log('studio-open', 'port did not answer Studio, closed');
+            this._closing = true;
+            await this._teardown();
+            return false;
+        }
+        diag.log('studio-open', 'serial port opened');
+        return true;
     }
 
     async disconnect() {
