@@ -9,27 +9,42 @@
    - SCALE (space/type/radius/elevation/z/motion) is theme-independent and lives
      once, here. Everything else references it. */
 
+/* Vendored fonts (SIL OFL, see fonts/OFL-*.txt): the desktop app works offline. */
+@font-face { font-family: 'Plus Jakarta Sans Variable'; font-style: normal; font-weight: 200 800; font-display: swap;
+  src: url('fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2-variations'), url('fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono Variable'; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url('fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations'), url('fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2'); }
+
 :root {
-  /* ---- color: light (classic) ---- */
-  --bg: #f3f4f6;
-  --surface: #ffffff;
-  --surface2: #f9fafb;
-  --text: #1c1e21;
-  --muted: #6b7280;
-  --faint: #9ca3af;
-  --border: #e5e7eb;
-  --border2: #d1d5db;
-  --accent: #2563eb;
-  --accent-bg: #e8f0fe;
-  --accent-text: #14458a;
-  --ok: #15803d;
-  --ok-bg: #e7f6ec;
-  --warn: #b45309;
-  --warn-bg: #fef3e2;
-  --danger: #b42318;
-  --danger-bg: #fdeceb;
-  --keycap: #ffffff;
-  --keycap-border: #d1d5db;
+  /* ---- color: Graphite dark (the default; themes.js pins the full set at
+     boot, this block only prevents a flash before it runs) ---- */
+  --bg: #121212;
+  --surface: #1b1b1d;
+  --surface2: #242427;
+  --surface3: #2e2e32;
+  --text: #f1f1ee;
+  --muted: #a9a9a3;
+  --faint: #74747a;
+  --border: #2b2b2f;
+  --border2: #3a3a40;
+  --accent: #d7f46c;
+  --accent-line: #d7f46c;
+  --accent-bg: #2b3314;
+  --accent-text: #e6f9a0;
+  --on-accent: #1a1f05;
+  --ok: #7fd69a;
+  --ok-bg: #16301f;
+  --warn: #f5b86b;
+  --warn-bg: #3a2d14;
+  --danger: #f1857c;
+  --danger-bg: #3a1714;
+  --keycap: #2a2a2e;
+  --keycap-border: #3a3a40;
+  /* Legend colours: layer, hold / modifier, macro, transparent / none. */
+  --c-layer: #7aa7ff;
+  --c-hold: #f5b86b;
+  --c-macro: #c792ea;
+  --c-dim: #6a6a70;
 
   /* Elevation is derived from a theme-agnostic shadow ink so it tracks any
      palette main.js pins. (--shadow is NOT in THEME_VARS: hardcoding a light
@@ -37,9 +52,9 @@
      light mode. Deriving from --shadow-ink fixes that without touching the
      THEMES table.) */
   --shadow-ink: 0 0 0;
-  --shadow-1: 0 1px 2px rgba(var(--shadow-ink) / 0.06);
-  --shadow-2: 0 2px 8px rgba(var(--shadow-ink) / 0.08);
-  --shadow-3: 0 8px 28px rgba(var(--shadow-ink) / 0.18);
+  --shadow-1: 0 1px 2px rgba(var(--shadow-ink) / 0.35);
+  --shadow-2: 0 2px 8px rgba(var(--shadow-ink) / 0.4);
+  --shadow-3: 0 8px 28px rgba(var(--shadow-ink) / 0.55);
   --shadow: var(--shadow-1); /* back-compat alias */
 
   /* ---- space: 4px base, tightened at the low end for dense product UI ---- */
@@ -67,10 +82,10 @@
 
   /* ---- radius ---- */
   --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 14px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 22px;
   --r-full: 999px;
 
   /* ---- z: semantic, ordered. Never write a bare z-index. ---- */
@@ -91,35 +106,8 @@
   --text-scale: 1.15;
   --board-zoom: 1;
 
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a1a18;
-    --surface: #242422;
-    --surface2: #2c2c29;
-    --text: #ececea;
-    --muted: #a3a39d;
-    --faint: #76766f;
-    --border: #36352f;
-    --border2: #45443d;
-    --accent: #5b9aff;
-    --accent-bg: #1c2a44;
-    --accent-text: #bcd4ff;
-    --ok: #69d28c;
-    --ok-bg: #15301f;
-    --warn: #e0a94f;
-    --warn-bg: #3a2d14;
-    --danger: #f1857c;
-    --danger-bg: #3a1714;
-    --keycap: #2c2c29;
-    --keycap-border: #45443d;
-    --shadow-1: 0 1px 2px rgba(var(--shadow-ink) / 0.3);
-    --shadow-2: 0 2px 8px rgba(var(--shadow-ink) / 0.4);
-    --shadow-3: 0 8px 28px rgba(var(--shadow-ink) / 0.55);
-  }
+  --font-ui: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -136,7 +124,7 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 
 :where(button, [role="button"], a, input, select, textarea, .dev-item, .code, .toggle):focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-line);
   outline-offset: 2px;
   border-radius: var(--r-xs);
 }
@@ -175,8 +163,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- buttons & inputs ---------- */
 
 .btn {
-  padding: 6px 12px;
-  border-radius: 7px;
+  padding: 6px 14px;
+  border-radius: var(--r-full);
   border: 1px solid var(--border2);
   background: var(--surface);
   cursor: pointer;
@@ -188,11 +176,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn:active { transform: translateY(0.5px); }
 .btn.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
-  font-weight: var(--fw-md);
+  font-weight: var(--fw-sb);
 }
-.btn.primary:hover { filter: brightness(1.08); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ghost { background: transparent; box-shadow: none; border-color: transparent; color: var(--muted); }
+.btn.ghost:hover { background: var(--surface2); color: var(--text); }
 .btn.danger { color: var(--danger); border-color: var(--danger); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn:disabled:active { transform: none; }
@@ -208,7 +198,7 @@ select, input[type="text"], input[type="number"], input[type="search"] {
 select:hover, input[type="text"]:hover,
 input[type="number"]:hover, input[type="search"]:hover { border-color: var(--faint); }
 
-input[type="range"] { accent-color: var(--accent); }
+input[type="range"] { accent-color: var(--accent-line); }
 
 /* ---------- palette tabs ---------- */
 
@@ -880,7 +870,7 @@ body.hud-electron a { -webkit-app-region: no-drag; }
 .tr-unlock b {
     display: grid; place-items: center; width: 30px; height: 30px;
     font-family: var(--font-mono); font-size: var(--fs-lg);
-    background: var(--accent); color: #fff; border-radius: var(--r-sm);
+    background: var(--accent); color: var(--on-accent); border-radius: var(--r-sm);
 }
 @keyframes tr-unlock {
     from { opacity: 0; transform: translateY(4px); }

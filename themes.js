@@ -11,11 +11,33 @@
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
-export const THEME_VARS = ['bg', 'surface', 'surface2', 'text', 'muted', 'faint', 'border', 'border2',
-    'accent', 'accent-bg', 'accent-text', 'ok', 'ok-bg', 'warn', 'warn-bg', 'danger', 'danger-bg',
-    'keycap', 'keycap-border'];
+export const THEME_VARS = ['bg', 'surface', 'surface2', 'surface3', 'text', 'muted', 'faint', 'border', 'border2',
+    'accent', 'accent-line', 'accent-bg', 'accent-text', 'on-accent', 'ok', 'ok-bg', 'warn', 'warn-bg', 'danger', 'danger-bg',
+    'keycap', 'keycap-border', 'c-layer', 'c-hold', 'c-macro', 'c-dim'];
+
+// Look-shell tokens a theme need not spell out: surface3 (raised), accent-line
+// (rings and thin strokes; defaults to accent), on-accent (ink on an accent
+// fill) and the four legend colours. Filled per light/dark mode so every older
+// palette keeps working.
+const SEMANTIC = {
+    dark: { 'on-accent': '#ffffff', 'c-layer': '#7aa7ff', 'c-hold': '#f5b86b', 'c-macro': '#c792ea', 'c-dim': '#6a6a70' },
+    light: { 'on-accent': '#ffffff', 'c-layer': '#2f5fd0', 'c-hold': '#9a5b00', 'c-macro': '#8a45b8', 'c-dim': '#a3a39d' },
+};
 export const THEMES = {
-    classic: { label: 'Classic (auto light/dark)' },
+    // Look-shell (2026-10-02): graphite near-black surfaces, one lime accent.
+    // Dark ink on lime buttons (on-accent); the light theme keeps the lime fill
+    // but draws rings and thin text in a darker olive (accent-line / accent-text)
+    // because lime on white is 1.2:1.
+    graphite: {
+        label: 'Graphite', mode: 'dark',
+        vars: { bg: '#121212', surface: '#1b1b1d', surface2: '#242427', surface3: '#2e2e32', text: '#f1f1ee', muted: '#a9a9a3', faint: '#74747a', border: '#2b2b2f', border2: '#3a3a40', accent: '#d7f46c', 'accent-line': '#d7f46c', 'accent-bg': '#2b3314', 'accent-text': '#e6f9a0', 'on-accent': '#1a1f05', ok: '#7fd69a', 'ok-bg': '#16301f', warn: '#f5b86b', 'warn-bg': '#3a2d14', danger: '#f1857c', 'danger-bg': '#3a1714', keycap: '#2a2a2e', 'keycap-border': '#3a3a40', 'c-layer': '#7aa7ff', 'c-hold': '#f5b86b', 'c-macro': '#c792ea', 'c-dim': '#6a6a70' },
+    },
+    graphiteLight: {
+        label: 'Graphite Light', mode: 'light',
+        vars: { bg: '#f2f2ee', surface: '#fbfbf8', surface2: '#ffffff', surface3: '#e9e9e3', text: '#1b1b1d', muted: '#5d5d58', faint: '#8d8d86', border: '#dededa', border2: '#c9c9c2', accent: '#d7f46c', 'accent-line': '#7f9a0c', 'accent-bg': '#eef7c4', 'accent-text': '#465807', 'on-accent': '#1a1f05', ok: '#1f7a3d', 'ok-bg': '#e3f3e8', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#b42318', 'danger-bg': '#fdeceb', keycap: '#ffffff', 'keycap-border': '#c9c9c2', 'c-layer': '#2f5fd0', 'c-hold': '#9a5b00', 'c-macro': '#8a45b8', 'c-dim': '#a3a39d' },
+    },
+    // "System": follows the OS between Graphite and Graphite Light.
+    classic: { label: 'System (auto light/dark)' },
     // keybr.com's own inks, sampled from the running site (2026-08-18) rather
     // than eyeballed: --primary/--secondary/--accent and their ramps. Mirrors
     // AdeptCompanion's Pipette.Theme, which is the default there.
@@ -24,30 +46,37 @@ export const THEMES = {
     // shows those on its page background; here they carry badge text on a
     // tinted chip, where the originals land near 2.6:1.
     keybrDark: {
+        mode: 'dark',
         label: 'keybr Dark',
         vars: { bg: '#2b2b2b', surface: '#333333', surface2: '#404040', text: '#b8b3b3', muted: '#9f9999', faint: '#747070', border: '#404040', border2: '#4d4d4d', accent: '#867f7f', 'accent-bg': '#4d4d4d', 'accent-text': '#e4e0e0', ok: '#6dbe83', 'ok-bg': '#24402c', warn: '#e0a94f', 'warn-bg': '#3a2d14', danger: '#d77b7b', 'danger-bg': '#3e2222', keycap: '#404040', 'keycap-border': '#4d4d4d' },
     },
     keybrLight: {
+        mode: 'light',
         label: 'keybr Light',
         vars: { bg: '#f4f0f0', surface: '#ffffff', surface2: '#faf9f9', text: '#282640', muted: '#514e63', faint: '#7a7786', border: '#e9e1e1', border2: '#ded3d3', accent: '#3d475c', 'accent-bg': '#e3e6ed', 'accent-text': '#292f3d', ok: '#2a7e21', 'ok-bg': '#e6f1e4', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#a1464e', 'danger-bg': '#f7e8e9', keycap: '#ffffff', 'keycap-border': '#e9e1e1' },
     },
     light: {
+        mode: 'light',
         label: 'Light',
         vars: { bg: '#f5f5f4', surface: '#ffffff', surface2: '#fafaf9', text: '#1c1c1a', muted: '#6b6b66', faint: '#9a9a93', border: '#e2e2dd', border2: '#cfcfc8', accent: '#2563eb', 'accent-bg': '#e8f0fe', 'accent-text': '#14458a', ok: '#15803d', 'ok-bg': '#e7f6ec', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#b42318', 'danger-bg': '#fdeceb', keycap: '#ffffff', 'keycap-border': '#cfcfc8' },
     },
     dark: {
+        mode: 'dark',
         label: 'Dark',
         vars: { bg: '#1a1a18', surface: '#242422', surface2: '#2c2c29', text: '#ececea', muted: '#a3a39d', faint: '#76766f', border: '#36352f', border2: '#45443d', accent: '#5b9aff', 'accent-bg': '#1c2a44', 'accent-text': '#bcd4ff', ok: '#69d28c', 'ok-bg': '#15301f', warn: '#e0a94f', 'warn-bg': '#3a2d14', danger: '#f1857c', 'danger-bg': '#3a1714', keycap: '#2c2c29', 'keycap-border': '#45443d' },
     },
     nord: {
+        mode: 'dark',
         label: 'Nord',
         vars: { bg: '#2e3440', surface: '#3b4252', surface2: '#434c5e', text: '#eceff4', muted: '#aeb8cc', faint: '#7b869c', border: '#4c566a', border2: '#596580', accent: '#88c0d0', 'accent-bg': '#274552', 'accent-text': '#c8e4ec', ok: '#a3be8c', 'ok-bg': '#33402c', warn: '#ebcb8b', 'warn-bg': '#3f3826', danger: '#bf616a', 'danger-bg': '#40272b', keycap: '#434c5e', 'keycap-border': '#596580' },
     },
     dracula: {
+        mode: 'dark',
         label: 'Dracula',
         vars: { bg: '#282a36', surface: '#313342', surface2: '#3a3d4f', text: '#f8f8f2', muted: '#b6b8c8', faint: '#7e8195', border: '#44475a', border2: '#565a72', accent: '#bd93f9', 'accent-bg': '#3b3354', 'accent-text': '#e3d3ff', ok: '#50fa7b', 'ok-bg': '#1f4030', warn: '#ffb86c', 'warn-bg': '#43331f', danger: '#ff5555', 'danger-bg': '#4a2020', keycap: '#3a3d4f', 'keycap-border': '#565a72' },
     },
     solarized: {
+        mode: 'light',
         label: 'Solarized Light',
         // muted/ok use Solarized base01 + a darkened green: the canonical
         // base00 #657b83 (4.30:1) and green #859900 (2.76:1 on ok-bg — the
@@ -57,8 +86,8 @@ export const THEMES = {
     },
 };
 
-// AJ Q5 (2026-10-01): keybr Dark is the default everywhere, as in native.
-export const DEFAULT_THEME = 'keybrDark';
+// Look-shell: Graphite is the default (was keybr Dark, AJ Q5 2026-10-01).
+export const DEFAULT_THEME = 'graphite';
 export const TEXT_SCALE = { min: 0.9, max: 1.6, step: 0.05, def: 1.15 };
 export const BOARD_ZOOM = { min: 60, max: 150, step: 10, def: 100 };
 
@@ -75,14 +104,42 @@ export function currentTheme() {
     return t in THEMES ? t : DEFAULT_THEME;
 }
 
+/** 'dark' | 'light' for a theme id; "System" resolves through the OS. */
+export function modeOf(id) {
+    const m = THEMES[id]?.mode;
+    if (m) return m;
+    return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+/** The vars a theme pins: its own, over the mode's semantic defaults.
+ * System resolves to Graphite / Graphite Light. */
+export function varsFor(id) {
+    const key = THEMES[id]?.vars ? id : modeOf(id) === 'light' ? 'graphiteLight' : 'graphite';
+    const v = THEMES[key].vars;
+    const mode = THEMES[key].mode;
+    return { 'surface3': v.surface2, 'accent-line': v.accent, ...SEMANTIC[mode], ...v };
+}
+
+let osWatch = null;
 export function applyTheme(name) {
     const id = name in THEMES ? name : DEFAULT_THEME;
-    const theme = THEMES[id];
     const root = document.documentElement;
     for (const v of THEME_VARS) root.style.removeProperty('--' + v);
-    if (theme.vars) for (const [k, val] of Object.entries(theme.vars)) root.style.setProperty('--' + k, val);
+    for (const [k, val] of Object.entries(varsFor(id))) root.style.setProperty('--' + k, val);
+    root.dataset && (root.dataset.theme = modeOf(id));
     store.set('flask-theme', id);
+    // System follows the OS live; any other theme drops the listener.
+    if (typeof matchMedia === 'function') {
+        const mq = matchMedia('(prefers-color-scheme: light)');
+        if (osWatch) { mq.removeEventListener?.('change', osWatch); osWatch = null; }
+        if (id === 'classic') { osWatch = () => applyTheme('classic'); mq.addEventListener?.('change', osWatch); }
+    }
     notify();
+}
+
+/** The sun/moon switch: dark ⇄ light, staying inside the Graphite pair. */
+export function toggleTheme() {
+    applyTheme(modeOf(currentTheme()) === 'dark' ? 'graphiteLight' : 'graphite');
 }
 
 export function currentTextScale() {

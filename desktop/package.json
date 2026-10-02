@@ -40,6 +40,7 @@
           "*.html",
           "*.css",
           "css/**",
+          "fonts/**",
           "!desktop/**",
           "!node_modules/**",
           "!tests/**"
