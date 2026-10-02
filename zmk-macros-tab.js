@@ -18,8 +18,8 @@
 import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=62';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=62';
 import { CH, V } from './flaskproto.js?v=62';
-import { usageCap } from './zmk-keycodes.js?v=62';   // macroSummary letters only
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=62';
+import { usagesToText } from './zmk-adaptive-codec.js?v=62';   // macroSummary text
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary, onSlotsChanged, draftSlots, dim } from './zmk-behaviour-common.js?v=62';
 import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=62';
 import {
     MACRO_ACTION, MACRO_ACTION_LABELS,
@@ -30,9 +30,10 @@ import {
 export function macroSummary(steps) {
     const live = macroLiveSteps(steps ?? []);
     if (!live.length) return '';
-    const caps = live.map((st) => (st.action === MACRO_ACTION.tap && st.param ? usageCap(st.param) : null));
-    if (caps.every((c) => c && c.length === 1)) {
-        const t = caps.join('').toLowerCase();
+    // Plain and shifted printable keys read back as the text they type.
+    const t = live.every((st) => st.action === MACRO_ACTION.tap && st.param)
+        ? usagesToText(live.map((st) => st.param)) : null;
+    if (t != null) {
         return `types '${t.length > 12 ? t.slice(0, 12) + '…' : t}'`;
     }
     return `${live.length} step${live.length === 1 ? '' : 's'}`;
@@ -42,9 +43,38 @@ export class ZmkMacrosTab {
     constructor(app) {
         this.app = app;
         this.root = blurClicks(el('div'));
-        this.drafts = new Set(); // empty slots kept visible while editing
+        // Empty slots kept visible while editing. Shared, so Adaptive never
+        // hands out a slot that is open here as a draft.
+        this.drafts = draftSlots.macro;
+        this.drafts.clear();
         installSlotSummary(app);
         registerSummary('macro', (m) => macroSummary(this.steps?.[m]));
+        // Another tab wrote macro slots (Adaptive's text macros, a Mode):
+        // our cache is stale and "New macro" would overwrite them.
+        onSlotsChanged(CH.macros, this, (d) => this.refresh(d.slot));
+    }
+
+    /** Re-read one slot, or everything when `slot` is omitted. */
+    async refresh(slot) {
+        if (!this.steps || this._rec) return;
+        try {
+            if (slot == null) { await this.load(); return; }
+            this.steps[slot] = await this.readSlot(slot);
+            this.render();
+        } catch (e) { toast(`Macros reload failed: ${e.message}`, true); }
+    }
+
+    /** One slot's steps off the device, padded with empties. Stops at the
+     * first empty step (playback does too). */
+    async readSlot(m) {
+        const slot = [];
+        for (let s = 0; s < this.stepCount; s++) {
+            const step = decodeMacroStep(await this.app.flask.getBytes(CH.macros, V.macrosStep, [m, s], 2));
+            slot.push({ action: step.action, param: step.param });
+            if (step.action === MACRO_ACTION.empty) break;
+        }
+        while (slot.length < this.stepCount) slot.push({ action: MACRO_ACTION.empty, param: 0 });
+        return slot;
     }
 
     async load() {
@@ -53,25 +83,12 @@ export class ZmkMacrosTab {
         hid?.pause?.();
         try {
             this.enabled = await flask.getU16(CH.macros, V.macrosEnabled);
-            this.slotCount = await flask.getU16(CH.macros, V.macrosSlotCount);
-            this.stepCount = await flask.getU16(CH.macros, V.macrosStepCount);
+            this.slotCount = await dim(this.app, CH.macros, V.macrosSlotCount);
+            this.stepCount = await dim(this.app, CH.macros, V.macrosStepCount);
             this.tapMs = await flask.getU16(CH.macros, V.macrosTapMs);
             this.waitMs = await flask.getU16(CH.macros, V.macrosWaitMs);
             this.steps = [];
-            for (let m = 0; m < this.slotCount; m++) {
-                const slot = [];
-                // Playback stops at the first empty step — so can the reads.
-                for (let s = 0; s < this.stepCount; s++) {
-                    const r = await flask.getBytes(CH.macros, V.macrosStep, [m, s], 2);
-                    const step = decodeMacroStep(r);
-                    slot.push({ action: step.action, param: step.param });
-                    if (step.action === MACRO_ACTION.empty) break;
-                }
-                while (slot.length < this.stepCount) {
-                    slot.push({ action: MACRO_ACTION.empty, param: 0 });
-                }
-                this.steps.push(slot);
-            }
+            for (let m = 0; m < this.slotCount; m++) this.steps.push(await this.readSlot(m));
         } finally {
             hid?.resume?.();
         }
@@ -92,6 +109,8 @@ export class ZmkMacrosTab {
             this.bar?.markEdited();
         } catch (e) {
             toast(`Macro write failed: ${e.message}`, true);
+            // The cache already holds the edit the device refused: show what it holds.
+            try { this.steps[m] = await this.readSlot(m); } catch { /* keep the cache */ }
         }
     }
 
@@ -106,10 +125,18 @@ export class ZmkMacrosTab {
         this.render();
     }
 
-    addMacro() {
-        const i = this.steps.findIndex((st, idx) =>
-            macroIsEmpty(st) && !this.drafts.has(idx));
-        if (i < 0) { toast(`All ${this.slotCount} macro slots are in use`, true); return; }
+    /** First slot that is empty ON THE DEVICE (not just in our cache, which
+     * another tab may have outrun) and not an open draft. */
+    async addMacro() {
+        let i = -1;
+        try {
+            for (let k = 0; k < this.steps.length && i < 0; k++) {
+                if (this.drafts.has(k) || !macroIsEmpty(this.steps[k])) continue;
+                this.steps[k] = await this.readSlot(k);   // one read when it really is empty
+                if (macroIsEmpty(this.steps[k])) i = k;
+            }
+        } catch (e) { toast(`Could not check macro slots: ${e.message}`, true); return; }
+        if (i < 0) { this.render(); toast(`All ${this.slotCount} macro slots are in use`, true); return; }
         this.drafts.add(i);
         this.render();
         this.reveal(i);
@@ -131,6 +158,7 @@ export class ZmkMacrosTab {
         this.steps[m] = Array.from({ length: this.stepCount },
             () => ({ action: MACRO_ACTION.empty, param: 0 }));
         this.drafts.delete(m);
+        zmkSetSlotName(this.app.profile?.family ?? 'imprint', 'macros', m, '');   // a stale name outlives the slot (WB-12)
         for (let s = 0; s < live; s++) {
             await this.writeStep(m, s);
         }
@@ -284,7 +312,7 @@ export class ZmkMacrosTab {
         } else {
             const val = el('span', { class: 'val', text: `${step.param} ms` });
             const slider = el('input', {
-                type: 'range', min: 0, max: 5000, step: 10, value: step.param,
+                type: 'range', min: 0, max: 10000, step: 10, value: step.param,
                 style: 'width:140px',
             });
             slider.addEventListener('input', () => { val.textContent = `${slider.value} ms`; });

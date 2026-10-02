@@ -10,6 +10,8 @@
 // importing v10 into v9 skips leader/gestures.
 
 import { CH, V } from './flaskproto.js?v=62';
+import { zmkBehaviors } from './zmk-keycodes.js?v=62';
+import { isRecursiveOutput } from './behavior-catalog.js?v=62';
 import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=62';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
@@ -24,6 +26,25 @@ import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
     from './zmk-tapdance-codec.js?v=62';
 import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
     from './zmk-adaptive-codec.js?v=62';
+
+/** Behavior ids shift between firmware builds and differ from the offline sim,
+ * so a behavior output (action 3) is exported with its display name beside the
+ * id, exactly as the keymap half does (WB-05). */
+export function namedOut(o) {
+    const behavior = o.action === 3 ? zmkBehaviors()?.get(o.behaviorId)?.displayName : undefined;
+    return behavior ? { ...o, behavior } : o;
+}
+
+/** Apply side of namedOut: the name wins; the id is used only when the file
+ * has no name (or this session has no behavior list to look names up in).
+ * Returns null when the file names a behavior this firmware does not have. */
+export function resolveOut(o, behaviors = zmkBehaviors()) {
+    if (!o || o.action !== 3 || !o.behavior || !behaviors?.size) return o;
+    for (const [id, d] of behaviors) if (d.displayName === o.behavior) return { ...o, behaviorId: id };
+    return null;
+}
+
+const NO_OUT = { action: 0, behaviorId: 0, param1: 0, param2: 0 };
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -131,10 +152,13 @@ async function exportFlaskStateInner(app) {
         for (let i = 0; i < count; i++) {
             const cfg = decodeTdCfg(await flask.getBytes(CH.tapDance, V.tdCfg, [i], 1));
             const taps = [];
+            // A dance is its contiguous prefix: stop at the first NONE (apply pads the rest).
+            // A Tap Dance / Adaptive Key step would recurse in the firmware: not exported.
             for (let t = 0; t < tapCap; t++) {
                 const d = decodeTdStep(await flask.getBytes(CH.tapDance, V.tdStep, [i, t], 2));
-                taps.push({ action: d.action, behaviorId: d.behaviorId,
-                    param1: d.param1, param2: d.param2 });
+                if (!d.action || isRecursiveOutput(d)) break;
+                taps.push(namedOut({ action: d.action, behaviorId: d.behaviorId,
+                    param1: d.param1, param2: d.param2 }));
             }
             slots.push({ termMs: cfg.termMs, taps });
         }
@@ -148,7 +172,8 @@ async function exportFlaskStateInner(app) {
         const sets = await g(CH.adaptive, V.akSetCount);
         const ruleCap = await g(CH.adaptive, V.akRuleCount);
         const stepCap = await g(CH.adaptive, V.akStepCount) || 6;
-        const out1 = (d) => ({ action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 });
+        const out1 = (d) => (isRecursiveOutput(d) ? { ...NO_OUT }
+            : namedOut({ action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 }));
         const fallback = [];
         for (let st = 0; st < sets; st++) {
             fallback.push(out1(decodeAkFallback(await flask.getBytes(CH.adaptive, V.akFallback, [st], 1))));
@@ -160,7 +185,7 @@ async function exportFlaskStateInner(app) {
             const steps = [];
             for (let s = 0; s < stepCap; s++) {
                 const d = decodeAkStep(await flask.getBytes(CH.adaptive, V.akStep, [i, s], 2));
-                if (!d.action) break;
+                if (!d.action || isRecursiveOutput(d)) break;
                 steps.push(out1(d));
             }
             if (steps.length) rules.push({ index: i, set: h.set, trigger: h.trigger, maxIdleMs: h.maxIdleMs, strict: h.strict, steps });
@@ -180,13 +205,13 @@ async function exportFlaskStateInner(app) {
                 const r = await flask.getBytes(CH.combos, V.combosSlotV3, [i], 1);
                 const { positions, action, behaviorId, param1, param2,
                     timeoutMs, priorIdleMs, layer } = decodeComboSlotV3(r, keys);
-                slots.push({ positions, action, behaviorId, param1, param2,
+                slots.push({ positions, ...namedOut({ action, behaviorId, param1, param2 }),
                     timeoutMs, priorIdleMs, layer });
             } else if (caps.combosTyped) {
                 const r = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
                 const { positions, action, behaviorId, param1, param2 } =
                     decodeComboSlotV2(r, keys);
-                slots.push({ positions, action, behaviorId, param1, param2 });
+                slots.push({ positions, ...namedOut({ action, behaviorId, param1, param2 }) });
             } else {
                 const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
                 const { positions, usage } = decodeComboSlot(r, keys);
@@ -285,6 +310,14 @@ async function applyFlaskStateInner(app, data, save = true) {
     const failures = [];
     const saves = [];
     const setU = async (ch, id, v) => { await flask.setU16(ch, id, v); applied++; };
+    // Behavior outputs resolve by display name; one this firmware lacks becomes empty.
+    let unresolved = 0;
+    const out = (o) => {
+        const r = resolveOut(o);
+        if (r) return r;
+        unresolved++;
+        return { ...o, ...NO_OUT };
+    };
 
 
     const section = async (name, cond, fn, ch) => {
@@ -371,7 +404,7 @@ async function applyFlaskStateInner(app, data, save = true) {
         // File slots may be legacy {usage}, typed (v12) or timed (v14);
         // device may be any of those too — bridge every direction.
         const file = (s.slots ?? []).slice(0, count)
-            .map((x) => (x.action != null ? x : comboSlotToTyped(x)));
+            .map((x) => out(x.action != null ? x : comboSlotToTyped(x)));
         // Two live combos on one key set freeze the board on press: refuse
         // the whole section before any write. Pre-v14 Totem firmware keeps
         // its compiled combos outside the runtime table, so check those too.
@@ -421,9 +454,12 @@ async function applyFlaskStateInner(app, data, save = true) {
             await flask.setBytes(CH.tapDance, V.tdCfg,
                 encodeTdCfg(i, slot.termMs ?? 0), 1);
             applied++;
-            for (let t = 0; t < Math.min(tapCap, slot.taps?.length ?? 0); t++) {
+            // Pad with NONE: an export lists only the live prefix, and a stale tap
+            // behind it on the device would come alive with the next edit.
+            for (let t = 0; t < tapCap; t++) {
+                const o = slot.taps?.[t];
                 await flask.setBytes(CH.tapDance, V.tdStep,
-                    encodeTdStep(i, t, slot.taps[t]), 2);
+                    encodeTdStep(i, t, o && !isRecursiveOutput(o) ? out(o) : NO_OUT), 2);
                 applied++;
             }
         }
@@ -435,7 +471,7 @@ async function applyFlaskStateInner(app, data, save = true) {
         const ruleCap = await flask.getU16(CH.adaptive, V.akRuleCount);
         const stepCap = await flask.getU16(CH.adaptive, V.akStepCount) || 6;
         for (let st = 0; st < Math.min(sets, s.fallback?.length ?? 0); st++) {
-            await flask.setBytes(CH.adaptive, V.akFallback, encodeAkFallback(st, s.fallback[st]), 1);
+            await flask.setBytes(CH.adaptive, V.akFallback, encodeAkFallback(st, isRecursiveOutput(s.fallback[st]) ? NO_OUT : out(s.fallback[st])), 1);
             applied++;
         }
         // Device rules the file does not list are deleted, so the file is the whole table
@@ -452,7 +488,7 @@ async function applyFlaskStateInner(app, data, save = true) {
             if (r.index >= ruleCap || r.set >= sets) continue;
             await flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(r.index, r), 1);
             for (let st = 0; st < stepCap; st++) {
-                await flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(r.index, st, r.steps?.[st] ?? {}), 2);
+                await flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(r.index, st, r.steps?.[st] && !isRecursiveOutput(r.steps[st]) ? out(r.steps[st]) : {}), 2);
             }
             applied++;
         }
@@ -513,7 +549,7 @@ async function applyFlaskStateInner(app, data, save = true) {
             try { await flask.save(ch); } catch (e) { failures.push(`save 0x${ch.toString(16)}: ${e.message}`); }
         }
     }
-    return { applied, failures, saved: save ? saves.length : 0, channels: saves };
+    return { applied, failures, unresolved, saved: save ? saves.length : 0, channels: saves };
 }
 
 /** Save module channels in order, stopping at the first failure (Make

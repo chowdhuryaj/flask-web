@@ -12,13 +12,14 @@ import { board } from './board.js?v=62';
 import { kpParam } from './zmk-keycodes.js?v=62';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty }
     from './zmk-output-codec.js?v=62';
-import { blurClicks, pickOutput, outText, outCell } from './zmk-behaviour-common.js?v=62';
+import { blurClicks, pickOutput, outText, outCell, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=62';
 
 export class ZmkLeaderTab {
     constructor(app) {
         this.app = app;
         this.root = blurClicks(el('div'));
         this.drafts = new Set();
+        onSlotsChanged(CH.leader, this, () => { if (this.slots && this.editing == null) this.load().catch(() => {}); });
     }
 
     async load() {
@@ -28,10 +29,8 @@ export class ZmkLeaderTab {
         try {
             this.enabled = await flask.getU16(CH.leader, V.leaderEnabled);
             this.timeout = await flask.getU16(CH.leader, V.leaderTimeout);
-            this.slotCount = await flask.getU16(CH.leader, V.leaderSlotCount);
-            this.maxKeys = await flask.getU16(CH.leader, V.leaderKeys) || 8;
-            this.macroSlots = this.app.caps.macros
-                ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
+            this.slotCount = await dim(this.app, CH.leader, V.leaderSlotCount);
+            this.maxKeys = await dim(this.app, CH.leader, V.leaderKeys) || 8;
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
                 const r = await flask.getBytes(CH.leader, V.leaderSlot, [i], 1);
@@ -48,16 +47,25 @@ export class ZmkLeaderTab {
         this.render();
     }
 
-    async writeSlot(i) {
+    async writeSlot(i, before = null) {
         try {
             const r = await this.app.flask.setBytes(CH.leader, V.leaderSlot,
                 encodeLeaderSlot(i, this.slots[i], this.maxKeys), 1);
             this.slots[i] = decodeLeaderSlot(r, this.maxKeys);
             this.bar?.markEdited();
         } catch (e) {
+            // Revert the optimistic edit: the card must show what the device holds.
+            if (before) this.slots[i] = before;
             toast(`Leader write failed: ${e.message}`, true);
         }
         this.render();
+    }
+
+    /** Apply `patch` to slot i and write it; a refused write restores the old slot. */
+    edit(i, patch) {
+        const before = { ...this.slots[i], positions: [...this.slots[i].positions] };
+        Object.assign(this.slots[i], patch);
+        return this.writeSlot(i, before);
     }
 
     addSequence() {
@@ -123,9 +131,10 @@ export class ZmkLeaderTab {
     }
 
     async clearSlot(i) {
+        const before = this.slots[i];
         this.slots[i] = { seq: i, positions: [], action: 0, param: 0 };
         this.drafts.delete(i);
-        await this.writeSlot(i);
+        await this.writeSlot(i, before);
     }
 
     // ---- position picking: in order, on the main board ----
@@ -145,7 +154,7 @@ export class ZmkLeaderTab {
         this._stopPick = board.pickPositions({
             initial: [...this.slots[i].positions], max: this.maxKeys, allowRepeat: true,
             label: `Click the keys of Sequence ${i} in order`,
-            onChange: (ps) => { this.slots[i].positions = ps; this.writeSlot(i); },
+            onChange: (ps) => { this.edit(i, { positions: ps }); },
         });
         // Leaving the tab ends pick mode (else a Keys-tab click edits this).
         const panel = this.root.closest('.panel');
@@ -165,20 +174,16 @@ export class ZmkLeaderTab {
     }
 
     removePosition(i, at) {
-        this.slots[i].positions.splice(at, 1);
         // The board keeps its own copy while picking: resync it.
-        this.writeSlot(i).then(() => { if (this.editing === i) this.startPick(i); });
+        this.edit(i, { positions: this.slots[i].positions.filter((_, k) => k !== at) })
+            .then(() => { if (this.editing === i) this.startPick(i); });
     }
 
     pickOutputFor(i) {
         const s = this.slots[i];
         pickOutput({
             app: this.app, surface: 'zmk.typedOutput', title: `Sequence ${i} output`, value: s,
-            onPick: (v) => {
-                s.action = v.action;
-                s.param = v.action ? v.param1 : 0;
-                this.writeSlot(i);
-            },
+            onPick: (v) => this.edit(i, { action: v.action, param: v.action ? v.param1 : 0 }),
         });
     }
 
@@ -232,8 +237,7 @@ export class ZmkLeaderTab {
                 const p = Number(input.value);
                 if (!Number.isInteger(p) || p < 0 || p > 254) return;
                 if (this.slots[i].positions.length >= this.maxKeys) { toast(`Sequences take up to ${this.maxKeys} keys`, true); return; }
-                this.slots[i].positions.push(p);
-                this.writeSlot(i);
+                this.edit(i, { positions: [...this.slots[i].positions, p] });
             },
         }));
     }
@@ -278,11 +282,12 @@ export class ZmkLeaderTab {
                     class: 'btn small primary', text: '＋ New sequence',
                     onclick: () => this.addSequence(),
                 }),
-                el('button', {
+                // Only boards with preset geometry (Imprint) get the button.
+                ZMK_LEADER_FN_PRESET[this.app.profile?.family ?? 'imprint'] ? el('button', {
                     class: 'btn small', text: 'F-keys preset',
                     title: 'leader→1..9 = F1-F9, leader→0 = F10, leader→F→1..9 = F11-F19, leader→F→0 = F20',
                     onclick: () => this.addFnPreset(),
-                }),
+                }) : null,
                 el('span', { class: 'note faint', text: `${used}/${this.slotCount} slots used` }),
             ),
             this.bar,

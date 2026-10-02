@@ -155,10 +155,19 @@ export function holdtapBackend(flask, { slotCount = 255, onDirty } = {}) {
         return { behaviorId: v.behaviorId, ms, exact: true, write: (position) => write(position, ms) };
     };
     /** 0x52 SLOT_INFO → {slot, kind: 'key'|'virtual', keyPos, name}. */
-    const slotInfo = async (slot) => {
-        const b = await flask.getBytes(HOLDTAP.channel, HOLDTAP.info, [slot], 1);
-        const name = String.fromCharCode(...b.slice(3, 29).filter((c) => c)).trim();
-        return { slot: b[0], kind: b[1] === 1 ? 'virtual' : 'key', keyPos: b[1] === 1 ? null : b[2], name };
+    // Name and kind are fixed for a build: read each slot's info once per
+    // connection (this backend is memoized per flask client), so "Reload from
+    // device" only re-reads the timing frames.
+    const infoCache = new Map();
+    const slotInfo = (slot) => {
+        if (!infoCache.has(slot)) {
+            infoCache.set(slot, (async () => {
+                const b = await flask.getBytes(HOLDTAP.channel, HOLDTAP.info, [slot], 1);
+                const name = String.fromCharCode(...b.slice(3, 29).filter((c) => c)).trim();
+                return { slot: b[0], kind: b[1] === 1 ? 'virtual' : 'key', keyPos: b[1] === 1 ? null : b[2], name };
+            })().catch((e) => { infoCache.delete(slot); throw e; }));
+        }
+        return infoCache.get(slot);
     };
     /** Every slot, key positions then virtual ones (WP4a: virtual sliders
      * labelled by name in the combo / behavior context). */
@@ -203,6 +212,10 @@ export function attachHoldtap(app, { onDirty } = {}) {
 // ---------------------------------------------------------------------------
 // Entries (§4.4). `zmk.match` names are absorbed by exact displayName; the
 // regex rules in classifyZmk() catch renamed variants by shape.
+
+/** flask_gestures: set count and the 255 "follow the Active set" value. */
+const GESTURE_SETS = 8;
+const GESTURE_ACTIVE = 255;
 
 const MODE_PARAM = { key: 'mode', kind: 'choice', options: ['plain', 'smart'], default: 'plain',
     labels: { plain: 'Plain', smart: 'Smart (hold only after a pause)' } };
@@ -293,6 +306,12 @@ function maskToUsage(m) {
     const i = [0, 1, 2, 3, 4, 5, 6, 7].find((b) => m & (1 << b));
     if (i == null) return 0;
     return ((((m & ~(1 << i)) & 0xFF) << 24) | kpParam(0xE0 + i)) >>> 0;
+}
+/** &sk / &mt with no modifier is not a behavior anyone wants (param 0). */
+function needMods(id, m) {
+    const u = maskToUsage(m);
+    if (!u) throw new Error('Pick at least one modifier.');
+    return u;
 }
 function usageToMask(u) {
     const { mods, page, id } = usageParts(u);
@@ -420,6 +439,8 @@ function zmkCatalog(app) {
             if (p.kind === 'layer') return { ...p, options: layersNow().map((l) => l.id), labels: Object.fromEntries(layersNow().map((l) => [l.id, l.name || `Layer ${l.id}`])) };
             if (p.kind === 'slot') {
                 const r = rangeOf(d0);
+                // Flask Gesture: 8 sets, plus 255 = follow the Active set (not 56 phantom sets).
+                if (e.id === 'gesture') return { ...p, min: 0, max: Math.min(r?.max ?? 7, GESTURE_SETS - 1), active: GESTURE_ACTIVE, default: 0 };
                 return { ...p, min: r?.min ?? 0, max: r ? Math.min(r.max, 63) : 31, default: r?.min ?? 0 };
             }
             if (p.key === 'code') {
@@ -465,6 +486,17 @@ const adv = (raw, adapter) => ({ entryId: 'advanced', params: { raw, adapter } }
 export function decode(binding, adapter = adapterOf(binding)) {
     if (adapter === 'zmk-typed') return decodeTyped(binding);
     return decodeStudio(binding);
+}
+
+/** A typed output that runs Tap Dance or Adaptive Key. Inside a tap-dance step
+ * or an adaptive step / fallback that recurses in the firmware and reboots the
+ * board (F01): the app never offers it and shows a stored one as empty. */
+export function isRecursiveOutput(o) {
+    if (!o || o.action !== 3) return false;
+    try {
+        const id = decodeTyped({ action: 3, behaviorId: o.behaviorId, param1: o.param1 ?? 0, param2: o.param2 ?? 0 }).entryId;
+        return id === 'tap-dance' || id === 'adaptive';
+    } catch { return false; }
 }
 
 /** Entry + params → binding for `adapter`. Inverse of decode. Params left
@@ -594,8 +626,8 @@ function encodeStudio(id, params) {
     switch (id) {
         case 'key': case 'key-toggle': return B(keyToUsage(p.key ?? 0, p.mods));
         case 'media-key': return B(((HID_PAGE_CONSUMER << 16) | (p.code & 0xFFFF)) >>> 0);
-        case 'mod-tap': return B(p.holdKey ?? maskToUsage(p.hold), keyToUsage(p.tap ?? 0, p.tapMods));
-        case 'one-shot-mod': return B(p.key ?? maskToUsage(p.mods));
+        case 'mod-tap': return B(p.holdKey ?? needMods(id, p.hold), keyToUsage(p.tap ?? 0, p.tapMods));
+        case 'one-shot-mod': return B(p.key ?? needMods(id, p.mods));
         case 'layer-tap': return B(p.layer, keyToUsage(p.tap ?? 0, p.tapMods));
         case 'hold-layer': case 'to-layer': case 'toggle-layer': case 'num-word': case 'one-shot-layer': return B(p.layer);
         case 'smart-layer': return B(p.layer, p.layer2 ?? p.layer);
@@ -674,7 +706,7 @@ export function capParts(binding, adapter = adapterOf(binding)) {
         case 'macro': return { top: '', main: `M${p.slot}` };
         case 'tap-dance': return { top: '', main: `TD${p.slot}` };
         case 'adaptive': return { top: '', main: `AK${p.slot}` };
-        case 'gesture': return { top: 'Gesture', main: String(p.slot) };
+        case 'gesture': return { top: 'Gesture', main: p.slot === GESTURE_ACTIVE ? 'Active' : String(p.slot) };
         case 'media-key':
             return { top: '', main: usageCap(((HID_PAGE_CONSUMER << 16) | p.code) >>> 0) };
         case 'mouse-key': case 'lighting':

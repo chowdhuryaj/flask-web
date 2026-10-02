@@ -15,7 +15,7 @@ import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel, reloadBa
 import { CH, V } from './flaskproto.js?v=62';
 import { renderKeyboardSVG } from './board.js?v=62';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=62';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=62';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=62';
 import { OUTPUT_ACTION, GESTURE_DIR_LABELS, encodeGestureSlot, decodeGestureSlot }
     from './zmk-output-codec.js?v=62';
 
@@ -36,6 +36,7 @@ export class ZmkGesturesTab {
         installSlotSummary(app);
         this.set = 0;
         this.sets = [];     // [set][dir] typed outputs — all sets, cached
+        onSlotsChanged(CH.gestures, this, () => { if (this.sets.length) this.load().catch(() => {}); });
     }
 
     async load() {
@@ -43,9 +44,7 @@ export class ZmkGesturesTab {
         this.enabled = await flask.getU16(CH.gestures, V.gesturesEnabled);
         this.ratchet = await flask.getU16(CH.gestures, V.gesturesRatchetStep);
         this.activeSet = await flask.getU16(CH.gestures, V.gesturesActiveSet);
-        this.setCount = await flask.getU16(CH.gestures, V.gesturesSetCount) || 8;
-        this.macroSlots = this.app.caps.macros
-            ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
+        this.setCount = await dim(this.app, CH.gestures, V.gesturesSetCount) || 8;
         this.set = Math.min(this.set, this.setCount - 1);
         // All sets up front (setCount × 8 slot frames — same burst size as
         // the combos tab): blank-set detection for the Active-set dropdown
@@ -78,10 +77,11 @@ export class ZmkGesturesTab {
         return !this.sets[i]?.some((o) => o.action !== OUTPUT_ACTION.none);
     }
 
-    async writeDir(dir) {
+    /** Write direction `dir` of the shown set; the cache changes only from the echo. */
+    async writeDir(dir, out) {
         try {
             const r = await this.app.flask.setBytes(CH.gestures, V.gesturesSlot,
-                encodeGestureSlot(this.set, dir, this.outputs[dir]), 2);
+                encodeGestureSlot(this.set, dir, out), 2);
             this.sets[this.set][dir] = decodeGestureSlot(r);
             this.bar?.markEdited();
         } catch (e) {
@@ -95,11 +95,7 @@ export class ZmkGesturesTab {
         pickOutput({
             app: this.app, surface: 'zmk.typedOutput',
             title: `${this.setName(this.set)} · ${GESTURE_DIR_LABELS[dir]}`, value: o,
-            onPick: (v) => {
-                o.action = v.action;
-                o.param = v.action ? v.param1 : 0;
-                this.writeDir(dir);
-            },
+            onPick: (v) => this.writeDir(dir, { ...o, action: v.action, param: v.action ? v.param1 : 0 }),
         });
     }
 
@@ -193,6 +189,7 @@ export class ZmkGesturesTab {
                 options: activeOptions,
                 onChange: async (val) => {
                     this.activeSet = await flask.setU16(CH.gestures, V.gesturesActiveSet, Number(val));
+                    this.bar?.markEdited();   // render() detaches the select before ui.js can announce the edit
                     this.render();
                 },
             }),
