@@ -504,12 +504,16 @@ async function startTrainer() {
     await showTab('trainer');
 }
 
+/** Behaviour tabs whose tiles go onto the selected key; only these get the
+ * "Click a tile…" caption. */
+const TILE_TABS = new Set(['macros', 'tapdance', 'combos', 'overrides', 'nape-macros']);
+
 async function showTab(id) {
     // The chip row follows the tab, never the other way round: a tab opened
     // from anywhere else (startTrainer, a group click) must not leave its own
     // group chip unlit.
     app.tabGroup = groupOf(id);
-    setCaptionGroup(app.tabGroup);
+    setCaptionGroup(app.tabGroup === 'behaviour' && !TILE_TABS.has(id) ? 'behaviourEdit' : app.tabGroup);
     renderTabNav();
     $('palette-body').scrollTop = 0;
     for (const t of TABS) {
