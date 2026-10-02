@@ -84,6 +84,38 @@ export const THEMES = {
         // theme's near-white surface.
         vars: { bg: '#fdf6e3', surface: '#fefbf0', surface2: '#f5efdc', text: '#073642', muted: '#586e75', faint: '#93a1a1', border: '#e6dfc8', border2: '#d3cbb0', accent: '#268bd2', 'accent-bg': '#e0eef8', 'accent-text': '#0d5a8f', ok: '#5b6800', 'ok-bg': '#eef0d8', warn: '#7d5c00', 'warn-bg': '#f6eed3', danger: '#dc322f', 'danger-bg': '#fbe3e2', keycap: '#fefbf0', 'keycap-border': '#d3cbb0' },
     },
+    // Six added palettes (2026-10-02). Each: near-neutral surfaces, one accent,
+    // accent-line / accent-text / on-accent split so the accent stays legible.
+    // Miyazaki tide-pool: green-black water, one seafoam accent.
+    kelp: {
+        label: 'Kelp', mode: 'dark',
+        vars: { bg: '#0f1413', surface: '#161c1a', surface2: '#1e2523', surface3: '#272f2c', text: '#e9efec', muted: '#a3b0aa', faint: '#74837c', border: '#232b28', border2: '#323c38', accent: '#6fd0b4', 'accent-line': '#6fd0b4', 'accent-bg': '#12332b', 'accent-text': '#a9ecd8', 'on-accent': '#07201a', ok: '#8bd48a', 'ok-bg': '#17301b', warn: '#f0b865', 'warn-bg': '#35290f', danger: '#f08a80', 'danger-bg': '#3a1a17', keycap: '#1f2624', 'keycap-border': '#323c38', 'c-layer': '#7aa9ff', 'c-hold': '#f0b865', 'c-macro': '#e08fc0', 'c-dim': '#5f6b66' },
+    },
+    // Grand Budapest: cocoa-black box, one pastry-pink accent.
+    mendl: {
+        label: "Mendl's", mode: 'dark',
+        vars: { bg: '#161112', surface: '#1f181a', surface2: '#292022', surface3: '#33292c', text: '#f3ebec', muted: '#b5a6a9', faint: '#85767a', border: '#2c2326', border2: '#3d3236', accent: '#f2a7ba', 'accent-line': '#f2a7ba', 'accent-bg': '#3a1f28', 'accent-text': '#f9cfd9', 'on-accent': '#2a0e16', ok: '#8fd0a0', 'ok-bg': '#17301f', warn: '#f0c070', 'warn-bg': '#38290f', danger: '#ff8a7a', 'danger-bg': '#3d1816', keycap: '#2a2123', 'keycap-border': '#3d3236', 'c-layer': '#86b6ff', 'c-hold': '#f0c070', 'c-macro': '#8fd6c0', 'c-dim': '#6c5f63' },
+    },
+    // Tokyo after sunset: ink blue-black, one cool sky accent.
+    blueHour: {
+        label: 'Blue Hour', mode: 'dark',
+        vars: { bg: '#0e1218', surface: '#151a22', surface2: '#1c232d', surface3: '#252d38', text: '#e8edf3', muted: '#9fabba', faint: '#738093', border: '#1f2630', border2: '#2e3844', accent: '#7cc4e8', 'accent-line': '#7cc4e8', 'accent-bg': '#12303f', 'accent-text': '#b4e2f6', 'on-accent': '#07202c', ok: '#7fd69a', 'ok-bg': '#15301f', warn: '#f0b865', 'warn-bg': '#35290f', danger: '#f08a84', 'danger-bg': '#3a1a1a', keycap: '#1c232d', 'keycap-border': '#2e3844', 'c-layer': '#96a7ff', 'c-hold': '#f0b865', 'c-macro': '#e58fb8', 'c-dim': '#5d6877' },
+    },
+    // Teenage Engineering: warm charcoal, one signal-orange accent.
+    ember: {
+        label: 'Ember', mode: 'dark',
+        vars: { bg: '#151311', surface: '#1e1b18', surface2: '#282420', surface3: '#332e29', text: '#f2eee8', muted: '#b0a89c', faint: '#7f7869', border: '#2a2622', border2: '#3b3631', accent: '#ff7a3d', 'accent-line': '#ff7a3d', 'accent-bg': '#3d1e10', 'accent-text': '#ffc2a0', 'on-accent': '#1f0b02', ok: '#8fd08a', 'ok-bg': '#1a2f17', warn: '#f0c25a', 'warn-bg': '#372c0c', danger: '#f4877e', 'danger-bg': '#3c1815', keycap: '#26221e', 'keycap-border': '#3b3631', 'c-layer': '#7fb0ff', 'c-hold': '#e8c35a', 'c-macro': '#6fd0c0', 'c-dim': '#6a6358' },
+    },
+    // Cool paper, navy ink, one saffron fill (ink-brown for thin strokes).
+    yolk: {
+        label: 'Yolk', mode: 'light',
+        vars: { bg: '#f5f5f2', surface: '#fcfcfa', surface2: '#ffffff', surface3: '#eaeae5', text: '#1b2030', muted: '#555b6a', faint: '#80858f', border: '#e0e0da', border2: '#cbcbc3', accent: '#f5bd1f', 'accent-line': '#9a7000', 'accent-bg': '#fdf0c4', 'accent-text': '#5c4300', 'on-accent': '#231a00', ok: '#1f7a3d', 'ok-bg': '#e3f3e8', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#b42318', 'danger-bg': '#fdeceb', keycap: '#ffffff', 'keycap-border': '#cbcbc3', 'c-layer': '#2f5fd0', 'c-hold': '#9a5b00', 'c-macro': '#8a45b8', 'c-dim': '#a3a39d' },
+    },
+    // Cream washi paper, sumi ink, one indigo accent.
+    washi: {
+        label: 'Washi', mode: 'light',
+        vars: { bg: '#f3eee3', surface: '#faf6ec', surface2: '#fffdf7', surface3: '#e9e3d4', text: '#1f1d1a', muted: '#5b564c', faint: '#857f6f', border: '#ddd6c4', border2: '#c8bfa8', accent: '#2f4f8f', 'accent-line': '#2f4f8f', 'accent-bg': '#dde4f3', 'accent-text': '#1d3466', 'on-accent': '#ffffff', ok: '#2a6f3a', 'ok-bg': '#e2eedd', warn: '#85540a', 'warn-bg': '#f8ecd0', danger: '#a8281c', 'danger-bg': '#f8e1db', keycap: '#fffdf7', 'keycap-border': '#c8bfa8', 'c-layer': '#1f7a78', 'c-hold': '#9a5b00', 'c-macro': '#9a3a6a', 'c-dim': '#a39e8e' },
+    },
 };
 
 // Look-shell: Graphite is the default (was keybr Dark, AJ Q5 2026-10-01).
