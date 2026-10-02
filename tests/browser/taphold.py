@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""WP3b Tap/Hold composer checks. Offline workspaces only; no hardware.
+"""Tap-hold in the key inspector (look-shell; replaces the WP3b popover composer
+checks). Offline TOTEM workspace only; no hardware.
 
 Run:  PORT=8153 python3 serve.py   then   PORT=8153 python3 tests/browser/taphold.py
 
-TOTEM: select F, "Make this a tap-hold", HOLD ⇧, Apply: the cap shows a
-labelled hold line (⇧) and tap line (F), the binding is Hold-Tap L (live)
-(F is a left-hand key); click again opens the composer pre-filled; undo
-restores plain F. Home-row mods preset: 8 keys in one step, one undo.
-Screenshots: tests/artifacts/taphold/ and $WP3B_SHOTS (wp3b-*.png).
+- select F, tap the Gui chip: F becomes a hold-tap at once (one undo step), the
+  cap shows tap F big with a hold sub-label, the binding is Hold-Tap L (live);
+- a right-hand key defaults to the Right side (no extra click);
+- Hold does Layer: one layer chip makes a layer-tap; HOLD key: HOLD box + a tile;
+- the timing card shows the term slider and four flavours with a sentence each;
+  the slider writes the key's slot and the edit lands in the one Save;
+- the home-row mods preset applies 8 keys, one undo reverts them;
+- after an edit the dock stays on the category the user was on.
+Screenshots: tests/artifacts/taphold/.
 """
-import os
 import sys
 from pathlib import Path
 
@@ -17,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from harness import ROOT, launch, new_context, open_workspace, sync_playwright  # noqa: E402
 
 OUT = ROOT / 'tests' / 'artifacts' / 'taphold'
-SHOTS = os.environ.get('WP3B_SHOTS')
 failures = []
 
 
@@ -27,143 +30,120 @@ def check(cond, msg):
         failures.append(msg)
 
 
-def shot(page, name):
-    OUT.mkdir(parents=True, exist_ok=True)
-    page.screenshot(path=str(OUT / f'{name}.png'), full_page=True)
-    if SHOTS:
-        page.screenshot(path=str(Path(SHOTS) / f'wp3b-{name}.png'), full_page=True)
-
-
-KEY_INDEX = """(cap) => [...document.querySelectorAll('#board-slot .kb-svg g.key')]
-    .findIndex(g => [...g.querySelectorAll('.cap-main')].map(t => t.textContent).join('') === cap)"""
-BINDING = """async (pos) => {
-  const { board } = await import('/board.js?v=61');
-  const C = await import('/behavior-catalog.js?v=61');
-  const v = board.bindingOf(pos ?? undefined);
-  return { v, d: C.describeBinding(v, board.adapter.profile.capAdapter ?? 'zmk-studio'),
-           via: v && typeof v === 'object' ? (await import('/zmk-keycodes.js?v=61')).zmkBehaviors().get(v.behaviorId)?.displayName : null };
-}"""
+KEY_INDEX = """(cap) => [...document.querySelectorAll('#board-slot g.key')]
+    .findIndex((g) => g.querySelector('.cap-main')?.textContent === cap)"""
 
 
 def keys(page):
-    return page.locator('#board-slot .kb-svg g.key')
+    return page.locator('#board-slot g.key')
 
 
-def picker(page):
-    return page.locator('#panels .panel.active .bp[data-host="docked"]').first
-
-
-def make_taphold(page, cap, label):
-    i = page.evaluate(KEY_INDEX, cap)
-    check(i >= 0, f'{label}: a key reads {cap}')
-    g = keys(page).nth(i)
-    g.click()
-    pos = page.evaluate("async () => (await import('/board.js?v=61')).board.selectedKey().pos")
-    bp = picker(page)
-    bp.locator('[data-act="taphold"]').click()
-    check(bp.locator('[data-composer]').count() == 1, f'{label}: composer opens')
-    tap = bp.locator('.bp-th-slot[data-slot="tap"] .bp-th-value').text_content()
-    check(tap == cap, f'{label}: TAP keeps the current key ({tap})')
-    check(bp.locator('.bp-th-slot[data-slot="hold"].on').count() == 1, f'{label}: composer asks for HOLD')
-    bp.locator('[data-mod="⇧"]').click()
-    shot(page, f'{label}-composer')
-    check(not bp.locator('[data-act="th-apply"]').is_disabled(), f'{label}: Apply enabled')
-    bp.locator('[data-act="th-apply"]').click()
-    page.wait_for_timeout(200)
-    return i, pos
-
-
-def assert_labelled(page, i, cap, label):
-    g = keys(page).nth(i)
-    hold = g.locator('.cap-hold')
-    check(g.locator('.cap-holdband').count() == 1, f'{label}: cap has the HOLD band')
-    check(hold.count() == 1 and '⇧' in hold.text_content() and 'hold' in hold.text_content().lower(),
-          f'{label}: hold line "{hold.text_content() if hold.count() else None}"')
-    tap = g.locator('.cap-tap')
-    check(tap.count() == 1 and tap.text_content().lower().startswith('tap') and tap.text_content().endswith(cap),
-          f'{label}: tap line "{tap.text_content() if tap.count() else None}"')
+def undo(page):
+    page.locator('#undo-btn').click()
+    page.wait_for_timeout(300)
 
 
 def totem(browser):
+    OUT.mkdir(parents=True, exist_ok=True)
     ctx, page, errors = new_context(browser)
     open_workspace(page, 'TOTEM (ZMK)')
-    i, pos = make_taphold(page, 'F', 'totem')
-    b = page.evaluate(BINDING, pos)
-    check(b['via'] == 'Hold-Tap L (live)', f'totem: F (left hand) uses &fht_l: {b}')
-    assert_labelled(page, i, 'F', 'totem')
-    shot(page, 'totem-cap')
-    # click the key twice: popover opens the composer pre-filled
+    i = page.evaluate(KEY_INDEX, 'F')
+    check(i >= 0, 'a key reads F')
     keys(page).nth(i).click()
-    keys(page).nth(i).click()
-    pop = page.locator('.picker-popover')
-    pop.wait_for(timeout=3000)
-    check(pop.locator('[data-composer]').count() == 1, 'totem: editing a mod-tap opens the composer')
-    check(pop.locator('.bp-th-slot[data-slot="hold"] .bp-th-value').text_content() == '⇧', 'totem: HOLD pre-filled ⇧')
-    check(pop.locator('.bp-th-slot[data-slot="tap"] .bp-th-value').text_content() == 'F', 'totem: TAP pre-filled F')
-    shot(page, 'totem-prefilled')
-    # WP7 item 10: the offline sim serves 0x2A, so the composer's live
-    # tapping-term slider shows (no mock) and Apply writes the key's slot.
-    slider = pop.locator('.bp-timing input[type=range]')
-    check(slider.count() == 1, 'totem: composer shows the live timing slider offline')
-    if slider.count():
-        slider.evaluate('(s) => { s.value = 330; s.dispatchEvent(new Event("input")); }')
-        pop.locator('[data-act="th-apply"]').click()
-        page.wait_for_timeout(400)
-        term = page.evaluate(f"JSON.parse(localStorage.getItem('flask-offline-totem')).zmk.holdtap[{pos}].term")
-        check(term == 330, f'totem: composer slider wrote slot {pos} term {term}')
-        dirty = page.evaluate("async () => (await import('/save-state.js?v=61')).saveState.dirty().map(d => d.label)")
-        check('Hold-tap timing' in dirty, f'totem: timing edit is in the one Save: {dirty}')
-        page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
-        page.wait_for_timeout(200)
-    else:
-        page.keyboard.press('Escape')
-    page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
-    page.wait_for_timeout(200)
+    check(page.locator('.slot.s-tap').is_visible() and page.locator('.slot.s-hold').is_visible(), 'TAP and HOLD boxes are visible with no extra click')
+    check(page.locator('.insp [data-act="th-apply"]').count() == 0, 'there is no Apply button')
+    page.locator('.dock-side [data-tab="behaviours"]').click()     # the dock category must survive the edit
+    page.locator('.insp .chip[data-mod="Gui"]').click()
+    page.wait_for_timeout(500)
     g = keys(page).nth(i)
-    check(g.locator('.cap-holdband').count() == 0 and g.locator('.cap-main').text_content() == 'F', 'totem: undo restores plain F')
-
-    # rotated thumbs keep their labels (the default keymap has live hold-taps there)
-    thumbs = page.evaluate("""() => [...document.querySelectorAll('#board-slot .kb-svg g.key.ht')]
-        .filter(g => g.getAttribute('transform')).length""")
-    check(thumbs > 0, f'totem: {thumbs} rotated thumb caps draw hold/tap labels')
-
-    # home-row mods preset
-    keys(page).nth(i).click()
-    bp = picker(page)
-    bp.locator('[data-act="taphold"]').click()
-    bp.locator('[data-act="hrm"]').click()
-    picked = page.locator('#board-slot .kb-svg .keycap.picked').count()
-    check(picked == 8, f'totem: home row pre-picked ({picked})')
-    bp.locator('[data-order="GACS"]').click()
-    shot(page, 'totem-homerow-pick')
-    check(not bp.locator('[data-act="hrm-apply"]').is_disabled(), 'totem: preset Apply enabled')
-    bp.locator('[data-act="hrm-apply"]').click()
+    check(g.locator('.cap-main').text_content() == 'F' and g.locator('.cap-sub').text_content() == '⌘', 'F reads F with ⌘ under it')
+    src = page.locator('.insp-src').text_content()
+    check('Hold-Tap L (live)' in src, f'left-hand key on &fht_l: {src}')
+    check(page.locator('.dock-side [data-tab="behaviours"].on').count() == 1, 'the dock stays on Behaviours after the edit')
+    check(page.locator('.slot.s-hold .slot-val').text_content() == '⌘', 'HOLD box shows ⌘')
+    # timing card
+    page.locator('.ht-card').wait_for(timeout=5000)
+    check(page.locator('.ht-card input[type=range]').count() == 1, 'timing card: term slider')
+    fl = page.locator('.ht-card .flavor').all_inner_texts()
+    check(len(fl) == 4 and all(len(t) > 40 for t in fl), f'four flavours with a sentence each ({len(fl)})')
+    page.locator('.ht-card input[type=range]').evaluate('(s) => { s.value = 330; s.dispatchEvent(new Event("input")); s.dispatchEvent(new Event("change")); }')
     page.wait_for_timeout(400)
-    ht = page.locator('#board-slot .kb-svg g.key.ht .cap-hold').evaluate_all('xs => xs.map(x => x.textContent)')
-    check(sum(1 for t in ht if any(m in t for m in '⌘⌥⌃⇧')) >= 8 and not any('live' in t for t in ht), f'totem: home-row caps {ht}')
-    shot(page, 'totem-homerow')
-    idx = page.evaluate("[...document.querySelectorAll('#board-slot .kb-svg g.key')].findIndex((g) => g.classList.contains('ht'))")
-    cell = page.evaluate("""async (i) => { const bp = await import('/binding-picker.js?v=61');
-      const { board } = await import('/board.js?v=61');
-      const el = bp.renderBindingCell(board.bindingOf(i), 'zmk.key');
-      return [el.querySelector('.bp-cell-hold') != null, el.querySelector('.bp-cell-tap') != null]; }""", idx)
-    check(idx >= 0 and cell == [True, True], f'totem: renderBindingCell labels hold/tap: {cell}')
-    page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
+    term = page.evaluate("JSON.parse(localStorage.getItem('flask-offline-totem')).zmk.holdtap[13].term")
+    check(term == 330, f'slider wrote the key slot (term {term})')
+    dirty = page.evaluate("async () => (await import('/save-state.js?v=61')).saveState.dirty().map(d => d.label)")
+    check('Hold-tap timing' in dirty, f'timing edit is in the one Save: {dirty}')
+    page.locator('.ht-card .flavor').nth(2).click()
     page.wait_for_timeout(300)
-    check(page.evaluate(KEY_INDEX, 'F') >= 0, 'totem: one undo reverts the preset')
-    check(not errors, f'totem: no page errors {errors}')
+    check(page.locator('.ht-card .flavor.on').count() == 1, 'one flavour selected')
+    page.screenshot(path=str(OUT / 'totem-inspector.png'))
+    # toggling the chip off returns to a plain key, in one undo step each
+    page.locator('.insp .chip[data-mod="Gui"]').click()
+    page.wait_for_timeout(400)
+    check(keys(page).nth(i).locator('.cap-sub').count() == 0, 'chip off: plain F again')
+    undo(page)
+    check(keys(page).nth(i).locator('.cap-sub').count() == 1, 'undo brings the hold back')
+    undo(page)
+    check(keys(page).nth(i).locator('.cap-sub').count() == 0, 'second undo: plain F')
+
+    # right-hand key defaults to the Right side
+    j = page.evaluate(KEY_INDEX, 'J')
+    keys(page).nth(j).click()
+    check(page.locator('.insp [data-side="R"].on').count() == 1, 'a right-hand key defaults to Right')
+    page.locator('.insp .chip[data-mod="Sft"]').click()
+    page.wait_for_timeout(400)
+    check('Hold-Tap R (live)' in page.locator('.insp-src').text_content(), 'right-hand key on &fht_r')
+    undo(page)
+
+    # Layer hold: one chip
+    keys(page).nth(i).click()
+    page.locator('.insp [data-kind="layer"]').click()
+    page.locator('.insp [data-layer="1"]').click()
+    page.wait_for_timeout(500)
+    check(keys(page).nth(i).locator('.cap-sub.s-layer').count() == 1, 'layer-tap: blue layer sub-label')
+    undo(page)
+
+    # Hold key: arm the HOLD box, click a tile
+    page.locator('.insp [data-kind="key"]').click()
+    page.locator('.insp-holdkey .btn').click()
+    check('HOLD key' in page.locator('.dock-banner').text_content(), 'dock says tiles will set the HOLD key')
+    page.locator('.dock-side [data-tab="keys"]').click()
+    page.locator('.dock-cats [data-cat="function"]').click()
+    page.locator('.dock-grid .tile[data-tile^="key:function:"]').first.click()
+    page.wait_for_timeout(500)
+    check(page.locator('.slot.s-hold .slot-val').text_content() != '—', 'HOLD key set')
+    undo(page)
+
+    # Rotated thumbs keep their labels (live hold-taps on the default keymap)
+    thumbs = page.evaluate("""() => [...document.querySelectorAll('#board-slot g.key.k-hold')]
+        .filter(g => g.getAttribute('transform') && g.querySelector('.cap-sub')).length""")
+    check(thumbs > 0, f'{thumbs} rotated thumb keys draw a hold sub-label')
+
+    # Home-row mods preset
+    keys(page).nth(i).click()
+    page.locator('.insp [data-act="hrm"]').click()
+    picked = page.locator('#board-slot .keycap.picked').count()
+    check(picked == 8, f'home row pre-picked ({picked})')
+    page.locator('.insp [data-order="GACS"]').click()
+    page.screenshot(path=str(OUT / 'totem-homerow-pick.png'))
+    check(not page.locator('.insp [data-act="hrm-apply"]').is_disabled(), 'preset Apply enabled')
+    page.locator('.insp [data-act="hrm-apply"]').click()
+    page.wait_for_timeout(500)
+    holds = page.locator('#board-slot g.key.k-hold .cap-sub').evaluate_all('xs => xs.map(x => x.textContent)')
+    check(sum(1 for t in holds if any(m in t for m in '⌘⌥⌃⇧')) >= 8, f'home-row caps {holds}')
+    undo(page)
+    check(page.evaluate(KEY_INDEX, 'F') >= 0 and keys(page).nth(i).locator('.cap-sub').count() == 0, 'one undo reverts the preset')
+    check(not errors, f'no page errors {errors}')
     ctx.close()
 
 
 def main():
     with sync_playwright() as p:
         browser = launch(p)
-        for fn in (totem,):
-            try:
-                fn(browser)
-            except Exception as e:  # noqa: BLE001
-                failures.append(f'{fn.__name__}: {e}')
-                print('FAIL', fn.__name__, e)
+        try:
+            totem(browser)
+        except Exception as e:  # noqa: BLE001
+            failures.append(f'totem: {e}')
+            print('FAIL totem', e)
         browser.close()
     print('taphold:', 'FAIL' if failures else 'PASS')
     return 1 if failures else 0

@@ -41,7 +41,7 @@ def selected(page):
 
 
 def pick_zmk_key(page, name):
-    page.locator(f'#panels .panel.active button[title="{name}"]').first.click()
+    page.locator(f'.dock .tile[aria-label="{name}"]').first.click()
 
 
 def shot(page, name):
@@ -67,15 +67,16 @@ def totem(browser):
     check(cap(page, 0) == 'A', f'totem: key 0 reads A after pick, got {cap(page, 0)}')
     check(selected(page) == {'layer': 0, 'pos': 1}, f'totem: selection advanced to key 1 -> {selected(page)}')
 
-    # Click-again popover on the selected key (twice, as in the acceptance).
+    # Click-again on the selected key is harmless (the inspector replaces the popover).
     key(page, 1).click()
     key(page, 1).click()
-    page.locator('.picker-popover').wait_for(timeout=3000)
-    page.locator('.picker-popover button[title="B"]').first.click()
     page.wait_for_timeout(150)
-    check(page.locator('.picker-popover').count() == 0, 'totem: popover closes on pick')
-    check(cap(page, 1) == 'B', f'totem: key 1 reads B after popover pick, got {cap(page, 1)}')
-    check(selected(page) == {'layer': 0, 'pos': 1}, 'totem: popover pick does not advance')
+    check(page.locator('.picker-popover').count() == 0, 'totem: click-again opens no popover')
+    check(selected(page) == {'layer': 0, 'pos': 1}, 'totem: click-again keeps the selection')
+    pick_zmk_key(page, 'B')
+    page.wait_for_timeout(150)
+    check(cap(page, 1) == 'B', f'totem: key 1 reads B after a tile pick, got {cap(page, 1)}')
+    check(selected(page) == {'layer': 0, 'pos': 2}, 'totem: plain pick advances')
 
     # Undo restores both keys, in order; redo reapplies.
     page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
@@ -95,7 +96,7 @@ def totem(browser):
 
     # Layer switch + rename + remove/add.
     page.locator('.bd-chip', has_text='control').first.click()
-    check(page.locator('.bd-chip.on').inner_text().split('\n')[-1] == 'control', 'totem: layer chip switches')
+    check(page.locator('.bd-chip.on').inner_text().split('\n')[-1].lower() == 'control', 'totem: layer chip switches')
     check(cap(page, 0) != 'Q', 'totem: layer 1 draws its own bindings')
     shot(page, 'totem-layer')
     page.locator('.bd-chip.on').dblclick()
@@ -106,11 +107,11 @@ def totem(browser):
     before = page.locator('.bd-chip').count()
     page.locator('.bd-op[aria-label^="Remove this layer"]').click()
     page.wait_for_timeout(200)
-    page.locator('.bd-op[aria-label="Add a layer"]').click()
+    page.locator('.bd-add').click()
     page.wait_for_timeout(300)
     check(page.locator('.bd-chip').count() >= before - 1, 'totem: remove then add layer keeps the bar')
-    check(page.locator('.bd-op[aria-label="Add a layer"]').count() == 0
-          or page.locator('.bd-op[aria-label="Add a layer"]').is_disabled() is False,
+    check(page.locator('.bd-add[aria-label="Add a layer"]').count() == 0
+          or page.locator('.bd-add').is_disabled() is False,
           'totem: add leaves the bar consistent')
 
     # Position-pick mode.
@@ -158,9 +159,9 @@ def imprint(browser):
     check(page.locator('.kb-svg g.key').count() == 70, 'imprint: 70 keys')
     check(inside_frame(page) == 0, 'imprint: every key inside the frame')
     # WP7 item 7: dual-role caps draw the HOLD band + tap line (home-row mods)
-    ht = page.locator('#board-slot .kb-svg g.key.ht')
-    check(ht.count() >= 8 and page.locator('#board-slot .kb-svg g.key.ht .cap-holdband').count() == ht.count(),
-          f'imprint: banded hold/tap caps, got {ht.count()}')
+    ht = page.locator('#board-slot .kb-svg g.key.k-hold')
+    check(ht.count() >= 8 and page.locator('#board-slot .kb-svg g.key.k-hold .cap-sub').count() == ht.count(),
+          f'imprint: hold sub-labels under the tap legend, got {ht.count()}')
     key(page, 12).click()
     shot(page, 'imprint-selected')
     page.locator('.bd-chip').nth(1).click()
@@ -171,7 +172,7 @@ def imprint(browser):
     ctx, page, errors = new_context(browser)
     open_workspace(page, 'TOTEM (ZMK)')
     check(inside_frame(page) == 0, 'totem: rotated thumbs inside the frame')
-    check(page.locator('#board-slot .kb-svg g.key.ht .cap-holdband').count() >= 8, 'totem: banded hold/tap caps')
+    check(page.locator('#board-slot .kb-svg g.key.k-hold .cap-sub').count() >= 8, 'totem: hold sub-labels')
     ctx.close()
 
 

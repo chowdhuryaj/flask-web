@@ -49,44 +49,71 @@ const zmk = (app) => isZmkFamily(app.family);
 // Order = tab order (the first visible row is the landing tab). No Build /
 // Bench / bake / Tap Calibrator / Teleport rows; those stay native-only.
 export const TAB_TABLE = [
-    { id: 'zmk-keymap', label: 'Keymap', group: 'keys', when: (a) => a.caps.zmkStudio, ctor: ZmkKeymapTab },
-    { id: 'gestures', label: 'Gestures', group: 'device', when: (a) => a.caps.gestures, ctor: ZmkGesturesTab },
-    { id: 'mouse', label: 'Mouse', group: 'device', when: (a) => a.caps.mouse, ctor: MouseTab },
+    { id: 'zmk-keymap', label: 'Keymap', group: 'keys', screen: 'keymap', when: (a) => a.caps.zmkStudio, ctor: ZmkKeymapTab },
+    { id: 'gestures', label: 'Gestures', group: 'device', screen: 'device', when: (a) => a.caps.gestures, ctor: ZmkGesturesTab },
+    { id: 'mouse', label: 'Mouse', group: 'device', screen: 'device', when: (a) => a.caps.mouse, ctor: MouseTab },
     // Needs no capability: it runs on browser key events.
-    { id: 'trainer', label: 'Trainer', group: 'trainer', when: () => true, ctor: TrainerTab },
-    { id: 'rgb', label: 'RGB', group: 'device', when: (a) => a.caps.rgbMap, ctor: ZmkRgbTab },
+    { id: 'trainer', label: 'Trainer', group: 'trainer', screen: 'trainer', when: () => true, ctor: TrainerTab },
+    { id: 'rgb', label: 'RGB', group: 'device', screen: 'device', when: (a) => a.caps.rgbMap, ctor: ZmkRgbTab },
     // caps.combos/macros/tapDance/leader come from zmkCapabilities.
-    { id: 'zmk-combos', label: 'Combos', group: 'behaviour', when: (a) => a.caps.combos, ctor: ZmkCombosTab },
-    { id: 'zmk-macros', label: 'Macros', group: 'behaviour', when: (a) => a.caps.macros, ctor: ZmkMacrosTab },
-    { id: 'zmk-tapdance', label: 'Tap Dance', group: 'behaviour', when: (a) => a.caps.tapDance, ctor: ZmkTapDanceTab },
+    { id: 'zmk-combos', label: 'Combos', group: 'behaviour', screen: 'combos', when: (a) => a.caps.combos, ctor: ZmkCombosTab },
+    { id: 'zmk-macros', label: 'Macros', group: 'behaviour', screen: 'macros', when: (a) => a.caps.macros, ctor: ZmkMacrosTab },
+    { id: 'zmk-tapdance', label: 'Tap Dance', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.tapDance, ctor: ZmkTapDanceTab },
     // §1.3: renamed "Shift" → "Shift Keys" (native label).
-    { id: 'zmk-shift', label: 'Shift Keys', group: 'behaviour', when: (a) => a.caps.customShift, ctor: ZmkShiftTab },
-    { id: 'zmk-leader', label: 'Leader', group: 'behaviour', when: (a) => a.caps.leader, ctor: ZmkLeaderTab },
+    { id: 'zmk-shift', label: 'Shift Keys', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.customShift, ctor: ZmkShiftTab },
+    { id: 'zmk-leader', label: 'Leader', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.leader, ctor: ZmkLeaderTab },
     // AJ-Q4 / WP7: per-key and virtual-slot hold-tap timing (flask_holdtap,
     // 0x2A). caps.holdtap is set by main.js's async probe: proto >= 17 AND
     // GET 2A 01 answers (Imprint and older Totem images answer 0xFF).
-    { id: 'zmk-holdtiming', label: 'Hold timing', group: 'behaviour', when: (a) => zmk(a) && !!a.caps.holdtap, ctor: ZmkHoldTimingTab },
+    { id: 'zmk-holdtiming', label: 'Hold timing', group: 'behaviour', screen: 'behaviours', when: (a) => zmk(a) && !!a.caps.holdtap, ctor: ZmkHoldTimingTab },
     // Modes are app-side snapshots, so any ZMK board has them.
-    { id: 'zmk-modes', label: 'Modes', group: 'device', when: zmk, ctor: ZmkModesTab },
-    { id: 'zmk-test', label: 'Test', group: 'device', when: zmk, ctor: ZmkTestTab },
+    { id: 'zmk-modes', label: 'Modes', group: 'device', screen: 'device', when: zmk, ctor: ZmkModesTab },
+    { id: 'zmk-test', label: 'Test', group: 'device', screen: 'test', when: zmk, ctor: ZmkTestTab },
     // §1.3: Device › Keyboard, on every device and offline workspace (the
     // header leftovers: appearance, diagnostics, device info).
-    { id: 'keyboard', label: 'Keyboard', group: 'device', when: () => true, ctor: KeyboardTab },
+    { id: 'keyboard', label: 'Keyboard', group: 'device', screen: 'device', when: () => true, ctor: KeyboardTab },
 ];
 
-/** @returns {{id:string,label:string,group:string,ctor:Function}[]} */
+/**
+ * Look-shell: the top-level tab row. A screen is one button in the second row
+ * of the top bar; a screen with several tabs (Behaviours, Device) shows them
+ * as a small segmented strip above its panel. Tab ids and groups are unchanged.
+ */
+export const SCREENS = [
+    { id: 'keymap', label: 'Keymap' },
+    { id: 'combos', label: 'Combos' },
+    { id: 'behaviours', label: 'Behaviours' },
+    { id: 'macros', label: 'Macros' },
+    { id: 'device', label: 'Device' },
+    { id: 'test', label: 'Test' },
+    { id: 'trainer', label: 'Trainer' },
+];
+// Tabs that need the board (and layer rail) on screen: Keymap edits keys,
+// Combos and Leader pick positions on it, Hold timing jumps to a key.
+export const BOARD_TABS = new Set(['zmk-keymap', 'zmk-combos', 'zmk-leader', 'zmk-holdtiming']);
+export const SIDE_TABS = new Set(['zmk-keymap']);   // the right context panel
+
+/** @returns {{id:string,label:string,group:string,screen:string,ctor:Function}[]} */
 export function tabsFor(app) {
     // Standalone trainer: an explicit gate, because there is no device (the
     // placeholder 'generic' family) for the device tabs to talk to.
-    if (app.trainerOnly) return [{ id: 'trainer', label: 'Typing trainer', group: 'trainer', ctor: TrainerTab }];
+    if (app.trainerOnly) return [{ id: 'trainer', label: 'Typing trainer', group: 'trainer', screen: 'trainer', ctor: TrainerTab }];
     const seen = new Set();
     const out = [];
-    for (const { id, label, group, when, ctor } of TAB_TABLE) {
+    for (const { id, label, group, screen, when, ctor } of TAB_TABLE) {
         if (seen.has(id) || !when(app)) continue;
         seen.add(id);
-        out.push({ id, label, group, ctor });
+        out.push({ id, label, group, screen, ctor });
     }
     return out;
+}
+
+export const screenOf = (id) => TAB_TABLE.find((t) => t.id === id)?.screen ?? 'device';
+
+/** Screens present for these tabs, in SCREENS order, each with its tabs. */
+export function screensFor(tabs) {
+    return SCREENS.map((s) => ({ ...s, tabs: tabs.filter((t) => (t.screen ?? screenOf(t.id)) === s.id) }))
+        .filter((s) => s.tabs.length);
 }
 
 export const groupOf = (id) => TAB_TABLE.find((t) => t.id === id)?.group ?? 'device';

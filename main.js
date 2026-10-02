@@ -16,7 +16,7 @@ import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
 import { loadWorkspace, saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline,
          workspaceKey } from './offline.js?v=61';
 import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=61';
-import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=61';
+import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=61';
 import { shell } from './app-shell.js?v=61';
 import { installCaptions, setCaptionGroup } from './caption.js?v=61';
 import { saveState } from './save-state.js?v=61';
@@ -58,6 +58,7 @@ app.hud = new HUD(app);
 app.shell = shell;
 app.saveState = saveState;
 app.showTab = (id) => showTab(id);
+app.tabInstance = (id) => TABS.find((t) => t.id === id)?.instance ?? null;
 // ⌘K. Installed at module scope, not per-device: navigating is exactly what
 // you want when nothing is connected yet.
 app.palette = new CommandPalette(app, {
@@ -227,6 +228,7 @@ function disconnectUI() {
     $('offline-seg').style.display = 'none';
     $('panels').replaceChildren();
     $('main-tabs').replaceChildren();
+    $('subtabs')?.replaceChildren();
     setMode('landing');
     refreshDeviceList();
     renderOfflineList();
@@ -248,7 +250,7 @@ async function startOffline(key, family) {
     $('proto-warn').style.display = 'none';
     $('status-pill').classList.remove('connected');
     $('status-pill').classList.add('offline');
-    $('status-text').textContent = `Offline — ${ws.label}`;
+    $('status-text').textContent = 'Offline preview';
     $('device-name').textContent = ws.label;
     $('offline-seg').style.display = '';
     updateOfflineBanner();
@@ -260,9 +262,8 @@ async function startOffline(key, family) {
 function updateOfflineBanner() {
     if (!app.offline || !app.offlineWs) return;
     const n = offlineQueued(app.offlineWs);
-    $('offline-msg').textContent = n
-        ? `${n} queued for ${app.offlineWs.label}`
-        : 'Edits queue until the next connect';
+    $('offline-msg').textContent = n ? `${n} queued` : '';
+    $('offline-seg').title = n ? `${n} changes queued for ${app.offlineWs.label}` : 'Edits queue until the keyboard connects';
 }
 
 function exitOffline() {
@@ -333,37 +334,14 @@ function buildTabs() {
 }
 
 /**
- * The nav only. Deliberately separate from renderTabStrip: that one
- * re-instantiates every panel, and a group click must not throw away the
- * state of every open tab to change which row of buttons is showing.
+ * The nav only: the top bar's second row (look-shell), one button per screen,
+ * a sub-strip for screens with several tabs. Deliberately separate from
+ * renderTabStrip: that one re-instantiates every panel, and a screen click
+ * must not throw away the state of every open tab.
  */
-function renderTabNav() {
-    const nav = $('main-tabs');
-    // Groups present on THIS device — an empty chip would be a dead end.
-    const present = new Set(TABS.map((t) => groupOf(t.id)));
-    const groups = TAB_GROUPS.filter((g) => present.has(g.id));
-    if (!groups.some((g) => g.id === app.tabGroup)) {
-        app.tabGroup = groups[0]?.id ?? 'keys';
-    }
-    const inGroup = TABS.filter((t) => groupOf(t.id) === app.tabGroup);
-
-    const groupRow = el('div', { class: 'tab-groups' },
-        ...groups.map((g) => el('button', {
-            class: g.id === app.tabGroup ? 'active' : '',
-            text: g.label,
-            'data-caption': GROUP_CAPTION[g.id],
-            onclick: () => {
-                const first = TABS.find((t) => groupOf(t.id) === g.id);
-                if (first) showTab(first.id);
-            },
-        })));
-    // A group of one is its own tab — a single-item strip under a chip that
-    // already says the same word is pure noise.
-    const tabRow = inGroup.length > 1
-        ? el('div', { class: 'tab-row' }, ...inGroup.map((t) =>
-            el('button', { text: t.label, 'data-tab': t.id, onclick: () => showTab(t.id) })))
-        : null;
-    nav.replaceChildren(...[groupRow, tabRow].filter(Boolean));
+function renderTabNav(active = app.activeTab ?? TABS[0]?.id) {
+    shell.renderTabs({ tabs: TABS, active, onSelect: showTab, app,
+        registry: { screensFor, screenOf, BOARD_TABS, SIDE_TABS } });
 }
 
 /** Nav + one panel per tab, instantiated but not yet loaded. */
@@ -400,14 +378,12 @@ async function showTab(id) {
     // from anywhere else (startTrainer, a group click) must not leave its own
     // group chip unlit.
     app.tabGroup = groupOf(id);
+    app.activeTab = id;
     setCaptionGroup(app.tabGroup);
-    renderTabNav();
+    renderTabNav(id);
     $('palette-body').scrollTop = 0;
     for (const t of TABS) {
         t.panel.classList.toggle('active', t.id === id);
-    }
-    for (const b of $('main-tabs').querySelectorAll('button[data-tab]')) {
-        b.classList.toggle('active', b.dataset.tab === id);
     }
     const tab = TABS.find((t) => t.id === id);
     if (tab && !tab.loaded) {
@@ -638,8 +614,10 @@ function init() {
     }
     shell.mount({
         statusBar: $('statusbar'), rail: $('rail'), layerBar: $('layerbar-slot'),
-        board: $('board-slot'), palette: $('palette'),
+        board: $('board-slot'), palette: $('app-frame'),   // holds the caption bar
     });
+    $('menu-diag')?.addEventListener('click', () => app.openDiagnostics?.());
+    $('menu-palette')?.addEventListener('click', () => app.palette.toggle());
     setCaptionGroup(app.tabGroup);
 
     $('device-btn').addEventListener('click', async () => {
@@ -665,10 +643,15 @@ function init() {
     // One Save (spec §3.2): the registry is WP6's; this is only its window.
     const renderSave = () => {
         const dirty = saveState.dirty();
-        $('save-seg').style.display = dirty.length ? '' : 'none';
-        $('save-btn').textContent = saveState.summary?.() || `Save ${dirty.length} unsaved`;
+        // The primary Save is always on the bar (look-shell): lime when there is
+        // something to save, a quiet "Saved" when there is not.
+        $('save-btn').textContent = dirty.length ? (saveState.summary?.() || `Save ${dirty.length} unsaved`) : 'Saved';
+        $('save-btn').disabled = !dirty.length;
         $('save-btn').title = dirty.map((d) => d.label).join(', ');
-        const canDiscard = saveState.canDiscard?.() ?? dirty.some((d) => d.source === 'studio-keymap');
+        // ONE Discard (look-extras' flaskDiscardAll covers keymap edits and the
+        // offline queue); shown while there is anything to throw away.
+        const queued = app.offline && app.offlineWs ? offlineQueued(app.offlineWs) : 0;
+        const canDiscard = dirty.length > 0 || queued > 0;
         $('discard-btn').style.display = canDiscard ? '' : 'none';
     };
     saveState.addEventListener('change', renderSave);
@@ -679,7 +662,16 @@ function init() {
         else toast('Saved');
     });
     $('discard-btn').addEventListener('click', async () => {
-        if (!saveState.discard) { toast('Discard arrives with WP6', true); return; }
+        if (typeof window.flaskDiscardAll === 'function') {
+            try {
+                const r = await window.flaskDiscardAll();
+                if (r?.failed?.length || (r?.failed && r.failed.source)) toast('Some changes could not be discarded', true);
+                else toast('Changes discarded');
+            } catch (e) { toast(`Discard failed: ${e.message}`, true); }
+            renderSave();
+            return;
+        }
+        if (!saveState.discard) { toast('Discard is not available in this build', true); return; }
         const r = await saveState.discard();
         if (r.failed) toast(`Discard failed (${r.failed.source}): ${r.failed.error?.message ?? r.failed.error}`, true);
     });

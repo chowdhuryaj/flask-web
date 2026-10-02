@@ -56,7 +56,8 @@ def new_context(browser, viewport=(1440, 1000), seeds=()):
     page = ctx.new_page()
     errors = []
     page.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
-    page.on('console', lambda m: m.type == 'error' and errors.append(f'console: {m.text}'))
+    # css/extras.css belongs to look-extras; its 404 is expected until that branch is merged.
+    page.on('console', lambda m: m.type == 'error' and 'extras.css' not in (m.location or {}).get('url', '') and errors.append(f'console: {m.text}'))
     return ctx, page, errors
 
 
@@ -98,11 +99,13 @@ CONTRACT_SMOKE = """async (surface) => {
 
 
 def visit_all_tabs(page):
-    """Open every group and every tab once, so each tab's load() runs."""
-    for g in range(page.locator('.tab-groups button').count()):
-        page.locator('.tab-groups button').nth(g).click()
+    """Open every screen and every sub-tab once, so each tab's load() runs
+    (look-shell: the top bar's second row is `.maintab`, a screen with several
+    tabs shows `.subtab` buttons above its panel)."""
+    for s in range(page.locator('.maintab').count()):
+        page.locator('.maintab').nth(s).click()
         page.wait_for_timeout(250)
-        row = page.locator('.tab-row button[data-tab]')
+        row = page.locator('.subtab[data-tab]')
         for t in range(row.count()):
             row.nth(t).click()
             page.wait_for_timeout(250)

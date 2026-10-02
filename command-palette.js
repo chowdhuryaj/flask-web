@@ -14,6 +14,7 @@ import { el } from './ui.js?v=61';
 import { openPicker } from './binding-picker.js?v=61';
 import { catalogFor, encode } from './behavior-catalog.js?v=61';
 import { isZmkFamily } from './zmk.js?v=61';
+import { applyTheme, applyBoardZoom, currentTheme, modeOf } from './themes.js?v=61';
 
 const MAX_RESULTS = 40;
 
@@ -134,6 +135,26 @@ export class CommandPalette {
         return [...prefix, ...contains].slice(0, MAX_RESULTS);
     }
 
+    /** Look-shell: theme, board fit, jump to a layer. */
+    #lookCommands() {
+        const { app } = this;
+        const board = app.shell?.board;
+        const dark = modeOf(currentTheme()) === 'dark';
+        const out = [{
+            title: dark ? 'Switch to the light theme' : 'Switch to the dark theme',
+            subtitle: 'Graphite ⇄ Graphite Light',
+            run: () => applyTheme(dark ? 'graphiteLight' : 'graphite'),
+        }];
+        const layers = board?.adapter?.layers?.();
+        if (layers) {
+            out.push({ title: 'Fit the board', subtitle: 'scale the board to the pane', run: () => { applyBoardZoom(100); board.fit(); } });
+            for (const l of layers) {
+                out.push({ title: `Go to layer ${l.index} · ${l.name}`, subtitle: 'show this layer on the board', run: () => board.setLayer(l.index) });
+            }
+        }
+        return out;
+    }
+
     /** Keycode / behavior assignment, only while a key is selected. */
     #assignCommands() {
         const { app } = this;
@@ -172,6 +193,7 @@ export class CommandPalette {
                 run: () => deps.showTab(tab.id),
             });
         }
+        out.push(...this.#lookCommands());
         out.push(...this.#assignCommands());
         out.push({
             title: 'Diagnostics',

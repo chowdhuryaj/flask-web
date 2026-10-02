@@ -68,7 +68,11 @@ def main():
         bid = {b['displayName']: b['id'] for b in fx['behaviors'] if b['displayName']}
 
         # Docked (the keymap tab's picker is the catalog picker now).
-        dock = page.locator('#panels .panel.active .picker.bp').first
+        # (The Keymap screen now has the palette dock + inspector; the docked host is
+        # exercised through a stub container.)
+        page.evaluate("() => { const d = document.createElement('div'); d.id = 'wp3-dock'; document.body.append(d); }")
+        page.evaluate(OPEN, {'surface': 'zmk.key', 'host': 'docked', 'title': 'dock', 'position': None, 'live': False})
+        dock = page.locator('#wp3-dock .picker.bp').first
         dock.wait_for()
         groups = dock.locator('.bp-groups .chip').all_inner_texts()
         check(groups == ['Keys', 'Modifiers', 'Layers', 'Media & System', 'Run'], f'totem groups {groups}')
@@ -94,8 +98,7 @@ def main():
         row.locator('.chip', has_text='Fast · 150 ms').click()
         dock.locator('.bp-entry[data-entry="mod-tap"] .bp-assign').click()
         page.wait_for_timeout(400)
-        ws = json.loads(page.evaluate("localStorage.getItem('flask-offline-totem')"))
-        b0 = ws['zmk']['keymap']['layers'][0]['bindings'][0]
+        b0 = page.evaluate('window.__picked.at(-1)')   # the stub host's onPick
         check(b0['behaviorId'] == bid['Mod-Tap (fast 150)'] and b0['param2'] == 0x70004,
               f'fast mod-tap in sim: {b0}')
         dock.screenshot(path=str(OUT / 'totem-docked.png'))

@@ -8,56 +8,98 @@
   <link rel="stylesheet" href="css/shell.css?v=61">
   <link rel="stylesheet" href="css/board.css?v=61">
   <link rel="stylesheet" href="css/picker.css?v=61">
+  <link rel="stylesheet" href="css/keymap.css?v=61">
   <link rel="stylesheet" href="css/hud.css?v=61">
+  <link rel="stylesheet" href="css/extras.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚗️</text></svg>">
 </head>
 <body>
-  <!-- Editor frame (spec §0.1, §1.2): status bar, left rail, layer bar + board,
-       palette. Shown once a device, offline workspace or the trainer is open;
-       the landing card replaces it otherwise. -->
+  <!-- Editor frame (look-shell): top bar, second row of screen tabs, then the
+       workspace. On the Keymap screen the workspace is three zones: layer rail
+       (left), board over the palette dock (centre), context panel (right).
+       Shown once a device, offline workspace or the trainer is open; the
+       landing card replaces it otherwise. -->
   <div id="app-frame" class="app-frame" style="display:none">
-    <div id="statusbar" class="statusbar" role="toolbar" aria-label="Status">
-      <button class="sb-device" id="device-btn" data-caption="Switch device — back to the device list, where you can connect another keyboard."><span aria-hidden="true">⇄</span> <span id="device-name">Flask</span></button>
-      <span class="sb-sep" aria-hidden="true">|</span>
-      <span class="sb-seg" id="save-seg" style="display:none">
-        <button class="btn primary small" id="save-btn" data-caption="Write every unsaved change to the keyboard."></button>
-        <button class="btn small" id="discard-btn" style="display:none" data-caption="Throw away the unsaved ZMK keymap edits.">Discard</button>
-      </span>
-      <button class="btn small" id="layout-save" style="display:none" data-caption="Save the whole layout (keymap, combos, macros, tunings) to a file.">Save layout</button>
-      <button class="btn small" id="layout-load" style="display:none" data-caption="Apply a saved layout file. Works offline too and queues for the next connect.">Load</button>
-      <input type="file" id="layout-file" accept="application/json,.json" style="display:none">
+    <header id="statusbar" class="topbar" role="toolbar" aria-label="Status">
+      <button class="kb-chip" id="device-btn" data-caption="Switch device: back to the device list, where you can connect another keyboard.">
+        <span class="kb-chip-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7.5 14h9"/></svg>
+        </span>
+        <span class="kb-chip-txt"><b id="device-name">Flask</b><small id="device-sub" class="mono"></small></span>
+        <span class="kb-chip-act">Change</span>
+      </button>
+      <span class="pill chip-status" id="status-pill"><span class="dot"></span><span id="status-text">Not connected</span></span>
+      <span class="pill warn" id="proto-warn" style="display:none"></span>
       <span class="sb-seg warn" id="offline-seg" style="display:none">
         <span id="offline-msg"></span>
-        <button class="btn small" id="offline-discard">Discard queued</button>
-        <button class="btn small" id="offline-exit">Exit offline</button>
+        <button class="btn small ghost" id="offline-exit">Exit offline</button>
+        <button id="offline-discard" hidden aria-hidden="true" tabindex="-1"></button>
       </span>
       <span class="spacer"></span>
-      <span class="pill warn" id="proto-warn" style="display:none"></span>
-      <span class="pill" id="status-pill"><span class="dot"></span><span id="status-text">Not connected</span></span>
-    </div>
-
-    <div class="editor">
-      <aside class="rail" id="rail" aria-label="Board tools">
-        <button class="rail-btn" id="undo-btn" aria-label="Undo" data-caption="Undo the last key assignment." disabled>↶</button>
-        <button class="rail-btn" id="redo-btn" aria-label="Redo" data-caption="Redo the assignment you undid." disabled>↷</button>
-        <span class="rail-gap"></span>
-        <button class="rail-btn" id="zoom-in" aria-label="Zoom in" data-caption="Make the board bigger.">+</button>
-        <span class="rail-zoom mono" id="zoom-readout">100%</span>
-        <button class="rail-btn" id="zoom-out" aria-label="Zoom out" data-caption="Make the board smaller.">−</button>
-      </aside>
-      <div class="editor-col">
-        <div class="layerbar" id="layerbar-row">
-          <div class="layerbar-slot" id="layerbar-slot"></div>
-          <button class="chip" id="hud-btn" style="display:none" data-caption="Float the live keymap over other windows.">Pop out</button>
-        </div>
-        <div class="board-slot" id="board-slot"></div>
-        <section class="palette" id="palette">
-          <nav class="tabs" id="main-tabs"></nav>
-          <div class="palette-body" id="palette-body"><div id="panels"></div></div>
-          <div class="caption-bar" id="caption-bar" aria-live="polite"></div>
-        </section>
+      <div class="tb-group" role="group" aria-label="History">
+        <button class="icon-btn" id="undo-btn" aria-label="Undo" data-caption="Undo the last key assignment." disabled>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+        </button>
+        <button class="icon-btn" id="redo-btn" aria-label="Redo" data-caption="Redo the assignment you undid." disabled>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+        </button>
       </div>
+      <div class="menu-wrap">
+        <button class="icon-btn" id="more-btn" aria-label="More" aria-haspopup="menu" aria-expanded="false" data-caption="Export, print, save and load layouts, pop out the board, diagnostics.">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+        </button>
+        <div class="menu" id="more-menu" role="menu" hidden>
+          <button role="menuitem" id="menu-export-keymap" data-caption="Download the keymap as a ZMK .keymap file.">Export .keymap</button>
+          <button role="menuitem" id="menu-print-layers" data-caption="Print every layer as a one-page cheat sheet.">Print layer sheet</button>
+          <hr>
+          <button role="menuitem" id="layout-save" style="display:none" data-caption="Save the whole layout (keymap, combos, macros, tunings) to a file.">Save layout…</button>
+          <button role="menuitem" id="layout-load" style="display:none" data-caption="Apply a saved layout file. Works offline too and queues for the next connect.">Load layout…</button>
+          <input type="file" id="layout-file" accept="application/json,.json" style="display:none">
+          <button role="menuitem" id="hud-btn" style="display:none" data-caption="Float the live keymap over other windows.">Pop out</button>
+          <button role="menuitem" id="menu-diag" data-caption="Live transport and Studio event log.">Diagnostics…</button>
+          <button role="menuitem" id="menu-palette" data-caption="Jump to a screen or assign to the selected key.">Command palette<kbd class="menu-kbd">⌘K</kbd></button>
+        </div>
+      </div>
+      <div class="theme-switch" role="group" aria-label="Theme">
+        <button id="theme-light" aria-label="Light theme" aria-pressed="false" data-caption="Graphite Light.">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <button id="theme-dark" aria-label="Dark theme" aria-pressed="true" data-caption="Graphite.">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </div>
+      <span class="sb-seg save-seg" id="save-seg">
+        <button class="btn primary" id="save-btn" data-caption="Write every unsaved change to the keyboard." disabled>Saved</button>
+        <button class="btn ghost" id="discard-btn" style="display:none" data-caption="Throw away unsaved keymap edits and anything queued for the next connect.">Discard</button>
+      </span>
+    </header>
+
+    <nav id="main-tabs" class="maintabs" aria-label="Screens"></nav>
+
+    <div class="editor" id="editor" data-screen="keymap" data-board="1" data-side="1">
+      <aside class="rail" id="rail" aria-label="Layers">
+        <div class="layerbar-slot" id="layerbar-slot"></div>
+      </aside>
+      <section class="board-wrap" id="board-wrap">
+        <div class="board-slot" id="board-slot"></div>
+        <div class="board-foot">
+          <div class="board-state" id="board-state" aria-live="polite"></div>
+          <div class="board-tools" role="group" aria-label="Board zoom">
+            <button class="icon-btn" id="zoom-out" aria-label="Zoom out" data-caption="Make the board smaller.">−</button>
+            <span class="zoom-readout mono" id="zoom-readout">100%</span>
+            <button class="icon-btn" id="zoom-in" aria-label="Zoom in" data-caption="Make the board bigger.">+</button>
+            <button class="btn small ghost" id="fit-btn" data-caption="Scale the board to fit the pane.">Fit</button>
+          </div>
+
+        </div>
+      </section>
+      <section class="palette work" id="palette">
+        <div class="subtabs" id="subtabs" role="tablist" hidden></div>
+        <div class="palette-body" id="palette-body"><div id="panels"></div></div>
+      </section>
+      <aside class="side" id="side" aria-label="Key inspector"></aside>
     </div>
+    <div class="caption-bar" id="caption-bar" aria-live="polite"></div>
   </div>
 
   <main id="landing-main">

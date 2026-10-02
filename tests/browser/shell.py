@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WP1 shell checks. Run:  PORT=8141 python3 serve.py  then
+"""Shell checks (WP1, updated for look-shell). Run:  PORT=8141 python3 serve.py  then
 PORT=8141 python3 tests/browser/shell.py
 
 Hardware is stubbed (see harness.py). Checks, per offline workspace:
@@ -26,55 +26,49 @@ SUBSET = {  # tab labels that must exist per group (1.4); WP4 adds more later
 }
 
 
-def tabs_in(page, group):
-    page.locator('.tab-groups button', has_text=group).click()
-    return set(page.locator('.tab-row button[data-tab]').all_inner_texts())
+SCREENS = ['Keymap', 'Combos', 'Behaviours', 'Macros', 'Device', 'Test', 'Trainer']
+SUBTABS = {  # screen -> sub-tab labels that must exist (look-shell: the second row is the screens)
+    'totem': {'Behaviours': {'Tap Dance', 'Shift Keys', 'Leader'}, 'Device': {'Modes', 'Keyboard'}},
+    'imprint': {'Behaviours': {'Tap Dance', 'Shift Keys', 'Leader'}, 'Device': {'Mouse', 'Gestures', 'RGB', 'Modes', 'Keyboard'}},
+}
+
+
+def subtabs_in(page, screen):
+    page.locator('.maintab', has_text=screen).click()
+    page.wait_for_timeout(200)
+    return set(page.locator('.subtab').all_inner_texts())
 
 
 def check_workspace(browser, name, label, failures):
-    for size in ((1440, 1000), (900, 1000)):
+    for size in ((1440, 1000), (1024, 768), (768, 1024)):
         ctx, page, errors = h.new_context(browser, viewport=size)
         h.open_workspace(page, label)
         tag = f'{name}@{size[0]}'
+        labels = [t.split('\n')[0] for t in page.locator('.maintab').all_inner_texts()]
+        if labels != SCREENS:
+            failures.append(f'{tag}: screens {labels} != {SCREENS}')
+        if page.locator('.tab-groups').count():
+            failures.append(f'{tag}: the old palette tab strip is still there')
+        if page.evaluate('document.documentElement.scrollWidth > innerWidth'):
+            failures.append(f'{tag}: horizontal page scroll')
         if size[0] == 1440:
-            chips = page.locator('.tab-groups button').all_inner_texts()
-            if chips != GROUPS:
-                failures.append(f'{tag}: chips {chips} != {GROUPS}')
-            for g, want in SUBSET[name].items():
-                have = tabs_in(page, g)
+            for screen, want in SUBTABS[name].items():
+                have = subtabs_in(page, screen)
                 if not want <= have:
-                    failures.append(f'{tag}: {g} missing {sorted(want - have)} (have {sorted(have)})')
-            page.locator('.tab-groups button', has_text='Keys').click()
-            if page.locator('header').count():
-                failures.append(f'{tag}: <header> still present')
-            if page.locator('#app-frame button#diag-btn, #app-frame #theme-sel, #app-frame #zoom-sel').count():
-                failures.append(f'{tag}: old header controls remain')
-
-            # Board slot stays put while the palette scrolls. WP2 fills the
-            # slot; until then a stand-in proves the layout pins it.
-            page.evaluate("""() => {
-              document.getElementById('board-slot').innerHTML = '<div id="stand-in" style="height:120px"></div>';
-              const p = document.querySelector('.panel.active');
-              p.insertAdjacentHTML('beforeend', '<div style="height:2400px"></div>');
-            }""")
+                    failures.append(f'{tag}: {screen} missing {sorted(want - have)} (have {sorted(have)})')
+            page.locator('.maintab', has_text='Keymap').click()
+            # The board is one frame element; the Keymap screen keeps it while the dock scrolls.
             before = page.locator('#board-slot').bounding_box()
-            page.evaluate("() => { const b = document.getElementById('palette-body'); b.scrollTop = b.scrollHeight; }")
-            if not page.evaluate("() => document.getElementById('palette-body').scrollTop > 100"):
-                failures.append(f'{tag}: palette did not scroll')
-            after = page.locator('#board-slot').bounding_box()
-            if before != after:
-                failures.append(f'{tag}: board slot moved {before} -> {after}')
-            if page.evaluate("() => document.documentElement.scrollTop") != 0:
-                failures.append(f'{tag}: page itself scrolled')
-            page.evaluate("() => document.getElementById('board-slot').replaceChildren()")
-
+            page.evaluate("() => { const g = document.querySelector('.dock-grid'); g.scrollTop = g.scrollHeight; }")
+            if page.locator('#board-slot').bounding_box() != before:
+                failures.append(f'{tag}: board moved while the dock scrolled')
             # Caption follows hover and restores on leave.
-            page.mouse.move(1000, 30)   # off the chip the last click left it on
+            page.mouse.move(700, 10)
             page.wait_for_timeout(150)
             default = page.locator('#caption-bar').inner_text()
             page.locator('#zoom-in').hover()
             hovered = page.locator('#caption-bar').inner_text()
-            page.mouse.move(1000, 30)
+            page.mouse.move(700, 10)
             page.wait_for_timeout(150)
             if hovered == default or 'bigger' not in hovered:
                 failures.append(f'{tag}: caption did not change on hover ({hovered!r})')
@@ -90,17 +84,18 @@ def check_appearance(browser, failures):
     page.goto(h.URL)
     page.wait_for_selector('#landing')
     bg = page.evaluate("() => document.documentElement.style.getPropertyValue('--bg')")
-    if bg != '#2b2b2b':
-        failures.append(f'default theme is not keybr Dark (--bg={bg!r})')
+    if bg != '#121212':
+        failures.append(f'default theme is not Graphite (--bg={bg!r})')
     fs = page.evaluate("() => getComputedStyle(document.documentElement).fontSize")
     if fs != '18.4px':
         failures.append(f'text scale default: font-size {fs} != 18.4px')
     page.locator('#offline-list .dev-item').filter(has_text='TOTEM').first.click()
     page.locator('#panels .panel.active').wait_for()
-    page.locator('.tab-groups button', has_text='Device').click()
-    page.locator('.tab-row button[data-tab=keyboard]').click()
+    page.locator('.maintab', has_text='Device').click()
+    page.locator('.subtab[data-tab=keyboard]').click()
     page.locator('.kb-theme[data-theme-id=nord]').click()
     page.locator('.kb-tab input[type=range]').fill('1.3')
+    page.locator('.maintab', has_text='Keymap').click()
     page.locator('#zoom-in').click()
     page.reload()
     page.wait_for_selector('#landing')
@@ -138,7 +133,9 @@ def check_assign_command(browser, failures):
     }""")
     txt = page.locator('#save-btn').inner_text()
     if '1 unsaved' not in txt:
-        failures.append(f'status bar save text: {txt!r}')
+        failures.append(f'top bar save text: {txt!r}')
+    if page.locator('#save-btn').is_disabled():
+        failures.append('Save stays disabled with something unsaved')
     failures += [f'assign: {e}' for e in errors]
     ctx.close()
 

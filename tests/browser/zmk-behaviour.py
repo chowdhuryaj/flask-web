@@ -39,8 +39,14 @@ def shot(page, name):
 
 
 def go(page, group, tab):
-    page.locator('.tab-groups button').filter(has_text=group).click()
-    page.locator('.tab-row button[data-tab]').filter(has_text=tab).click()
+    """look-shell: Combos / Macros / Test are screens; the rest are sub-tabs of
+    Behaviours or Device."""
+    screen = page.locator('.maintab').filter(has_text=tab)
+    if screen.count():
+        screen.first.click()
+    else:
+        page.locator('.maintab').filter(has_text='Device' if group == 'Device' else 'Behaviours').click()
+        page.locator('.subtab').filter(has_text=tab).click()
     page.wait_for_timeout(500)
 
 
@@ -49,8 +55,8 @@ def key(page, pos):
 
 
 def save_text(page):
-    seg = page.locator('#save-seg')
-    return seg.inner_text().strip() if seg.is_visible() else ''
+    btn = page.locator('#save-btn')
+    return '' if btn.is_disabled() else btn.inner_text().strip()    # clean = a disabled "Saved"
 
 
 def ws(page, name):
@@ -148,7 +154,7 @@ def main():
         check(ws(page, 'totem')['zmk']['holdtap'][33]['term'] == 330, 'slot 33 term written to the sim')
         check('unsaved' in save_text(page), f'status bar SAVE dirty after slot 33: {save_text(page)!r}')
         check('Hold-tap timing' in page.evaluate("import('./save-state.js?v=61').then(m => m.saveState.dirty().map(d => d.label).join('|'))"), 'Hold-tap timing is a registered source')
-        row.locator('select').select_option('2')
+        row.locator('.flavor[data-flavor="2"]').click()
         page.wait_for_timeout(300)
         check(ws(page, 'totem')['zmk']['holdtap'][33]['flavor'] == 2, 'flavor written')
         check(ws(page, 'totem')['zmk']['holdtap'][33]['term'] == 330, 'flavor write kept the term')
@@ -201,9 +207,7 @@ def main():
         ctx, page, errors = H.new_context(browser, seeds=())
         H.open_workspace(page, 'Cyboard Imprint (ZMK)')
         check(page.locator('#panels [data-panel="zmk-holdtiming"]').count() == 0, 'no Hold timing tab on Imprint (0x2A answers 0xFF)')
-        page.locator('.tab-groups button').filter(has_text='Device').click()
-        page.locator('.tab-row button[data-tab]').filter(has_text='Gestures').click()
-        page.wait_for_timeout(500)
+        go(page, 'Device', 'Gestures')
         page.locator('.card button.code').first.click()
         sheet = page.locator('.picker-sheet')
         sheet.locator('.bp-groups .chip', has_text='Run').click()
