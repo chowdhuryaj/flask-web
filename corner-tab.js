@@ -16,7 +16,11 @@
 // belongs to rather than by hunting the board picture.
 
 import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=49';
-import { kcCell, makePickerHost } from './picker.js?v=49';
+import { kcCell } from './picker.js?v=49';
+import { capLabel } from './keycodes.js?v=49';
+import { openPicker } from './binding-picker.js?v=1';
+import { board } from './board.js?v=1';
+import { reloadRow } from './tiles.js?v=1';
 import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=49';
 
 /** Which layer the wire frames are addressed with when outputs are universal.
@@ -64,8 +68,55 @@ export class CornerTab {
         }
 
         await this._loadOutputs(this.layer);
-        this.picker = makePickerHost({ layerCount: this.app.layerCount });
+        this._watch();
         this.render();
+    }
+
+    /** Pick a chord's output. Surface qmk.cornerChord (spec 4.7). */
+    _pick(def) {
+        openPicker({
+            surface: 'qmk.cornerChord', host: 'sheet', app: this.app,
+            value: this.outputs[this.layer]?.[def] ?? 0,
+            title: `Chord: ${ccDefName(def)}`,
+            onPick: (kc) => this._set(def, kc),
+        });
+    }
+
+    /** Boxes between the member keys on the one board, while this tab is the
+     * visible panel. There is no show/hide hook, so watch the panel class. */
+    _watch() {
+        if (this._obs || typeof MutationObserver === 'undefined') return;
+        const panel = this.root.parentElement;
+        if (!panel) return;
+        this._obs = new MutationObserver(() => this._board());
+        this._obs.observe(panel, { attributes: true, attributeFilter: ['class'] });
+        board.addEventListener('layer', () => {
+            if (this._active() && this.app.caps.cornerPerLayer && board.layer !== this.layer) this._switchLayer(board.layer);
+        });
+    }
+
+    _active() {
+        const p = this.root.parentElement;
+        return !!p && (!p.classList.contains('panel') || p.classList.contains('active'));
+    }
+
+    _board() {
+        if (!this._active()) { board.setChordBoxes(null); board.setLayerBarNote(null); return; }
+        const boxes = [];
+        for (let def = 0; def < this.defCount; def++) {
+            const members = this._members(def);
+            const kc = this.outputs[this.layer]?.[def] ?? 0;
+            if (members.length < 2 || kc === 0) continue;
+            boxes.push({
+                id: def, label: kc === KC_TRNS ? '▽' : capLabel(kc),
+                caption: `Chord ${ccDefName(def)} → ${capLabel(kc)}. Click to change.`,
+                positions: members.map((p) => ({ row: ccRow(p), col: ccCol(p) })),
+                inherited: this.app.caps.cornerPerLayer && !this._isOwn(def, this.layer),
+            });
+        }
+        board.setChordBoxes(boxes, (b) => this._pick(b.id));
+        const warn = this.unplaced ? `${this.unplaced} chord(s) will not fire` : '';
+        board.setLayerBarNote(el('span', { class: warn ? 'bd-note warn' : 'bd-note faint', text: warn || `${boxes.length} chords, click a box to edit` }));
     }
 
     /** Resolved keycode per chord on one layer — inheritance already applied
@@ -112,6 +163,7 @@ export class CornerTab {
     }
 
     async _switchLayer(layer) {
+        if (layer === this.layer && this.outputs[layer]) return;
         this.layer = layer;
         if (!this.outputs[layer]) {
             try { await this._loadOutputs(layer); }
@@ -142,7 +194,7 @@ export class CornerTab {
                 : inherited ? ' — inherited from a lower layer' : '');
 
         const cell = kcCell(unbound ? 0 : kc,
-            () => this.picker.request((picked) => this._set(def, picked)), title);
+            () => this._pick(def), title);
         cell.style.width = '56px';
         if (unbound) { cell.textContent = '+'; cell.style.opacity = '0.35'; }
         else if (inherited) { cell.style.opacity = '0.55'; cell.style.borderStyle = 'dashed'; }
@@ -234,13 +286,15 @@ export class CornerTab {
                     value: this.layer,
                     options: Array.from({ length: this.app.layerCount || 16 }, (_, i) =>
                         ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` })),
-                    onChange: (v) => this._switchLayer(Number(v)),
+                    onChange: (v) => { board.setLayer(Number(v)); return this._switchLayer(Number(v)); },
                 })
                 : null,
             this._grid('Finger', CC.clusterNames, CC.fingerChordNames, 0),
             this._grid('Thumb', ['L thumb', 'R thumb'], CC.thumbChordNames, CC.thumbBase),
-            // Deliberately NO save bar — see the comment in _set().
-            el('div', { class: 'note faint', text: 'Assignments are durable the moment they are written — this channel has no separate Save.' }));
-        this.root.replaceChildren(c, this.picker.card);
+            // Deliberately NO save bar and NO saveState registration: 0x28 has
+            // no save step on the QMK line (see _set()).
+            reloadRow(() => this.load(), 'Assignments are durable the moment they are written. This channel has no separate Save.'));
+        this.root.replaceChildren(c);
+        this._board();
     }
 }

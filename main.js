@@ -65,6 +65,7 @@ app.hud = new HUD(app);
 // Redesign contracts (WP0): reachable from every tab via `app`.
 app.shell = shell;
 app.saveState = saveState;
+app.showTab = (id) => showTab(id);   // Typing's links to Behaviour › Leader / Shift Keys
 // ⌘K. Installed at module scope, not per-device: navigating is exactly what
 // you want when nothing is connected yet.
 app.palette = new CommandPalette(app, {
@@ -177,6 +178,8 @@ async function loadDevice(device) {
     setDeviceCustomKeys(definition.customKeycodes);
     // Macro keycodes are only offerable once we know how many slots the board
     // actually has — QK_MACRO is 128 wide and boards serve a fraction of it.
+    try { app.tapDanceCount = (await app.vial.dynamicEntryCounts()).tapDance; }
+    catch { app.tapDanceCount = 0; }   // WP3 picker: TD slot range
     try { setDeviceMacroCount(await app.vial.macroCount()); }
     catch { setDeviceMacroCount(0); }
 
@@ -333,6 +336,7 @@ function startOffline(key, family) {
     }
     setDeviceCustomKeys(ws.profile.customKeycodes || []);
     setDeviceMacroCount(ws.macros?.count ?? 0);
+    app.tapDanceCount = zmk ? undefined : ws.entries?.counts?.tapDance;
 
     setMode('offline');   // no HUD: it is live device state
     $('lock-btn').style.display = 'none';

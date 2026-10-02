@@ -10,6 +10,7 @@ const before = JSON.parse(readFileSync(new URL('./fixtures/tabs-before-wp0.json'
 // Deliberate changes from §1.3; anything else differing is a regression.
 const RELABEL = { 'zmk-shift': 'Shift Keys' };
 const REGROUP = { chords: 'device' };
+const WP4B_NEW = new Set(['qmk-leader', 'qmk-shift']);
 let checks = 0;
 
 for (const [ws, tabs] of Object.entries(before)) {
@@ -17,7 +18,8 @@ for (const [ws, tabs] of Object.entries(before)) {
     const app = ws === 'trainerOnly' ? { trainerOnly: true }
         : { family: ws.split('-')[0], caps: capabilities(ws.split('-')[0], before[`${ws}@version`]) };
     // WP1 added Device › Keyboard (spec §1.3); everything else is unchanged.
-    const now = tabsFor(app).filter((t) => t.id !== 'keyboard');
+    // WP4b added Behaviour › Leader / Shift Keys on QMK typing boards (§1.3).
+    const now = tabsFor(app).filter((t) => t.id !== 'keyboard' && !WP4B_NEW.has(t.id));
     assert.deepEqual(now.map((t) => t.id), tabs.map((t) => t[0]), `${ws}: tab ids/order`);
     for (const [i, [id, label, group]] of tabs.entries()) {
         assert.equal(now[i].label, RELABEL[id] ?? label, `${ws}/${id}: label`);
@@ -37,6 +39,7 @@ const SPEC_1_3 = {
     'zmk-shift': 'behaviour', 'zmk-leader': 'behaviour', 'zmk-modes': 'device', 'zmk-test': 'device',
     'nape-macros': 'behaviour', 'nape-settings': 'device',
     keyboard: 'device',
+    'qmk-leader': 'behaviour', 'qmk-shift': 'behaviour',
 };
 const groupIds = new Set(TAB_GROUPS.map((g) => g.id));
 for (const [id, group] of Object.entries(SPEC_1_3)) {
@@ -57,6 +60,17 @@ for (const ws of Object.keys(before)) {
     assert.equal(all.at(-1).id, 'keyboard', `${ws}: keyboard tab last`);
     assert.equal(all.at(-1).group, 'device'); checks += 2;
 }
+// WP4b (AJ-Q3): QMK typing boards get Leader and Shift Keys under Behaviour, right
+// after Chords/Key Overrides; ZMK and non-typing QMK boards do not.
+for (const [ws, typing] of [['svalboard', true], ['adept', true], ['nlkb16', true], ['generic', false], ['imprint', false], ['totem', false], ['nape', false]]) {
+    const app = { family: ws, caps: capabilities(ws, before[`${ws}@version`]) };
+    const ids = tabsFor(app).filter((t) => t.group === 'behaviour').map((t) => t.id);
+    assert.equal(ids.includes('qmk-leader'), typing, `${ws}: qmk-leader`);
+    assert.equal(ids.includes('qmk-shift'), typing, `${ws}: qmk-shift`);
+    checks += 2;
+}
+assert.deepEqual(tabsFor({ family: 'svalboard', caps: capabilities('svalboard', 23) }).filter((t) => t.group === 'behaviour').map((t) => t.label),
+    ['Macros', 'Tap Dance', 'Combos', 'Key Overrides', 'Chords', 'Leader', 'Shift Keys']); checks++;
 assert.deepEqual(tabsFor({ trainerOnly: true }).map((t) => t.id), ['trainer']); checks++;
 // Rows sharing an id must agree on label and group.
 for (const t of TAB_TABLE) {

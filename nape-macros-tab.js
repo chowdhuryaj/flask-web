@@ -5,14 +5,21 @@
 // whole buffer is rewritten every save. Escapes recorded by Keychron's app are
 // preserved verbatim rather than reinterpreted (see macroToText).
 
-import { el, toast } from './ui.js?v=49';
+import { el, card, toast } from './ui.js?v=49';
 import { macroToText, macroFromText } from './nape-proto.js?v=49';
+import { encode } from './behavior-catalog.js?v=1';
+import { tile, tileGrid, openSheet, pasteToKey, addSummary } from './tiles.js?v=1';
+
+const summary = (bytes) => {
+    if (!bytes?.length) return '';
+    const t = macroToText(bytes);
+    return `types '${t.length > 12 ? `${t.slice(0, 12)}…` : t}'`;
+};
 
 export class NapeMacrosTab {
     constructor(app) {
         this.app = app;
         this.root = el('div');
-        this.editing = null;   // index being edited
     }
 
     async load() {
@@ -26,6 +33,8 @@ export class NapeMacrosTab {
         } finally {
             app.hid.resume();
         }
+        this.app.macroCount = this.count;   // WP3 picker: Nape macro slot range
+        addSummary(this.app, 'macro', (i) => summary(this.macros?.[i]));
         this.render();
     }
 
@@ -39,88 +48,58 @@ export class NapeMacrosTab {
             bytes = macroFromText(text);
         } catch (e) {
             toast(e.message, true);
-            return;
+            return false;
         }
         const next = this.macros.slice();
         next[index] = bytes;
         const total = next.reduce((n, m) => n + m.length + 1, 0);
         if (total > this.bufferSize) {
-            toast(`Too long — ${total} of ${this.bufferSize} bytes used across all macros`, true);
-            return;
+            toast(`Too long: ${total} of ${this.bufferSize} bytes used across all macros`, true);
+            return false;
         }
         this.app.hid.pause();
         try {
             await this.app.nape.writeMacros(next, this.bufferSize);
             this.macros = next;
-            this.editing = null;
             toast(`Macro ${index} saved`);
         } catch (e) {
             toast(`Save failed: ${e.message}`, true);
+            return false;
         } finally {
             this.app.hid.resume();
         }
         this.render();
+        return true;
     }
 
-    _row(bytes, index) {
-        const text = macroToText(bytes);
-        const empty = bytes.length === 0;
-
-        if (this.editing !== index) {
-            return el('tr', { class: empty ? 'macro-empty' : '' },
-                el('td', { class: 'macro-idx', text: `M${index}` }),
-                el('td', { class: 'macro-text', text: empty ? 'Not set' : text }),
-                el('td', { class: 'macro-len', text: empty ? '' : `${bytes.length} B` }),
-                el('td', null, el('button', {
-                    class: 'btn small', text: empty ? 'Add' : 'Edit',
-                    onclick: () => { this.editing = index; this.render(); },
-                })));
-        }
-
+    _edit(index) {
         const input = el('input', {
-            type: 'text', class: 'macro-input', value: text,
-            placeholder: 'Text to type, e.g. chowd198@umn.edu',
+            type: 'text', class: 'macro-input step-text', value: macroToText(this.macros[index]),
+            placeholder: 'Text to type, e.g. chowd198@umn.edu', style: 'width:100%',
         });
-        let committed = false;      // Enter and blur both fire — commit once
-        const commit = () => {
-            if (committed) return;
-            committed = true;
-            this._save(index, input.value);
-        };
-        const cancel = () => {
-            if (committed) return;
-            committed = true;
-            this.editing = null;
-            this.render();
-        };
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') commit();
-            if (e.key === 'Escape') cancel();
-        });
-        return el('tr', { class: 'macro-editing' },
-            el('td', { class: 'macro-idx', text: `M${index}` }),
-            el('td', { colspan: '2' }, input),
-            el('td', null,
-                el('button', { class: 'btn small primary', text: 'Save', onclick: commit }),
-                el('button', { class: 'btn small', text: 'Cancel', onclick: cancel })));
+        const commit = async (sh) => { if (await this._save(index, input.value)) sh.close(); };
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(sheet); });
+        const sheet = openSheet(`Macro M${index}`, () => [
+            el('div', { class: 'note faint', text:
+                'Type text a button can play back. Non-typeable bytes are written as \\xNN, and anything '
+                + "recorded in Keychron's app is preserved exactly as it was." }),
+            input,
+            el('div', { class: 'usage', text: `${this.used} of ${this.bufferSize} bytes used across all macros` }),
+        ], (sh) => [
+            el('button', { class: 'btn', text: 'Cancel', onclick: () => sh.close() }),
+            el('button', { class: 'btn primary', text: 'Save macro', onclick: () => commit(sh) }),
+        ]);
+        input.focus();
     }
 
     render() {
-        const rows = this.macros.map((m, i) => this._row(m, i));
-        const pct = Math.round((this.used / this.bufferSize) * 100);
-        this.root.replaceChildren(
-            el('div', { class: 'nape-section' },
-                el('h3', { text: 'Macros' }),
-                el('p', { class: 'hint' },
-                    'Type text a button can play back. Assign a macro to a button in the '
-                    + 'Keymap tab. Non-typeable bytes are written as \\xNN, and anything '
-                    + "recorded in Keychron's app is preserved exactly as it was."),
-                el('table', { class: 'macro-table' },
-                    el('tbody', null, ...rows)),
-                el('p', { class: 'macro-usage' },
-                    el('span', { class: 'macro-bar' },
-                        el('span', { class: 'macro-bar-fill', style: `width:${pct}%` })),
-                    el('span', { text: `${this.used} of ${this.bufferSize} bytes used` }))),
-        );
+        this.root.replaceChildren(card('Macros', `${this.count} slots · ${this.used}/${this.bufferSize} bytes used`,
+            el('div', { class: 'note faint', text: 'Click a macro to paste it onto the selected key in the Keymap tab. The pencil edits it.' }),
+            tileGrid(...this.macros.map((m, i) => tile({
+                name: `M${i}`, sub: summary(m) || 'empty', empty: !m.length,
+                caption: `Macro ${i}: ${summary(m) || 'empty'}. Click to paste onto the selected key.`,
+                onPaste: () => pasteToKey(encode('macro', { slot: i }, 'nape')),
+                onEdit: () => this._edit(i),
+            })))));
     }
 }

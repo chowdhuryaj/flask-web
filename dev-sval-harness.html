@@ -32,6 +32,8 @@
 import { capabilities } from './caps.js?v=49';
 import { CH, V } from './flaskproto.js?v=49';
 import { TypingTab } from './typing-tab.js?v=49';
+import { QmkLeaderTab } from './qmk-leader-tab.js?v=1';
+import { QmkShiftTab } from './qmk-shift-tab.js?v=1';
 import { GesturesTab, ChordsTab } from './gestures-tab.js?v=49';
 import { CornerTab } from './corner-tab.js?v=49';
 import { MouseTab } from './mouse-tab.js?v=49';
@@ -111,6 +113,8 @@ const appFor = (version) => ({
 // teleport, and corner outputs universal (no layer selector).
 const v21 = appFor(22);
 await mount('Typing — Svalboard v22 (Super Leader keycode-only, Cyclotab, alt-repeat)', TypingTab, v21);
+await mount('Leader — Svalboard v22 (Super Leader, keycode-only)', QmkLeaderTab, v21);
+await mount('Shift Keys — Svalboard v22', QmkShiftTab, v21);
 await mount('Mouse Chords — Svalboard v22 (two balls, defer click)', ChordsTab, v21);
 await mount('Corner Combos — Svalboard v22 (universal outputs)', CornerTab, v21);
 await mount('Mouse — Svalboard v22 (hi-res scroll, no accel/smoothing/teleport)', MouseTab, v21);
@@ -119,12 +123,14 @@ await mount('Mouse — Svalboard v22 (hi-res scroll, no accel/smoothing/teleport
 // board must still get the old surface.
 const v17 = appFor(17);
 await mount('Typing — Svalboard v17 (snippets + output-kind selector)', TypingTab, v17);
+await mount('Leader — Svalboard v17 (output-kind selector)', QmkLeaderTab, v17);
 await mount('Corner Combos — Svalboard v17 (per-layer + inheritance)', CornerTab, v17);
 await mount('Mouse — Svalboard v17 (teleport, accel, smoothing)', MouseTab, v17);
 
 // Regression side: the pre-v12 shapes the same files still have to serve.
 const v11 = appFor(11);
-await mount('Typing — Svalboard v11 (original 8-sequence leader)', TypingTab, v11);
+await mount('Typing — Svalboard v11', TypingTab, v11);
+await mount('Leader — Svalboard v11 (original 8-sequence leader)', QmkLeaderTab, v11);
 await mount('Gestures — Adept v11 (latched sets, restricted picker)', GesturesTab,
     { ...appFor(11), family: 'adept', caps: capabilities('adept', 11) });
 
