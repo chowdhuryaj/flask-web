@@ -473,3 +473,6 @@ export async function saveFlaskChannels(app, channels) {
         return { ok: true };
     } finally { app.hid?.resume?.(); }
 }
+
+// window.flaskExportKeymap / window.flaskPrintLayers (side-effect import; see zmk-extras.js)
+import './zmk-extras.js?v=61';

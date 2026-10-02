@@ -207,6 +207,15 @@ export class CommandPalette {
                 run: () => app.hud?.toggle(),
             });
         }
+        out.push({
+            title: 'Export .keymap',
+            subtitle: 'ZMK devicetree file from the current layout',
+            run: () => window.flaskExportKeymap?.(),
+        }, {
+            title: 'Print layer sheet',
+            subtitle: 'two layers per page, light background',
+            run: () => window.flaskPrintLayers?.(),
+        });
         return out;
     }
 }
