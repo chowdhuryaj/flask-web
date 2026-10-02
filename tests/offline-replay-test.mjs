@@ -4,7 +4,9 @@
 import assert from 'node:assert/strict';
 import { syncWorkspace, pendingCount, listWorkspaces, saveWorkspace } from '../offline.js?v=62';
 import { FlaskProto, CH, V, CMD } from '../flaskproto.js?v=62';
-import { ZmkOfflineFlask, createZmkTemplate } from '../zmk-offline.js?v=62';
+import { ZmkOfflineFlask, createZmkTemplate, zmkSyncExtras, zmkPendingCount } from '../zmk-offline.js?v=62';
+import { encodeCskSlot } from '../zmk-csk-codec.js?v=62';
+import { encodeTdStep, encodeTdCfg, TD_ACTION } from '../zmk-tapdance-codec.js?v=62';
 
 let checks = 0;
 const mem = new Map();
@@ -61,5 +63,49 @@ assert.deepEqual(frames.map((x) => x[1]), [CH.tapDance]); checks++;
 localStorage.setItem('flask-offline-adept', JSON.stringify({ key: 'adept', family: 'adept', dirty: {} }));
 saveWorkspace(ws);
 assert.deepEqual(listWorkspaces().map((w) => w.key), ['imprint']); checks++;
+
+// 6. Shift keys + tap dance journal offline and replay with the tabs' own frames.
+{
+    const ws2 = createZmkTemplate('imprint');
+    ws2.key = 'imprint2';
+    const g = new ZmkOfflineFlask(ws2);
+    await g.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }), 1);
+    await g.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(5, { base: 0x70006, shifted: 0x70007 }), 1);
+    await g.setBytes(CH.tapDance, V.tdStep,
+        encodeTdStep(1, 0, { action: TD_ACTION.usage, param1: 0x70008 }), 2);
+    await g.setBytes(CH.tapDance, V.tdStep,
+        encodeTdStep(1, 1, { action: TD_ACTION.usage, param1: 0x70009 }), 2);
+    await g.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(1, 250), 1);
+    assert.equal(zmkPendingCount(ws2), 5, 'csk + td entries counted'); checks++;
+
+    const writes = [], saves = [];
+    const dev = { flask: {
+        setBytes: async (c, i, p) => { writes.push([c, i, [...p]]); return p; },
+        save: async (c) => { saves.push(c); },
+    }, hid: null };
+    const r3 = await zmkSyncExtras(dev, ws2);
+    assert.equal(r3.applied, 5); assert.deepEqual(r3.failures, []); checks += 2;
+    const has = (c, i, p) => writes.some((w) => w[0] === c && w[1] === i
+        && JSON.stringify(w[2]) === JSON.stringify(p));
+    assert.ok(has(CH.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }))); checks++;
+    assert.ok(has(CH.customShift, V.cskSlot, encodeCskSlot(5, { base: 0x70006, shifted: 0x70007 }))); checks++;
+    assert.ok(has(CH.tapDance, V.tdStep, encodeTdStep(1, 0, { action: TD_ACTION.usage, param1: 0x70008 }))); checks++;
+    assert.ok(has(CH.tapDance, V.tdStep, encodeTdStep(1, 1, { action: TD_ACTION.usage, param1: 0x70009 }))); checks++;
+    assert.ok(has(CH.tapDance, V.tdCfg, encodeTdCfg(1, 250))); checks++;
+    assert.deepEqual(saves.sort(), [CH.customShift, CH.tapDance].sort(), 'each channel saved once'); checks++;
+    assert.equal(zmkPendingCount(ws2), 0, 'cleared after success'); checks++;
+
+    // Failure stays queued, 'unhandled' is dropped.
+    await g.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }), 1);
+    await g.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(2, 300), 1);
+    const flaky = { flask: {
+        setBytes: async (c) => { throw new Error(c === CH.customShift ? 'timeout' : 'unhandled'); },
+        save: async () => {},
+    } };
+    const r4 = await zmkSyncExtras(flaky, ws2);
+    assert.equal(r4.failures.length, 1); assert.equal(r4.applied, 0); checks += 2;
+    assert.deepEqual(Object.keys(ws2.zmkDirty.cskSlot), ['3'], 'timeout stays queued'); checks++;
+    assert.deepEqual(Object.keys(ws2.zmkDirty.tdStep), [], 'unhandled dropped'); checks++;
+}
 
 console.log(`offline-replay-test: ${checks} checks OK`);

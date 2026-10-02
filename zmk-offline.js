@@ -1582,6 +1582,44 @@ async function zmkSyncExtrasInner(app, ws) {
     }
     if (touched) { try { await app.flask.save(CH.gestures); } catch { /* keep */ } }
 
+    // Custom shift: one slot frame per edited slot (same frame the Shift tab sends).
+    touched = false;
+    for (const slot of Object.keys(ws.zmkDirty.cskSlot ?? {})) {
+        try {
+            if (!ws.zmk.csk[slot]) throw new Error('unhandled');
+            await app.flask.setBytes(CH.customShift, V.cskSlot,
+                encodeCskSlot(Number(slot), ws.zmk.csk[slot]), 1);
+            delete ws.zmkDirty.cskSlot[slot];
+            applied++; touched = true;
+        } catch (e) {
+            if (e.message === 'unhandled') delete ws.zmkDirty.cskSlot[slot];
+            else fail.push(`shift ${slot}: ${e.message}`);
+        }
+    }
+    if (touched) { try { await app.flask.save(CH.customShift); } catch { /* keep */ } }
+
+    // Tap dance: keys are "slot,tap" (step frame) or "slot,cfg" (term frame).
+    touched = false;
+    for (const key of Object.keys(ws.zmkDirty.tdStep ?? {})) {
+        const [slot, which] = key.split(',');
+        const td = ws.zmk.tapdance[slot];
+        try {
+            if (!td) throw new Error('unhandled');
+            if (which === 'cfg') {
+                await app.flask.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(Number(slot), td.termMs), 1);
+            } else {
+                await app.flask.setBytes(CH.tapDance, V.tdStep,
+                    encodeTdStep(Number(slot), Number(which), td.taps[which]), 2);
+            }
+            delete ws.zmkDirty.tdStep[key];
+            applied++; touched = true;
+        } catch (e) {
+            if (e.message === 'unhandled') delete ws.zmkDirty.tdStep[key];
+            else fail.push(`tap dance ${key}: ${e.message}`);
+        }
+    }
+    if (touched) { try { await app.flask.save(CH.tapDance); } catch { /* keep */ } }
+
     // flask_adaptive: header, then every step, per edited rule (a deleted
     // rule is just its zeroed header); fallbacks are keyed f<set>. A device
     // without the module answers unhandled: those entries are dropped.
