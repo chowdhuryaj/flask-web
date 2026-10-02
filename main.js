@@ -7,8 +7,8 @@ import { diag } from './diag.js?v=49';
 import { FlaskHID } from './webhid.js?v=49';
 import { renderPreflight } from './preflight.js?v=49';
 import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=49';
-import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=50';
+import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=51';
 import { VialClient } from './vialclient.js?v=49';
 import { parseDefinition } from './vialdef.js?v=49';
 import { buildProfile, familyOf, familyLabel } from './profiles.js?v=49';
@@ -19,7 +19,7 @@ import { NapeMacrosTab } from './nape-macros-tab.js?v=49';
 import { capabilities } from './caps.js?v=49';
 import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=49';
 import { KeymapTab } from './keymap-tab.js?v=49';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=49';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=50';
 import { ZmkRgbTab } from './zmk-rgb-tab.js?v=49';
 import { ZmkCombosTab } from './zmk-combos-tab.js?v=49';
 import { CommandPalette } from './command-palette.js?v=49';
@@ -29,7 +29,7 @@ import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=49';
 import { ZmkShiftTab } from './zmk-shift-tab.js?v=49';
 import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=49';
 import { ZmkTestTab } from './zmk-test-tab.js?v=49';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=49';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=50';
 import { MouseTab } from './mouse-tab.js?v=49';
 import { TypingTab } from './typing-tab.js?v=49';
 import { SettingsTab } from './settings-tab.js?v=49';
@@ -268,7 +268,10 @@ async function loadZmkDevice(device) {
 
     // The stock ZMK VID/PID is shared by every ZMK board — confirm the
     // family from meta 0x03 (pre-family firmware keeps the VID/PID guess).
-    app.family = await confirmZmkFamily(app.flask, app.family);
+    const confirmed = await confirmZmkFamily(app.flask, app.family);
+    app.familyUnresolved = confirmed == null;   // keymap import / Mode apply / Studio writes stay blocked
+    if (app.familyUnresolved) toast(ZMK_FAMILY_UNRESOLVED_MSG, true);
+    else app.family = confirmed;
 
     app.caps = capabilities(app.family, app.protocolVersion);
     app.profile = zmkProfile(app.family);
@@ -285,7 +288,7 @@ async function loadZmkDevice(device) {
     await maybeSyncOffline(app, device);
     const ws = loadWorkspace(workspaceKey(app.family, device));
     app.zmkQueuedWs = null;   // never let a prior connect's queue leak across
-    if (ws && zmkPendingCount(ws)) {
+    if (ws && zmkPendingCount(ws) && !app.familyUnresolved) {
         const { applied, failures } = await zmkSyncExtras(app, ws);
         if (failures.length) {
             console.warn('zmk offline sync failures:', failures);

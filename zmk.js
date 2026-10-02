@@ -306,14 +306,19 @@ export function zmkFamilyMismatch(fileFamily, deviceFamily) {
 
 /** Confirm the family from meta 0x03 — the stock ZMK VID/PID is shared by
  * every ZMK board, so the candidate from zmkFamilyCandidate() is a guess
- * until the device names itself. Pre-family firmware keeps the guess. */
+ * until the device names itself. Only an explicit "unhandled" answer means
+ * pre-family firmware (keeps the guess). A timeout or any other error, or an
+ * unknown code, returns null: the family is unresolved and writes stay blocked. */
 export async function confirmZmkFamily(flask, candidate) {
     try {
         const code = await flask.getU16(CH.meta, V.metaFamily);
-        if (ZMK_FAMILY_CODES[code]) return ZMK_FAMILY_CODES[code];
-    } catch { /* keep candidate */ }
-    return candidate;
+        return ZMK_FAMILY_CODES[code] ?? null;
+    } catch (e) {
+        return e?.message === 'unhandled' ? candidate : null;
+    }
 }
+
+export const ZMK_FAMILY_UNRESOLVED_MSG = "Couldn't read the board family; reconnect";
 
 // ---------------------------------------------------------------------------
 // Client-side slot names (bench 5 ask: rename combos/macros). The firmware

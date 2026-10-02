@@ -785,6 +785,18 @@ eq(zigzag(1), 2, 'zigzag(1)');
 // ---- Modes store (zmk-modes.js) ----
 {
     const M = await import('./zmk-modes.js');
+    {   // Make baseline: only a clean import AND a successful save mark it
+        const run = (r, saved) => M.writeBaseline({
+            applyKeymapData: async () => r, saveChanges: async () => saved }, {});
+        eq(await run({ stopped: false }, true), true, 'baseline: clean import + save = ok');
+        eq(await run({ stopped: true }, true), false, 'baseline: stopped import is not baselined');
+        eq(await run(null, true), false, 'baseline: refused import is not baselined');
+        eq(await run({ stopped: false }, false), false, 'baseline: failed save is not baselined');
+        let saves = 0;
+        await M.writeBaseline({ applyKeymapData: async () => ({ stopped: true }),
+            saveChanges: async () => { saves++; return true; } }, {});
+        eq(saves, 0, 'baseline: no save after a stopped import');
+    }
     const payload = (layers = 3, flask = null) => ({
         kind: 'flask-zmk-keymap', version: 2,
         layers: Array.from({ length: layers }, (_, i) => ({ name: `L${i}`, bindings: [] })),
@@ -1152,8 +1164,24 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     const fake = (code) => ({ getU16: async () => code });
     eq(await confirmZmkFamily(fake(6), 'imprint'), 'totem', 'meta 6 resolves candidate to totem');
     eq(await confirmZmkFamily(fake(4), 'imprint'), 'imprint', 'meta 4 resolves to imprint');
-    eq(await confirmZmkFamily({ getU16: async () => { throw new Error('x'); } }, 'imprint'),
-        'imprint', 'pre-family firmware keeps the candidate');
+    eq(await confirmZmkFamily({ getU16: async () => { throw new Error('unhandled'); } }, 'imprint'),
+        'imprint', 'unhandled = pre-family firmware keeps the candidate');
+    eq(await confirmZmkFamily({ getU16: async () => { throw new Error('timeout'); } }, 'imprint'),
+        null, 'timeout leaves the family unresolved (no imprint fallback)');
+    eq(await confirmZmkFamily(fake(99), 'imprint'), null, 'unknown family code stays unresolved');
+    // Writes are blocked while unresolved: keymap tab guards on app.familyUnresolved.
+    const { ZmkKeymapTab } = await import("./zmk-keymap-tab.js");
+    if (ZmkKeymapTab) {
+        const t = Object.create(ZmkKeymapTab.prototype);
+        t.app = { familyUnresolved: true };
+        const toasts = [];
+        globalThis.document = { querySelector: () => null, body: { append: (n) => toasts.push(n) },
+            createElement: () => ({ style: {}, classList: { add() {} }, append() {}, setAttribute() {},
+                addEventListener() {}, remove() {}, set textContent(v) { this._t = v; } }) };
+        eq(await t.applyKeymapData({ kind: 'flask-zmk-keymap', layers: [] }), null, 'import blocked while family unresolved');
+        eq(await t.saveChanges(), false, 'save blocked while family unresolved');
+        delete globalThis.document;
+    }
 
     const v = ZMK_EXPECTED_PROTOCOL.imprint;
     const tc = zmkCapabilities('totem', v);

@@ -17,7 +17,7 @@
 // after its Studio load; before that a numeric position fallback renders.
 
 import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=49';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=50';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=51';
 import { CH, V } from './flaskproto.js?v=49';
 import { renderKeyboardSVG } from './keymap-tab.js?v=49';
 import {
@@ -32,7 +32,7 @@ import {
     comboSlotToTyped, comboTypedToLegacy,
 } from './zmk-combos-codec.js?v=49';
 import { zmkBehaviors } from './zmk-keycodes.js?v=49';
-import { buildZmkPicker } from './zmk-keymap-tab.js?v=49';
+import { buildZmkPicker } from './zmk-keymap-tab.js?v=50';
 import { captureOneKey } from './zmk-capture.js?v=49';
 
 // Shared with the keymap picker's mod chips + tap-hold composer (same

@@ -14,7 +14,7 @@
 import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel } from './ui.js?v=49';
 import { CH, V } from './flaskproto.js?v=49';
 import { renderKeyboardSVG } from './keymap-tab.js?v=49';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=50';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=51';
 import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=49';
 import { OUTPUT_ACTION, GESTURE_DIR_LABELS, encodeGestureSlot, decodeGestureSlot }
     from './zmk-output-codec.js?v=49';

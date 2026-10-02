@@ -16,7 +16,7 @@
 // compacted: deleting a row shifts the tail up and rewrites the suffix.
 
 import { el, card, sliderRow, toggleRow, saveBar, toast, renameLabel } from './ui.js?v=49';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=50';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=51';
 import { CH, V } from './flaskproto.js?v=49';
 import { usageCap, usageLabel } from './zmk-keycodes.js?v=49';
 import { pickUsage } from './zmk-combos-tab.js?v=49';

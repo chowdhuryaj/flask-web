@@ -13,7 +13,7 @@ import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=49';
 import { zmkApplyPendingKeymap } from './zmk-offline.js?v=50';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=49';
 import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=49';
-import { ZMK_VIDPID, zmkFamilyMismatch } from './zmk.js?v=50';
+import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=51';
 import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=49';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
@@ -396,7 +396,15 @@ export class ZmkKeymapTab {
 
     get currentLayer() { return this.keymap.layers[this.layer]; }
 
+    /** True (with a toast) while the board family is unresolved. */
+    _familyBlocked() {
+        if (!this.app?.familyUnresolved) return false;
+        toast(ZMK_FAMILY_UNRESOLVED_MSG, true);
+        return true;
+    }
+
     async assign(binding) {
+        if (this._familyBlocked()) return;
         if (this.selected == null) { toast('Click a key first'); return; }
         const pos = this.selected;
         const layer = this.currentLayer;
@@ -416,7 +424,9 @@ export class ZmkKeymapTab {
         }
     }
 
+    /** Returns true only when the save landed. */
     async saveChanges() {
+        if (this._familyBlocked()) return false;
         try {
             await this.client.saveChanges();
             this._setUnsaved(false);
@@ -424,9 +434,11 @@ export class ZmkKeymapTab {
             // auto-restore snapshot follows every successful save.
             this._writeSnapshot();
             toast('Saved to keyboard');
+            return true;
         } catch (e) {
-            if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
+            if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return false; }
             toast(`Save failed: ${e.message}`, true);
+            return false;
         }
     }
 
@@ -463,6 +475,7 @@ export class ZmkKeymapTab {
     }
 
     async addLayerOp() {
+        if (this._familyBlocked()) return;
         try {
             const { index, layer } = await this.client.addLayer();
             if (layer && index >= 0) {
@@ -479,6 +492,7 @@ export class ZmkKeymapTab {
     }
 
     async removeLayerOp() {
+        if (this._familyBlocked()) return;
         if (this.keymap.layers.length <= 1) { toast('Cannot remove the last layer', true); return; }
         const idx = this.layer;
         const gone = this.currentLayer;
@@ -494,6 +508,7 @@ export class ZmkKeymapTab {
     }
 
     async restoreLayerOp() {
+        if (this._familyBlocked()) return;
         const item = this.removedLayers[this.removedLayers.length - 1];
         if (!item) return;
         const at = Math.min(item.atIndex, this.keymap.layers.length);
@@ -513,6 +528,7 @@ export class ZmkKeymapTab {
     }
 
     async moveLayerOp(delta) {
+        if (this._familyBlocked()) return;
         const from = this.layer;
         const to = from + delta;
         if (to < 0 || to >= this.keymap.layers.length) return;
@@ -607,6 +623,7 @@ export class ZmkKeymapTab {
      * offline sim and real firmware); ids are only a same-build fallback.
      * quiet suppresses the success toast (the auto-sync has its own). */
     async applyKeymapData(data, { quiet = false } = {}) {
+        if (this._familyBlocked()) return null;
         if (data?.kind !== 'flask-zmk-keymap' || !Array.isArray(data.layers)) {
             toast('Not a flask ZMK keymap export', true);
             return null;
@@ -672,6 +689,7 @@ export class ZmkKeymapTab {
     }
 
     async renameLayer(newName) {
+        if (this._familyBlocked()) return;
         const layer = this.currentLayer;
         const name = newName.trim().slice(0, this.keymap.maxLayerNameLength || 20);
         if (!name || name === layer.name) { this.renaming = false; this.render(); return; }

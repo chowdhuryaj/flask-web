@@ -21,7 +21,7 @@
 
 import { CH, V } from './flaskproto.js?v=49';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=50';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=51';
 import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=50';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=50';
 import { OfflineFlask, saveWorkspace } from './offline.js?v=49';

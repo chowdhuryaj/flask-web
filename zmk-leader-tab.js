@@ -9,7 +9,7 @@
 
 import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=49';
 import { CH, V } from './flaskproto.js?v=49';
-import { ZMK_LEADER_FN_PRESET } from './zmk.js?v=50';
+import { ZMK_LEADER_FN_PRESET } from './zmk.js?v=51';
 import { renderKeyboardSVG } from './keymap-tab.js?v=49';
 import { pickUsage } from './zmk-combos-tab.js?v=49';
 import { usageCap, usageLabel, kpParam } from './zmk-keycodes.js?v=49';
