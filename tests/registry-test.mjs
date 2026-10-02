@@ -16,7 +16,8 @@ for (const [ws, tabs] of Object.entries(before)) {
     if (ws.includes('@')) continue;
     const app = ws === 'trainerOnly' ? { trainerOnly: true }
         : { family: ws.split('-')[0], caps: capabilities(ws.split('-')[0], before[`${ws}@version`]) };
-    const now = tabsFor(app);
+    // WP1 added Device › Keyboard (spec §1.3); everything else is unchanged.
+    const now = tabsFor(app).filter((t) => t.id !== 'keyboard');
     assert.deepEqual(now.map((t) => t.id), tabs.map((t) => t[0]), `${ws}: tab ids/order`);
     for (const [i, [id, label, group]] of tabs.entries()) {
         assert.equal(now[i].label, RELABEL[id] ?? label, `${ws}/${id}: label`);
@@ -35,6 +36,7 @@ const SPEC_1_3 = {
     'zmk-combos': 'behaviour', 'zmk-macros': 'behaviour', 'zmk-tapdance': 'behaviour',
     'zmk-shift': 'behaviour', 'zmk-leader': 'behaviour', 'zmk-modes': 'device', 'zmk-test': 'device',
     'nape-macros': 'behaviour', 'nape-settings': 'device',
+    keyboard: 'device',
 };
 const groupIds = new Set(TAB_GROUPS.map((g) => g.id));
 for (const [id, group] of Object.entries(SPEC_1_3)) {
@@ -47,6 +49,15 @@ for (const t of TAB_TABLE) {
     assert.ok(t.id in SPEC_1_3, `${t.id}: not in the §1.3 table`);
     checks += 2;
 }
+// WP1: Device › Keyboard is last in every non-trainer workspace.
+for (const ws of Object.keys(before)) {
+    if (ws.includes('@') || ws === 'trainerOnly') continue;
+    const app = { family: ws.split('-')[0], caps: capabilities(ws.split('-')[0], before[`${ws}@version`]) };
+    const all = tabsFor(app);
+    assert.equal(all.at(-1).id, 'keyboard', `${ws}: keyboard tab last`);
+    assert.equal(all.at(-1).group, 'device'); checks += 2;
+}
+assert.deepEqual(tabsFor({ trainerOnly: true }).map((t) => t.id), ['trainer']); checks++;
 // Rows sharing an id must agree on label and group.
 for (const t of TAB_TABLE) {
     const first = TAB_TABLE.find((u) => u.id === t.id);

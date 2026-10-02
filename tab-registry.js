@@ -12,6 +12,8 @@
 //                         table order, each id at most once
 //   groupOf(id)           → group id ('device' for unknown ids)
 //
+// WP1 added `keyboard` (Device › Keyboard, last in table order).
+//
 // `app` needs only {trainerOnly, family, caps}. Constructors are called as
 // `new ctor(app)` by main.js; nothing here touches the DOM.
 
@@ -40,6 +42,7 @@ import { CornerTab } from './corner-tab.js?v=49';
 import { RgbTab } from './rgb-tab.js?v=49';
 import { DisplayTab } from './display-tab.js?v=49';
 import { TrainerTab } from './trainer-tab.js?v=49';
+import { KeyboardTab } from './app-shell.js?v=2';
 
 /**
  * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the
@@ -100,6 +103,9 @@ export const TAB_TABLE = [
     { id: 'zmk-test', label: 'Test', group: 'device', when: zmk, ctor: ZmkTestTab },
     { id: 'display', label: 'Display', group: 'device', when: (a) => a.caps.display, ctor: DisplayTab },
     { id: 'settings', label: 'QMK Settings', group: 'device', when: (a) => a.caps.vial, ctor: SettingsTab },
+    // §1.3: Device › Keyboard, on every device and offline workspace (the
+    // header leftovers: appearance, diagnostics, lock, device info).
+    { id: 'keyboard', label: 'Keyboard', group: 'device', when: () => true, ctor: KeyboardTab },
 ];
 
 /** @returns {{id:string,label:string,group:string,ctor:Function}[]} */

@@ -15,7 +15,7 @@ import { buildProfile, familyOf, familyLabel } from './profiles.js?v=49';
 import { loadNapeDevice, isNapeFamily } from './nape.js?v=49';
 import { capabilities } from './caps.js?v=49';
 import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=49';
-import { CommandPalette } from './command-palette.js?v=49';
+import { CommandPalette } from './command-palette.js?v=50';
 import { HUD } from './hud.js?v=49';
 import { runUnlockFlow, lockKeyboard } from './unlock.js?v=49';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
@@ -24,66 +24,12 @@ import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorks
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
          maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=49';
 import { exportVil, importVil, downloadText } from './vil.js?v=49';
-import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=1';
-import { shell } from './app-shell.js?v=1';
-import { installCaptions } from './caption.js?v=1';
+import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=2';
+import { shell } from './app-shell.js?v=2';
+import { installCaptions, setCaptionGroup } from './caption.js?v=1';
 import { saveState } from './save-state.js?v=1';
-
-// ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
-
-const THEME_VARS = ['bg', 'surface', 'surface2', 'text', 'muted', 'faint', 'border', 'border2',
-    'accent', 'accent-bg', 'accent-text', 'ok', 'ok-bg', 'warn', 'warn-bg', 'danger', 'danger-bg',
-    'keycap', 'keycap-border'];
-const THEMES = {
-    classic: { label: 'Classic (auto light/dark)' },
-    // keybr.com's own inks, sampled from the running site (2026-08-18) rather
-    // than eyeballed: --primary/--secondary/--accent and their ramps. Mirrors
-    // AdeptCompanion's Pipette.Theme, which is the default there.
-    //
-    // ok/danger in the dark entry are keybr's #448154/#9b4545 LIGHTENED. keybr
-    // shows those on its page background; here they carry badge text on a
-    // tinted chip, where the originals land near 2.6:1.
-    keybrDark: {
-        label: 'keybr Dark',
-        vars: { bg: '#2b2b2b', surface: '#333333', surface2: '#404040', text: '#b8b3b3', muted: '#9f9999', faint: '#747070', border: '#404040', border2: '#4d4d4d', accent: '#867f7f', 'accent-bg': '#4d4d4d', 'accent-text': '#e4e0e0', ok: '#6dbe83', 'ok-bg': '#24402c', warn: '#e0a94f', 'warn-bg': '#3a2d14', danger: '#d77b7b', 'danger-bg': '#3e2222', keycap: '#404040', 'keycap-border': '#4d4d4d' },
-    },
-    keybrLight: {
-        label: 'keybr Light',
-        vars: { bg: '#f4f0f0', surface: '#ffffff', surface2: '#faf9f9', text: '#282640', muted: '#514e63', faint: '#7a7786', border: '#e9e1e1', border2: '#ded3d3', accent: '#3d475c', 'accent-bg': '#e3e6ed', 'accent-text': '#292f3d', ok: '#2a7e21', 'ok-bg': '#e6f1e4', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#a1464e', 'danger-bg': '#f7e8e9', keycap: '#ffffff', 'keycap-border': '#e9e1e1' },
-    },
-    light: {
-        label: 'Light',
-        vars: { bg: '#f5f5f4', surface: '#ffffff', surface2: '#fafaf9', text: '#1c1c1a', muted: '#6b6b66', faint: '#9a9a93', border: '#e2e2dd', border2: '#cfcfc8', accent: '#2563eb', 'accent-bg': '#e8f0fe', 'accent-text': '#14458a', ok: '#15803d', 'ok-bg': '#e7f6ec', warn: '#8a5a12', 'warn-bg': '#fef3e2', danger: '#b42318', 'danger-bg': '#fdeceb', keycap: '#ffffff', 'keycap-border': '#cfcfc8' },
-    },
-    dark: {
-        label: 'Dark',
-        vars: { bg: '#1a1a18', surface: '#242422', surface2: '#2c2c29', text: '#ececea', muted: '#a3a39d', faint: '#76766f', border: '#36352f', border2: '#45443d', accent: '#5b9aff', 'accent-bg': '#1c2a44', 'accent-text': '#bcd4ff', ok: '#69d28c', 'ok-bg': '#15301f', warn: '#e0a94f', 'warn-bg': '#3a2d14', danger: '#f1857c', 'danger-bg': '#3a1714', keycap: '#2c2c29', 'keycap-border': '#45443d' },
-    },
-    nord: {
-        label: 'Nord',
-        vars: { bg: '#2e3440', surface: '#3b4252', surface2: '#434c5e', text: '#eceff4', muted: '#aeb8cc', faint: '#7b869c', border: '#4c566a', border2: '#596580', accent: '#88c0d0', 'accent-bg': '#274552', 'accent-text': '#c8e4ec', ok: '#a3be8c', 'ok-bg': '#33402c', warn: '#ebcb8b', 'warn-bg': '#3f3826', danger: '#bf616a', 'danger-bg': '#40272b', keycap: '#434c5e', 'keycap-border': '#596580' },
-    },
-    dracula: {
-        label: 'Dracula',
-        vars: { bg: '#282a36', surface: '#313342', surface2: '#3a3d4f', text: '#f8f8f2', muted: '#b6b8c8', faint: '#7e8195', border: '#44475a', border2: '#565a72', accent: '#bd93f9', 'accent-bg': '#3b3354', 'accent-text': '#e3d3ff', ok: '#50fa7b', 'ok-bg': '#1f4030', warn: '#ffb86c', 'warn-bg': '#43331f', danger: '#ff5555', 'danger-bg': '#4a2020', keycap: '#3a3d4f', 'keycap-border': '#565a72' },
-    },
-    solarized: {
-        label: 'Solarized Light',
-        // muted/ok use Solarized base01 + a darkened green: the canonical
-        // base00 #657b83 (4.30:1) and green #859900 (2.76:1 on ok-bg — the
-        // "template" badge text) both sit under the 4.5:1 floor on this
-        // theme's near-white surface.
-        vars: { bg: '#fdf6e3', surface: '#fefbf0', surface2: '#f5efdc', text: '#073642', muted: '#586e75', faint: '#93a1a1', border: '#e6dfc8', border2: '#d3cbb0', accent: '#268bd2', 'accent-bg': '#e0eef8', 'accent-text': '#0d5a8f', ok: '#5b6800', 'ok-bg': '#eef0d8', warn: '#7d5c00', 'warn-bg': '#f6eed3', danger: '#dc322f', 'danger-bg': '#fbe3e2', keycap: '#fefbf0', 'keycap-border': '#d3cbb0' },
-    },
-};
-
-function applyTheme(name) {
-    const theme = THEMES[name] || THEMES.classic;
-    const root = document.documentElement;
-    for (const v of THEME_VARS) root.style.removeProperty('--' + v);
-    if (theme.vars) for (const [k, val] of Object.entries(theme.vars)) root.style.setProperty('--' + k, val);
-    localStorage.setItem('flask-theme', name);
-}
+import { board } from './board.js?v=1';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=1';
 
 // ---------- app state ----------
 
@@ -120,10 +66,26 @@ app.palette = new CommandPalette(app, {
     showTab: (id) => showTab(id),
     groupLabel: (id) => TAB_GROUPS.find((g) => g.id === groupOf(id))?.label ?? '',
     unlock: () => app.onHudLockClick?.(),
+    diagnostics: () => app.openDiagnostics?.(),
 });
 
 const $ = (id) => document.getElementById(id);
 const TABS = [];
+
+/** landing | device | offline | trainer. One switch for what is on screen. */
+function setMode(mode) {
+    const inApp = mode !== 'landing';
+    $('landing-main').style.display = inApp ? 'none' : '';
+    $('app-frame').style.display = inApp ? '' : 'none';
+    $('app-frame').dataset.mode = mode;
+    document.body.classList.toggle('in-app', inApp);
+    syncHudBtn();
+    syncRail();
+}
+
+const IS_DESKTOP = navigator.userAgent.includes('Electron');
+// Set by the ⇄ device button so the reconnect poll does not undo the switch.
+let manualSwitch = false;
 
 // ---------- connect / load ----------
 
@@ -132,6 +94,7 @@ let connecting = false; // re-entrancy guard: events + the reconnect poll race
 async function connectFlow(device) {
     if (connecting) return;
     connecting = true;
+    manualSwitch = false;
     try {
         if (app.offline) exitOffline(); // restore the real clients first
         // Leaving the standalone trainer: without this, buildTabs takes its
@@ -145,6 +108,7 @@ async function connectFlow(device) {
             return;
         }
         $('status-text').textContent = 'Loading…';
+        $('device-name').textContent = device.productName || 'Keyboard';
         try {
             await loadDevice(device);
         } catch (e) {
@@ -181,9 +145,7 @@ async function loadDevice(device) {
     // fetch and no Flask channel — everything lives in nape.js.
     if (isNapeFamily(app.family)) {
         await loadNapeDevice(app, device);
-        $('landing').style.display = 'none';
-        $('main-tabs').style.display = '';
-        $('hud-btn').style.display = '';
+        setMode('device');
         updateStatus(device);
         buildTabs();
         if (TABS.length) await showTab(TABS[0].id);
@@ -224,9 +186,7 @@ async function loadDevice(device) {
         .catch((e) => console.warn('snapshot failed:', e));
 
     // UI
-    $('landing').style.display = 'none';
-    $('main-tabs').style.display = '';
-    $('hud-btn').style.display = '';
+    setMode('device');
     $('lock-btn').style.display = '';
     $('vil-save').style.display = '';
     $('vil-load').style.display = '';
@@ -281,9 +241,9 @@ async function loadZmkDevice(device) {
         }
     }
 
-    $('landing').style.display = 'none';
-    $('main-tabs').style.display = '';
-    $('hud-btn').style.display = '';
+    // Save layout / Load stay hidden on ZMK until WP6 dispatches them to the
+    // keymap JSON export/import (spec §3.10).
+    setMode('device');
     updateStatus(device);
     buildTabs();
     // Pre-autoscroll (v<2) firmware can yield a single empty Mouse tab but
@@ -297,15 +257,16 @@ function updateStatus(device) {
     pill.classList.add('connected');
     const fam = familyLabel(app.family);
     const proto = app.protocolVersion != null ? ` · Flask v${app.protocolVersion}` : ' · plain Vial';
-    $('status-text').textContent = `${app.profile?.name ?? device.productName}${proto}`;
-    pill.title = `${fam} — ${device.vendorId.toString(16)}:${device.productId.toString(16)}`;
+    $('device-name').textContent = app.profile?.name ?? device.productName ?? 'Keyboard';
+    $('status-text').textContent = 'Connected';
+    pill.title = `${fam}${proto} — ${device.vendorId.toString(16)}:${device.productId.toString(16)}`;
 
     const warn = $('proto-warn');
     const expected = isZmkFamily(app.family)
         ? ZMK_EXPECTED_PROTOCOL[app.family] : EXPECTED_PROTOCOL[app.family];
     if (app.protocolVersion != null && expected && app.protocolVersion !== expected) {
         warn.style.display = '';
-        warn.textContent = `firmware protocol v${app.protocolVersion}, app expects v${expected}`;
+        warn.textContent = `protocol v${app.protocolVersion} ≠ app v${expected} — reflash`;
     } else {
         warn.style.display = 'none';
     }
@@ -313,7 +274,9 @@ function updateStatus(device) {
 }
 
 function updateLockButton() {
-    $('lock-btn').textContent = app.unlocked ? '🔓 Unlocked' : '🔒 Locked';
+    const b = $('lock-btn');
+    b.textContent = app.unlocked ? 'Unlocked' : 'Locked';
+    b.classList.toggle('warn', app.unlocked);
 }
 
 function disconnectUI() {
@@ -321,16 +284,17 @@ function disconnectUI() {
     app.protocolVersion = null;
     app.profile = null;
     app.trainerOnly = false;
-    $('status-pill').classList.remove('connected');
-    $('status-text').textContent = 'Not connected';
+    $('status-pill').classList.remove('connected', 'offline');
+    $('status-text').textContent = 'Disconnected';
+    $('device-name').textContent = 'Flask';
     $('proto-warn').style.display = 'none';
-    $('main-tabs').style.display = 'none';
-    $('hud-btn').style.display = 'none';
     $('lock-btn').style.display = 'none';
     $('vil-save').style.display = 'none';
     $('vil-load').style.display = 'none';
+    $('offline-seg').style.display = 'none';
     $('panels').replaceChildren();
-    $('landing').style.display = '';
+    $('main-tabs').replaceChildren();
+    setMode('landing');
     refreshDeviceList();
     renderOfflineList();
 }
@@ -361,16 +325,16 @@ function startOffline(key, family) {
     setDeviceCustomKeys(ws.profile.customKeycodes || []);
     setDeviceMacroCount(ws.macros?.count ?? 0);
 
-    $('landing').style.display = 'none';
-    $('main-tabs').style.display = '';
-    $('hud-btn').style.display = 'none';   // HUD is live device state
+    setMode('offline');   // no HUD: it is live device state
     $('lock-btn').style.display = 'none';
     $('vil-save').style.display = zmk ? 'none' : '';   // .vil is a Vial format
     $('vil-load').style.display = zmk ? 'none' : '';
     $('proto-warn').style.display = 'none';
+    $('status-pill').classList.remove('connected');
     $('status-pill').classList.add('offline');
     $('status-text').textContent = `Offline — ${ws.label}`;
-    $('offline-banner').style.display = 'flex';
+    $('device-name').textContent = ws.label;
+    $('offline-seg').style.display = '';
     updateOfflineBanner();
     buildTabs();
     showTab(zmk ? 'zmk-keymap' : 'keymap');
@@ -380,8 +344,8 @@ function updateOfflineBanner() {
     if (!app.offline || !app.offlineWs) return;
     const n = pendingCount(app.offlineWs) + zmkPendingCount(app.offlineWs);
     $('offline-msg').textContent = n
-        ? `Offline — ${n} change${n === 1 ? '' : 's'} queued for ${app.offlineWs.label}; they apply on the next connect.`
-        : `Offline — edits queue here and apply when ${app.offlineWs.label} is next connected.`;
+        ? `${n} queued for ${app.offlineWs.label}`
+        : 'Edits queue until the next connect';
 }
 
 function exitOffline() {
@@ -392,8 +356,6 @@ function exitOffline() {
     app.vial = new VialClient(app.hid);
     app.zmkStudioSim = null;    // keymap tab falls back to the real serial client
     app.readKeyState = null;
-    $('offline-banner').style.display = 'none';
-    $('status-pill').classList.remove('offline');
     disconnectUI();
 }
 
@@ -436,6 +398,13 @@ function renderOfflineList() {
 
 // ---------- tabs ----------
 
+const GROUP_CAPTION = {
+    keys: 'Keys: keycodes you paste onto the selected key.',
+    behaviour: 'Behaviour: what a key or chord does (macros, tap dance, combos).',
+    device: 'Device: tune and administer this keyboard.',
+    trainer: 'Trainer: practise typing.',
+};
+
 function buildTabs() {
     TABS.length = 0;
     TABS.push(...tabsFor(app));
@@ -461,6 +430,7 @@ function renderTabNav() {
         ...groups.map((g) => el('button', {
             class: g.id === app.tabGroup ? 'active' : '',
             text: g.label,
+            'data-caption': GROUP_CAPTION[g.id],
             onclick: () => {
                 const first = TABS.find((t) => groupOf(t.id) === g.id);
                 if (first) showTab(first.id);
@@ -496,9 +466,10 @@ async function startTrainer() {
     app.caps = capabilities('generic', null);
     app.profile = null;
     app.keymap = null;
-    $('landing').style.display = 'none';
-    $('main-tabs').style.display = '';
+    setMode('trainer');
+    $('status-pill').classList.remove('connected', 'offline');
     $('status-text').textContent = 'Typing trainer';
+    $('device-name').textContent = 'Typing trainer';
     buildTabs();
     await showTab('trainer');
 }
@@ -508,7 +479,9 @@ async function showTab(id) {
     // from anywhere else (startTrainer, a group click) must not leave its own
     // group chip unlit.
     app.tabGroup = groupOf(id);
+    setCaptionGroup(app.tabGroup);
     renderTabNav();
+    $('palette-body').scrollTop = 0;
     for (const t of TABS) {
         t.panel.classList.toggle('active', t.id === id);
     }
@@ -534,9 +507,11 @@ async function refreshDeviceList() {
     const granted = await FlaskHID.grantedDevices();
     list.replaceChildren(...granted.map((d) => {
         const family = familyOf(d.vendorId, d.productId);
+        const hex = (n) => n.toString(16).padStart(4, '0');
         return el('button', { class: 'dev-item', onclick: () => connectFlow(d) },
             d.productName || 'Vial keyboard',
-            family !== 'generic' ? el('span', { class: 'badge', text: 'Flask' }) : null);
+            el('span', { class: 'vidpid mono', text: `${hex(d.vendorId)}:${hex(d.productId)}` }),
+            el('span', { class: 'badge', text: family !== 'generic' ? 'full tuning' : 'Vial editor' }));
     }));
 }
 
@@ -566,6 +541,20 @@ async function connectClick() {
     }
 }
 
+function syncHudBtn() {
+    const b = $('hud-btn');
+    const live = $('app-frame').dataset.mode === 'device';
+    b.style.display = live ? '' : 'none';
+    b.textContent = app.hud.open ? 'Floating' : 'Pop out';
+    b.classList.toggle('on', !!app.hud.open);
+}
+
+function syncRail() {
+    const has = (f) => typeof board[f] === 'function';
+    $('undo-btn').disabled = !has('undo') || board.canUndo?.() === false;
+    $('redo-btn').disabled = !has('redo') || board.canRedo?.() === false;
+}
+
 function init() {
     installCaptions();
     // The preflight panel: the only thing that separates "no WebHID" from
@@ -593,7 +582,6 @@ function init() {
                 + 'Load the https:// address — this looks identical to an unsupported browser.';
         }
         $('unsupported').style.display = '';
-        $('connect-btn').disabled = true;
         $('landing-connect').disabled = true;
     }
 
@@ -602,21 +590,20 @@ function init() {
     navigator.locks?.request('flask-web-hid', { ifAvailable: true }, (lock) => {
         if (!lock) {
             toast('Flask is already open in another tab — close it first.', true);
-            $('connect-btn').disabled = true;
             $('landing-connect').disabled = true;
             return;
         }
         return new Promise(() => {}); // hold the lock for the page lifetime
     });
 
-    $('connect-btn').addEventListener('click', connectClick);
     $('landing-connect').addEventListener('click', connectClick);
-    $('hud-btn').addEventListener('click', () => app.hud.toggle());
+    $('hud-btn').addEventListener('click', async () => { await app.hud.toggle(); syncHudBtn(); });
+    setInterval(syncHudBtn, 1000);   // the HUD can close itself (its own ✕, pagehide)
     // Black-box diagnostics: live transport/Studio event log + export —
     // the no-reflash crash-capture path (bench 5 ask). The ring runs
     // unconditionally from page load; this is just the window onto it.
     app.diag = diag;
-    $('diag-btn').addEventListener('click', () => {
+    app.openDiagnostics = () => {
         const pre = el('pre', {
             style: 'max-height:55vh; overflow:auto; font-size:11px; white-space:pre-wrap;'
                 + ' user-select:text; margin:0',
@@ -654,14 +641,14 @@ function init() {
             if (e.target === back) diag.removeEventListener('log', refresh);
         });
         refresh();
-    });
+    };
     $('vil-save').addEventListener('click', async () => {
         try {
             toast('Reading layout…');
             const text = await exportVil(app);
             const name = (app.profile?.name ?? 'layout').replace(/[^\w-]+/g, '_');
             downloadText(`${name}.vil`, text);
-            toast('.vil saved');
+            toast('Layout saved');
         } catch (e) { toast(`Export failed: ${e.message}`, true); }
     });
     $('vil-load').addEventListener('click', () => $('vil-file').click());
@@ -707,7 +694,7 @@ function init() {
         // the one we were using (or nothing is connected). While editing
         // offline, a plug-in of the SAME family also connects — that's the
         // moment the queued changes apply.
-        if (app.hid.connected || connecting) return;
+        if (app.hid.connected || connecting || manualSwitch) return;
         if (reconnectCandidate([e.detail])) {
             diag.log('reconnect', 'replug event — reattaching');
             toast('Reconnecting…');
@@ -724,7 +711,7 @@ function init() {
     // attempt backs off 30 s so a broken device can't toast-spam.
     let lastAutoAttempt = 0;
     setInterval(async () => {
-        if (app.hid.connected || connecting || !FlaskHID.supported()) return;
+        if (app.hid.connected || connecting || manualSwitch || !FlaskHID.supported()) return;
         if (Date.now() - lastAutoAttempt < 30000) return;
         try {
             const match = reconnectCandidate(await FlaskHID.grantedDevices());
@@ -737,23 +724,57 @@ function init() {
         } catch { /* next tick retries */ }
     }, 2500);
 
-    // Theme + zoom.
-    const themeSel = $('theme-sel');
-    themeSel.replaceChildren(...Object.entries(THEMES).map(([id, t]) =>
-        el('option', { value: id, text: t.label })));
-    // AJ Q5 (2026-10-01): keybr Dark is the default everywhere, as in native.
-    const savedTheme = localStorage.getItem('flask-theme') || 'keybrDark';
-    themeSel.value = savedTheme;
-    applyTheme(savedTheme);
-    themeSel.addEventListener('change', () => applyTheme(themeSel.value));
+    // Frame wiring: appearance, device switch, rail, save segment.
+    initAppearance();
+    if (IS_DESKTOP) {
+        document.title = 'Totem-Flask';
+        $('landing-title').textContent = 'Totem-Flask';
+    }
+    shell.mount({
+        statusBar: $('statusbar'), rail: $('rail'), layerBar: $('layerbar-slot'),
+        board: $('board-slot'), palette: $('palette'),
+    });
+    setCaptionGroup(app.tabGroup);
 
-    const zoomSel = $('zoom-sel');
-    const savedZoom = localStorage.getItem('flask-zoom') || '100';
-    zoomSel.value = savedZoom;
-    document.body.style.zoom = Number(savedZoom) / 100;
-    zoomSel.addEventListener('change', () => {
-        document.body.style.zoom = Number(zoomSel.value) / 100;
-        localStorage.setItem('flask-zoom', zoomSel.value);
+    $('device-btn').addEventListener('click', async () => {
+        if (app.offline) { exitOffline(); return; }
+        if (app.trainerOnly) { app.exitTrainer?.(); return; }
+        manualSwitch = true;
+        await app.hid.close();
+        disconnectUI();
+    });
+
+    const readout = $('zoom-readout');
+    const syncZoom = () => { readout.textContent = `${currentBoardZoom()}%`; };
+    $('zoom-in').addEventListener('click', () => applyBoardZoom(currentBoardZoom() + BOARD_ZOOM.step));
+    $('zoom-out').addEventListener('click', () => applyBoardZoom(currentBoardZoom() - BOARD_ZOOM.step));
+    appearance.addEventListener('appearance', syncZoom);
+    syncZoom();
+    // Undo/redo belong to the board (WP2); until it provides them the rail
+    // buttons stay disabled.
+    $('undo-btn').addEventListener('click', () => board.undo?.());
+    $('redo-btn').addEventListener('click', () => board.redo?.());
+    for (const ev of ['select', 'change', 'history']) board.addEventListener(ev, syncRail);
+
+    // One Save (spec §3.2): the registry is WP6's; this is only its window.
+    const renderSave = () => {
+        const dirty = saveState.dirty();
+        $('save-seg').style.display = dirty.length ? '' : 'none';
+        $('save-btn').textContent = `Save ${dirty.length} unsaved`;
+        $('save-btn').title = dirty.map((d) => d.label).join(', ');
+        $('discard-btn').style.display = dirty.some((d) => d.source === 'studio-keymap') ? '' : 'none';
+    };
+    saveState.addEventListener('change', renderSave);
+    renderSave();
+    $('save-btn').addEventListener('click', async () => {
+        const r = await saveState.saveAll();
+        if (r.failed) toast(`Save failed (${r.failed.source}): ${r.failed.error?.message ?? r.failed.error}`, true);
+        else toast('Saved');
+    });
+    // app.discardKeymap is provided by WP2/WP6 (Studio session discard).
+    $('discard-btn').addEventListener('click', () => {
+        if (app.discardKeymap) app.discardKeymap();
+        else toast('Discard is not wired yet', true);
     });
 
     // Silent reconnect to the remembered device on page load.

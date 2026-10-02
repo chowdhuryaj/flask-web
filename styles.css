@@ -753,8 +753,8 @@ body.hud-electron a { -webkit-app-region: no-drag; }
 /* Offline is a persistent MODE, not an alert — it reads as a quiet strip in
  * the chrome rather than a full-bleed warning slab competing with the surface
  * it describes. */
-.pill.offline { border-color: #e5a50a; }
-.pill.offline .dot { background: #e5a50a; }
+.pill.offline { border-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
+.pill.offline .dot { background: var(--warn); }
 .badge.faint { opacity: 0.6; }
 
 /* ---------- Keychron Nape Pro ---------- */

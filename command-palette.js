@@ -5,11 +5,15 @@
 // "chords", "layer 3", "unlock" and press Return.
 //
 // It matters more here than on the desktop, which has a menu bar to fall back
-// on. Port of AdeptCompanion's CommandPalette.swift, minus the keycode
-// assignment — that one needs a selected key, and on the web the selection
-// lives inside the Keymap tab rather than in shared state.
+// on. Port of AdeptCompanion's CommandPalette.swift. With a key selected on
+// the board (shell.selectedKey(), WP2) it also assigns: "Assign to selected
+// key…" opens the picker, and every catalog entry (behavior-catalog.js,
+// WP3) is offered by name.
 
 import { el } from './ui.js?v=49';
+import { openPicker } from './binding-picker.js?v=1';
+import { catalogFor, encode } from './behavior-catalog.js?v=1';
+import { isZmkFamily } from './zmk.js?v=51';
 
 const MAX_RESULTS = 40;
 
@@ -130,6 +134,35 @@ export class CommandPalette {
         return [...prefix, ...contains].slice(0, MAX_RESULTS);
     }
 
+    /** Keycode / behavior assignment, only while a key is selected. */
+    #assignCommands() {
+        const { app } = this;
+        const sel = app.shell?.selectedKey?.();
+        if (!sel) return [];
+        const where = `key ${typeof sel.pos === 'number' ? sel.pos : ''}${sel.layer != null ? ` · layer ${sel.layer}` : ''}`.trim();
+        const zmk = isZmkFamily(app.family);
+        const nape = !!app.caps?.nape;
+        const adapter = zmk ? 'zmk-studio' : nape ? 'nape' : 'qmk';
+        const surface = zmk ? 'zmk.key' : nape ? 'nape.key' : 'qmk.key';
+        const assign = (v) => app.shell.board.assign(v);
+        const pick = (title) => openPicker({ surface, app, host: 'sheet', title, onPick: assign });
+        const out = [{
+            title: 'Assign to selected key…',
+            subtitle: where,
+            run: () => pick(`Assign to ${where}`),
+        }];
+        for (const entry of catalogFor(app)) {
+            out.push({
+                title: `Assign ${entry.name}`,
+                subtitle: `${entry.group} · ${entry.desc}`,
+                run: () => (entry.params.length
+                    ? pick(`${entry.name} on ${where}`)
+                    : assign(encode(entry.id, {}, adapter))),
+            });
+        }
+        return out;
+    }
+
     #commands() {
         const { app, deps } = this;
         const out = [];
@@ -158,6 +191,12 @@ export class CommandPalette {
                 });
             }
         }
+        out.push(...this.#assignCommands());
+        out.push({
+            title: 'Diagnostics',
+            subtitle: 'transport and Studio event log',
+            run: () => deps.diagnostics?.(),
+        });
         if (app.hid?.connected) {
             out.push({
                 title: app.unlocked ? 'Lock the keyboard' : 'Unlock the keyboard',
