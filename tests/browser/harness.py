@@ -9,7 +9,8 @@ before any page script runs, so requestDevice/requestPort throw and the
 granted lists are empty. Workspaces are offline templates (TOTEM, Imprint,
 Adept) plus the Svalboard snapshot fixture seeded into localStorage.
 
-Checks: zero page errors, and each workspace's tab ids equal the pre-redesign
+Checks: zero page errors and console errors while opening every tab, the
+openPicker stub as sheet and popover, and each workspace's tab ids equal the pre-redesign
 snapshot (tests/fixtures/tabs-before-wp0.json). Screenshots go to
 tests/artifacts/harness/. Exit status is non-zero on any failure.
 """
@@ -96,6 +97,17 @@ CONTRACT_SMOKE = """async (surface) => {
 }"""
 
 
+def visit_all_tabs(page):
+    """Open every group and every tab once, so each tab's load() runs."""
+    for g in range(page.locator('.tab-groups button').count()):
+        page.locator('.tab-groups button').nth(g).click()
+        page.wait_for_timeout(250)
+        row = page.locator('.tab-row button[data-tab]')
+        for t in range(row.count()):
+            row.nth(t).click()
+            page.wait_for_timeout(250)
+
+
 def contract_smoke(page, name):
     """openPicker stub opens and closes as sheet and popover on this line."""
     surface = 'zmk.key' if name in ('totem', 'imprint') else 'qmk.key'
@@ -118,6 +130,7 @@ def main():
                 if ids != want:
                     failures.append(f'{name}: tabs {ids} != {want}')
                 failures += [f'{name}: {m}' for m in contract_smoke(page, name)]
+                visit_all_tabs(page)
                 page.screenshot(path=str(out / f'{name}.png'), full_page=True)
             except Exception as e:  # noqa: BLE001 - report and continue
                 failures.append(f'{name}: {e}')
