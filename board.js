@@ -677,7 +677,7 @@ class Board extends EventTarget {
     }
 
     async #write(layer, sel, value) {
-        if (this.#busy) return false;
+        if (this.#busy) { toast('Still writing the last key. Pick again in a moment.', true); return false; }
         this.#busy = true;
         try {
             const r = await this.#a.write(layer, sel, value);
