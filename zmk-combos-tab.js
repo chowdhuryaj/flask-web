@@ -14,7 +14,7 @@
 import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=61';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=61';
 import { CH, V } from './flaskproto.js?v=61';
-import { board } from './board.js?v=61';
+import { board, capPartsOf, htPartsOf } from './board.js?v=61';
 import { saveState } from './save-state.js?v=61';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
@@ -26,7 +26,22 @@ import {
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=61';
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=61';
 
-const posText = (ps) => ps.join(' + ');
+/** A key position's legend on the BASE layer ("Q", "Esc", a tap-hold's tap),
+ * or the raw index when the board has no keymap bound yet. */
+export function legendOf(pos) {
+    const a = board.adapter;
+    try {
+        const sel = a?.selOf(pos);
+        const b = sel && a.bindingAt(0, sel);
+        if (!b) return String(pos);
+        const ht = htPartsOf(b, a.profile);
+        if (ht) return ht.tap;
+        const { top, main } = capPartsOf(b, a.profile);
+        return (top && main ? `${top} ${main}` : main || top) || String(pos);
+    } catch { return String(pos); }
+}
+
+const posText = (ps) => ps.map(legendOf).join(' + ');
 
 export class ZmkCombosTab {
     constructor(app) {
@@ -35,6 +50,11 @@ export class ZmkCombosTab {
         this.drafts = new Set(); // empty slots kept visible while editing
         this.warn = new Map();   // slot -> refusal text, shown on its row
         installSlotSummary(app);
+        // Legends follow base-layer edits. Not mid-pick: render() there would
+        // fight the board's pick banner.
+        board.addEventListener('change', () => {
+            if (this.root.isConnected && this.slots && this.editing == null) this.render();
+        });
     }
 
     async load() {
@@ -176,6 +196,18 @@ export class ZmkCombosTab {
         this.drafts.add(i);
         this.render();
         this.startPick(i);
+        this.reveal(i);
+    }
+
+    /** Scroll a card into view (the palette body scrolls on its own) and focus it. */
+    reveal(i) {
+        const card = this.root.querySelector(`[data-combo="${i}"]`);
+        if (!card) return;
+        card.setAttribute('tabindex', '-1');
+        card.classList.add('x-new');
+        card.scrollIntoView({ block: 'start' });
+        card.focus({ preventScroll: true });
+        setTimeout(() => card.classList.remove('x-new'), 1600);
     }
 
     async clearSlot(i) {

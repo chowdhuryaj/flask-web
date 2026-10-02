@@ -1,0 +1,3 @@
+/* look-extras: new-card highlight for "+ New combo". Link from index.html. */
+.card.x-new { outline: 2px solid var(--accent, #867f7f); outline-offset: 2px; transition: outline-color 1.2s; }
+.card[tabindex="-1"]:focus { outline-offset: 2px; }
