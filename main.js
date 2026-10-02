@@ -192,6 +192,7 @@ async function loadZmkDevice(device) {
     updateStatus(device);
     await probeHoldtap();
     await probeAdaptive();
+    await probeAutoshift();
     buildTabs();
     if (TABS.length) await showTab(TABS[0].id);
 }
@@ -263,6 +264,7 @@ async function startOffline(key, family) {
     updateOfflineBanner();
     await probeHoldtap();
     await probeAdaptive();
+    await probeAutoshift();
     buildTabs();
     showTab('zmk-keymap');
 }
@@ -345,6 +347,16 @@ async function probeAdaptive() {
     if ((app.protocolVersion ?? 0) < 18) return;
     try { app.caps.adaptive = !!(await app.flask.getU16(CH.adaptive, V.akSetCount)); }
     catch { app.caps.adaptive = false; }
+}
+
+/** caps.autoshift for Behaviour › Auto Shift: proto >= 19 and channel 0x2C
+ * answers GET TIMEOUT (never 0 when compiled; 0xFF echo = module absent). */
+async function probeAutoshift() {
+    if (!app.caps || !isZmkFamily(app.family)) return;
+    app.caps.autoshift = false;
+    if ((app.protocolVersion ?? 0) < 19) return;
+    try { app.caps.autoshift = !!(await app.flask.getU16(CH.autoShift, V.ashTimeout)); }
+    catch { app.caps.autoshift = false; }
 }
 
 function buildTabs() {

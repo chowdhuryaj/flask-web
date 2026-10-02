@@ -91,7 +91,11 @@ export function familyLabel(family) {
 // added flask_holdtap 0x2A: per-key-position runtime hold-tap timing. v18
 // (totem only) added flask_adaptive 0x2B: runtime adaptive keys (&fak <set>:
 // rules keyed on the previous key, typed multi-step outputs). Probed, not
-// table-gated: caps.adaptive comes from main.js probeAdaptive().
+// table-gated: caps.adaptive comes from main.js probeAdaptive(). v19 (totem
+// only) adds flask_autoshift 0x2C: runtime global auto shift + retro shift,
+// probed the same way (caps.autoshift, main.js probeAutoshift()).
+// ponytail: bump totem to 19 here when the v19 firmware ships; the Auto Shift
+// tab is probe-gated and does not need it.
 export const ZMK_EXPECTED_PROTOCOL = { imprint: 16, totem: 18 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are

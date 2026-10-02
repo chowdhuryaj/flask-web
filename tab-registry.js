@@ -24,6 +24,7 @@ import { ZmkLeaderTab } from './zmk-leader-tab.js?v=62';
 import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=62';
 import { ZmkShiftTab } from './zmk-shift-tab.js?v=62';
 import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=62';
+import { ZmkAutoshiftTab } from './zmk-autoshift-tab.js?v=62';
 import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=62';
 import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=62';
 import { ZmkTestTab } from './zmk-test-tab.js?v=62';
@@ -60,6 +61,9 @@ export const TAB_TABLE = [
     { id: 'zmk-combos', label: 'Combos', group: 'behaviour', screen: 'combos', when: (a) => a.caps.combos, ctor: ZmkCombosTab },
     { id: 'zmk-macros', label: 'Macros', group: 'behaviour', screen: 'macros', when: (a) => a.caps.macros, ctor: ZmkMacrosTab },
     { id: 'zmk-tapdance', label: 'Tap Dance', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.tapDance, ctor: ZmkTapDanceTab },
+    // flask_autoshift (0x2C, v19): caps.autoshift is main.js's async probe (GET 2C 02
+    // answers); older images answer 0xFF, so the tab hides. Sits before Shift Keys.
+    { id: 'zmk-autoshift', label: 'Auto Shift', group: 'behaviour', screen: 'behaviours', when: (a) => zmk(a) && !!a.caps.autoshift, ctor: ZmkAutoshiftTab },
     // §1.3: renamed "Shift" → "Shift Keys" (native label).
     { id: 'zmk-shift', label: 'Shift Keys', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.customShift, ctor: ZmkShiftTab },
     // flask_adaptive (0x2B, v18): caps.adaptive is main.js's async probe (GET 2B 02

@@ -1226,7 +1226,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
 // ---- totem offline preview: shared layout, generated default, no drift ----
 {
-    const { createZmkTemplate, ZMK_TEMPLATE_FAMILIES, ZmkOfflineFlask, OfflineStudioClient }
+    const { createZmkTemplate, ZMK_TEMPLATE_FAMILIES, ZmkOfflineFlask, OfflineStudioClient, SIM_PROTOCOL }
         = await import('./zmk-offline.js?v=62');
     const { TOTEM_GEOM } = await import('./zmk-totem-layout.js?v=62');
     const { TOTEM_DEFAULT } = await import('./zmk-totem-default.js?v=62');
@@ -1235,7 +1235,8 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(TOTEM_GEOM.length, 38, 'totem layout has 38 keys');
     const ws = createZmkTemplate('totem');
     ws._notify = () => {};
-    eq(ws.protocolVersion, ZMK_EXPECTED_PROTOCOL.totem, 'offline totem protocol version');
+    // The sim may run ahead of the app's expected protocol (v19 Auto Shift is tryable before the bump).
+    eq(ws.protocolVersion, Math.max(ZMK_EXPECTED_PROTOCOL.totem, SIM_PROTOCOL.totem), 'offline totem protocol version');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 38), true, 'every offline totem layer has 38 bindings');
     eq(ws.profile.keys.length, 38, 'offline totem profile has 38 keys');
     // Same positions online (profile) and offline (profile + Studio layout).
