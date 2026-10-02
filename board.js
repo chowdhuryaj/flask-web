@@ -29,7 +29,7 @@
 // Import this file ONLY as './board.js?v=1': x.js and x.js?v=1 are two
 // module instances and the singleton would split.
 
-import { el, svgEl, toast } from './ui.js?v=49';
+import { el, svgEl, toast as uiToast } from './ui.js?v=49';
 import { capLabel, hoverText } from './keycodes.js?v=49';
 import { capParts as catalogCapParts } from './behavior-catalog.js?v=1';
 
@@ -37,6 +37,7 @@ export const BOARD_ZOOM_VAR = '--board-zoom';
 export const GAP = 5;
 const PAD = 4;
 const hasDom = () => typeof document !== 'undefined';
+const toast = (...a) => { if (hasDom()) uiToast(...a); };   // node tests have no DOM
 
 // ---------------------------------------------------------------- geometry
 
@@ -182,7 +183,8 @@ export function renderKeyboardSVG(opts) {
     const radius = (profile.family && /^(totem|imprint)/.test(profile.family) ? 5 : 6) * Math.min(1, scale + 0.2);
     const svg = svgEl('svg', {
         class: 'kb-svg', width: L.width, height: L.height, viewBox: `0 0 ${L.width} ${L.height}`,
-        style: opts.zoomable ? `width:calc(${L.width}px * var(${BOARD_ZOOM_VAR}, 1)); height:auto; max-width:none` : null,
+        // zoom is relative to "fits the pane": 1 never overflows, 1.5 may be 50 % wider.
+        style: opts.zoomable ? `width:calc(${L.width}px * var(${BOARD_ZOOM_VAR}, 1)); max-width:calc(100% * var(${BOARD_ZOOM_VAR}, 1)); height:auto` : null,
     });
     const sel = opts.selected;
     const names = opts.names ?? 'sel';
