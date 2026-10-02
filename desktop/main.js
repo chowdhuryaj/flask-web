@@ -48,7 +48,8 @@ const HID_ALLOW = new Set([
     'd020:1603', // NLKB16-02
 ]);
 const SERIAL_ALLOW = new Set(['1d50:615e']); // ZMK Studio RPC (CDC)
-const vp = (v, p) => `${(v || 0).toString(16).padStart(4, '0')}:${(p || 0).toString(16).padStart(4, '0')}`;
+// HID ids arrive as numbers, serial ids as decimal strings ('7504') — Number() takes both.
+const vp = (v, p) => `${(Number(v) || 0).toString(16).padStart(4, '0')}:${(Number(p) || 0).toString(16).padStart(4, '0')}`;
 
 const NATIVE_BUNDLE_ID = 'com.aj.flask';
 const OLD_PROFILE = path.join(app.getPath('appData'), 'Flask'); // desktop 1.x
