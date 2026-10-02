@@ -1,6 +1,8 @@
 // Tiny DOM factories + shared widgets. Pattern lifted from AlooMapper
 // (hid-remapper config-tool-vial vial.js) — no framework, direct DOM.
 
+import { saveState } from './save-state.js?v=1';
+
 export function el(tag, attrs, ...kids) {
     const e = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
@@ -114,6 +116,7 @@ export function sliderRow(opts) {
             const v = Number(input.value);
             try {
                 const echoed = await opts.onChange(v);
+                announceEdit(input);
                 if (echoed != null && echoed !== v && !pendingWrite) {
                     input.value = echoed;
                     valEl.textContent = fmt(echoed);
@@ -139,6 +142,7 @@ export function toggleRow(opts) {
         try {
             const echoed = await opts.onChange(want);
             btn.classList.toggle('on', echoed == null ? want : !!echoed);
+            announceEdit(btn);
         } catch (e) {
             toast(`Write failed: ${e.message}`, true);
         }
@@ -157,7 +161,7 @@ export function selectRow(opts) {
         ...opts.options.map((o) => el('option', { value: o.value, text: o.label })));
     sel.value = String(opts.value);
     sel.addEventListener('change', async () => {
-        try { await opts.onChange(sel.value); }
+        try { await opts.onChange(sel.value); announceEdit(sel); }
         catch (e) { toast(`Write failed: ${e.message}`, true); }
     });
     const row = el('div', { class: 'row' },
@@ -178,7 +182,8 @@ export const SAVE_STATE = {
     saved: 'Saved to keyboard',
 };
 
-/** Per-channel Save bar: snapshots live values into the firmware EEPROM.
+/** DEPRECATED (WP6): kept so tabs not yet moved to reloadBar keep working.
+ * Per-channel Save bar: snapshots live values into the firmware EEPROM.
  * The dot + label is the canonical live/saved vocabulary (same dot language as
  * the header's connection pill) — pass `note` only for context the dot cannot
  * carry, never to restate live-vs-saved. Call `bar.setState('live'|'saved')`
@@ -198,6 +203,77 @@ export function saveBar(onSave, note) {
         btn.disabled = true;
         try { await onSave(); toast('Saved'); bar.setState('saved'); }
         catch (e) { toast(`Save failed: ${e.message}`, true); }
+        btn.disabled = false;
+    });
+    return bar;
+}
+
+// ---------- reload bar (spec 3.2) ----------
+
+// A live write (sliderRow/toggleRow/selectRow) bubbles 'flask-edit'. The
+// nearest card's reload bar turns that into a saveState registration, so the
+// ONE Save in the status bar knows about it. Rows need no channel knowledge.
+function announceEdit(node) {
+    node.dispatchEvent(new CustomEvent('flask-edit', { bubbles: true }));
+}
+if (typeof document !== 'undefined') {
+    document.addEventListener('flask-edit', (e) => {
+        const bar = e.target.closest?.('.card')?.querySelector('[data-reload-bar]');
+        bar?.markEdited?.();
+    });
+}
+
+/** Per-channel "Reload from device" bar. Replaces saveBar: there is no Save
+ * button here, the status bar owns Save (saveState). `channel` is the source id
+ * (CH.x) so Save runs channels in ascending order; `save` is what the status
+ * bar runs for it, typically `() => flask.save(CH.x)`.
+ *
+ *   reloadBar(channel, {reload, save, label, line, note})
+ *     reload   async () => void   re-read this screen from the device
+ *     save     async () => void   persist the channel (status bar calls it)
+ *     label    name shown in unsaved lists
+ *     line     'qmk'|'zmk'|'nape'  for the never-register check
+ *
+ * Omit `save` for a channel that has none (Svalboard corner chords 0x28): the
+ * bar then never registers and only reloads. State wording is the native one. */
+export const RELOAD_STATE = {
+    null: SAVE_STATE.null,
+    live: 'Unsaved — Save is in the status bar',
+    saving: 'Saving…',
+    saved: 'Saved ✓',
+};
+
+export function reloadBar(channel, { reload, save, label, line, note } = {}) {
+    const btn = el('button', { class: 'btn small', text: 'Reload from device' });
+    const state = el('span', { class: 'state', text: RELOAD_STATE.null });
+    const bar = el('div', { class: 'savebar', 'data-reload-bar': '' }, btn, state);
+    if (note) bar.append(el('span', { class: 'note', text: note }));
+
+    bar.setState = (s) => {
+        if (s) bar.dataset.state = s; else delete bar.dataset.state;
+        state.textContent = RELOAD_STATE[s] || RELOAD_STATE.null;
+    };
+    let mine = false;   // did this bar register the channel?
+    bar.markEdited = () => {
+        if (!save) return;
+        mine = true;
+        saveState.markDirty(channel, label || `Channel 0x${Number(channel).toString(16)}`, async () => {
+            bar.setState('saving');
+            try { await save(); } catch (e) { bar.setState('live'); throw e; }
+        }, { line });
+        bar.setState('live');
+    };
+    // The status bar's Save cleans the source; reflect it here.
+    const onChange = () => {
+        if (!bar.isConnected) { saveState.removeEventListener('change', onChange); return; }
+        if (mine && !saveState.dirty().some((d) => d.source === channel)) { mine = false; bar.setState('saved'); }
+    };
+    saveState.addEventListener('change', onChange);
+    btn.addEventListener('click', async () => {
+        if (!reload) return;
+        btn.disabled = true;
+        try { await reload(); toast('Reloaded from device'); }
+        catch (e) { toast(`Reload failed: ${e.message}`, true); }
         btn.disabled = false;
     });
     return bar;
