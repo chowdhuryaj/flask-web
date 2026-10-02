@@ -84,6 +84,7 @@ const STOCK = {
     'Sticky Key': ['sk', 'u'], 'Key Toggle': ['kt', 'u'], 'Caps Word': ['caps_word'],
     'Key Repeat': ['key_repeat'], 'Reset': ['sys_reset'], 'Bootloader': ['bootloader'],
     'Output Selection': ['out', 'out'], 'Bluetooth': ['bt', 'bt', 'n'], 'Studio Unlock': ['studio_unlock'],
+    'Mouse Key Press': ['mkp', 'mb'],
 };
 // Flask / Totem firmware nodes whose display name is stable (Totem-ZMK config/totem.keymap).
 const FIRMWARE = {
@@ -161,6 +162,7 @@ export function exportKeymapText(data, opts = {}) {
         if (kind === 'u') return usageToDt(v);
         if (kind === 'l') return layerRef(v);
         if (kind === 'out') return OUT[v] ?? String(v);
+        if (kind === 'mb') return v && !(v & (v - 1)) ? `MB${Math.log2(v) + 1}` : hex(v);
         if (kind === 'bt') return BT[v] ?? String(v);
         if (kind === 'raw' && v === 0xFFFF) { usesSwitchLayout = true; return 'OS_NEXT'; }
         return kind === 'raw' ? hex(v) : String(v);
@@ -242,6 +244,7 @@ export function exportKeymapText(data, opts = {}) {
         let b = null;
         if (s.action != null) b = typedOut(s, `combo ${i}`);
         else if (s.usage) b = `&kp ${usageToDt(s.usage)}`;   // pre-v12 slot
+        if (b === '&none') { notExported.push(`combo ${i} (keys ${s.positions.join(' ')}) skipped: its output could not be written`); return; }
         if (!b || s.positions.length < 2) {
             if (s.positions.length) notExported.push(`combo ${i} (keys ${s.positions.join(' ')}) is incomplete (needs two keys and an output), skipped`);
             return;
