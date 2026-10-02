@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Flask — Vial configurator</title>
-  <link rel="stylesheet" href="styles.css?v=49">
-  <link rel="stylesheet" href="css/shell.css?v=1">
+  <title>Flask</title>
+  <link rel="stylesheet" href="styles.css?v=50">
+  <link rel="stylesheet" href="css/shell.css?v=2">
   <link rel="stylesheet" href="css/board.css?v=1">
   <link rel="stylesheet" href="css/picker.css?v=1">
   <link rel="stylesheet" href="css/tiles.css?v=1">
@@ -16,36 +16,56 @@
   <script src="vendor/xz-decompress.js?v=49"></script>
 </head>
 <body>
-  <header>
-    <h1>⚗️ Flask</h1>
-    <span class="pill" id="status-pill"><span class="dot"></span><span id="status-text">Not connected</span></span>
-    <span class="pill warn" id="proto-warn" style="display:none"></span>
-    <span class="spacer"></span>
-    <button class="btn" id="hud-btn" style="display:none">HUD</button>
-    <button class="btn" id="diag-btn" title="Black-box diagnostics — transport + Studio event log, exportable">🐞</button>
-    <button class="btn" id="lock-btn" style="display:none"></button>
-    <button class="btn" id="vil-save" style="display:none" title="Save the whole layout (keymap, entries, macros, tunings) as a Vial-compatible .vil file">Save .vil</button>
-    <button class="btn" id="vil-load" style="display:none" title="Apply a .vil file — works offline too (queues for the next connect)">Load .vil</button>
-    <input type="file" id="vil-file" accept=".vil,application/json" style="display:none">
-    <select id="theme-sel" title="Theme"></select>
-    <select id="zoom-sel" title="Zoom">
-      <option value="80">80%</option><option value="90">90%</option>
-      <option value="100" selected>100%</option><option value="110">110%</option>
-      <option value="125">125%</option><option value="150">150%</option>
-    </select>
-    <button class="btn primary" id="connect-btn">Connect</button>
-  </header>
+  <!-- Editor frame (spec §0.1, §1.2): status bar, left rail, layer bar + board,
+       palette. Shown once a device, offline workspace or the trainer is open;
+       the landing card replaces it otherwise. -->
+  <div id="app-frame" class="app-frame" style="display:none">
+    <div id="statusbar" class="statusbar" role="toolbar" aria-label="Status">
+      <button class="sb-device" id="device-btn" data-caption="Switch device — back to the device list, where you can connect another keyboard."><span aria-hidden="true">⇄</span> <span id="device-name">Flask</span></button>
+      <span class="sb-sep" aria-hidden="true">|</span>
+      <button class="sb-btn" id="lock-btn" style="display:none" data-caption="Unlock lets macros, matrix reads and the bootloader jump work. Click to change."></button>
+      <span class="sb-seg" id="save-seg" style="display:none">
+        <button class="btn primary small" id="save-btn" data-caption="Write every unsaved change to the keyboard."></button>
+        <button class="btn small" id="discard-btn" style="display:none" data-caption="Throw away the unsaved ZMK keymap edits.">Discard</button>
+      </span>
+      <button class="btn small" id="vil-save" style="display:none" data-caption="Save the whole layout (keymap, entries, macros, tunings) to a file.">Save layout</button>
+      <button class="btn small" id="vil-load" style="display:none" data-caption="Apply a saved layout file. Works offline too and queues for the next connect.">Load</button>
+      <input type="file" id="vil-file" accept=".vil,application/json" style="display:none">
+      <span class="sb-seg warn" id="offline-seg" style="display:none">
+        <span id="offline-msg"></span>
+        <button class="btn small" id="offline-discard">Discard queued</button>
+        <button class="btn small" id="offline-exit">Exit offline</button>
+      </span>
+      <span class="spacer"></span>
+      <span class="pill warn" id="proto-warn" style="display:none"></span>
+      <span class="pill" id="status-pill"><span class="dot"></span><span id="status-text">Not connected</span></span>
+    </div>
 
-  <nav class="tabs" id="main-tabs" style="display:none"></nav>
-
-  <div id="offline-banner" class="banner" style="display:none">
-    <span id="offline-msg"></span>
-    <span class="spacer"></span>
-    <button class="btn small" id="offline-discard">Discard queued</button>
-    <button class="btn small" id="offline-exit">Exit offline</button>
+    <div class="editor">
+      <aside class="rail" id="rail" aria-label="Board tools">
+        <button class="rail-btn" id="undo-btn" aria-label="Undo" data-caption="Undo the last key assignment." disabled>↶</button>
+        <button class="rail-btn" id="redo-btn" aria-label="Redo" data-caption="Redo the assignment you undid." disabled>↷</button>
+        <span class="rail-gap"></span>
+        <button class="rail-btn" id="zoom-in" aria-label="Zoom in" data-caption="Make the board bigger.">+</button>
+        <span class="rail-zoom mono" id="zoom-readout">100%</span>
+        <button class="rail-btn" id="zoom-out" aria-label="Zoom out" data-caption="Make the board smaller.">−</button>
+      </aside>
+      <div class="editor-col">
+        <div class="layerbar" id="layerbar-row">
+          <div class="layerbar-slot" id="layerbar-slot"></div>
+          <button class="chip" id="hud-btn" style="display:none" data-caption="Float the live keymap over other windows.">Pop out</button>
+        </div>
+        <div class="board-slot" id="board-slot"></div>
+        <section class="palette" id="palette">
+          <nav class="tabs" id="main-tabs"></nav>
+          <div class="palette-body" id="palette-body"><div id="panels"></div></div>
+          <div class="caption-bar" id="caption-bar" aria-live="polite"></div>
+        </section>
+      </div>
+    </div>
   </div>
 
-  <main>
+  <main id="landing-main">
     <div id="unsupported" class="banner" style="display:none">
       <span id="unsupported-msg">This browser has no WebHID. Use Chrome, Edge, or another Chromium-based
       browser (WebHID is not available in Firefox or Safari).</span>
@@ -53,29 +73,30 @@
       <button class="btn small" id="unsupported-why">Why?</button>
     </div>
     <div id="landing" class="landing">
-      <h2>Flask web configurator</h2>
-      <p>Keymap editor + live tuning for Flask-firmware keyboards
-        (Ploopy Adept, Svalboard, NLKB16-02) and any Vial keyboard.</p>
-      <p class="faint">Close the Vial desktop GUI and any other Flask app first —
-        two editors talking to one keyboard interleave responses.</p>
-      <div class="dev-list" id="dev-list"></div>
-      <button class="btn primary" id="landing-connect">Connect a keyboard</button>
-      <p class="faint" style="margin-top:28px">No keyboard with you? Edit offline —
-        changes queue locally and apply automatically the next time that
-        keyboard is connected.</p>
-      <div class="dev-list" id="offline-list"></div>
-      <p class="faint" style="margin-top:28px">Learning a layout, or just want to get
-        faster? The typing trainer unlocks letters as you earn them, one at a time —
-        no keyboard needs to be connected.</p>
-      <button class="btn" id="trainer-btn">Open the typing trainer</button>
+      <div class="landing-card">
+        <h2 id="landing-title">Flask</h2>
+        <div class="landing-build mono">web configurator</div>
+        <div class="eyebrow">Select device</div>
+        <div class="dev-list" id="dev-list"></div>
+        <button class="btn primary wide" id="landing-connect">Add a keyboard…</button>
+        <p class="faint">Close the Vial desktop GUI and any other Flask app first.
+          Two editors talking to one keyboard interleave responses.</p>
 
-      <p class="faint" style="margin-top:28px">Connect not working, or on a managed
-        machine? <button class="btn small" id="preflight-btn">Run a compatibility check</button></p>
-      <div id="preflight" class="card preflight" style="display:none"></div>
+        <div class="eyebrow">Offline</div>
+        <p class="faint">No keyboard with you? Changes queue locally and apply the next
+          time that keyboard is connected.</p>
+        <div class="dev-list" id="offline-list"></div>
+
+        <div class="eyebrow">Practice</div>
+        <button class="btn wide" id="trainer-btn">Open the typing trainer</button>
+
+        <p class="faint">Connect not working, or on a managed machine?
+          <button class="btn small" id="preflight-btn">Run a compatibility check</button></p>
+        <div id="preflight" class="card preflight" style="display:none"></div>
+      </div>
     </div>
-    <div id="panels"></div>
   </main>
 
-  <script type="module" src="main.js?v=51"></script>
+  <script type="module" src="main.js?v=52"></script>
 </body>
 </html>

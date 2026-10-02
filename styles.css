@@ -1,5 +1,5 @@
-/* flask-web — one linked stylesheet on purpose: the HUD PiP window clones
-   document.styleSheets, and a single <link> makes that clone trivial.
+/* flask-web tokens and shared base. The HUD PiP window clones every linked
+   sheet in document.styleSheets (this one plus css/*.css).
 
    Two token layers, on purpose:
    - COLOR is a user-facing feature. main.js pins the full palette per theme
@@ -86,6 +86,11 @@
   --dur-base: 180ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* Text size and board zoom are user settings (themes.js). Native default
+     is 1.15x; the board reads --board-zoom as a ratio. */
+  --text-scale: 1.15;
+  --board-zoom: 1;
+
   --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -119,6 +124,8 @@
 
 * { box-sizing: border-box; }
 
+html { font-size: calc(16px * var(--text-scale)); }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -142,25 +149,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   }
 }
 
-/* ---------- header ---------- */
-
-header {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-6);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-
-header h1 {
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-sb);
-  letter-spacing: -0.01em;
-  margin: 0 var(--sp-2) 0 0;
-}
-header .spacer { flex: 1; }
+/* ---------- pills (status bar) ---------- */
 
 .pill {
   display: inline-flex;
@@ -186,8 +175,8 @@ header .spacer { flex: 1; }
 /* ---------- buttons & inputs ---------- */
 
 .btn {
-  padding: var(--sp-3) var(--sp-5);
-  border-radius: var(--r-sm);
+  padding: 6px 12px;
+  border-radius: 7px;
   border: 1px solid var(--border2);
   background: var(--surface);
   cursor: pointer;
@@ -207,7 +196,7 @@ header .spacer { flex: 1; }
 .btn.danger { color: var(--danger); border-color: var(--danger); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn:disabled:active { transform: none; }
-.btn.small { padding: var(--sp-1) var(--sp-4); font-size: var(--fs-sm); }
+.btn.small { padding: var(--sp-2) 10px; font-size: var(--fs-sm); }
 
 select, input[type="text"], input[type="number"], input[type="search"] {
   padding: var(--sp-2) var(--sp-4);
@@ -221,52 +210,50 @@ input[type="number"]:hover, input[type="search"]:hover { border-color: var(--fai
 
 input[type="range"] { accent-color: var(--accent); }
 
-/* ---------- main tabs ---------- */
+/* ---------- palette tabs ---------- */
 
-/* Two rows: what KIND of thing you want, then which one. Seventeen tabs in a
-   single scrolling row meant the far end cost a hunt before the click. */
-nav.tabs {
-  display: flex;
-  flex-direction: column;
-  padding: 0 var(--sp-6);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
+/* Two rows, as in native: group chips (what KIND of thing), then the tab strip
+   (which one). Chip and strip geometry follow spec §2.3. The palette frame
+   itself lives in css/shell.css. */
+nav.tabs { display: flex; flex-direction: column; }
 .tab-groups, .tab-row {
   display: flex;
-  gap: var(--sp-1);
   overflow-x: auto;
   scrollbar-width: none;
 }
 .tab-groups::-webkit-scrollbar, .tab-row::-webkit-scrollbar { display: none; }
-.tab-groups { padding-top: var(--sp-3); }
-.tab-groups button {
-  padding: var(--sp-2) var(--sp-4);
-  border: 1px solid transparent;
+.tab-groups { gap: var(--sp-4); padding: var(--sp-5) var(--sp-6) 0; }
+.tab-row { gap: 18px; padding: var(--sp-4) var(--sp-6) 0; border-bottom: 1px solid var(--border); }
+
+/* One capsule for group, category and layer chips. */
+.chip, .tab-groups button {
+  padding: var(--sp-2) 10px;
+  border: 1px solid var(--keycap-border);
   border-radius: var(--r-full);
-  background: none;
+  background: var(--surface);
   cursor: pointer;
   color: var(--muted);
   white-space: nowrap;
-  font-size: var(--fs-sm);
+  font-size: 0.71875rem;
+  font-weight: var(--fw-md);
   transition: color var(--dur-fast) var(--ease-out),
               background var(--dur-fast) var(--ease-out);
 }
-.tab-groups button:hover { color: var(--text); }
-.tab-groups button.active {
+.chip:hover, .tab-groups button:hover { color: var(--text); }
+.chip.on, .tab-groups button.active {
   color: var(--accent-text);
   background: var(--accent-bg);
   border-color: var(--accent);
-  font-weight: var(--fw-sb);
 }
 
 .tab-row button {
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-3) 0 var(--sp-4);
   border: none;
   background: none;
   cursor: pointer;
   color: var(--muted);
   border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   white-space: nowrap;
   font-size: var(--fs-md);
   transition: color var(--dur-fast) var(--ease-out),
@@ -708,56 +695,64 @@ body.hud-electron a { -webkit-app-region: no-drag; }
 .faint { color: var(--muted); }
 .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
 
-.landing {
-  text-align: center;
-  padding: var(--sp-9) var(--sp-7);
+.landing { display: flex; justify-content: center; padding: var(--sp-8) var(--sp-6); }
+.landing-card {
+  width: 380px; max-width: 100%;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  text-align: left;
 }
 .landing h2 {
+  margin: 0;
   font-size: var(--fs-xl);
-  font-weight: var(--fw-sb);
+  font-weight: 700;
   letter-spacing: -0.02em;
-  text-wrap: balance;
 }
-.landing p { color: var(--muted); max-width: 480px; margin: var(--sp-5) auto; text-wrap: pretty; }
+.landing-build { color: var(--muted); }
+.landing p { color: var(--muted); margin: var(--sp-5) 0; font-size: var(--fs-sm); text-wrap: pretty; }
+.eyebrow {
+  margin: var(--sp-7) 0 var(--sp-4);
+  font-size: 0.625rem; font-weight: var(--fw-sb);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+.landing-build + .eyebrow { margin-top: var(--sp-6); }
+.btn.wide { width: 100%; }
 
-.dev-list { display: flex; flex-direction: column; gap: var(--sp-4); max-width: 420px; margin: var(--sp-7) auto; }
+.dev-list { display: flex; flex-direction: column; gap: var(--sp-4); }
+.dev-list:empty { display: none; }
 .dev-item {
   display: flex; align-items: center; gap: var(--sp-5);
-  padding: var(--sp-5) var(--sp-6);
+  padding: 14px;
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
+  border-radius: 10px;
+  background: var(--surface2);
   cursor: pointer;
   text-align: left;
+  font-size: var(--fs-base); font-weight: var(--fw-sb);
   transition: border-color var(--dur-fast) var(--ease-out),
               background var(--dur-fast) var(--ease-out);
 }
-.dev-item:hover { border-color: var(--accent); background: var(--surface2); }
+.dev-item:hover { border-color: var(--accent); }
 .dev-item .badge {
   margin-left: auto;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-xs); font-weight: var(--fw-md);
   padding: var(--sp-1) var(--sp-4);
   border-radius: var(--r-full);
   background: var(--ok-bg);
   color: var(--ok);
 }
+.dev-item .badge + .badge { margin-left: 0; }
+.dev-item .vidpid { margin-left: auto; font-weight: 400; color: var(--muted); }
+.dev-item .vidpid + .badge { margin-left: 0; }
 
 /* ---------- offline mode ---------- */
 /* Offline is a persistent MODE, not an alert — it reads as a quiet strip in
  * the chrome rather than a full-bleed warning slab competing with the surface
  * it describes. */
-#offline-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  margin: 0;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--warn-bg);
-  padding: var(--sp-3) var(--sp-6);
-  font-size: var(--fs-sm);
-}
 .pill.offline { border-color: #e5a50a; }
 .pill.offline .dot { background: #e5a50a; }
 .badge.faint { opacity: 0.6; }
