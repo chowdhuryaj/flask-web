@@ -130,6 +130,18 @@ function guardUnload(on) {
     window[on ? 'addEventListener' : 'removeEventListener']('beforeunload', unloadGuard);
 }
 
+/** Toast for a discardAll() result. `remaining` = sources still dirty afterwards.
+ * Never says "discarded" while the result failed or something stays unsaved. */
+export function discardMessage(r, remaining = []) {
+    const done = (r?.discarded?.length ?? 0) + (r?.queued ?? 0);
+    if (r?.failed) {
+        const f = r.failed;
+        return { bad: true, text: `Discard stopped${f.source != null ? ` at ${f.source}` : ''}: ${f.error?.message ?? f.error ?? 'failed'}${remaining.length ? `. Still unsaved: ${remaining.join(', ')}` : ''}` };
+    }
+    if (remaining.length) return { bad: true, text: `${done ? 'Discarded some changes. ' : ''}Still unsaved (cannot be discarded): ${remaining.join(', ')}` };
+    return done ? { bad: false, text: 'Changes discarded' } : { bad: false, text: 'Nothing to discard' };
+}
+
 export const saveState = new SaveState();
 if (typeof window !== 'undefined') window.flaskDiscardAll = () => saveState.discardAll();
 export { SaveState };   // tests make their own instance

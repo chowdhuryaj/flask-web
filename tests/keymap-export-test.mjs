@@ -77,6 +77,38 @@ ok(usageToDt((0x07 << 16) | 0x91).startsWith('ZMK_HID_USAGE('), 'unknown usage i
     ok(z.text.includes('compatible = "zmk,combos"'), 'stock combos on request');
 }
 
+
+// ---- verifier fixes: bt / mkp / escaping / header / hold timing for every slot
+{
+    const L = (name, ...bs) => ({ id: 0, name, bindings: bs.map(([behavior, behaviorId, param1, param2 = 0]) => ({ behavior, behaviorId, param1, param2 })) });
+    const cat = [{ id: 1, displayName: 'Bluetooth' }, { id: 2, displayName: 'Mouse Key Press' }, { id: 3, displayName: 'Key Press' }];
+    const r = exportKeymapText({ family: 'imprint', layers: [L('a"b\\c', ['Bluetooth', 1, 0], ['Bluetooth', 1, 3, 2], ['Bluetooth', 1, 4], ['Bluetooth', 1, 5, 1], ['Mouse Key Press', 2, 1])] }, { behaviors: cat });
+    ok(r.text.includes('&bt BT_CLR ') && r.text.includes('&bt BT_SEL 2') && r.text.includes('&bt BT_CLR_ALL') && r.text.includes('&bt BT_DISC 1'), 'bt: new commands, second cell only for SEL/DISC');
+    ok(!/BT_CLR \d|BT_CLR_ALL \d/.test(r.text), 'bt: no stray second cell');
+    ok(r.text.includes('#include <dt-bindings/zmk/pointing.h>') && r.text.includes('&mkp MB1'), 'mkp pulls in pointing.h');
+    const none = exportKeymapText({ family: 'imprint', layers: [L('x', ['Key Press', 3, 4])] }, { behaviors: cat });
+    ok(!none.text.includes('pointing.h'), 'no pointing.h without &mkp');
+    ok(r.text.includes('display-name = "a\\"b\\\\c";'), 'layer name escaped');
+    ok(/NOT a drop-in replacement/.test(r.text) && r.text.includes('config repo'), 'header says firmware behaviours come from the config repo');
+    const m = exportKeymapText({ family: 'imprint', layers: [L('x', ['Key Press', 3, 4])],
+        flask: { macros: { slots: [[{ action: 1, param: (7 << 16) | 4 }]] , }, slotNames: { macros: { 0: 'say "hi" \\' } } } }, { behaviors: cat });
+    ok(m.text.includes('display-name = "say \\"hi\\" \\\\";'), 'macro name escaped');
+}
+{
+    const { readHoldtap } = await import('../zmk-extras.js?v=62');
+    const bytes = (slot, custom) => [slot, 0, 200, 0, 0, 0, 0, 1, custom ? 1 : 0];
+    const fake = { getU16: async () => 3, getBytes: async (ch, id, [slot]) => {
+        if (slot === 2) throw new Error('timeout');
+        return id === 0x50 ? bytes(slot, slot === 1) : [slot, 0, slot, 0, ...new Array(26).fill(0)];
+    } };
+    const res = await readHoldtap({ flask: fake, protocolVersion: 17 });
+    eq(res.slots.map((s) => [s.slot, s.custom]), [[0, false], [1, true]], 'default (non-custom) slots are read too');
+    eq(res.unreadable.map((u) => u.slot), [2], 'unreadable slot reported');
+    const out = exportKeymapText({ family: 'totem', layers: [{ id: 0, name: 'a', bindings: [] }], holdtap: res.slots, holdtapUnreadable: res.unreadable }, { behaviors: [] });
+    ok(out.text.includes('ht_key_0 {') && out.text.includes('ht_key_1 {'), 'every slot written, not only custom ones');
+    ok(out.notExported.some((n) => n.startsWith('hold timing slot 2')), 'unreadable slot listed in not-exported');
+}
+
 // ---- cross-check against the real firmware keymap
 const real = join(homedir(), 'dev/Input/Flask-Svalboard/Totem-ZMK/config/totem.keymap');
 if (existsSync(real)) {

@@ -12,7 +12,7 @@ globalThis.localStorage ??= {
     get length() { return this._m.size; },
 };
 
-const { SaveState } = await import('../save-state.js?v=62');
+const { SaveState, discardMessage } = await import('../save-state.js?v=62');
 const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=62');
 
 let checks = 0;
@@ -66,6 +66,17 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     eq(r.failed.source, 'studio-keymap');
     eq(ran, [], 'channels never saved when the keymap save fails');
     eq(s.dirty().length, 2);
+}
+
+// ---- discard toast never claims success while something stays unsaved ----
+{
+    eq(discardMessage({ discarded: ['studio-keymap'], failed: null, queued: 0 }, []), { bad: false, text: 'Changes discarded' });
+    eq(discardMessage({ discarded: [], failed: null, queued: 3 }, []).text, 'Changes discarded', 'queued entries count');
+    eq(discardMessage({ discarded: [], failed: null, queued: 0 }, []).text, 'Nothing to discard');
+    const f = discardMessage({ discarded: [], failed: { source: 'studio-keymap', error: new Error('x') } }, ['Keymap']);
+    ok(f.bad && f.text.includes('studio-keymap') && f.text.includes('x') && f.text.includes('Still unsaved: Keymap') && !/Changes discarded/.test(f.text), 'failure text');
+    const rem = discardMessage({ discarded: ['a'], failed: null, queued: 0 }, ['DPI']);
+    ok(rem.bad && rem.text.includes('DPI') && !/^Changes discarded/.test(rem.text), 'leftover dirty source is named');
 }
 
 // ---- discard ----

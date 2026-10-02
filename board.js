@@ -509,6 +509,7 @@ class Board extends EventTarget {
         let binding;
         try { binding = JSON.parse(text); } catch { return false; }
         if (!binding || typeof binding !== 'object' || this.#a?.readOnly || this.#pick) return false;
+        if (this.#a?.validBinding && !this.#a.validBinding(binding)) return false;   // foreign drag: ignore
         this.#sel = sel;
         this.#renderBoard();
         this.#emitSelect();

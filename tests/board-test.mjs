@@ -3,7 +3,7 @@
 // popover are covered by tests/browser/board.py.
 import assert from 'node:assert/strict';
 import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText, DRAG_TYPE } from '../board.js?v=62';
-import { setZmkContext, bindingCap, bindingHover } from '../zmk-keycodes.js?v=62';
+import { setZmkContext, bindingCap, bindingHover, isZmkBinding } from '../zmk-keycodes.js?v=62';
 import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=62';
 import { TOTEM_GEOM } from '../zmk-totem-layout.js?v=62';
 
@@ -207,6 +207,17 @@ eq(baseUnit(40), 48, 'unit never below 48');
     ok(b.canUndo, 'a drop is one undo step'); await b.undo(); eq(map[1][1], 21, 'undo reverts the drop');
     eq(await b.dropOn({ kind: 'key', row: 0, col: 0 }, 'not json'), false, 'bad payload ignored');
     eq(await b.dropOn({ kind: 'key', row: 0, col: 0 }, 'null'), false, 'null payload ignored');
+    // Foreign drops are validated by the adapter (zmk: integer fields, behaviorId in the catalog).
+    const cat = new Map([[7, { id: 7 }]]);
+    ok(isZmkBinding({ behaviorId: 7, param1: 4, param2: 0 }, cat), 'valid binding');
+    for (const bad of [{ behaviorId: 8, param1: 0, param2: 0 }, { behaviorId: '7', param1: 0, param2: 0 }, { behaviorId: 7, param1: 1.5, param2: 0 },
+        { behaviorId: 7, param1: 'x', param2: 0 }, { behaviorId: 7, param1: 2 ** 33, param2: 0 }, { v: 77 }, null, [], 'x']) ok(!isZmkBinding(bad, cat), `rejected ${JSON.stringify(bad)}`);
+    adapter.validBinding = (x) => isZmkBinding(x, cat);
+    eq(await b.dropOn({ kind: 'key', row: 0, col: 2 }, '{"behaviorId":99,"param1":0,"param2":0}'), false, 'unknown behaviorId dropped');
+    eq(map[1][2], 22, 'and nothing written');
+    eq(b.selectedKey().pos, 1, 'selection unchanged by a refused drop');
+    eq(await b.dropOn({ kind: 'key', row: 0, col: 2 }, '{"behaviorId":7,"param1":4,"param2":0}'), true, 'valid drop still works');
+    await b.undo();
     // Click on the selected key again: nothing opens, nothing changes (the popover is gone).
     b.select({ kind: 'key', row: 0, col: 0 });
     const n = seen.length;

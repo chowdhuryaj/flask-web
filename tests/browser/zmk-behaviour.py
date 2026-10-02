@@ -76,7 +76,7 @@ def main():
 
         # -- the seeded table: R+F (3+13) is slot 7, Enter
         slot7 = page.locator('[data-combo="7"]')
-        check('3 + 13' in slot7.inner_text(), 'slot 7 reads 3 + 13')
+        check('R + F' in slot7.inner_text(), 'slot 7 reads R + F (legend form)')
         # -- hold-tap outputs (combos z / x: Layer-Tap ... combo) draw labelled HOLD and TAP parts
         ht = page.locator('#panels .panel.active [data-combo] [data-act="output"] .bp-cell.ht')
         check(ht.count() >= 2, f'hold-tap combo outputs use renderBindingCell, got {ht.count()}')
@@ -122,7 +122,7 @@ def main():
         page.wait_for_timeout(400)
         check(page.locator('.picker-sheet').count() == 0, 'sheet closes on pick')
         newest = combo_cards(page).last
-        check('20 + 21 → Esc' in newest.inner_text(), f'row reads "20 + 21 → Esc": {newest.inner_text()[:60]!r}')
+        check('T + Z → Esc' in newest.inner_text(), f'row reads "T + Z → Esc": {newest.inner_text()[:60]!r}')
         check(save_text(page).startswith('Save 1 unsaved') or '1 unsaved' in save_text(page), f'status bar: {save_text(page)!r}')
         shot(page, 'combos-new-row')
 

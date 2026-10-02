@@ -25,7 +25,7 @@ import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } 
 import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=62';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
-    setZmkContext, zmkBehaviors, zmkLayers, layerName,
+    setZmkContext, zmkBehaviors, zmkLayers, layerName, isZmkBinding,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
 } from './zmk-keycodes.js?v=62';
 
@@ -536,6 +536,7 @@ export class ZmkKeymapTab {
             })),
             bindingAt: (layer, sel) => tab.keymap.layers[layer]?.bindings[sel.col] ?? null,
             write: (layer, sel, binding) => tab._writeBinding(layer, sel.col, binding),
+            validBinding: (b) => isZmkBinding(b),
             posOf: (sel) => sel.col,
             selOf: (pos) => (Number.isInteger(pos) ? { kind: 'key', row: 0, col: pos } : null),
             renameLayer: (layer, name) => tab.renameLayer(name, layer),

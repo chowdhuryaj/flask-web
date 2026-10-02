@@ -155,6 +155,14 @@ export function setZmkContext({ behaviors, layers }) {
 }
 
 export function zmkBehaviors() { return ctx.behaviors; }
+
+/** A binding that is safe to write: integer behaviorId present in `catalog`
+ * (a Map by id) and integer params. Drops from outside the palette land here. */
+export function isZmkBinding(b, catalog = ctx.behaviors) {
+    const int = (n) => Number.isInteger(n) && n >= -0x80000000 && n <= 0xFFFFFFFF;
+    return !!b && typeof b === 'object' && int(b.behaviorId) && catalog?.has?.(b.behaviorId) === true
+        && int(b.param1 ?? 0) && int(b.param2 ?? 0);
+}
 export function zmkLayers() { return ctx.layers; }
 
 /** Layer display name by STABLE layer id (not index). */

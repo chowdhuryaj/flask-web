@@ -40,7 +40,7 @@ kbd {
 .dock-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 148px minmax(0, 1fr); }
 .dock-side { display: flex; flex-direction: column; gap: 10px; padding: 10px 8px 10px 12px; border-right: 1px solid var(--border); overflow: hidden auto; min-height: 0; }
 .dock-side .seg { display: flex; }
-.dock-side .seg button { flex: 1; padding: 4px 5px; font-size: 0.6875rem; }
+.dock-side .seg button { flex: 1 1 auto; min-width: 0; padding: 4px 3px; font-size: 0.6875rem; white-space: nowrap; }
 .dock-cats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
 .dock-cats button {
   width: 100%; text-align: left; padding: 6px 10px; border: 0; border-radius: 9px; background: none;
@@ -189,7 +189,7 @@ kbd {
 @media (max-width: 820px) {
   .side > .insp, .insp[data-view="key"], .insp[data-view="preset"] { position: static; overflow: visible; }
   .dock { height: 320px; }
-  .dock-body { grid-template-columns: 124px minmax(0, 1fr); }
+  .dock-body { grid-template-columns: 148px minmax(0, 1fr); }
 }
 
 .insp-mods .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }

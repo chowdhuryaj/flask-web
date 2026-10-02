@@ -16,22 +16,25 @@ const say = (msg, bad = false) => {
     import('./ui.js?v=62').then((m) => m.toast(msg, bad)).catch(() => {});
 };
 
-// Per-key hold timing straight off channel 0x2A (flask_holdtap). Empty when the
-// board has none.
-async function readHoldtap(app) {
-    const f = app.flask;
-    if (!f || (app.protocolVersion ?? 0) < 17) return [];
-    try {
-        const n = await f.getU16(0x2A, 0x01);
-        const out = [];
-        for (let slot = 0; slot < n; slot++) {
+// Hold timing for EVERY flask_holdtap slot (channel 0x2A): what the firmware
+// answers is the compiled default until a slot is customised, so reading all of
+// them exports the defaults too. Offline preview answers the same reads from its
+// default catalog (zmk-offline.js holdtapDefaults). A slot that cannot be read goes
+// to `unreadable` and ends up in the not-exported block. Empty when the board
+// has no flask_holdtap.
+export async function readHoldtap(app) {
+    const f = app.flask, slots = [], unreadable = [];
+    if (!f || (app.protocolVersion ?? 0) < 17) return { slots, unreadable };
+    let n;
+    try { n = await f.getU16(0x2A, 0x01); } catch (e) { return { slots, unreadable: [{ slot: 'count', error: e?.message ?? String(e) }] }; }
+    for (let slot = 0; slot < n; slot++) {
+        try {
             const s = decodeHoldtapSlot(await f.getBytes(0x2A, 0x50, [slot], 1));
-            if (!s.custom) continue;
             const i = decodeHoldtapInfo(await f.getBytes(0x2A, 0x52, [slot], 1));
-            out.push({ ...s, slot, kind: i.kind, name: i.name });
-        }
-        return out;
-    } catch { return []; }
+            slots.push({ ...s, slot, kind: i.kind, name: i.name });
+        } catch (e) { unreadable.push({ slot, error: e?.message ?? String(e) }); }
+    }
+    return { slots, unreadable };
 }
 
 /** The Totem firmware's own node names for behaviors that carry no display name,
@@ -69,14 +72,16 @@ export async function buildKeymapExport({ combos = 'flask' } = {}) {
     };
     if (app?.flask && app?.caps?.flask) {
         data.flask = await exportFlaskState(app);
-        data.holdtap = await readHoldtap(app);
+        const ht = await readHoldtap(app);
+        data.holdtap = ht.slots;
+        data.holdtapUnreadable = ht.unreadable;
     }
     // Totem: a slot still on its firmware default keys keeps the firmware's node name.
     const comboNameFor = family === 'totem'
         ? (i, pos) => { const d = TOTEM_DEFAULT.combos[i]; return d && d.positions.join() === pos.join() ? d.name : ''; }
         : null;
     const r = exportKeymapText(data, { behaviors, nodeById: totemNodeById(app), combos, comboNameFor });
-    return { ...r, filename: `${family}.keymap` };
+    return { ...r, filename: `${family}-flask-export.keymap` };
 }
 
 function download(filename, text) {

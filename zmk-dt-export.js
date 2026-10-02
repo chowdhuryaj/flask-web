@@ -99,7 +99,9 @@ const FIRMWARE = {
     'Sticky Layer (smart)': ['skl', 'l'], 'Smart Layer': ['smart_layer', 'l', 'l'],
     'Num Word': ['num_word', 'l'], 'Flask Leader': ['fled'],
 };
-const BT = { 0: 'BT_CLR', 1: 'BT_NXT', 2: 'BT_PRV', 3: 'BT_SEL' };
+// bt.h: BT_SEL and BT_DISC take a profile index (second cell); the rest take none.
+const BT = { 0: 'BT_CLR', 1: 'BT_NXT', 2: 'BT_PRV', 3: 'BT_SEL', 4: 'BT_CLR_ALL', 5: 'BT_DISC' };
+const BT_WITH_PROFILE = new Set([3, 5]);
 const OUT = { 0: 'OUT_TOG', 1: 'OUT_USB', 2: 'OUT_BLE' };
 
 const KIND = { hid_usage: 'u', layer_id: 'l', constant: 'n', range: 'n' };
@@ -119,6 +121,8 @@ const ident = (s, fallback) => {
     const t = String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     return /^[a-z]/.test(t) ? t : fallback;
 };
+/** Quoted devicetree string body: escape \\ and ", drop control characters. */
+export const dtStr = (s) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/[\\"]/g, (c) => '\\' + c);
 const hex = (n) => `0x${(n >>> 0).toString(16).toUpperCase()}`;
 
 export function exportKeymapText(data, opts = {}) {
@@ -148,7 +152,7 @@ export function exportKeymapText(data, opts = {}) {
     const tdSlots = flask.tapDance?.slots ?? [];
     const macroNode = new Map(), tdNode = new Map();    // slot -> node name, once referenced/non-empty
     const firmwareRefs = new Map();                     // node -> display name
-    let usesSwitchLayout = false;
+    let usesSwitchLayout = false, usesPointing = false;
     const slotName = (kind, i) => data.flask?.slotNames?.[kind]?.[i] ?? '';
 
     const macroLive = (i) => (macroSlots[i] ?? []).filter((s) => s.action !== 0);
@@ -190,13 +194,14 @@ export function exportKeymapText(data, opts = {}) {
             kinds = kindsFromMeta(meta?.metadata);
             firmwareRefs.set(node, name || 'firmware-defined, no display name');
         }
+        if (node === 'mkp') usesPointing = true;
         const args = [];
         let k1 = kinds[0] ?? '-', k2 = kinds[1] ?? '-';
         // A parameter the app has no metadata for must not vanish: print it raw.
         if (k1 === '-' && p1 >>> 0) { k1 = 'raw'; if (p1 >>> 0 !== 0xFFFF) notExported.push(`${where}: &${node} parameter ${hex(p1)} has no metadata, written as a raw number`); }
         if (k2 === '-' && p2 >>> 0) { k2 = 'raw'; notExported.push(`${where}: &${node} second parameter ${hex(p2)} has no metadata, written as a raw number`); }
         if (k1 !== '-') args.push(val(k1, p1));
-        if (k2 !== '-' && !(k1 === 'bt' && (p1 >>> 0) !== 3)) args.push(val(k2, p2));
+        if (k2 !== '-' && !(k1 === 'bt' && !BT_WITH_PROFILE.has(p1 >>> 0))) args.push(val(k2, p2));
         return `&${node}${args.length ? ' ' + args.join(' ') : ''}`;
     };
     const typedOut = (o, where) => {   // combo / tap-dance output {action,behaviorId,param1,param2}
@@ -274,7 +279,7 @@ export function exportKeymapText(data, opts = {}) {
         return [`        ${node}: ${node} {`,
             '            compatible = "zmk,behavior-macro";',
             '            #binding-cells = <0>;',
-            `            display-name = "${slotName('macros', i) || `Flask macro ${i}`}";`,
+            `            display-name = "${dtStr(slotName('macros', i) || `Flask macro ${i}`)}";`,
             ...(flask.macros?.waitMs ? [`            wait-ms = <${flask.macros.waitMs}>;`] : []),
             ...(flask.macros?.tapMs ? [`            tap-ms = <${flask.macros.tapMs}>;`] : []),
             `            bindings = <${steps.join(' ')}>;`,
@@ -291,12 +296,17 @@ export function exportKeymapText(data, opts = {}) {
             '        };'].join('\n');
     });
 
-    // ---- per-key hold timing (custom slots only)
+    // ---- hold timing: EVERY slot is written (the compiled default for slots the
+    // user never touched, the custom value for the rest); a slot that could not
+    // be read is listed, never dropped silently.
     const FLAV = ['hold-preferred', 'balanced', 'tap-preferred', 'tap-unless-interrupted'];
-    const htText = (data.holdtap ?? []).filter((s) => s.custom).map((s) => {
-        const nm = s.kind === 'virtual' ? ident(s.name, `slot_${s.slot}`) : `key_${s.slot}`;
+    for (const u of data.holdtapUnreadable ?? []) notExported.push(`hold timing slot ${u.slot ?? u}${u.error ? ` could not be read (${u.error})` : ' could not be read'}, not written`);
+    const htText = (data.holdtap ?? []).map((s) => {
+        const virtual = s.kind === 'virtual';
+        const nm = virtual ? ident(s.name, `slot_${s.slot}`) : `key_${s.slot}`;
         return [`        ht_${nm} {`,
-            `            key-positions = <${s.slot}>;`,
+            ...(virtual ? [`            /* virtual slot ${s.slot}${s.name ? ': ' + String(s.name).replace(/\*\//g, '* /') : ''} (no key position) */`]
+                : [`            key-positions = <${s.slot}>;`]),
             `            tapping-term-ms = <${s.term}>;`,
             ...(s.quick ? [`            quick-tap-ms = <${s.quick}>;`] : []),
             ...(s.idle ? [`            require-prior-idle-ms = <${s.idle}>;`] : []),
@@ -320,6 +330,10 @@ export function exportKeymapText(data, opts = {}) {
     out.push('/*');
     out.push(` * ${data.device ?? 'ZMK board'} (${family}) keymap, exported from Totem-Flask ${opts.date ?? new Date().toISOString().slice(0, 10)}.`);
     out.push(` * ${layers.length} layers, ${layers[0]?.bindings.length ?? 0} keys each.`);
+    out.push(' *');
+    out.push(' * NOT a drop-in replacement for the firmware\'s own .keymap: behaviours the firmware');
+    out.push(' * defines (&fht_l, &slk_*, &fled, ...) are only referenced by node name and must come');
+    out.push(' * from the config repo; this file carries the app\'s layers, combos, macros and timing.');
     if (family === 'totem') {
         out.push(' *');
         out.push(' * Key positions (transform order):');
@@ -334,6 +348,7 @@ export function exportKeymapText(data, opts = {}) {
     out.push('#include <dt-bindings/zmk/bt.h>');
     out.push('#include <dt-bindings/zmk/keys.h>');
     out.push('#include <dt-bindings/zmk/outputs.h>');
+    if (usesPointing) out.push('#include <dt-bindings/zmk/pointing.h>');
     if (usesSwitchLayout) out.push('#include <dt-bindings/zmk-switch-layout/switch-layout.h>');
     const osDefine = usesSwitchLayout ? ['', '#define OS_NEXT ZMK_SWITCH_LAYOUT_NEXT'] : [];
     out.push(...osDefine);
@@ -343,7 +358,7 @@ export function exportKeymapText(data, opts = {}) {
     if (firmwareRefs.size) {
         out.push('/* Defined by the firmware repo, referenced here by node name (the app only knows their');
         out.push(' * display names; copy their nodes from your config/*.keymap if building elsewhere):');
-        for (const [node, dn] of [...firmwareRefs].sort()) out.push(` *   &${node}  "${dn}"`);
+        for (const [node, dn] of [...firmwareRefs].sort()) out.push(` *   &${node}  "${String(dn).replace(/\*\//g, '* /')}"`);
         out.push(' */');
         out.push('');
     }
@@ -375,7 +390,7 @@ export function exportKeymapText(data, opts = {}) {
         out.push('');
     }
     if (htText.length) {
-        out.push('    /* Per-key hold timing changed in the app (flask_holdtap slots; slot index = key position). */');
+        out.push('    /* Per-key hold timing (flask_holdtap slots: compiled defaults plus any changed in the app; slot index = key position). */');
         out.push('    flask_holdtap_defaults {');
         out.push('        compatible = "flask,holdtap-defaults";');
         out.push('');
@@ -388,7 +403,7 @@ export function exportKeymapText(data, opts = {}) {
     layerBlocks.forEach((lb, i) => {
         out.push('');
         out.push(`        ${lb.id} {`);
-        out.push(`            display-name = "${String(lb.name).replace(/"/g, "'")}";`);
+        out.push(`            display-name = "${dtStr(lb.name)}";`);
         const g = grid(lb.cells);
         out.push('            bindings = <');
         g.forEach((line) => out.push(`                ${line}`));

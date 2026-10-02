@@ -19,7 +19,7 @@ import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=62';
 import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=62';
 import { shell } from './app-shell.js?v=62';
 import { installCaptions, setCaptionGroup } from './caption.js?v=62';
-import { saveState } from './save-state.js?v=62';
+import { saveState, discardMessage } from './save-state.js?v=62';
 import { board } from './board.js?v=62';
 import { attachHoldtap } from './behavior-catalog.js?v=62';
 import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=62';
@@ -651,7 +651,7 @@ function init() {
         // ONE Discard (look-extras' flaskDiscardAll covers keymap edits and the
         // offline queue); shown while there is anything to throw away.
         const queued = app.offline && app.offlineWs ? offlineQueued(app.offlineWs) : 0;
-        const canDiscard = dirty.length > 0 || queued > 0;
+        const canDiscard = saveState.canDiscard() || queued > 0;
         $('discard-btn').style.display = canDiscard ? '' : 'none';
     };
     saveState.addEventListener('change', renderSave);
@@ -665,8 +665,8 @@ function init() {
         if (typeof window.flaskDiscardAll === 'function') {
             try {
                 const r = await window.flaskDiscardAll();
-                if (r?.failed?.length || (r?.failed && r.failed.source)) toast('Some changes could not be discarded', true);
-                else toast('Changes discarded');
+                const m = discardMessage(r, saveState.dirty().map((d) => d.label || d.source));
+                toast(m.text, m.bad);
             } catch (e) { toast(`Discard failed: ${e.message}`, true); }
             renderSave();
             return;
