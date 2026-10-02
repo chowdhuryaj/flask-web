@@ -112,10 +112,12 @@ eq('adaptive' in parseKeymap('/ { keymap { compatible = "zmk,keymap"; base { bin
 }
 
 // ---- 3. offline sim ---------------------------------------------------------
+// &fak's id: the generated catalog's once it carries the node, else a fake extra.
+const FAK = TOTEM_DEFAULT.behaviors.find((d) => d.displayName === 'Adaptive Key')?.id ?? 900;
 const mkWs = () => {
     const ws = createZmkTemplate('totem');
     ws.zmk.adaptive = adaptiveTable(fx.adaptive);
-    ws.zmk.extraBehaviors = { 900: { id: 900, displayName: 'Adaptive Key', metadata: [], node: 'fak' } };
+    if (FAK === 900) ws.zmk.extraBehaviors = { 900: { id: 900, displayName: 'Adaptive Key', metadata: [], node: 'fak' } };
     return ws;
 };
 {
@@ -164,9 +166,9 @@ const mkWs = () => {
     eq(await norm({ action: 1, behaviorId: 7, param1: 0x70004, param2: 3 }), out(1, 0, 0x70004, 0), 'usage zeroes behavior and p2');
     eq(await norm({ action: 2, behaviorId: 7, param1: 5, param2: 3 }), out(2, 0, 5, 0), 'macro zeroes behavior and p2');
     eq(await norm({ action: 3, behaviorId: 13, param1: 1, param2: 2 }), out(3, 13, 1, 2), 'other behaviors pass through');
-    eq(await norm({ action: 3, behaviorId: 900, param1: 1 }), out(0, 0, 0, 0), 'a step that is &fak itself -> NONE');
+    eq(await norm({ action: 3, behaviorId: FAK, param1: 1 }), out(0, 0, 0, 0), 'a step that is &fak itself -> NONE');
     const fbo = async (o) => decodeAkFallback(await f.setBytes(CH.adaptive, V.akFallback, encodeAkFallback(3, o)));
-    eq(await fbo({ action: 3, behaviorId: 900 }), { set: 3, action: 0, behaviorId: 0, param1: 0, param2: 0 }, 'fallback &fak -> NONE');
+    eq(await fbo({ action: 3, behaviorId: FAK }), { set: 3, action: 0, behaviorId: 0, param1: 0, param2: 0 }, 'fallback &fak -> NONE');
     eq((await fbo({ action: 3, behaviorId: 13 })).behaviorId, 13, 'fallback keeps other behaviors');
 
     // imprint: no module, the probe answers unhandled
