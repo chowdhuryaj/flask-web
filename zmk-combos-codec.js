@@ -131,3 +131,32 @@ export function comboSlotToTyped({ slot, positions = [], usage = 0 }) {
 export function comboTypedToLegacy({ slot, positions = [], action = 0, param1 = 0 }) {
     return { slot, positions, usage: action === COMBO_ACTION.usage ? param1 >>> 0 : 0 };
 }
+
+// ---------------------------------------------------------------------------
+// Duplicate guard. Two live combos on exactly the same position set make the
+// firmware's candidate matcher ambiguous (bench 2026-10-01: Totem R+F = slot 7
+// "ent" already; a second R+F froze the board on press).
+
+/** Order-free identity of a position set: "3,13". */
+export const comboPosKey = (positions) =>
+    [...new Set(positions)].sort((a, b) => a - b).join(',');
+
+/**
+ * Does `positions` exactly duplicate another LIVE slot (or, on firmware that
+ * keeps devicetree combos out of the runtime table, a compiled default)?
+ * `defaults` = [{positions}] of the compiled devicetree combos; pass [] on
+ * v14+ where they are runtime slots already. Returns
+ * {kind: 'slot'|'default', index} or null. A one-key set never counts.
+ */
+export function findDuplicateCombo(slots, self, positions, defaults = []) {
+    if (positions.length < 2) return null;
+    const key = comboPosKey(positions);
+    for (let j = 0; j < slots.length; j++) {
+        if (j === self || comboSlotV2IsEmpty(slots[j])) continue;
+        if (comboPosKey(slots[j].positions) === key) return { kind: 'slot', index: j };
+    }
+    for (let j = 0; j < defaults.length; j++) {
+        if (comboPosKey(defaults[j].positions) === key) return { kind: 'default', index: j };
+    }
+    return null;
+}
