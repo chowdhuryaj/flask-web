@@ -14,7 +14,8 @@ import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=60';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy } from './zmk-combos-codec.js?v=60';
+         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=60';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=60';
 import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=60';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
     from './zmk-output-codec.js?v=60';
@@ -341,11 +342,25 @@ async function applyFlaskStateInner(app, data, save = true) {
         const count = await flask.getU16(CH.combos, V.combosSlotCount);
         const keys = caps.combosKeys
             ? (await flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
-        for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
-            // File slots may be legacy {usage}, typed (v12) or timed (v14);
-            // device may be any of those too — bridge every direction.
-            const typed = s.slots[i].action != null
-                ? s.slots[i] : comboSlotToTyped(s.slots[i]);
+        // File slots may be legacy {usage}, typed (v12) or timed (v14);
+        // device may be any of those too — bridge every direction.
+        const file = (s.slots ?? []).slice(0, count)
+            .map((x) => (x.action != null ? x : comboSlotToTyped(x)));
+        // Two live combos on one key set freeze the board on press: refuse
+        // the whole section before any write. Pre-v14 Totem firmware keeps
+        // its compiled combos outside the runtime table, so check those too.
+        const defaults = !caps.combosTimed && app.profile?.family === 'totem' ? TOTEM_DEFAULT.combos : [];
+        for (let i = 0; i < file.length; i++) {
+            if (comboSlotV2IsEmpty(file[i])) continue;
+            const dup = findDuplicateCombo(file.slice(0, i), -1, file[i].positions ?? [], defaults);
+            if (dup) {
+                throw new Error(`combo ${i} uses the same keys as ${dup.kind === 'default'
+                    ? `the keymap's compiled combo ${dup.index}` : `combo ${dup.index}`} in this file `
+                    + '(two combos on one key set freeze the board); no combos were written');
+            }
+        }
+        for (let i = 0; i < file.length; i++) {
+            const typed = file[i];
             if (caps.combosTimed) {
                 await flask.setBytes(CH.combos, V.combosSlotV3,
                     encodeComboSlotV3(i, typed, keys), 1); // missing timing encodes as 0/ANY
