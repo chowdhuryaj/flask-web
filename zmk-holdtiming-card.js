@@ -48,7 +48,9 @@ export async function holdTimingCard(app) {
      * re-read through the backend so ITS cache matches: the picker's slider
      * writes term from that cache and must not revert these fields. */
     const putSlot = async (row, patch) => {
-        const next = { ...row.s, ...patch };
+        // Read the slot first: the picker may have changed term since this
+        // row rendered, and a stale row.s would write the old term back.
+        const next = { ...(await be.readSlot(row.info.slot)), ...patch };
         const echo = decodeHoldtapSlot(await flask.setBytes(ch, HOLDTAP.slot, encodeHoldtapSlot(next), 1));
         row.s = await be.readSlot(echo.slot);
         dirty(be);
