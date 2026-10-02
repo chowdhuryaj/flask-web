@@ -13,9 +13,8 @@ import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './u
 import {
     CH, V, slot, osName, SNIPPET_COUNT, SNIPPET_LEN, SNIPPET_KEYS, CYCLOTAB_KEYS,
 } from './flaskproto.js?v=49';
-import { kcCell } from './picker.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
-import { announceEdit } from './tiles.js?v=1';
+import { announceEdit, bindingCell } from './tiles.js?v=1';
 
 /** "3: Regards," — what a snippet reads as in a dropdown. */
 function snippetLabel(index, text) {
@@ -90,7 +89,7 @@ export class TypingTab {
 
     /** Keycode cell: opens the picker, writes the pick, announces the edit, re-renders. */
     _kc(kc, title, write) {
-        const cell = kcCell(kc, () => openPicker({
+        const cell = bindingCell(kc, () => openPicker({
             surface: 'qmk.key', value: kc, host: 'sheet', title, app: this.app,
             onPick: async (picked) => {
                 try {

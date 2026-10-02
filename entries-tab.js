@@ -7,16 +7,14 @@
 // overrides have no keycode to paste, so their tiles open the editor.
 
 import { el, card, toast, reloadBar } from './ui.js?v=49';
-import { kcCell } from './picker.js?v=49';
-import { capLabel } from './keycodes.js?v=49';
 import { TapDance, Combo, KeyOverride } from './vialproto.js?v=49';
 import { CH, slot } from './flaskproto.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
 import { encode, modsText } from './behavior-catalog.js?v=1';
-import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow } from './tiles.js?v=1';
+import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow, bindingCell, bindingText } from './tiles.js?v=1';
 
 const pick = (app, surface, value, title, onPick) => openPicker({ surface, value, host: 'sheet', title, app, onPick });
-const cap = (kc) => (kc ? capLabel(kc) : '');
+const cap = bindingText;
 const clearBtn = (onclick) => el('button', { class: 'btn small', text: '✕', title: 'Clear', onclick });
 
 // ---------- tap dance ----------
@@ -63,7 +61,7 @@ export class TapDanceTab {
             return [
                 ...TD_ROWS.map(([field, label]) => el('div', { class: 'row', 'data-td-row': field },
                     el('span', { class: 'lbl', text: label }),
-                    kcCell(e[field], () => pick(this.app, 'qmk.tapDanceStep', e[field], `TD${i}: ${label}`, (kc) => put({ [field]: kc }))),
+                    bindingCell(e[field], () => pick(this.app, 'qmk.tapDanceStep', e[field], `TD${i}: ${label}`, (kc) => put({ [field]: kc }))),
                     e[field] ? clearBtn(() => put({ [field]: 0 })) : null)),
                 el('div', { class: 'row' },
                     el('span', { class: 'lbl' }, 'Tapping term (ms)', el('span', { class: 'hint', text: '0 = the keyboard default' })), term),
@@ -133,7 +131,7 @@ export class ComboTab {
     }
 
     summary(e) {
-        const ins = e.inputs.filter(Boolean).map(capLabel).join(' + ');
+        const ins = e.inputs.filter(Boolean).map(bindingText).join(' + ');
         return ins || e.output ? `${ins || '?'} → ${cap(e.output) || '?'}` : '';
     }
 
@@ -143,7 +141,7 @@ export class ComboTab {
             const put = async (patch) => { if (await this.set(i, patch)) sh.refresh(); };
             const rows = e.inputs.map((kc, n) => el('div', { class: 'row', 'data-combo-input': n },
                 el('span', { class: 'lbl', text: `Key ${n + 1}` }),
-                kcCell(kc, () => pick(this.app, 'qmk.key', kc, `C${i}: key ${n + 1}`, (v) => {
+                bindingCell(kc, () => pick(this.app, 'qmk.key', kc, `C${i}: key ${n + 1}`, (v) => {
                     const inputs = [...this.entries[i].inputs];
                     inputs[n] = v;
                     return put({ inputs });
@@ -151,7 +149,7 @@ export class ComboTab {
                 kc ? clearBtn(() => { const inputs = [...this.entries[i].inputs]; inputs[n] = 0; put({ inputs }); }) : null));
             rows.push(el('div', { class: 'row' },
                 el('span', { class: 'lbl', text: 'Output' }),
-                kcCell(e.output, () => pick(this.app, 'qmk.comboOutput', e.output, `C${i}: output`, (v) => put({ output: v })))));
+                bindingCell(e.output, () => pick(this.app, 'qmk.comboOutput', e.output, `C${i}: output`, (v) => put({ output: v })))));
             if (this.masks) {
                 const mask = this.masks[i];
                 const chips = el('span', { class: 'lbl' }, 'Only on layers', el('span', { class: 'hint', text: 'none lit = every layer' }));
@@ -229,9 +227,9 @@ export class KeyOverrideTab {
                         onclick: () => put({ triggerMods: e.triggerMods ^ bit }),
                     }))),
                 el('div', { class: 'row' }, el('span', { class: 'lbl', text: 'Trigger key' }),
-                    kcCell(e.trigger, () => pick(this.app, 'qmk.keyOverride', e.trigger, `KO${i}: trigger`, (v) => put({ trigger: v })))),
+                    bindingCell(e.trigger, () => pick(this.app, 'qmk.keyOverride', e.trigger, `KO${i}: trigger`, (v) => put({ trigger: v })))),
                 el('div', { class: 'row' }, el('span', { class: 'lbl', text: 'Replacement' }),
-                    kcCell(e.replacement, () => pick(this.app, 'qmk.keyOverride', e.replacement, `KO${i}: replacement`, (v) => put({ replacement: v })))),
+                    bindingCell(e.replacement, () => pick(this.app, 'qmk.keyOverride', e.replacement, `KO${i}: replacement`, (v) => put({ replacement: v })))),
                 el('div', { class: 'row' }, el('span', { class: 'lbl', text: 'Enabled' }),
                     el('button', {
                         class: 'btn small' + (on ? ' primary' : ''), text: on ? 'on' : 'off',

@@ -7,8 +7,8 @@
 // works — hence caps.gestureAnyKeycode rather than a blanket restriction.
 
 import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=49';
-import { kcCell } from './picker.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
+import { bindingCell } from './tiles.js?v=1';
 import {
     CH, CH_BALL_LEFT, V, slot, GESTURE_DIRS, GESTURE_SETS, WC_BUTTONS,
 } from './flaskproto.js?v=49';
@@ -38,7 +38,7 @@ function slotGrid({ title, rows, rowLabel, getKc, onPick }) {
         const row = el('div', { class: 'row', style: 'gap:2px' },
             el('span', { class: 'faint', style: 'width:52px', text: rowLabel(r) }));
         for (let dir = 0; dir < 8; dir++) {
-            const cell = kcCell(getKc(r, dir), () => onPick(r, dir));
+            const cell = bindingCell(getKc(r, dir), () => onPick(r, dir));
             cell.style.width = '48px';
             row.append(cell);
         }

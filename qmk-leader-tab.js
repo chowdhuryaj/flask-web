@@ -14,9 +14,8 @@ import {
     CH, V, slot, LEADER_SEQS, LEADER_KEYS, SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS,
     OUTPUT_KIND, SNIPPET_COUNT,
 } from './flaskproto.js?v=49';
-import { kcCell } from './picker.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
-import { announceEdit } from './tiles.js?v=1';
+import { announceEdit, bindingCell } from './tiles.js?v=1';
 
 /** "3: Regards," : what a snippet reads as in a dropdown. */
 const snippetLabel = (index, text) => {
@@ -65,7 +64,7 @@ export class QmkLeaderTab {
 
     /** Keycode cell: opens the picker on `surface`, writes, announces the edit. */
     _kc(kc, surface, title, write) {
-        const cell = kcCell(kc, () => openPicker({
+        const cell = bindingCell(kc, () => openPicker({
             surface, value: kc, host: 'sheet', title, app: this.app,
             onPick: async (picked) => {
                 try {

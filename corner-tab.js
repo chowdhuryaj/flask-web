@@ -16,11 +16,9 @@
 // belongs to rather than by hunting the board picture.
 
 import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=49';
-import { kcCell } from './picker.js?v=49';
-import { capLabel } from './keycodes.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
 import { board } from './board.js?v=1';
-import { reloadRow } from './tiles.js?v=1';
+import { reloadRow, bindingCell, bindingText } from './tiles.js?v=1';
 import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=49';
 
 /** Which layer the wire frames are addressed with when outputs are universal.
@@ -108,8 +106,8 @@ export class CornerTab {
             const kc = this.outputs[this.layer]?.[def] ?? 0;
             if (members.length < 2 || kc === 0) continue;
             boxes.push({
-                id: def, label: kc === KC_TRNS ? '▽' : capLabel(kc),
-                caption: `Chord ${ccDefName(def)} → ${capLabel(kc)}. Click to change.`,
+                id: def, label: kc === KC_TRNS ? '▽' : bindingText(kc),
+                caption: `Chord ${ccDefName(def)} → ${bindingText(kc)}. Click to change.`,
                 positions: members.map((p) => ({ row: ccRow(p), col: ccCol(p) })),
                 inherited: this.app.caps.cornerPerLayer && !this._isOwn(def, this.layer),
             });
@@ -193,7 +191,7 @@ export class CornerTab {
             + (unbound ? ' — unassigned, click to bind'
                 : inherited ? ' — inherited from a lower layer' : '');
 
-        const cell = kcCell(unbound ? 0 : kc,
+        const cell = bindingCell(unbound ? 0 : kc,
             () => this._pick(def), title);
         cell.style.width = '56px';
         if (unbound) { cell.textContent = '+'; cell.style.opacity = '0.35'; }

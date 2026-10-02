@@ -3,7 +3,17 @@
 // the picker's "M3 · types 'hello'" chips (app.slotSummary).
 
 import { el, toast, modal } from './ui.js?v=49';
+import { kcCell } from './picker.js?v=49';
+import { capLabel } from './keycodes.js?v=49';
 import { board } from './board.js?v=1';
+
+// THE one place WP4b tabs turn a QMK keycode into something to show: tiles,
+// macro steps, tap dance rows, leader outputs, chord boxes. Swap these two
+// for wp3b's tap/hold label helper at integration; nothing else changes.
+/** Short text for a keycode ('' when unset). */
+export const bindingText = (kc) => (kc ? capLabel(kc) : '');
+/** Clickable cell showing a keycode. */
+export const bindingCell = (kc, onClick, title) => kcCell(kc, onClick, title);
 
 /** Announce a live write so the nearest card's reload bar registers its
  * channel with the status-bar Save (see ui.js reloadBar). */

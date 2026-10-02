@@ -5,9 +5,8 @@
 
 import { el, card, toast, toggleRow, reloadBar } from './ui.js?v=49';
 import { CH, V, slot, CSK_SLOTS } from './flaskproto.js?v=49';
-import { kcCell } from './picker.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
-import { announceEdit } from './tiles.js?v=1';
+import { bindingCell } from './tiles.js?v=1';
 
 // Spec 3.8 presets: base → what Shift+base types.
 const PRESETS = [
@@ -90,13 +89,13 @@ export class QmkShiftTab {
         for (let i = 0; i < CSK_SLOTS; i++) {
             if (!this.keys[i] && i > 0) {
                 // First empty slot is the "add" affordance; the rest stay hidden.
-                grid.append(kcCell(0, () => this._pick(i, 'base'), 'Add a shift pair'));
+                grid.append(bindingCell(0, () => this._pick(i, 'base'), 'Add a shift pair'));
                 break;
             }
             grid.append(el('div', { class: 'csk-pair', 'data-csk': i, style: 'display:flex; gap:2px; align-items:center' },
-                kcCell(this.keys[i], () => this._pick(i, 'base')),
+                bindingCell(this.keys[i], () => this._pick(i, 'base')),
                 '⇧→',
-                kcCell(this.shifted[i], () => this._pick(i, 'shifted')),
+                bindingCell(this.shifted[i], () => this._pick(i, 'shifted')),
                 this.keys[i] ? el('button', { class: 'btn small', text: '✕', title: 'Remove this pair', onclick: () => this._remove(i) }) : null));
         }
         c.append(grid,

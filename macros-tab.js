@@ -7,10 +7,9 @@
 
 import { el, card, toast } from './ui.js?v=49';
 import { MacroCodec } from './vialproto.js?v=49';
-import { capLabel } from './keycodes.js?v=49';
 import { openPicker } from './binding-picker.js?v=1';
 import { encode } from './behavior-catalog.js?v=1';
-import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow } from './tiles.js?v=1';
+import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow, bindingCell } from './tiles.js?v=1';
 
 const STEP_KINDS = [
     ['text', 'Type text'], ['tap', 'Tap key'], ['down', 'Hold key down'], ['up', 'Release key'], ['delay', 'Delay'],
@@ -88,10 +87,7 @@ export class MacrosTab {
             value = el('input', { type: 'number', min: 1, max: 60000, value: a.ms, style: 'width:90px' });
             value.addEventListener('input', () => { a.ms = Number(value.value) || 0; });
         } else {
-            value = el('button', {
-                class: 'code', text: a.kc ? capLabel(a.kc) : '·', title: 'Change key',
-                onclick: () => this.pickKey(a.kc, `${KIND_LABEL[a.t]} key`, (kc) => { a.kc = kc; sh.refresh(); }),
-            });
+            value = bindingCell(a.kc, () => this.pickKey(a.kc, `${KIND_LABEL[a.t]} key`, (kc) => { a.kc = kc; sh.refresh(); }), 'Change key');
         }
         return el('div', { class: 'row step', 'data-step': a.t },
             el('span', { class: 'step-idx', text: String(i + 1) }),
