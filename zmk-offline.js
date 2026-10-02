@@ -413,6 +413,27 @@ function totemCombos(family) {
 }
 const defaultCombosFor = (family) => (family === 'totem' ? totemCombos(family) : defaultCombos());
 
+// flask_holdtap (channel 0x2A, proto 17): Totem compiled defaults from
+// .workflow/scratch/flask-holdtap-contract.md. Slot = key position, then the
+// six virtual slots. Imprint has no module (getU16 answers 0).
+const HT_KEYS = 38;
+const HT_VIRTUAL = [
+    ['Control combo (32+33)', 200, 0, 0, 2], ['Fn combo (33+34)', 200, 0, 0, 2],
+    ['Copy/cut combo (11+12)', 200, 150, 0, 2], ['Undo/redo combo (10+11)', 200, 150, 0, 2],
+    ['Fn arrows (Fn 6-9)', 200, 150, 0, 2], ['Sym autoshift digits', 200, 0, 0, 2],
+];
+export function holdtapDefaults() {
+    const out = [];
+    for (let i = 0; i < HT_KEYS; i++) {
+        const hot = [20, 31, 32, 33, 34, 35, 36, 37].includes(i);
+        out.push(hot ? { term: 280, quick: 175, idle: 150, flavor: (i === 32 || i === 37) ? 2 : 1 }
+            : { term: 200, quick: 0, idle: 0, flavor: 1 });
+    }
+    for (const [, term, quick, idle, flavor] of HT_VIRTUAL) out.push({ term, quick, idle, flavor });
+    return out;
+}
+const clampMs = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
 // ---------------------------------------------------------------------------
 // Template workspace
 
@@ -568,6 +589,7 @@ export function normalizeZmkWorkspace(ws) {
     ws.zmkDirty.tdStep ??= {};
     if (ws.zmk) {
         ws.zmk.pendingKeymap ??= null;
+        if (ws.family === 'totem') ws.zmk.holdtap ??= holdtapDefaults();
         // v13: stored older workspaces gain the trackball decorations.
         if (ws.profile) ws.profile.decorations ??= ZMK_TRACKBALLS[ws.family] ?? [];
         // v13→v14: the trackball nudge (left ball off the inner column) —
@@ -689,6 +711,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             if (id === V.metaFamily) return familyCode(this.ws.family);
             return 0;
         }
+        if (ch === 0x2A && id === 0x01) return this.ws.zmk.holdtap?.length ?? 0;
         if (ch === CH.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
         if (ch === CH.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
         if (ch === CH.rgbMap && id === V.rgbmapSplitLink) return 1; // sim halves always linked
@@ -752,8 +775,43 @@ export class ZmkOfflineFlask extends OfflineFlask {
         return super.setU16(ch, id, value);
     }
 
+    // Runtime-only like the real RAM table: no replay journal.
+    async save(ch) { if (ch !== 0x2A) return super.save(ch); }
+
+    _holdtapGet(id, slot) {
+        const ht = this.ws.zmk.holdtap;
+        if (slot >= ht.length) throw new Error('unhandled');
+        if (id === 0x50 || id === 0x51) {
+            const def = holdtapDefaults()[slot];
+            const s = id === 0x50 ? ht[slot] : def;
+            const custom = id === 0x50 && JSON.stringify(s) !== JSON.stringify(def);
+            return [slot, s.term >> 8, s.term & 0xFF, s.quick >> 8, s.quick & 0xFF,
+                s.idle >> 8, s.idle & 0xFF, s.flavor, custom ? 1 : 0, ...new Array(20).fill(0)];
+        }
+        if (id === 0x52) {
+            const virt = slot >= HT_KEYS;
+            const name = virt ? HT_VIRTUAL[slot - HT_KEYS][0] : '';
+            return [slot, virt ? 1 : 0, virt ? 0xFF : slot,
+                ...[...name].map((c) => c.charCodeAt(0)), ...new Array(26 - name.length).fill(0)];
+        }
+        throw new Error('unhandled');
+    }
+
+    _holdtapSet(p) {
+        const ht = this.ws.zmk.holdtap;
+        const slot = p[0];
+        if (slot >= ht.length || p[7] > 3) throw new Error('unhandled');   // 0xFF echo
+        const u16 = (i) => (p[i] << 8) | p[i + 1];
+        if (u16(1) === 0) ht[slot] = { ...holdtapDefaults()[slot] };   // reset
+        else ht[slot] = { term: clampMs(u16(1), 50, 1000), quick: clampMs(u16(3), 0, 1000),
+            idle: clampMs(u16(5), 0, 1000), flavor: p[7] };
+        saveWorkspace(this.ws);
+        return this._holdtapGet(0x50, slot);
+    }
+
     async getBytes(ch, id, payload = []) {
         const { zmk } = this.ws;
+        if (ch === 0x2A && zmk.holdtap) return this._holdtapGet(id, payload[0] ?? 0);
         if (ch === CH.keyState && id === V.keyStateBitmap) {
             return new Array(16).fill(0);
         }
@@ -819,6 +877,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
 
     async setBytes(ch, id, payload) {
         const { zmk } = this.ws;
+        if (ch === 0x2A && zmk.holdtap && id === 0x50) return this._holdtapSet(payload);
         if (ch === CH.rgbMap && id === V.rgbmapLed) {
             const [layer, led, h, s, v] = payload;
             if (zmk.rgb[layer]?.[led]) {
