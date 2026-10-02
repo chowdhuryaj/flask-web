@@ -347,7 +347,12 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
             if (lay?.options?.length && !lay.options.includes(p[lay.key])) p[lay.key] = lay.options[Math.min(1, lay.options.length - 1)];
             const ch = e.params.find((x) => x.kind === 'choice' && x.key === 'code');
             if (ch && p.code === undefined) p.code = ch.options[0];
-            if (current?.entryId === e.id) Object.assign(p, current.params);
+            if (current?.entryId === e.id) {
+                Object.assign(p, current.params);
+                // A virtual-slot helper (combo / autoshift hold-tap) is not a
+                // choice here: editing the key makes it a regular mod-tap.
+                if (p.variant != null) { delete p.variant; p.live = 'off'; }
+            }
             state.set(e.id, p);
         }
         return state.get(e.id);

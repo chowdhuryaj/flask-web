@@ -57,9 +57,13 @@ for (const family of ['totem', 'imprint']) {
     useZmk('totem');
     const cat = C.catalogFor({ family: 'totem' });
     const by = Object.fromEntries(cat.map((e) => [e.id, e.device.map((v) => v.name).sort()]));
-    eq(by['mod-tap'], ['Hold-Tap (live)', 'Hold-Tap L (live)', 'Hold-Tap R (live)', 'Mod-Tap',
-        'Mod-Tap (fast 150)', 'Mod-Tap (slow 300)', 'Smart Mod']);
-    eq(by['layer-tap'], ['Layer-Tap', 'Layer-Tap (fast 150)', 'Layer-Tap (slow 300)']);
+    // Virtual-slot helpers (combo / autoshift hold-taps, Totem-ZMK 4422ec7)
+    // are absorbed as variants, never offered as a choice.
+    eq(by['mod-tap'], ['Autoshift (live)', 'Hold-Tap (live)', 'Hold-Tap L (live)', 'Hold-Tap R (live)', 'Mod-Tap',
+        'Mod-Tap (fast 150)', 'Mod-Tap (slow 300)', 'Mod-Tap Fn arrows (live)', 'Mod-Tap copy/cut combo (live)',
+        'Mod-Tap undo/redo combo (live)', 'Smart Mod']);
+    eq(by['layer-tap'], ['Layer-Tap', 'Layer-Tap (fast 150)', 'Layer-Tap (slow 300)',
+        'Layer-Tap Control combo (live)', 'Layer-Tap Fn combo (live)']);
     eq(by['one-shot-mod'], ['Sticky Key', 'Sticky Mod (smart)']);
     eq(by['one-shot-layer'], ['Sticky Layer', 'Sticky Layer (smart)']);
     const mt = cat.find((e) => e.id === 'mod-tap');
@@ -205,7 +209,7 @@ for (const family of ['totem', 'imprint']) {
 }
 
 // ---- flask_holdtap runtime backend (contract bytes, mocked device) ----
-function fakeHoldtapFlask({ slots = 38, proto17 = true } = {}) {
+function fakeHoldtapFlask({ slots = 44, proto17 = true } = {}) {
     const table = Array.from({ length: slots }, (_, i) => ({ term: 200, quick: 0, idle: 0, flavor: 1, def: 200 }));
     table[20] = { term: 280, quick: 175, idle: 150, flavor: 1, def: 280 };
     const frame = (i) => { const s = table[i]; return [i, s.term >> 8, s.term & 0xFF, s.quick >> 8, s.quick & 0xFF, s.idle >> 8, s.idle & 0xFF, s.flavor, s.term !== s.def ? 1 : 0]; };
@@ -213,7 +217,14 @@ function fakeHoldtapFlask({ slots = 38, proto17 = true } = {}) {
     return {
         log, table,
         async getU16(ch, id) { log.push(['get', ch, id]); if (!proto17 || ch !== 0x2A || id !== 1) throw new Error('unhandled'); return slots; },
-        async getBytes(ch, id, [i]) { log.push(['get', ch, id, i]); return frame(i); },
+        async getBytes(ch, id, [i]) {
+            log.push(['get', ch, id, i]);
+            if (id === 0x52) {
+                const name = i >= 38 ? ['Control combo (32+33)', 'Fn combo (33+34)'][i - 38] ?? '' : '';
+                return [i, i >= 38 ? 1 : 0, i >= 38 ? 0xFF : i, ...[...name].map((c) => c.charCodeAt(0)), ...Array(26 - name.length).fill(0)];
+            }
+            return frame(i);
+        },
         async setBytes(ch, id, p) {
             log.push(['set', ch, id, ...p]);
             const s = table[p[0]];
@@ -237,16 +248,20 @@ function fakeHoldtapFlask({ slots = 38, proto17 = true } = {}) {
     let dirty = 0;
     const be = await C.attachHoldtap({ flask: f, protocolVersion: 17 }, { onDirty: () => dirty++ });
     ok(be?.runtime && C.timingBackendNow() === be, 'runtime backend installed');
-    eq(be.slotCount, 38);
+    eq(be.slotCount, 44, 'slot count from the meta, not the key count');
+    eq(await be.slotInfo(20), { slot: 20, kind: 'key', keyPos: 20, name: '' });
+    eq(await be.slotInfo(38), { slot: 38, kind: 'virtual', keyPos: null, name: 'Control combo (32+33)' });
+    eq((await be.slots()).filter((x) => x.kind === 'virtual').length, 6);
+    eq(await be.write(39, 240), 240, 'virtual slots write like key slots');
     eq(await be.read(20), 280);
     eq(await be.write(20, 220), 220);
     eq(f.log.at(-1), ['set', 0x2A, 0x50, 20, 0x00, 0xDC, 0x00, 0xAF, 0x00, 0x96, 0x01, 0x00], 'contract SET bytes keep quick/idle/flavor');
     eq(await be.write(20, 30), 50, 'clamp echo adopted');
     eq(await be.reset(20), 280);
     eq(f.log.at(-1), ['set', 0x2A, 0x50, 20, 0, 0]);
-    eq(dirty, 3);
+    eq(dirty, 4);
     await be.save(); eq(f.log.at(-1), ['save', 0x2A]);
-    await assert.rejects(be.write(38, 200)); checks++;
+    await assert.rejects(be.write(44, 200)); checks++;
     // live mod-tap: exact ms, a write for the key position
     const r = C.resolveTiming('mod-tap', 260, [{ behaviorId: live('Hold-Tap L (live)'), ms: null, live: true, side: 'left' }], { side: 'left' });
     eq([r.behaviorId, r.ms, r.exact], [live('Hold-Tap L (live)'), 260, true]);

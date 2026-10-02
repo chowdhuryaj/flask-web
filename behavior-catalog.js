@@ -122,7 +122,7 @@ export function nearestVariant(ms, variants) {
 }
 
 /** flask_holdtap wire constants (.workflow/scratch/flask-holdtap-contract.md). */
-export const HOLDTAP = { channel: 0x2A, slotCount: 0x01, slot: 0x50, def: 0x51, minProto: 17,
+export const HOLDTAP = { channel: 0x2A, slotCount: 0x01, slot: 0x50, def: 0x51, info: 0x52, minProto: 17,
     FLAVORS: ['hold-preferred', 'balanced', 'tap-preferred', 'tap-unless-interrupted'] };
 
 const decodeSlot = (b) => ({
@@ -146,7 +146,7 @@ export function holdtapBackend(flask, { slotCount = 255, onDirty } = {}) {
         return s;
     };
     const write = async (position, ms) => {
-        if (!(position >= 0 && position < slotCount)) throw new Error(`no hold-tap slot ${position}`);
+        if (!(position >= 0 && position < slotCount)) throw new Error(`no hold-tap slot ${position}`);   // key positions and virtual slots alike
         const cur = cache.get(position) ?? await read(position);
         const term = Math.max(TIMING_PARAM.min, Math.min(TIMING_PARAM.max, Math.round(ms)));
         const echo = decodeSlot(await flask.setBytes(HOLDTAP.channel, HOLDTAP.slot, encodeSlot(cur, term), 1));
@@ -166,8 +166,21 @@ export function holdtapBackend(flask, { slotCount = 255, onDirty } = {}) {
         const v = live.find((x) => x.side === ctx?.side) ?? live[0];
         return { behaviorId: v.behaviorId, ms, exact: true, write: (position) => write(position, ms) };
     };
+    /** 0x52 SLOT_INFO → {slot, kind: 'key'|'virtual', keyPos, name}. */
+    const slotInfo = async (slot) => {
+        const b = await flask.getBytes(HOLDTAP.channel, HOLDTAP.info, [slot], 1);
+        const name = String.fromCharCode(...b.slice(3, 29).filter((c) => c)).trim();
+        return { slot: b[0], kind: b[1] === 1 ? 'virtual' : 'key', keyPos: b[1] === 1 ? null : b[2], name };
+    };
+    /** Every slot, key positions then virtual ones (WP4a: virtual sliders
+     * labelled by name in the combo / behavior context). */
+    const slots = async () => {
+        const out = [];
+        for (let i = 0; i < slotCount; i++) out.push(await slotInfo(i));
+        return out;
+    };
     return Object.assign(fn, {
-        runtime: true, slotCount, read: async (p) => (await read(p)).term, readSlot: read, write, reset,
+        runtime: true, slotCount, read: async (p) => (await read(p)).term, readSlot: read, write, reset, slotInfo, slots,
         save: () => flask.save(HOLDTAP.channel),
     });
 }
@@ -340,10 +353,15 @@ export function classifyZmk(d) {
     const s = shape(d);
     let m;
     if (s === 'hid_usage/hid_usage' && (m = name.match(/^Mod-Tap \((\w+) (\d+)\)$/))) return { entryId: 'mod-tap', set: { timing: +m[2] } };
-    if (s === 'hid_usage/hid_usage' && (m = name.match(/\(live\)$/))) {
-        const side = / L \(live\)$/.test(name) ? 'left' : / R \(live\)$/.test(name) ? 'right' : 'any';
-        return { entryId: 'mod-tap', set: { live: side } };
+    // flask_holdtap. Key-position nodes ("Hold-Tap L (live)") are the
+    // per-key live variants; any other "(live)" node reads a VIRTUAL slot
+    // (combo / autoshift building block): absorbed as a helper variant that
+    // decodes and round-trips but is never offered as a choice.
+    if (s === 'hid_usage/hid_usage' && (m = name.match(/^Hold-Tap(?: ([LR]))? \(live\)$/))) {
+        return { entryId: 'mod-tap', set: { live: m[1] === 'L' ? 'left' : m[1] === 'R' ? 'right' : 'any' } };
     }
+    if (/\(live\)$/.test(name) && s === 'hid_usage/hid_usage') return { entryId: 'mod-tap', set: { live: 'fixed', helper: true } };
+    if (/\(live\)$/.test(name) && s === 'layer_id/hid_usage') return { entryId: 'layer-tap', set: { live: 'fixed', helper: true } };
     if (s === 'layer_id/hid_usage' && (m = name.match(/^Layer-Tap \((\w+) (\d+)\)$/))) return { entryId: 'layer-tap', set: { timing: +m[2] } };
     if (/underglow/i.test(name)) return { entryId: 'underglow', set: {} };
     if (/grave.?escape/i.test(name)) return { entryId: 'grave-escape', set: {} };
@@ -666,6 +684,7 @@ function decodeStudio(b) {
                 timing: set.timing ?? TIMING_PARAM.default, mode: set.mode ?? 'plain', live: set.live ?? 'off' };
             if (hold == null) params.holdKey = p1;
             if (!params.tapMods) delete params.tapMods;
+            if (set.helper) params.variant = b.behaviorId;
             return { entryId, params };
         }
         case 'one-shot-mod': {
@@ -674,7 +693,8 @@ function decodeStudio(b) {
         }
         case 'layer-tap': {
             const t = usageToKey(p2);
-            return { entryId, params: { layer: p1, tap: t.key, ...(t.mods ? { tapMods: t.mods } : {}), timing: set.timing ?? TIMING_PARAM.default } };
+            return { entryId, params: { layer: p1, tap: t.key, ...(t.mods ? { tapMods: t.mods } : {}), timing: set.timing ?? TIMING_PARAM.default,
+                ...(set.helper ? { live: 'fixed', variant: b.behaviorId } : {}) } };
         }
         case 'hold-layer': case 'to-layer': case 'toggle-layer': case 'num-word':
             return { entryId, params: { layer: p1 } };
@@ -706,12 +726,13 @@ export function behaviorFor(entryId, params = {}) {
     const vs = variantsOf(entryId);
     if (!vs.length) return null;
     const p = P(entryId, params);
+    if (p.variant != null && vs.some((v) => v.behaviorId === p.variant)) return p.variant;   // helper (virtual slot)
     const mode = p.mode ?? 'plain';
     const live = p.live ?? 'off';
     if (entryId === 'mod-tap' || entryId === 'layer-tap') {
         if (mode === 'smart') return vs.find((v) => v.set.mode === 'smart')?.behaviorId ?? null;
         if (live !== 'off') {
-            const lv = vs.filter((v) => v.set.live).map((v) => ({ behaviorId: v.behaviorId, ms: null, live: true, side: v.set.live }));
+            const lv = vs.filter((v) => v.set.live && !v.set.helper).map((v) => ({ behaviorId: v.behaviorId, ms: null, live: true, side: v.set.live }));
             const r = lv.length && resolveTiming(entryId, p.timing ?? TIMING_PARAM.default, lv, { side: live });
             const pick = lv.find((v) => v.side === live) ?? (r && lv.find((v) => v.behaviorId === r.behaviorId));
             if (pick) return pick.behaviorId;
@@ -783,11 +804,15 @@ function keyCap(adapter, key, mods = 0) {
     return { top: modsText(mods), main: usageCap(keyToUsage(key, 0)) };
 }
 const codeLabel = (entry, code) => entry?.params?.find((p) => p.key === 'code')?.labels?.[code];
-const timingTag = (p, entryId) => {
+const timingTag = (p) => {
+    if (p.variant != null) {
+        const n = behaviorsNow().get(p.variant)?.displayName ?? '';
+        return /autoshift/i.test(n) ? ' · autoshift' : /combo/i.test(n) ? ' · combo' : ' · shared';
+    }
     if (p.live && p.live !== 'off') return ' · live';
     if (p.mode === 'smart') return ' · smart';
     if (p.timing != null && p.timing !== TIMING_PARAM.default) return p.timing < TIMING_PARAM.default ? ' · fast' : ' · slow';
-    return entryId ? '' : '';
+    return '';
 };
 
 /**
