@@ -329,6 +329,24 @@ async function offerLegacyImport(win) {
     else if (response === 2) fs.writeFileSync(legacyMarker(), JSON.stringify({ declined: true }));
 }
 
+/** Does the server on `port` answer index.html byte-for-byte like ours
+ * (e.g. serve.py on this checkout)? Anything else must not be loaded. */
+async function servesOurApp(port) {
+    const mine = await readAsset('/index.html');
+    if (mine.status !== 200) return false;
+    return new Promise((resolve) => {
+        const req = http.get({ host: '127.0.0.1', port, path: '/index.html', timeout: 3000 }, (res) => {
+            const chunks = [];
+            let n = 0;
+            res.on('data', (c) => { n += c.length; if (n > 4 * mine.body.length) req.destroy(); else chunks.push(c); });
+            res.on('end', () => resolve(res.statusCode === 200 && Buffer.concat(chunks).equals(mine.body)));
+            res.on('error', () => resolve(false));
+        });
+        req.on('timeout', () => req.destroy());
+        req.on('error', () => resolve(false));
+    });
+}
+
 /** Child mode: load the old origin hidden, print its flask-* localStorage. */
 async function runLegacyDump(outFile) {
     await app.whenReady();
@@ -337,10 +355,16 @@ async function runLegacyDump(outFile) {
         res.writeHead(r.status, r.headers);
         res.end(r.body);
     });
-    await new Promise((resolve) => {
-        srv.once('error', () => resolve());           // port busy (serve.py): same origin, reuse
-        srv.listen(LEGACY_ORIGIN_PORT, '127.0.0.1', resolve);
+    const busy = await new Promise((resolve) => {
+        srv.once('error', () => resolve(true));        // port busy: reuse only if it serves our files
+        srv.listen(LEGACY_ORIGIN_PORT, '127.0.0.1', () => resolve(false));
     });
+    if (busy && !(await servesOurApp(LEGACY_ORIGIN_PORT))) {
+        fs.writeFileSync(outFile, JSON.stringify({ __error:
+            `Port ${LEGACY_ORIGIN_PORT} is in use by another program. Quit it and try again.` }));
+        app.exit(0);
+        return;
+    }
     const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
     await win.loadURL(`http://localhost:${LEGACY_ORIGIN_PORT}/`);
     const data = await win.webContents.executeJavaScript(
