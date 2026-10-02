@@ -22,8 +22,8 @@ OUT = H.ROOT / 'tests' / 'artifacts' / 'picker'
 SHOTS = Path(os.environ['WP3_SHOTS']) if os.environ.get('WP3_SHOTS') else None
 
 OPEN = """async ({surface, host, title, position, live}) => {
-  const bp = await import('./binding-picker.js?v=60');
-  const cat = await import('./behavior-catalog.js?v=60');
+  const bp = await import('./binding-picker.js?v=61');
+  const cat = await import('./behavior-catalog.js?v=61');
   window.__picked = [];
   let app = {};
   if (live) {
@@ -159,22 +159,6 @@ def main():
             page.screenshot(path=str(SHOTS / 'wp3-live-timing.png'))
             page.keyboard.press('Escape')
         fails += [f'totem: {e}' for e in errors]
-        ctx.close()
-
-        # ---------------- Adept (QMK) ----------------
-        ctx, page, errors = H.new_context(browser, seeds=())
-        H.open_workspace(page, 'Ploopy Adept')
-        page.evaluate(OPEN, {'surface': 'qmk.key', 'host': 'sheet', 'title': 'Key', 'position': None, 'live': False})
-        sheet = page.locator('.picker-sheet')
-        sheet.locator('.chip', has_text='Layers').click()
-        sheet.locator('.bp-entry[data-entry="hold-layer"] .bp-key', has_text='1').first.click()
-        picked = page.evaluate('window.__picked')
-        check(picked == [0x5221], f'adept MO(1) {picked}')
-        page.evaluate(OPEN, {'surface': 'qmk.gestureSlotTappable', 'host': 'sheet', 'title': 'Gesture', 'position': None, 'live': False})
-        g = page.locator('.picker-sheet .bp-groups .chip').all_inner_texts()
-        check('Layers' not in g and 'Run' not in g, f'gesture <v16 groups {g}')
-        page.keyboard.press('Escape')
-        fails += [f'adept: {e}' for e in errors]
         ctx.close()
 
         # ---------------- Imprint ----------------

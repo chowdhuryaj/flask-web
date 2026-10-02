@@ -12,9 +12,7 @@
 
 export const CAPTION_DEFAULTS = {
     keys: 'Select a key on the keyboard, then click a key here to assign it — the selection auto-advances.',
-    behaviour: 'Click a tile to put it on the selected key · the pencil edits it.',
-    // Behaviour tabs without tiles (Chords, Leader, Hold timing, ZMK Combos…).
-    behaviourEdit: 'Changes apply live · Save in the status bar keeps them.',
+    behaviour: 'Changes apply live · Save in the status bar keeps them.',
     device: 'Changes apply live · Save in the status bar keeps them.',
     trainer: '',
 };

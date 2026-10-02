@@ -1,11 +1,10 @@
-// WebHID transport for QMK raw HID: usage page 0xFF60 / usage 0x61,
-// 32-byte INPUT/OUTPUT reports, no report ID. Port of the Swift app's
-// HIDClient (AdeptCompanion Sources/AdeptCore/HIDClient.swift) — same
-// single-in-flight + matcher + timeout/retry/drain semantics, with the
-// Swift `.busy` throw replaced by a FIFO promise chain so any caller
-// (tabs, HUD poll) can fire and ordering is preserved.
+// WebHID transport for the Flask raw HID interface: usage page 0xFF60 /
+// usage 0x61, 32-byte INPUT/OUTPUT reports, no report ID. Single-in-flight +
+// matcher + timeout/retry/drain semantics, with a FIFO promise chain so any
+// caller (tabs, HUD poll) can fire and ordering is preserved.
 
-import { diag, diagHex } from './diag.js?v=60';
+import { diag, diagHex } from './diag.js?v=61';
+import { ZMK_VIDPID } from './zmk.js?v=61';
 
 export const USAGE_PAGE = 0xFF60;
 export const USAGE = 0x61;
@@ -22,6 +21,9 @@ function isPollFrame(bytes) {
     const v = POLL_VALUES[bytes[1]];
     return v === null || v === bytes[2];
 }
+
+const isFlaskInterface = (d) => d.vendorId === ZMK_VIDPID.vid && d.productId === ZMK_VIDPID.pid
+    && d.collections.some((c) => c.usagePage === USAGE_PAGE && c.usage === USAGE);
 
 export class HIDError extends Error {
     constructor(kind, msg) { super(msg || kind); this.kind = kind; }
@@ -47,21 +49,20 @@ export class FlaskHID extends EventTarget {
 
     get connected() { return !!this.device?.opened; }
 
-    /** All previously-granted raw-HID interfaces (no user gesture needed). */
+    /** All previously-granted ZMK Flask raw-HID interfaces (no user gesture needed). */
     static async grantedDevices() {
         if (!navigator.hid) return [];
         const devices = await navigator.hid.getDevices();
-        return devices.filter((d) =>
-            d.collections.some((c) => c.usagePage === USAGE_PAGE && c.usage === USAGE));
+        return devices.filter(isFlaskInterface);
     }
 
-    /** User-gesture connect: browser chooser filtered to QMK raw HID. */
+    /** User-gesture connect: browser chooser filtered to the ZMK VID/PID's raw HID. */
     async requestDevice() {
         const devices = await navigator.hid.requestDevice({
-            filters: [{ usagePage: USAGE_PAGE, usage: USAGE }],
+            filters: [{ vendorId: ZMK_VIDPID.vid, productId: ZMK_VIDPID.pid,
+                        usagePage: USAGE_PAGE, usage: USAGE }],
         });
-        const dev = devices.find((d) =>
-            d.collections.some((c) => c.usagePage === USAGE_PAGE && c.usage === USAGE));
+        const dev = devices.find(isFlaskInterface);
         if (!dev) throw new HIDError('cancelled', 'No device chosen');
         return dev;
     }
@@ -103,7 +104,7 @@ export class FlaskHID extends EventTarget {
     _onInputReport(e) {
         const bytes = new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength);
         // No pending, or not the answer we're waiting for (late reply after a
-        // timeout, Vial-GUI traffic) → drop silently. This drop-while-idle is
+        // timeout, another app's traffic) → drop silently. This drop-while-idle is
         // what makes the retry drain window work.
         if (!this._pending || bytes.length < 5 || !this._pending.matches(bytes)) return;
         clearTimeout(this._pending.timer);
@@ -176,11 +177,10 @@ export class FlaskHID extends EventTarget {
         });
     }
 
-    // Retry wrapper (port of HIDClient.swift:213-229, comment preserved):
+    // Retry wrapper:
     // a single dropped/late report used to poison the whole session — the
     // 0.5 s timeout fires, the device's late answer is then consumed as the
-    // NEXT command's response (rawCommand matches any report), and every
-    // reply after that is shifted by one. The sleep before each retry is the
+    // NEXT command's response, and every reply after that is shifted by one. The sleep before each retry is the
     // fix's core: while nothing is pending, _onInputReport drops stray
     // reports, so the gap absorbs a late answer before it can desync the
     // stream.
@@ -210,48 +210,5 @@ export class FlaskHID extends EventTarget {
         return this._enqueue(() =>
             this._send(prefix, (r) => r[1] === channel && r[2] === valueID
                 && echo.every((b, i) => r[3 + i] === b), opts));
-    }
-
-    /**
-     * VIA-framed command: the response echoes the command byte, and the first
-     * `echoBytes` argument bytes (dynamic_keymap_get/set_keycode echo
-     * layer+row+col; get/set_buffer echo offset+size; the Keychron 0xA7
-     * envelope echoes its sub-command id).
-     *
-     * Prefer this over rawCommand wherever the device echoes: rawCommand
-     * matches ANY next report, so a late reply that arrives after its own
-     * request timed out is adopted by whatever is in flight, and every read
-     * after that is shifted by one (the bench-2 slot-table failure, in the
-     * VIA dialect).
-     */
-    viaCommand(prefix, echoBytes = 0) {
-        const cmd = prefix[0];
-        const echo = prefix.slice(1, 1 + echoBytes);
-        return this._enqueue(() =>
-            this._send(prefix, (r) => r[0] === cmd
-                && echo.every((b, i) => r[1 + i] === b)));
-    }
-
-    /**
-     * Raw VIA/Vial command: matches the NEXT report. Correct only because
-     * requests are strictly serialized and QMK answers every report exactly
-     * once — do not run the Vial GUI alongside; its responses interleave.
-     */
-    rawCommand(prefix) {
-        return this._enqueue(() => this._send(prefix, () => true));
-    }
-
-    /** Run several operations as one uninterruptible sequence (bulk fetch). */
-    transaction(fn) {
-        return this._enqueue(async () => {
-            // Inside a transaction, ops must bypass the queue (we're already
-            // holding it) — hand the callback direct-send primitives.
-            const direct = {
-                request: (prefix) => this._send(prefix,
-                    (r) => r[1] === (prefix[1] ?? 0) && r[2] === (prefix[2] ?? 0)),
-                rawCommand: (prefix) => this._send(prefix, () => true),
-            };
-            return fn(direct);
-        });
     }
 }

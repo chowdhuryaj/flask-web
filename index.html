@@ -4,16 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flask</title>
-  <link rel="stylesheet" href="styles.css?v=60">
-  <link rel="stylesheet" href="css/shell.css?v=60">
-  <link rel="stylesheet" href="css/board.css?v=60">
-  <link rel="stylesheet" href="css/picker.css?v=60">
-  <link rel="stylesheet" href="css/tiles.css?v=60">
-  <link rel="stylesheet" href="css/hud.css?v=60">
+  <link rel="stylesheet" href="styles.css?v=61">
+  <link rel="stylesheet" href="css/shell.css?v=61">
+  <link rel="stylesheet" href="css/board.css?v=61">
+  <link rel="stylesheet" href="css/picker.css?v=61">
+  <link rel="stylesheet" href="css/hud.css?v=61">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚗️</text></svg>">
-  <!-- Classic script (not a module): UMD root detection needs a real `this`.
-       Exposes window['xz-decompress'].XzReadableStream — used by vialdef.js. -->
-  <script src="vendor/xz-decompress.js?v=60"></script>
 </head>
 <body>
   <!-- Editor frame (spec §0.1, §1.2): status bar, left rail, layer bar + board,
@@ -23,14 +19,13 @@
     <div id="statusbar" class="statusbar" role="toolbar" aria-label="Status">
       <button class="sb-device" id="device-btn" data-caption="Switch device — back to the device list, where you can connect another keyboard."><span aria-hidden="true">⇄</span> <span id="device-name">Flask</span></button>
       <span class="sb-sep" aria-hidden="true">|</span>
-      <button class="sb-btn" id="lock-btn" style="display:none" data-caption="Unlock lets macros, matrix reads and the bootloader jump work. Click to change."></button>
       <span class="sb-seg" id="save-seg" style="display:none">
         <button class="btn primary small" id="save-btn" data-caption="Write every unsaved change to the keyboard."></button>
         <button class="btn small" id="discard-btn" style="display:none" data-caption="Throw away the unsaved ZMK keymap edits.">Discard</button>
       </span>
-      <button class="btn small" id="vil-save" style="display:none" data-caption="Save the whole layout (keymap, entries, macros, tunings) to a file.">Save layout</button>
-      <button class="btn small" id="vil-load" style="display:none" data-caption="Apply a saved layout file. Works offline too and queues for the next connect.">Load</button>
-      <input type="file" id="vil-file" accept=".vil,application/json" style="display:none">
+      <button class="btn small" id="layout-save" style="display:none" data-caption="Save the whole layout (keymap, combos, macros, tunings) to a file.">Save layout</button>
+      <button class="btn small" id="layout-load" style="display:none" data-caption="Apply a saved layout file. Works offline too and queues for the next connect.">Load</button>
+      <input type="file" id="layout-file" accept="application/json,.json" style="display:none">
       <span class="sb-seg warn" id="offline-seg" style="display:none">
         <span id="offline-msg"></span>
         <button class="btn small" id="offline-discard">Discard queued</button>
@@ -79,7 +74,7 @@
         <div class="eyebrow">Select device</div>
         <div class="dev-list" id="dev-list"></div>
         <button class="btn primary wide" id="landing-connect">Add a keyboard…</button>
-        <p class="faint">Close the Vial desktop GUI and any other Flask app first.
+        <p class="faint">Close any other Flask app first.
           Two editors talking to one keyboard interleave responses.</p>
 
         <div class="eyebrow">Offline</div>
@@ -97,6 +92,6 @@
     </div>
   </main>
 
-  <script type="module" src="main.js?v=60"></script>
+  <script type="module" src="main.js?v=61"></script>
 </body>
 </html>

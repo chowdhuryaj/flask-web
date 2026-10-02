@@ -1,18 +1,18 @@
 // WP0 contracts: the shared APIs Phase 1 builds against exist with the
-// Import stamps matter: "x.js" and "x.js?v=60" are two module instances in
+// Import stamps matter: "x.js" and "x.js?v=61" are two module instances in
 // Node and the browser alike. Import a module with the same ?v= as the code
 // under test does, or singletons (caption, board, zmk context) split.
 // agreed shapes, and the parts with logic (save order, timing seam) work.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SaveState, saveState } from '../save-state.js?v=60';
-import * as catalog from '../behavior-catalog.js?v=60';
-import { SURFACES, openPicker, typedFromStudio } from '../binding-picker.js?v=60';
-import { board } from '../board.js?v=60';
-import { shell } from '../app-shell.js?v=60';
-import * as caption from '../caption.js?v=60';
-import { CATALOG_GROUPS } from '../behavior-catalog.js?v=60';
-import { setZmkContext } from '../zmk-keycodes.js?v=60';   // same stamp as binding-picker: one module instance
+import { SaveState, saveState } from '../save-state.js?v=61';
+import * as catalog from '../behavior-catalog.js?v=61';
+import { SURFACES, openPicker, typedFromStudio } from '../binding-picker.js?v=61';
+import { board } from '../board.js?v=61';
+import { shell } from '../app-shell.js?v=61';
+import * as caption from '../caption.js?v=61';
+import { CATALOG_GROUPS } from '../behavior-catalog.js?v=61';
+import { setZmkContext } from '../zmk-keycodes.js?v=61';   // same stamp as binding-picker: one module instance
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -66,11 +66,10 @@ const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
     // Stubs: raw round trip through 'advanced'; capParts = today's label.
     const b = { behaviorId: 1, param1: 0x70004, param2: 0 };
     eq(catalog.encode(catalog.decode(b).entryId, catalog.decode(b).params), b);
-    eq(catalog.adapterOf(b), 'zmk-studio'); eq(catalog.adapterOf(0x5221), 'qmk');
+    eq(catalog.adapterOf(b), 'zmk-studio'); eq(catalog.adapterOf({ action: 1, param1: 1 }), 'zmk-typed');
     const totem = JSON.parse(readFileSync(new URL('./fixtures/totem-behaviors.json', import.meta.url)));
     setZmkContext({ behaviors: new Map(totem.behaviors.map((d) => [d.id, d])), layers: [] });
     eq(catalog.capParts(b).top, ''); ok(catalog.capParts(b).main.trim().length > 0, 'zmk cap label');
-    ok(catalog.capParts(0x04).main.length > 0, 'qmk cap label');
     eq(typedFromStudio(b, 1), { action: 1, param1: 0x70004 });
     eq(typedFromStudio({ behaviorId: 60, param1: 3, param2: 0 }, 1), { action: 2, param1: 3 });
     eq(typedFromStudio({ behaviorId: 9, param1: 5, param2: 6 }, 1), { action: 3, behaviorId: 9, param1: 5, param2: 6 });
@@ -80,13 +79,12 @@ const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
 {
     const groups = new Set([...CATALOG_GROUPS.map((g) => g.id), 'leader', 'tap-dance', 'mods-row']);
     for (const [id, s] of Object.entries(SURFACES)) {
-        ok(['qmk', 'zmk-studio', 'zmk-typed', 'nape'].includes(s.adapter), `${id} adapter`);
+        ok(['zmk-studio', 'zmk-typed'].includes(s.adapter), `${id} adapter`);
         ok(s.hide.every((h) => groups.has(h)), `${id} hide ids`);
     }
-    for (const id of ['qmk.key', 'qmk.encoder', 'qmk.comboOutput', 'qmk.tapDanceStep', 'qmk.keyOverride',
-        'qmk.cornerChord', 'qmk.gestureSlot', 'qmk.mouseChord', 'qmk.macroKey', 'qmk.leaderKey', 'qmk.cskBase',
-        'qmk.cskShifted', 'zmk.key', 'zmk.comboOutput', 'zmk.tapDanceStep', 'zmk.typedOutput', 'zmk.macroKey',
-        'zmk.cskBase', 'zmk.cskShifted', 'nape.key']) ok(id in SURFACES, `§4.7 surface ${id}`);
+    for (const id of ['zmk.key', 'zmk.comboOutput', 'zmk.tapDanceStep', 'zmk.typedOutput', 'zmk.macroKey',
+        'zmk.cskBase', 'zmk.cskShifted']) ok(id in SURFACES, `§4.7 surface ${id}`);
+    ok(!Object.keys(SURFACES).some((id) => !id.startsWith('zmk.')), 'only ZMK surfaces');
     assert.throws(() => openPicker({ surface: 'nope', onPick() {} })); checks++;
 }
 

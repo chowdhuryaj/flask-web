@@ -1,9 +1,8 @@
 // WP3 surfaces (§4.7): what each picker surface shows, per device.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SURFACES, surfaceEntries } from '../binding-picker.js?v=60';
-import { setZmkContext } from '../zmk-keycodes.js?v=60';
-import { setDeviceMacroCount } from '../keycodes.js?v=60';
+import { SURFACES, surfaceEntries } from '../binding-picker.js?v=61';
+import { setZmkContext } from '../zmk-keycodes.js?v=61';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -11,12 +10,10 @@ const groups = (s, app) => [...new Set(surfaceEntries(s, app).map((e) => e.group
 const ids = (s, app) => surfaceEntries(s, app).map((e) => e.id);
 const fx = JSON.parse(readFileSync(new URL('./fixtures/imprint-behaviors.json', import.meta.url)));
 setZmkContext({ behaviors: new Map(fx.behaviors.map((d) => [d.id, d])), layers: [{ id: 0, name: 'base' }, { id: 1, name: 'nav' }] });
-setDeviceMacroCount(16);
 
 // Every surface: no hidden group or entry leaks through.
 for (const [id, s] of Object.entries(SURFACES)) {
-    const app = s.adapter === 'nape' ? { family: 'nape' } : {};
-    for (const e of surfaceEntries(id, app)) {
+    for (const e of surfaceEntries(id, {})) {
         assert.ok(!s.hide.includes(e.group) && !s.hide.includes(e.id), `${id} shows ${e.id}`);
         checks++;
     }
@@ -36,10 +33,4 @@ eq(surfaceEntries('zmk.typedOutput').reason.length > 0, true, 'slot explains mis
 eq(surfaceEntries('zmk.comboOutput').find((e) => e.id === 'mod-tap').params.some((p) => p.key === 'live'), false,
     'live timing is per key position: keymap only');
 
-eq(groups('qmk.key', { layerCount: 4 }), ['keys', 'modifiers', 'layers', 'mouse', 'media', 'run', 'advanced']);
-eq(ids('qmk.comboOutput', { layerCount: 4 }).includes('leader'), false);
-eq(groups('qmk.gestureSlotTappable'), ['keys', 'media']);
-eq(groups('qmk.gestureSlot'), ['keys', 'modifiers', 'mouse', 'media', 'run', 'advanced']);
-eq(ids('qmk.macroKey'), ['key', 'none']);
-eq(groups('nape.key', { family: 'nape' }), ['keys', 'modifiers', 'layers', 'mouse', 'run']);
 console.log(`picker-test: ${checks} checks OK`);

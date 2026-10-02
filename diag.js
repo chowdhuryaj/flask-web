@@ -1,7 +1,7 @@
 // Black-box diagnostics — a timestamped ring of transport + Studio events,
 // exportable as a text report, so a board death is reconstructable from the
 // app alone (bench 5 ask: logging without reflashing the logging UF2 and
-// babysitting tio). Generic infra: the QMK and ZMK lines both ride it.
+// babysitting tio). Generic infra.
 //
 // What it can and cannot see: everything the HOST observes (frames, echoes,
 // timeouts, write failures, re-enumerations, Studio RPC results, boot

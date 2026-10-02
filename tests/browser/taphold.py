@@ -7,7 +7,6 @@ TOTEM: select F, "Make this a tap-hold", HOLD ⇧, Apply: the cap shows a
 labelled hold line (⇧) and tap line (F), the binding is Hold-Tap L (live)
 (F is a left-hand key); click again opens the composer pre-filled; undo
 restores plain F. Home-row mods preset: 8 keys in one step, one undo.
-Svalboard fixture: the same flow writes MT(MOD_LSFT, KC_F) = 0x2209.
 Screenshots: tests/artifacts/taphold/ and $WP3B_SHOTS (wp3b-*.png).
 """
 import os
@@ -15,7 +14,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import ROOT, SVAL, launch, new_context, open_workspace, sync_playwright  # noqa: E402
+from harness import ROOT, launch, new_context, open_workspace, sync_playwright  # noqa: E402
 
 OUT = ROOT / 'tests' / 'artifacts' / 'taphold'
 SHOTS = os.environ.get('WP3B_SHOTS')
@@ -38,11 +37,11 @@ def shot(page, name):
 KEY_INDEX = """(cap) => [...document.querySelectorAll('#board-slot .kb-svg g.key')]
     .findIndex(g => [...g.querySelectorAll('.cap-main')].map(t => t.textContent).join('') === cap)"""
 BINDING = """async (pos) => {
-  const { board } = await import('/board.js?v=60');
-  const C = await import('/behavior-catalog.js?v=60');
+  const { board } = await import('/board.js?v=61');
+  const C = await import('/behavior-catalog.js?v=61');
   const v = board.bindingOf(pos ?? undefined);
-  return { v, d: C.describeBinding(v, board.adapter.profile.capAdapter ?? 'qmk'),
-           via: v && typeof v === 'object' ? (await import('/zmk-keycodes.js?v=60')).zmkBehaviors().get(v.behaviorId)?.displayName : null };
+  return { v, d: C.describeBinding(v, board.adapter.profile.capAdapter ?? 'zmk-studio'),
+           via: v && typeof v === 'object' ? (await import('/zmk-keycodes.js?v=61')).zmkBehaviors().get(v.behaviorId)?.displayName : null };
 }"""
 
 
@@ -59,7 +58,7 @@ def make_taphold(page, cap, label):
     check(i >= 0, f'{label}: a key reads {cap}')
     g = keys(page).nth(i)
     g.click()
-    pos = page.evaluate("async () => (await import('/board.js?v=60')).board.selectedKey().pos")
+    pos = page.evaluate("async () => (await import('/board.js?v=61')).board.selectedKey().pos")
     bp = picker(page)
     bp.locator('[data-act="taphold"]').click()
     check(bp.locator('[data-composer]').count() == 1, f'{label}: composer opens')
@@ -112,13 +111,13 @@ def totem(browser):
         page.wait_for_timeout(400)
         term = page.evaluate(f"JSON.parse(localStorage.getItem('flask-offline-totem')).zmk.holdtap[{pos}].term")
         check(term == 330, f'totem: composer slider wrote slot {pos} term {term}')
-        dirty = page.evaluate("async () => (await import('/save-state.js?v=60')).saveState.dirty().map(d => d.label)")
+        dirty = page.evaluate("async () => (await import('/save-state.js?v=61')).saveState.dirty().map(d => d.label)")
         check('Hold-tap timing' in dirty, f'totem: timing edit is in the one Save: {dirty}')
-        page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
+        page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
         page.wait_for_timeout(200)
     else:
         page.keyboard.press('Escape')
-    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
     page.wait_for_timeout(200)
     g = keys(page).nth(i)
     check(g.locator('.cap-holdband').count() == 0 and g.locator('.cap-main').text_content() == 'F', 'totem: undo restores plain F')
@@ -143,47 +142,23 @@ def totem(browser):
     ht = page.locator('#board-slot .kb-svg g.key.ht .cap-hold').evaluate_all('xs => xs.map(x => x.textContent)')
     check(sum(1 for t in ht if any(m in t for m in '⌘⌥⌃⇧')) >= 8 and not any('live' in t for t in ht), f'totem: home-row caps {ht}')
     shot(page, 'totem-homerow')
-    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
+    idx = page.evaluate("[...document.querySelectorAll('#board-slot .kb-svg g.key')].findIndex((g) => g.classList.contains('ht'))")
+    cell = page.evaluate("""async (i) => { const bp = await import('/binding-picker.js?v=61');
+      const { board } = await import('/board.js?v=61');
+      const el = bp.renderBindingCell(board.bindingOf(i), 'zmk.key');
+      return [el.querySelector('.bp-cell-hold') != null, el.querySelector('.bp-cell-tap') != null]; }""", idx)
+    check(idx >= 0 and cell == [True, True], f'totem: renderBindingCell labels hold/tap: {cell}')
+    page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
     page.wait_for_timeout(300)
     check(page.evaluate(KEY_INDEX, 'F') >= 0, 'totem: one undo reverts the preset')
     check(not errors, f'totem: no page errors {errors}')
     ctx.close()
 
 
-def svalboard(browser):
-    ctx, page, errors = new_context(browser)
-    open_workspace(page, SVAL['label'])
-    i, pos = make_taphold(page, 'F', 'svalboard')
-    b = page.evaluate(BINDING, pos)
-    check(b['v'] == 0x2209, f'svalboard: MT(MOD_LSFT, KC_F) = 0x2209, got {b}')
-    assert_labelled(page, i, 'F', 'svalboard')
-    shot(page, 'svalboard-cap')
-    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
-    page.wait_for_timeout(200)
-    check(page.evaluate(BINDING, pos)['v'] == 0x09, 'svalboard: undo restores KC_F')
-    # fallback: a shifted tap can't be MT() on QMK
-    keys(page).nth(i).click()
-    bp = picker(page)
-    bp.locator('[data-act="taphold"]').click()
-    bp.locator('.bp-th-slot[data-slot="tap"]').click()
-    bp.locator('.bp-th-pane button.bp-key:text-is("!")').first.click()
-    bp.locator('[data-mod="⌃"]').click()
-    res = bp.locator('.bp-th-result').text_content()
-    check('can only tap a plain key' in res and bp.locator('[data-act="th-apply"]').is_disabled(), f'svalboard: fallback message "{res}"')
-    check(bp.locator('[data-act="th-fallback"]').count() == 1, 'svalboard: offers a tap dance instead')
-    shot(page, 'svalboard-fallback')
-    cell = page.evaluate("""async () => { const bp = await import('/binding-picker.js?v=60');
-      return [bp.renderBindingCell(0x2209, 'qmk.comboOutput').textContent, bp.renderBindingCell(0x09, 'qmk').textContent,
-              bp.renderBindingCell(0x2209, 'qmk').querySelector('.bp-cell-hold') != null]; }""")
-    check(cell == ['hold ⇧tap F', 'F', True], f'renderBindingCell labels hold/tap: {cell}')
-    check(not errors, f'svalboard: no page errors {errors}')
-    ctx.close()
-
-
 def main():
     with sync_playwright() as p:
         browser = launch(p)
-        for fn in (totem, svalboard):
+        for fn in (totem,):
             try:
                 fn(browser)
             except Exception as e:  # noqa: BLE001

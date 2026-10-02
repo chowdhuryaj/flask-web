@@ -1,5 +1,5 @@
-// WP6: save ordering, stop-on-first-failure, discard, the per-line
-// never-register rule, the baseline gate, and old-file round trips.
+// WP6: save ordering, stop-on-first-failure, discard, the baseline gate,
+// and old-file round trips.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -12,8 +12,8 @@ globalThis.localStorage ??= {
     get length() { return this._m.size; },
 };
 
-const { SaveState, assertRegistrable, NEVER_REGISTER } = await import('../save-state.js?v=60');
-const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=60');
+const { SaveState } = await import('../save-state.js?v=61');
+const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=61');
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -89,27 +89,6 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     eq(s.dirty(), [], 'reset drops everything');
 }
 
-// ---- never-register is per firmware line ----
-{
-    ok(NEVER_REGISTER.qmk.has(0x28));
-    const s = new SaveState();
-    const noop = async () => {};
-    s.setLine('qmk');
-    assert.throws(() => s.markDirty(0x28, 'Corner chords', noop), /no save step/); checks++;
-    s.markDirty(0x27, 'neighbour', noop);                       // other channels fine
-    eq(s.dirty().length, 1, 'rejected channel did not register');
-    s.setLine('zmk');
-    s.markDirty(0x28, 'Tap dance', noop);                       // ZMK tap dance is 0x28 and saves
-    ok(s.dirty().some((d) => d.source === 0x28));
-    s.setLine(null);
-    s.markDirty(0x28, 'unknown line is not checked', noop);
-    // Per-call line wins over the global one.
-    s.setLine('zmk');
-    assert.throws(() => s.markDirty(0x28, 'x', noop, { line: 'qmk' })); checks++;
-    assert.throws(() => assertRegistrable('qmk', 0x28)); checks++;
-    assertRegistrable('zmk', 0x28); assertRegistrable('qmk', 0x29); checks += 2;
-}
-
 // ---- Make baseline gate (fake keymap tab) ----
 {
     const mk = (apply, save) => {
@@ -159,8 +138,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- old ZMK export (v2 JSON with `family`) still imports and round-trips ----
 {
-    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js?v=60');
-    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js?v=60');
+    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js?v=61');
+    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js?v=61');
     const old = JSON.parse(fixture('zmk-export-v2.json'));
     eq([old.kind, old.version, old.family], ['flask-zmk-keymap', 2, 'imprint'], 'fixture has the v2 header with family');
     ok(isModePayload(old), 'old file is a valid mode payload');
@@ -185,7 +164,7 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     const live = await applyFlaskState(app, old.flask, { save: false });
     eq(saved, [], 'save:false never saves');
     ok(live.channels.length > 1, 'channels to save reported');
-    const { saveFlaskChannels } = await import('../zmk-export.js?v=60');
+    const { saveFlaskChannels } = await import('../zmk-export.js?v=61');
     let n = 0;
     app.flask.save = async (ch) => { n++; if (ch === live.channels[1]) throw new Error('nope'); };
     const sr = await saveFlaskChannels(app, live.channels);
@@ -193,45 +172,13 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     ok(sr.failure.includes('nope'));
 }
 
-// ---- old QMK .vil still imports and round-trips ----
-{
-    const { createTemplate, OfflineFlask, OfflineVial } = await import('../offline.js?v=60');
-    const { capabilities } = await import('../caps.js?v=60');
-    const { importVil, exportVil } = await import('../vil.js?v=60');
-    const text = fixture('adept-export.vil');
-    const old = JSON.parse(text);
-    const ws = createTemplate('adept');
-    const app = {
-        flask: new OfflineFlask(ws), vial: new OfflineVial(ws), family: ws.family,
-        protocolVersion: ws.protocolVersion, caps: capabilities(ws.family, ws.protocolVersion),
-        profile: ws.profile, layerCount: ws.layerCount, keymap: null, hid: { pause() {}, resume() {} },
-    };
-    const stats = await importVil(app, text);
-    ok(stats.applied > 0, 'applied items');
-    eq(stats.skipped, 0);
-    const again = JSON.parse(await exportVil(app));
-    eq(again.layout, old.layout, 'layout identical');
-    eq(again.encoder_layout, old.encoder_layout, 'encoders identical');
-    eq(again.flask_tunings, old.flask_tunings, 'flask_tunings identical');
-    eq(Object.keys(again).filter((k) => k !== 'flask_family').sort(), Object.keys(old).sort(), 'same top-level keys');
-    // F6: old file (no family) loads with a warning note; new exports carry
-    // the family and a mismatched one is refused before any write.
-    ok(stats.notes.some((n) => /no keyboard family/.test(n)), 'old file warns');
-    eq(again.flask_family, 'adept', 'export writes the family');
-    eq((await importVil(app, JSON.stringify(again))).notes.filter((n) => /family/.test(n)), [], 'matching family: no warning');
-    let writes = 0;
-    const sval = { ...app, family: 'svalboard', vial: { setKeycode: async () => { writes++; } } };
-    await assert.rejects(importVil(sval, JSON.stringify(again)), /for a Ploopy Adept, not a Svalboard/);
-    eq(writes, 0, 'mismatched family: nothing written');
-}
-
 // ---- offline queue count feeds the status bar ----
 {
-    const { createTemplate, OfflineVial } = await import('../offline.js?v=60');
-    const { offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=60');
-    const ws = createTemplate('adept');
+    const { createZmkTemplate, ZmkOfflineFlask, offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=61');
+    const { CH, V } = await import('../flaskproto.js?v=61');
+    const ws = createZmkTemplate('imprint');
     eq(offlineQueued(ws), 0);
-    await new OfflineVial(ws).setKeycode(0, 0, 0, 4);
+    await new ZmkOfflineFlask(ws).setU16(CH.scrollSnap, V.snapThreshold, 80);
     eq(offlineQueued(ws), 1);
     eq(discardOfflineQueued(ws), 1);
     eq(offlineQueued(ws), 0);

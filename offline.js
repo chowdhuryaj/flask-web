@@ -3,17 +3,18 @@
 // queue auto-applies on the next real connect.
 //
 // Model: a workspace per device family in localStorage holds a display
-// snapshot (keymap/encoders/tunables/QSIDs) plus a dirty journal. Offline
-// mode swaps app.flask/app.vial for the fakes below — the tabs are
-// unchanged and don't know the device is missing. Sync applies ONLY dirty
-// entries, never the whole snapshot, so a template workspace can't wipe a
-// real keymap.
+// snapshot plus a dirty journal. Offline mode swaps app.flask for the fake
+// below (zmk-offline.js extends it) — the tabs are unchanged and don't know
+// the device is missing. Sync applies ONLY dirty entries, never the whole
+// snapshot, so a template workspace can't wipe a real keymap.
+//
+// This file is the shared core: storage, the tunable/RGB journal and its
+// replay. Everything ZMK-shaped (keymap, combo/macro slots, templates) is in
+// zmk-offline.js.
 
-import { el, modal, toast } from './ui.js?v=60';
-import { CH, V, CC, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=60';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=60';
-import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=60';
-import { describe } from './keycodes.js?v=60';
+import { el, modal, toast } from './ui.js?v=61';
+import { CH, V } from './flaskproto.js?v=61';
+import { isZmkFamily } from './zmk.js?v=61';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';
@@ -21,22 +22,7 @@ const AUTO_KEY = 'flask-offline-autoapply';
 // Live-state value ids (SET is a transient action, not a setting) — never
 // journal these offline. '<ch>:<id>' decimal.
 const LIVE_SET = new Set([
-    `${CH.dragScroll}:4`,   // dragActive force on/off
     `${CH.autoscroll}:5`,   // asState force-stop
-    `${CH.diag}:1`,         // watermark reset
-    `${CH.numWord}:3`,      // nwActive
-    `${CH.gestures}:2`,     // active-set latch toggle
-    `${CH.display}:7`,      // raw panel cmd inject
-    `${CH.display}:8`,      // panel re-init
-    // Svalboard v12+. These are all on channels double-booked with the ZMK line
-    // (see flaskproto.js CH), but a workspace is one family, so the decimal key
-    // is unambiguous inside it.
-    `${CH.corner}:5`,       // corner misfire counter reset
-    `${CH.corner}:6`,       // corner chord capture arm
-    `${CH.teleport}:6`,     // teleport host heartbeat (this app never sends it)
-    `${CH.teleport}:7`,     // teleport self-test
-    `${CH.teleport}:8`,     // teleport host ack
-    `${CH.mouseButtons}:2`, // click-lock latch release (live rescue, not a setting)
 ]);
 
 // ---------- storage ----------
@@ -58,15 +44,9 @@ export function loadWorkspace(key) {
 function normalize(ws) {
     ws.dirty ??= {};
     const d = ws.dirty;
-    for (const k of ['km', 'enc', 'tun', 'qsid', 'td', 'combo', 'ko', 'ar', 'rgb', 'dispText']) d[k] ??= {};
+    for (const k of ['tun', 'rgb']) d[k] ??= {};
     d.saves ??= [];
-    d.macros ??= false;
     ws.tunables ??= {};
-    ws.qsids ??= {};
-    ws.entries ??= { counts: { tapDance: 32, combo: 32, keyOverride: 32, altRepeat: 0 }, td: {}, combo: {}, ko: {}, ar: {} };
-    ws.macros ??= { count: 16, bufferSize: 900, list: null };
-    ws.rgbmap ??= null;   // [8][23][h,s,v], created on first paint
-    ws.dispText ??= {};
     return ws;
 }
 
@@ -77,13 +57,14 @@ export function saveWorkspace(ws) {
 
 export function deleteWorkspace(key) { localStorage.removeItem(LS_PREFIX + key); }
 
+/** Saved workspaces for ZMK boards (anything else in storage is ignored). */
 export function listWorkspaces() {
     const out = [];
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k?.startsWith(LS_PREFIX) && k !== AUTO_KEY) {
             const ws = loadWorkspace(k.slice(LS_PREFIX.length));
-            if (ws?.key) out.push(ws);
+            if (ws?.key && isZmkFamily(ws.family)) out.push(ws);
         }
     }
     return out;
@@ -91,12 +72,7 @@ export function listWorkspaces() {
 
 export function pendingCount(ws) {
     const d = ws.dirty;
-    return Object.keys(d.km).length + Object.keys(d.enc).length
-        + Object.keys(d.tun).length + Object.keys(d.qsid).length
-        + Object.keys(d.td).length + Object.keys(d.combo).length
-        + Object.keys(d.ko).length + Object.keys(d.ar).length
-        + Object.keys(d.rgb).length + Object.keys(d.dispText).length
-        + (d.macros ? 1 : 0);
+    return Object.keys(d.tun).length + Object.keys(d.rgb).length;
 }
 
 export function clearDirty(ws) {
@@ -105,60 +81,14 @@ export function clearDirty(ws) {
     saveWorkspace(ws);
 }
 
-// ---------- templates (never-connected editing / beta testing) ----------
-
-// Families with curated geometry in profiles.js — a template needs no
-// served definition. Svalboard renders from its definition only, so it
-// gets a workspace the first time the real board connects.
-export const TEMPLATE_FAMILIES = ['adept', 'nlkb16'];
-
-const TEMPLATE_DIMS = {
-    adept: { rows: 1, cols: 6, layers: 8, encoders: 0 },
-    nlkb16: { rows: 4, cols: 5, layers: 8, encoders: 3 },
-};
-
-function templateDefinition(family) {
-    const t = TEMPLATE_DIMS[family];
-    const keys = [];
-    if (family === 'nlkb16') {
-        // 4×4 grid + the three col-4 matrix slots buildProfile's curated
-        // branch expects (knob pushes; (2,4) is filtered out there).
-        for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++)
-            keys.push({ row: r, col: c, x: c, y: r, w: 1, h: 1 });
-        for (let r = 0; r < 3; r++) keys.push({ row: r, col: 4, x: 5, y: r, w: 1, h: 1 });
-    }
-    return {
-        name: familyLabel(family), matrixRows: t.rows, matrixCols: t.cols,
-        keys, encoderKeys: [], customKeycodes: [],
-    };
-}
-
-export function createTemplate(family) {
-    const t = TEMPLATE_DIMS[family];
-    const profile = buildProfile(family, templateDefinition(family), t.layers);
-    const keymap = Array.from({ length: t.layers }, () =>
-        Array.from({ length: t.rows }, () => Array(t.cols).fill(0)));
-    const encoders = Array.from({ length: t.layers }, () =>
-        Array.from({ length: t.encoders }, () => ({ ccw: 0, cw: 0 })));
-    return normalize({
-        v: 1, key: family, family, label: familyLabel(family),
-        source: 'template', savedAt: Date.now(),
-        protocolVersion: EXPECTED_PROTOCOL[family] ?? null,
-        layerCount: t.layers, profile, keymap, encoders,
-    });
-}
-
-// ---------- offline stand-ins for FlaskProto / VialClient ----------
+// ---------- offline stand-in for FlaskProto ----------
 
 const tk = (ch, id) => `${ch}:${id}`;
-const CORNER_OFFLINE_MSG = 'chords are read-only offline (connect the keyboard to edit)';
 
 export class OfflineFlask {
     constructor(ws) { this.ws = ws; }
-    line = 'qmk';   // ZmkOfflineFlask: 'zmk' (0x28 is tap dance there)
 
     async getU16(ch, id) {
-        if (ch === CH.corner && id === V.ccDefCount && this.ws.corner?.defs) return this.ws.corner.defs.length;
         return this.ws.tunables[tk(ch, id)]?.val ?? 0;
     }
     async getI16(ch, id) { return ((await this.getU16(ch, id)) << 16) >> 16; }
@@ -176,9 +106,6 @@ export class OfflineFlask {
     }
 
     _journal(ch, id, op, val) {
-        // Corner chords (0x28) persist on the SET itself; replaying one would
-        // also SAVE 0x28 on reconnect, which wedges the Svalboard. Refuse.
-        if (ch === CH.corner && this.line !== 'zmk') throw new Error(CORNER_OFFLINE_MSG);
         const k = tk(ch, id);
         if (LIVE_SET.has(k) || ch === CH.meta) return; // transient — drop
         this.ws.tunables[k] = { op, val };
@@ -193,149 +120,7 @@ export class OfflineFlask {
         }
     }
 
-    // Payload-addressed ops: RGB paints and display custom text journal;
-    // pushes/raw-cmd/reinit are transient live actions and drop offline.
-    async getBytes(ch, id, payload = []) {
-        if (ch === CH.rgbMap && id === V.rgbmapLed) {
-            const [layer, led] = payload;
-            const hsv = this.ws.rgbmap?.[layer]?.[led] ?? [0, 0, 0];
-            return [layer, led, ...hsv];
-        }
-        if (ch === CH.display && id >= 0x30 && id <= 0x33) {
-            return [...new TextEncoder().encode(this.ws.dispText[id - 0x30] ?? '')];
-        }
-        // Corner chords (0x28) from the snapshot (captureSnapshot / fixture):
-        // geometry [def, p0, p1, flags], own-layer mask [def, hi, lo], and the
-        // resolved output [def, layer, kc hi, kc lo].
-        const cc = this.ws.corner;
-        if (ch === CH.corner && cc) {
-            const def = payload[0];
-            if (id === V.ccDef) return [def, ...(cc.defs[def] ?? [CC.posNone, CC.posNone, 0])];
-            if (id === V.ccLayers) { const m = cc.own?.[def] ?? 0; return [def, m >> 8, m & 0xFF]; }
-            if (id === V.ccOut) {
-                const layer = payload[1];
-                // ponytail: a layer without its own capture inherits layer 0;
-                // the firmware's real inheritance is only captured for own layers.
-                const kc = cc.out?.[layer]?.[def] ?? cc.out?.[0]?.[def] ?? 0;
-                return [def, layer, kc >> 8, kc & 0xFF];
-            }
-        }
-        return new Array(29).fill(0);
-    }
-
-    async setBytes(ch, id, payload) {
-        // Chord outputs persist on the SET itself and have no offline queue:
-        // refuse rather than drop the edit silently.
-        if (ch === CH.corner) throw new Error(CORNER_OFFLINE_MSG);
-        if (ch === CH.rgbMap) {
-            const put = (layer, led, h, s, v) => {
-                this.ws.rgbmap ??= Array.from({ length: NLKB.rgbLayers },
-                    () => Array.from({ length: NLKB.ledCount }, () => [0, 0, 0]));
-                this.ws.rgbmap[layer][led] = [h, s, v];
-                this.ws.dirty.rgb[`${layer},${led}`] = [h, s, v];
-            };
-            if (id === V.rgbmapLed) {
-                put(payload[0], payload[1], payload[2], payload[3], payload[4]);
-            } else if (id === V.rgbmapFill) {
-                for (let led = 0; led < NLKB.ledCount; led++)
-                    put(payload[0], led, payload[1], payload[2], payload[3]);
-            } else if (id === V.rgbmapBulk) {
-                const [layer, start, count] = payload;
-                for (let k = 0; k < count; k++)
-                    put(layer, start + k, payload[3 + k * 3], payload[4 + k * 3], payload[5 + k * 3]);
-            } else return;
-            saveWorkspace(this.ws);
-            return;
-        }
-        if (ch === CH.display && id >= 0x30 && id <= 0x33) {
-            this.ws.dispText[id - 0x30] =
-                new TextDecoder().decode(new Uint8Array(payload)).replace(/\0+$/, '');
-            this.ws.dirty.dispText[id - 0x30] = true;
-            saveWorkspace(this.ws);
-        }
-    }
-
     async handshake() { return this.ws.protocolVersion; }
-}
-
-export class OfflineVial {
-    constructor(ws) { this.ws = ws; }
-
-    async readKeymap() { return this.ws.keymap; }
-
-    async setKeycode(layer, row, col, kc) {
-        this.ws.keymap[layer][row][col] = kc;
-        this.ws.dirty.km[`${layer},${row},${col}`] = kc;
-        saveWorkspace(this.ws);
-    }
-
-    async encoderGet(layer, index) {
-        return this.ws.encoders?.[layer]?.[index] ?? { ccw: 0, cw: 0 };
-    }
-
-    async encoderSet(layer, index, clockwise, kc) {
-        const e = this.ws.encoders[layer][index];
-        e[clockwise ? 'cw' : 'ccw'] = kc;
-        this.ws.dirty.enc[`${layer},${index},${clockwise ? 1 : 0}`] = kc;
-        saveWorkspace(this.ws);
-    }
-
-    async layerCount() { return this.ws.layerCount; }
-    async unlockStatus() { return { unlocked: false, inProgress: false }; }
-
-    // Both Flask firmwares compile the full vial-qmk QMK-settings catalog;
-    // for a device-sourced workspace the snapshot narrows this on sync
-    // failure anyway (unsupported QSIDs just fail and stay queued).
-    async qmkSettingsQSIDs() { return QMK_SETTINGS.map((d) => d.qsid); }
-    async qmkSettingGet(qsid) { return this.ws.qsids[qsid]?.val ?? 0; }
-
-    async qmkSettingSet(qsid, width, val) {
-        this.ws.qsids[qsid] = { width, val };
-        this.ws.dirty.qsid[qsid] = { width, val };
-        saveWorkspace(this.ws);
-    }
-
-    async qmkSettingsReset() {
-        this.ws.qsids = {};
-        this.ws.dirty.qsid = {};
-        saveWorkspace(this.ws);
-    }
-
-    // ---- dynamic entries (tap dance / combos / key overrides / alt-repeat) ----
-
-    async dynamicEntryCounts() { return { ...this.ws.entries.counts }; }
-
-    _entrySet(kind, i, entry) {
-        this.ws.entries[kind][i] = entry;
-        this.ws.dirty[kind][i] = true;
-        saveWorkspace(this.ws);
-    }
-
-    async tapDanceGet(i) { return this.ws.entries.td[i] ?? TapDance.empty(); }
-    async tapDanceSet(i, e) { this._entrySet('td', i, e); }
-    async comboGet(i) { return this.ws.entries.combo[i] ?? Combo.empty(); }
-    async comboSet(i, e) { this._entrySet('combo', i, e); }
-    async keyOverrideGet(i) { return this.ws.entries.ko[i] ?? KeyOverride.empty(); }
-    async keyOverrideSet(i, e) { this._entrySet('ko', i, e); }
-    async altRepeatGet(i) { return this.ws.entries.ar[i] ?? AltRepeat.empty(); }
-    async altRepeatSet(i, e) { this._entrySet('ar', i, e); }
-
-    // ---- macros: stored decoded; the codec round-trips at the edges ----
-
-    async macroCount() { return this.ws.macros.count; }
-    async macroBufferSize() { return this.ws.macros.bufferSize; }
-
-    async readMacroBuffer(size) {
-        const img = this.ws.macros.list ? (MacroCodec.encode(this.ws.macros.list) ?? []) : [];
-        while (img.length < size) img.push(0);
-        return img.slice(0, size);
-    }
-
-    async writeMacroBuffer(buffer) {
-        this.ws.macros.list = MacroCodec.decode(buffer, this.ws.macros.count);
-        this.ws.dirty.macros = true;
-        saveWorkspace(this.ws);
-    }
 }
 
 // ---------- sync: replay the journal onto a real device ----------
@@ -343,34 +128,16 @@ export class OfflineVial {
 const CH_NAMES = Object.fromEntries(Object.entries(CH).map(([k, v]) => [v, k]));
 
 /** Human-readable change list for the confirm modal. */
-export function describeChanges(ws, profile) {
+export function describeChanges(ws) {
     const lines = [];
-    for (const [k, kc] of Object.entries(ws.dirty.km)) {
-        const [l, r, c] = k.split(',').map(Number);
-        lines.push(`L${l} ${keyName(profile ?? ws.profile, r, c)} → ${describe(kc)}`);
-    }
-    for (const [k, kc] of Object.entries(ws.dirty.enc)) {
-        const [l, i, cw] = k.split(',').map(Number);
-        lines.push(`L${l} encoder ${i} ${cw ? '↻' : '↺'} → ${describe(kc)}`);
-    }
     for (const [k, t] of Object.entries(ws.dirty.tun)) {
         const [ch, id] = k.split(':').map(Number);
         lines.push(`${CH_NAMES[ch] ?? `ch ${ch}`} value 0x${id.toString(16)} = ${t.val}`);
     }
-    for (const [qsid, e] of Object.entries(ws.dirty.qsid)) {
-        const desc = QMK_SETTINGS.find((d) => d.qsid === Number(qsid));
-        lines.push(`QMK setting ${desc?.label ?? qsid} = ${e.val}`);
-    }
-    for (const i of Object.keys(ws.dirty.td)) lines.push(`Tap dance ${i} → ${describe(ws.entries.td[i]?.onTap ?? 0)}…`);
-    for (const i of Object.keys(ws.dirty.combo)) lines.push(`Combo ${i} → ${describe(ws.entries.combo[i]?.output ?? 0)}`);
-    for (const i of Object.keys(ws.dirty.ko)) lines.push(`Key override ${i}: ${describe(ws.entries.ko[i]?.trigger ?? 0)} → ${describe(ws.entries.ko[i]?.replacement ?? 0)}`);
-    for (const i of Object.keys(ws.dirty.ar)) lines.push(`Alt-repeat ${i}`);
-    if (ws.dirty.macros) lines.push('Macros (whole buffer — needs unlock)');
     for (const k of Object.keys(ws.dirty.rgb)) {
         const [l, led] = k.split(',');
         lines.push(`RGB L${l} led ${led} = hsv(${ws.dirty.rgb[k].join(',')})`);
     }
-    for (const line of Object.keys(ws.dirty.dispText)) lines.push(`Display line ${line} text "${ws.dispText[line] ?? ''}"`);
     return lines;
 }
 
@@ -384,23 +151,6 @@ export async function syncWorkspace(app, ws) {
     // Entries the DEVICE does not serve — dropped rather than retried forever.
     const dropped = [];
     let applied = 0, clamped = 0;
-
-    for (const [k, kc] of Object.entries(ws.dirty.km)) {
-        const [l, r, c] = k.split(',').map(Number);
-        try {
-            await app.vial.setKeycode(l, r, c, kc);
-            if (app.keymap?.[l]?.[r] != null) app.keymap[l][r][c] = kc;
-            delete ws.dirty.km[k]; applied++;
-        } catch (e) { fail.push(`key ${k}: ${e.message}`); }
-    }
-
-    for (const [k, kc] of Object.entries(ws.dirty.enc)) {
-        const [l, i, cw] = k.split(',').map(Number);
-        try {
-            await app.vial.encoderSet(l, i, !!cw, kc);
-            delete ws.dirty.enc[k]; applied++;
-        } catch (e) { fail.push(`encoder ${k}: ${e.message}`); }
-    }
 
     const touched = new Set(ws.dirty.saves);
     for (const [k, t] of Object.entries(ws.dirty.tun)) {
@@ -417,11 +167,9 @@ export async function syncWorkspace(app, ws) {
             // "unhandled" means the DEVICE does not serve this id — the
             // firmware answered id_unhandled. Retrying it on every connect
             // forever is pointless, and it leaves a pending count that can
-            // never reach zero: exactly what happens to a workspace journaled
-            // against v17 once the board is flashed to v21, where accel,
-            // smoothing, snippets and teleport no longer exist. Drop those and
-            // report them separately. A timeout or transport error is a
-            // DIFFERENT failure and stays queued, because that one is transient.
+            // never reach zero. Drop those and report them separately. A
+            // timeout or transport error is a DIFFERENT failure and stays
+            // queued, because that one is transient.
             if (e.message === 'unhandled') {
                 delete ws.dirty.tun[k];
                 dropped.push(`${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}`);
@@ -430,54 +178,12 @@ export async function syncWorkspace(app, ws) {
             }
         }
     }
-    // Backstop: never SAVE the corner channel (wedges the Svalboard), even if
-    // an old workspace journaled a 0x28 tunable before _journal refused it.
-    if (app.flask.line !== 'zmk') touched.delete(CH.corner);   // ZMK 0x28 = tap dance
     for (const ch of touched) {
-        try { await app.flask.save(ch); } catch { /* DPI-style no-op channels */ }
+        try { await app.flask.save(ch); } catch { /* no-op channels */ }
     }
     ws.dirty.saves = [];
 
-    for (const [qsid, e] of Object.entries(ws.dirty.qsid)) {
-        try {
-            await app.vial.qmkSettingSet(Number(qsid), e.width, e.val);
-            delete ws.dirty.qsid[qsid]; applied++;
-        } catch (err) { fail.push(`QSID ${qsid}: ${err.message}`); }
-    }
-
-    // Dynamic entries (any Vial board).
-    const entryKinds = [
-        ['td', 'tap dance', (i, e) => app.vial.tapDanceSet(i, e)],
-        ['combo', 'combo', (i, e) => app.vial.comboSet(i, e)],
-        ['ko', 'key override', (i, e) => app.vial.keyOverrideSet(i, e)],
-        ['ar', 'alt-repeat', (i, e) => app.vial.altRepeatSet(i, e)],
-    ];
-    for (const [kind, name, set] of entryKinds) {
-        for (const i of Object.keys(ws.dirty[kind])) {
-            try {
-                await set(Number(i), ws.entries[kind][i]);
-                delete ws.dirty[kind][i]; applied++;
-            } catch (e) { fail.push(`${name} ${i}: ${e.message}`); }
-        }
-    }
-
-    // Macros — unlock-gated; firmware silently ignores writes while locked,
-    // so verify by re-reading and keep queued on mismatch.
-    if (ws.dirty.macros && ws.macros.list) {
-        try {
-            if (!app.unlocked) throw new Error('keyboard locked — unlock, then replug');
-            const size = await app.vial.macroBufferSize();
-            const img = MacroCodec.encode(ws.macros.list);
-            if (!img) throw new Error('a macro keycode cannot be encoded');
-            if (img.length > size) throw new Error(`macros too big (${img.length} > ${size} bytes)`);
-            await app.vial.writeMacroBuffer(img, size);
-            const back = await app.vial.readMacroBuffer(Math.min(img.length, size));
-            if (!img.every((b, i) => back[i] === b)) throw new Error('verify failed (still locked?)');
-            ws.dirty.macros = false; applied++;
-        } catch (e) { fail.push(`macros: ${e.message}`); }
-    }
-
-    // RGB map paints + display custom text (payload-addressed).
+    // RGB map paints (payload-addressed).
     let rgbTouched = false;
     for (const [k, hsv] of Object.entries(ws.dirty.rgb)) {
         const [l, led] = k.split(',').map(Number);
@@ -487,15 +193,6 @@ export async function syncWorkspace(app, ws) {
         } catch (e) { fail.push(`rgb ${k}: ${e.message}`); }
     }
     if (rgbTouched) { try { await app.flask.save(CH.rgbMap); } catch { /* no-op */ } }
-    let dispTouched = false;
-    for (const line of Object.keys(ws.dirty.dispText)) {
-        try {
-            await app.flask.setBytes(CH.display, 0x30 + Number(line),
-                [...new TextEncoder().encode(ws.dispText[line] ?? '')]);
-            delete ws.dirty.dispText[line]; applied++; dispTouched = true;
-        } catch (e) { fail.push(`display line ${line}: ${e.message}`); }
-    }
-    if (dispTouched) { try { await app.flask.save(CH.display); } catch { /* no-op */ } }
 
     saveWorkspace(ws);
     return { applied, clamped, failures: fail, dropped };
@@ -533,7 +230,7 @@ export async function maybeSyncOffline(app, device) {
 
     if (localStorage.getItem(AUTO_KEY) === '1') { await run(); return; }
 
-    const lines = describeChanges(ws, app.profile);
+    const lines = describeChanges(ws);
     await new Promise((resolve) => {
         const autoCb = el('input', { type: 'checkbox' });
         const body = el('div', {},
@@ -560,90 +257,4 @@ export async function maybeSyncOffline(app, device) {
         // Backdrop click = "Later" (modal removes itself; don't hang loadDevice).
         back.addEventListener('click', (e) => { if (e.target === back) resolve(); });
     });
-}
-
-/**
- * After a successful real connect, snapshot the device so the next offline
- * session starts from real state (geometry, custom keycodes, keymap).
- * Keeps any still-queued journal entries.
- */
-export async function captureSnapshot(app, device) {
-    const key = workspaceKey(app.family, device);
-    const prev = loadWorkspace(key);
-    const ws = prev ?? {
-        v: 1, key, family: app.family,
-        tunables: {}, qsids: {},
-        dirty: { km: {}, enc: {}, tun: {}, qsid: {}, saves: [] },
-    };
-    ws.source = 'device';
-    ws.savedAt = Date.now();
-    ws.label = app.profile.name;
-    ws.protocolVersion = app.protocolVersion;
-    ws.layerCount = app.layerCount;
-    ws.profile = app.profile;
-    ws.keymap = await app.vial.readKeymap(app.layerCount, app.profile.matrixRows, app.profile.matrixCols);
-    const encs = encoderCount(app.profile);
-    ws.encoders = [];
-    for (let l = 0; l < app.layerCount; l++) {
-        const layer = [];
-        for (let i = 0; i < encs; i++) layer.push(await app.vial.encoderGet(l, i));
-        ws.encoders.push(layer);
-    }
-    normalize(ws);
-
-    // Dynamic entries + macros (any Vial board). Indices still dirty (a
-    // failed sync) keep their queued values — don't clobber desired state.
-    try {
-        const counts = await app.vial.dynamicEntryCounts();
-        const ent = { counts, td: {}, combo: {}, ko: {}, ar: {} };
-        const kinds = [
-            ['td', counts.tapDance, (i) => app.vial.tapDanceGet(i), TapDance.isEmpty],
-            ['combo', counts.combo, (i) => app.vial.comboGet(i), Combo.isEmpty],
-            ['ko', counts.keyOverride, (i) => app.vial.keyOverrideGet(i), KeyOverride.isEmpty],
-            ['ar', counts.altRepeat, (i) => app.vial.altRepeatGet(i), AltRepeat.isEmpty],
-        ];
-        for (const [kind, count, get, isEmpty] of kinds) {
-            for (let i = 0; i < count; i++) {
-                if (ws.dirty[kind][i]) { ent[kind][i] = ws.entries[kind][i]; continue; }
-                const e = await get(i);
-                if (!isEmpty(e)) ent[kind][i] = e;
-            }
-        }
-        ws.entries = ent;
-    } catch (e) { console.warn('entry snapshot failed:', e); }
-    try {
-        if (!ws.dirty.macros) {
-            const count = await app.vial.macroCount();
-            const bufferSize = await app.vial.macroBufferSize();
-            ws.macros = { count, bufferSize,
-                list: MacroCodec.decode(await app.vial.readMacroBuffer(bufferSize), count) };
-        }
-    } catch (e) { console.warn('macro snapshot failed:', e); }
-    // Corner chords (0x28): geometry, own-layer masks, and the outputs of
-    // layer 0 plus each def's own layers (not every resolved layer: that is
-    // defs x layers frames on every connect).
-    try {
-        if (app.caps?.cornerCombos) {
-            const g = (id, p, n) => app.flask.getBytes(CH.corner, id, p, n);
-            const count = await app.flask.getU16(CH.corner, V.ccDefCount);
-            const cc = { defs: [], own: [], out: {} };
-            for (let def = 0; def < count; def++) {
-                const geo = await g(V.ccDef, [def], 1);
-                cc.defs.push(Array.from(geo.slice(1, 1 + CC.maxKeys + 1)));
-                const m = await g(V.ccLayers, [def], 1);
-                const mask = (m[1] << 8) | m[2];
-                cc.own.push(mask);
-                if (cc.defs[def].slice(0, CC.maxKeys).every((p) => p === CC.posNone)) continue;
-                for (let layer = 0; layer < Math.min(16, app.layerCount); layer++) {
-                    if (layer && !(mask & (1 << layer))) continue;
-                    const o = await g(V.ccOut, [def, layer], 2);
-                    const kc = (o[2] << 8) | o[3];
-                    if (kc) (cc.out[layer] ??= {})[def] = kc;
-                }
-            }
-            ws.corner = cc;
-        }
-    } catch (e) { console.warn('chord snapshot failed:', e); }
-
-    saveWorkspace(ws);
 }

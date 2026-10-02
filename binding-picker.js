@@ -3,48 +3,31 @@
 // parameters, groups as chips, one search across keys and behaviors.
 //
 // Value types, by adapter (SURFACES[surface].adapter):
-//   'qmk'        number, a QMK u16 keycode
 //   'zmk-studio' {behaviorId, param1, param2}, a Studio binding
 //   'zmk-typed'  {action, param1, behaviorId?, param2?}; action uses the
 //                shared slot vocabulary (zmk-tapdance-codec TD_ACTION:
 //                0 none, 1 usage, 2 macro slot, 3 behavior). Leader and
 //                gesture codecs call param1 `param`.
-//   'nape'       number, a Nape u16 keycode
 
-import { el } from './ui.js?v=60';
-import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=60';
-import { captureOneKey } from './zmk-capture.js?v=60';
-import { saveState } from './save-state.js?v=60';
-import { board } from './board.js?v=60';
+import { el } from './ui.js?v=61';
+import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=61';
+import { captureOneKey } from './zmk-capture.js?v=61';
+import { saveState } from './save-state.js?v=61';
+import { board } from './board.js?v=61';
 import {
     CATALOG_GROUPS, catalogFor, decode, encode, capParts, describeBinding, keySections, modsText,
     resolveTiming, timingBackendNow, attachHoldtap, HOLDTAP, TIMING_PARAM, adapterOf,
     composeTapHold, tapHoldSpecOf, holdTapParts, homeRowPlan,
-} from './behavior-catalog.js?v=60';
+} from './behavior-catalog.js?v=61';
 
 /**
  * Every surface a picker can serve (spec §4.7). `hide` lists catalog group
  * ids or entry ids (behavior-catalog.js) the surface cannot store, plus
  * 'mods-row' (no held-modifier row on the Keys grid). Callers pass the key,
  * e.g. `openPicker({ surface: 'zmk.comboOutput', … })`.
- * @type {Record<string, {adapter: 'qmk'|'zmk-studio'|'zmk-typed'|'nape', stores: string, hide: string[]}>}
+ * @type {Record<string, {adapter: 'zmk-studio'|'zmk-typed', stores: string, hide: string[]}>}
  */
 export const SURFACES = {
-    'qmk.key': { adapter: 'qmk', stores: 'u16 keycode', hide: [] },
-    'qmk.encoder': { adapter: 'qmk', stores: 'u16 keycode', hide: [] },
-    'qmk.comboOutput': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader'] },
-    'qmk.tapDanceStep': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader'] },
-    'qmk.keyOverride': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader'] },
-    'qmk.cornerChord': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader'] },
-    // Sval < v16 only takes tappable keycodes; v16+ is the mouseChord shape.
-    // The caller picks the variant from caps.
-    'qmk.gestureSlotTappable': { adapter: 'qmk', stores: 'tappable u16', hide: ['modifiers', 'layers', 'mouse', 'run', 'advanced'] },
-    'qmk.gestureSlot': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader', 'layers'] },
-    'qmk.mouseChord': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader', 'layers'] },
-    'qmk.macroKey': { adapter: 'qmk', stores: 'basic keycode', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced', 'mods-row'] },
-    'qmk.leaderKey': { adapter: 'qmk', stores: 'basic keycode', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced'] },
-    'qmk.cskBase': { adapter: 'qmk', stores: 'basic keycode', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced', 'mods-row'] },
-    'qmk.cskShifted': { adapter: 'qmk', stores: 'basic keycode + mods', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced'] },
     'zmk.key': { adapter: 'zmk-studio', stores: 'Studio binding', hide: [] },
     'zmk.comboOutput': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'advanced'] },
     'zmk.tapDanceStep': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'tap-dance', 'advanced'] },
@@ -52,20 +35,16 @@ export const SURFACES = {
     'zmk.macroKey': { adapter: 'zmk-typed', stores: 'usage', hide: ['modifiers', 'layers', 'mouse', 'run', 'advanced'] },
     'zmk.cskBase': { adapter: 'zmk-typed', stores: 'usage', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced', 'mods-row'] },
     'zmk.cskShifted': { adapter: 'zmk-typed', stores: 'usage + mods', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced'] },
-    'nape.key': { adapter: 'nape', stores: 'Nape u16', hide: ['media', 'advanced'] },
 };
 
 // What each storage kind can hold, beyond the group hides: entry ids, or
 // null for "anything the adapter encodes".
 const STORES = {
-    'basic keycode': ['key', 'none'],
-    'basic keycode + mods': ['key', 'none'],
-    'tappable u16': ['key', 'none', 'media-key'],
     'usage / macro': ['key', 'media-key', 'macro', 'none'],
     usage: ['key', 'media-key', 'none'],
     'usage + mods': ['key', 'media-key', 'none'],
 };
-const KEYMAP_SURFACES = new Set(['qmk.key', 'qmk.encoder', 'zmk.key', 'nape.key']);
+const KEYMAP_SURFACES = new Set(['zmk.key']);
 const GROUP_REASON = {
     modifiers: 'Modifier behaviors', layers: 'Layer keys', mouse: 'Mouse keys', media: 'Media and system keys',
     run: 'Macros and tap dances', advanced: 'Raw behaviors',
@@ -76,8 +55,7 @@ const GROUP_REASON = {
 export function surfaceEntries(surface, app) {
     const spec = SURFACES[surface];
     if (!spec) throw new Error(`unknown surface ${surface}`);
-    const fam = spec.adapter === 'nape' ? { family: 'nape' } : spec.adapter === 'qmk' ? { adapter: 'qmk' } : { adapter: 'zmk-studio' };
-    const all = catalogFor({ ...app, ...fam });
+    const all = catalogFor({ ...app, adapter: 'zmk-studio' });
     const storable = STORES[spec.stores] ?? null;
     const entries = all.filter((e) => !spec.hide.includes(e.group) && !spec.hide.includes(e.id)
         && (!storable || storable.includes(e.id))
@@ -190,13 +168,12 @@ const MOD_CHIPS = [{ bit: 0x01, g: '⌃', n: 'Control' }, { bit: 0x02, g: '⇧',
 
 /**
  * Build the picker content without a host. Returns
- * {root, setValue(v), focus(), stop(), capturing()}. picker.js and the
- * Nape/ZMK legacy wrappers use it; everything else calls openPicker.
+ * {root, setValue(v), focus(), stop(), capturing()}. Everything else calls
+ * openPicker.
  */
 export function buildPickerBody({ surface, value = null, app = {}, position, host = 'docked', onPick }) {
     const spec = SURFACES[surface];
     const adapter = spec.adapter;
-    const isZmk = adapter !== 'qmk' && adapter !== 'nape';
     let entries = surfaceEntries(surface, app);
     const keyEntry = entries.find((e) => e.id === 'key');
     const modsAllowed = !spec.hide.includes('mods-row') && !!keyEntry;
@@ -223,7 +200,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     const chips = el('div', { class: 'bp-groups', role: 'tablist' });
     const bodyEl = el('div', { class: 'bp-body' });
     const caption = el('div', { class: 'bp-caption', 'aria-live': 'polite' });
-    const defaultCaption = () => entries.reason || (adapter === 'qmk' ? '' : '');
+    const defaultCaption = () => entries.reason || '';
     const setCap = (t) => { caption.textContent = t || defaultCaption(); };
     root.addEventListener('pointerover', (e) => { const t = e.target.closest?.('[data-caption]'); if (t) setCap(t.dataset.caption); });
     root.addEventListener('focusin', (e) => { const t = e.target.closest?.('[data-caption]'); if (t) setCap(t.dataset.caption); });
@@ -455,7 +432,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         if (param.kind === 'layer') {
             const ids = param.options ?? Array.from({ length: (param.max ?? 15) + 1 }, (_, i) => i);
             const name = (id) => param.labels?.[id] ?? `Layer ${id}`;
-            return ids.map((id) => ({ value: id, label: name(id), top: `${e.tag} ${isZmk ? '' : id}`.trim(), cap: isZmk ? name(id) : `${id}` }));
+            return ids.map((id) => ({ value: id, label: name(id), top: e.tag, cap: name(id) }));
         }
         if (param.kind === 'slot') {
             const out = [];
@@ -505,7 +482,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         }
         if (x.kind === 'layer') {
             const sel = el('select', { 'aria-label': 'Layer', onchange: () => { p[x.key] = Number(sel.value); } },
-                ...optionsOf(e, x).map((o) => el('option', { value: o.value, text: isZmk ? o.label : `${o.value} ${o.label === `Layer ${o.value}` ? '' : o.label}`.trim(), selected: o.value === p[x.key] })));
+                ...optionsOf(e, x).map((o) => el('option', { value: o.value, text: o.label, selected: o.value === p[x.key] })));
             return el('span', { class: 'bp-ctl' }, el('label', { text: 'Layer' }), sel);
         }
         if (x.kind === 'num' || x.kind === 'slot') {
@@ -592,9 +569,9 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     }
 
     // ---- Tap/Hold composer (WP3b) ----
-    // Native Svalboard flow, one panel: TAP slot (any key) + HOLD slot
-    // (modifiers, a layer, or on ZMK any key). Apply writes MT()/LT() on
-    // QMK/Nape, &fht_l / &fht_r / &fht (live) or the compiled hold-tap on ZMK.
+    // One panel: TAP slot (any key) + HOLD slot (modifiers, a layer, or any
+    // key). Apply writes &fht_l / &fht_r / &fht (live) or the compiled
+    // hold-tap.
 
     function openComposer(v) {
         const spec = v == null ? null : tapHoldSpecOf(v, adapter);
@@ -707,7 +684,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         const kinds = [];
         if (htIds().includes('mod-tap')) kinds.push(['mods', 'Modifiers']);
         if (htIds().includes('layer-tap')) kinds.push(['layer', 'Layer']);
-        if (isZmk && htIds().includes('mod-tap')) kinds.push(['key', 'Key']);
+        if (htIds().includes('mod-tap')) kinds.push(['key', 'Key']);
         return el('span', { class: 'bp-ctl bp-seg', role: 'radiogroup', 'aria-label': 'Hold does' },
             el('label', { text: 'Hold does' }),
             ...kinds.map(([k, label]) => el('button', { class: 'chip' + (th.holdKind === k ? ' on' : ''), role: 'radio',
@@ -731,7 +708,6 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     }
 
     function timingRow(r) {
-        if (adapter === 'qmk' || adapter === 'nape') return el('div', { class: 'bp-note', text: 'Tapping term: global — QMK Settings.' });
         const be = timingBackendNow();
         const live = r.ok && r.params.live && r.params.live !== 'off';
         const pos = posNow();
@@ -817,17 +793,6 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     // ---- Advanced: device leftovers with metadata-driven params ----
     function advancedComposer(e) {
         const wrap = el('div', { class: 'bp-params' });
-        if (adapter === 'qmk' || adapter === 'nape') {
-            const input = el('input', { type: 'text', placeholder: '0x0000', size: 8, 'aria-label': 'Raw keycode (hex)',
-                value: current?.entryId === 'advanced' ? '0x' + (current.params.raw >>> 0).toString(16).toUpperCase().padStart(4, '0') : '' });
-            const go = el('button', { class: 'btn small primary', text: 'Assign', onclick: () => {
-                const v = parseInt(input.value.replace(/^0x/i, ''), 16);
-                if (!(v >= 0 && v <= 0xFFFF)) { setCap('Type a hex keycode, 0x0000–0xFFFF.'); return; }
-                current = decode(v, adapter); onPick(v);
-            } });
-            wrap.append(el('span', { class: 'bp-ctl' }, el('label', { text: 'Keycode' }), input), go);
-            return wrap;
-        }
         const list = e.behaviors ?? [];
         const sel = el('select', { 'aria-label': 'Behavior' }, ...list.map((d) => el('option', { value: d.id, text: d.displayName })));
         const ps = el('span', { class: 'bp-ctl' });
@@ -910,9 +875,9 @@ export function valueLabel(value, surface) {
  * A binding as a small inline cell for row / tile outputs (combo, macro,
  * leader, tap dance). Dual-role bindings show labelled HOLD and TAP parts;
  * anything else is the one-line description. For WP4a / WP4b.
- * @param {*} binding  adapter-typed value (QMK u16, Studio or typed ZMK)
+ * @param {*} binding  adapter-typed value (Studio or typed ZMK)
  * @param {string} [surfaceOrAdapter]  a SURFACES key or an adapter name;
- *        default: guessed from the value (pass 'nape' for Nape u16)
+ *        default: guessed from the value
  * @returns {HTMLSpanElement}
  */
 export function renderBindingCell(binding, surfaceOrAdapter) {

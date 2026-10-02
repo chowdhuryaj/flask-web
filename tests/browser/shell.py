@@ -23,10 +23,6 @@ SUBSET = {  # tab labels that must exist per group (1.4); WP4 adds more later
               'Device': {'Modes', 'Test', 'Keyboard'}},
     'imprint': {'Behaviour': {'Combos', 'Macros', 'Tap Dance', 'Shift Keys', 'Leader'},
                 'Device': {'Mouse', 'Gestures', 'RGB', 'Modes', 'Test', 'Keyboard'}},
-    'svalboard': {'Behaviour': {'Macros', 'Tap Dance', 'Combos', 'Key Overrides'},
-                  'Device': {'Mouse', 'QMK Settings', 'Keyboard'}},
-    'adept': {'Behaviour': {'Macros', 'Tap Dance', 'Combos', 'Key Overrides'},
-              'Device': {'QMK Settings', 'Keyboard'}},
 }
 
 
@@ -130,14 +126,14 @@ def check_assign_command(browser, failures):
     if labels():
         failures.append('palette offers Assign with no key selected')
     page.evaluate("""async () => {
-      const { board } = await import('./board.js?v=60');
+      const { board } = await import('./board.js?v=61');
       board.selectedKey = () => ({ layer: 0, pos: 1 });
     }""")
     if 'Assign to selected key…' not in labels():
         failures.append('palette lacks "Assign to selected key…" with a key selected')
     # Status bar Save segment follows saveState.
     page.evaluate("""async () => {
-      const { saveState } = await import('./save-state.js?v=60');
+      const { saveState } = await import('./save-state.js?v=61');
       saveState.markDirty('studio-keymap', 'keymap', async () => {});
     }""")
     txt = page.locator('#save-btn').inner_text()

@@ -8,16 +8,14 @@ TOTEM: click key 0, pick A, key 0 reads A and the selection moves to key 1;
 click key 1 twice opens the popover; undo restores key 0; remove then add a
 layer; rename sticks; position-pick mode; save-state dirty/discard.
 Imprint: every key (rotated thumbs included) sits inside the SVG frame.
-NLKB16: encoder caps select and do not advance. Adept/Svalboard: chord boxes
-and quick draw checks. Screenshots: tests/artifacts/board/ (and the scratch
-dir when WP2_SHOTS is set).
+Screenshots: tests/artifacts/board/ (and the scratch dir when WP2_SHOTS is set).
 """
 import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import ROOT, SVAL, launch, new_context, open_workspace, sync_playwright  # noqa: E402
+from harness import ROOT, launch, new_context, open_workspace, sync_playwright  # noqa: E402
 
 OUT = ROOT / 'tests' / 'artifacts' / 'board'
 SHOTS = os.environ.get('WP2_SHOTS')   # extra copy dir for the scratch screenshots
@@ -39,7 +37,7 @@ def cap(page, i):
 
 
 def selected(page):
-    return page.evaluate("""async () => (await import('/board.js?v=60')).board.selectedKey()""")
+    return page.evaluate("""async () => (await import('/board.js?v=61')).board.selectedKey()""")
 
 
 def pick_zmk_key(page, name):
@@ -80,19 +78,19 @@ def totem(browser):
     check(selected(page) == {'layer': 0, 'pos': 1}, 'totem: popover pick does not advance')
 
     # Undo restores both keys, in order; redo reapplies.
-    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
     check(cap(page, 1) == 'W', f'totem: undo restores key 1, got {cap(page, 1)}')
-    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=61')).board.undo()")
     check(cap(page, 0) == 'Q', f'totem: undo restores key 0, got {cap(page, 0)}')
-    page.evaluate("async () => (await import('/board.js?v=60')).board.redo()")
+    page.evaluate("async () => (await import('/board.js?v=61')).board.redo()")
     check(cap(page, 0) == 'A', f'totem: redo reapplies key 0, got {cap(page, 0)}')
 
     # Save-state: the edit registered; discard clears it and restores the device keymap.
-    n = page.evaluate("async () => (await import('/save-state.js?v=60')).saveState.dirty().map(d => d.source)")
+    n = page.evaluate("async () => (await import('/save-state.js?v=61')).saveState.dirty().map(d => d.source)")
     check(n == ['studio-keymap'], f'totem: studio-keymap registered with save-state, got {n}')
-    page.evaluate("""async () => { const t = (await import('/zmk-keymap-tab.js?v=60')).zmkLiveKeymapTab(); await t.discardChanges(); }""")
+    page.evaluate("""async () => { const t = (await import('/zmk-keymap-tab.js?v=61')).zmkLiveKeymapTab(); await t.discardChanges(); }""")
     check(cap(page, 0) == 'Q', f'totem: discard restores key 0, got {cap(page, 0)}')
-    check(page.evaluate("async () => (await import('/save-state.js?v=60')).saveState.dirty().length") == 0,
+    check(page.evaluate("async () => (await import('/save-state.js?v=61')).saveState.dirty().length") == 0,
           'totem: discard cleans save-state')
 
     # Layer switch + rename + remove/add.
@@ -117,7 +115,7 @@ def totem(browser):
 
     # Position-pick mode.
     page.locator('.bd-chip', has_text='base').first.click()
-    page.evaluate("""async () => { const { board } = await import('/board.js?v=60');
+    page.evaluate("""async () => { const { board } = await import('/board.js?v=61');
         window.__picks = []; window.__stop = board.pickPositions({ initial: [3], max: 2, label: 'Pick positions for Combo 1', onChange: (p) => { window.__picks = p; } }); }""")
     key(page, 4).click()
     check(page.evaluate('window.__picks') == [3, 4], f'totem: pick mode reports click order, got {page.evaluate("window.__picks")}')
@@ -129,7 +127,7 @@ def totem(browser):
     page.evaluate('window.__stop()')
     check(page.locator('.bd-banner').count() == 0, 'totem: stop() leaves pick mode')
     # WP7 allowRepeat (leader): a picked key appends again
-    page.evaluate("""async () => { const { board } = await import('/board.js?v=60');
+    page.evaluate("""async () => { const { board } = await import('/board.js?v=61');
         window.__picks = []; window.__stop = board.pickPositions({ max: 4, allowRepeat: true, onChange: (p) => { window.__picks = p; } }); }""")
     key(page, 3).click()
     key(page, 3).click()
@@ -177,70 +175,10 @@ def imprint(browser):
     ctx.close()
 
 
-def nlkb16(browser):
-    ctx, page, errors = new_context(browser)
-    open_workspace(page, 'NLKB16-02')
-    encs = page.locator('.kb-svg g.enc')
-    check(encs.count() >= 2, f'nlkb16: encoder caps drawn ({encs.count()})')
-    page.locator('.kb-svg g.key').first.click()
-    before = selected(page)
-    encs.first.click()
-    s = selected(page)
-    check(s and isinstance(s['pos'], dict) and 'encoder' in s['pos'], f'nlkb16: encoder cap selects, got {s}')
-    # Picking a keycode on an encoder cap keeps the selection there.
-    was = encs.first.locator('.cap-main').text_content()
-    page.locator('#panels .panel.active .bp-grid .bp-key').nth(3).click()   # a letter key, not the current binding
-    page.wait_for_timeout(200)
-    now = encs.first.locator('.cap-main').text_content()
-    check(now and now != was, f'nlkb16: encoder cap shows the new keycode ({was!r} -> {now!r})')
-    after = selected(page)
-    check(after == s, f'nlkb16: encoder pick does not advance (was {s}, now {after}, key was {before})')
-    shot(page, 'nlkb16-encoder')
-    check(not errors, f'nlkb16: page errors {errors}')
-    ctx.close()
-
-
-def adept_sval(browser):
-    ctx, page, errors = new_context(browser)
-    open_workspace(page, 'Ploopy Adept')
-    page.locator('.kb-svg g.key').first.click()
-    page.locator('#panels .panel.active .picker button').nth(8).click()
-    page.wait_for_timeout(200)
-    check(selected(page) is not None, 'adept: auto-advance keeps a selection')
-    page.locator('.bd-chip').nth(1).dblclick()
-    page.locator('.bd-rename').fill('AdeptX')
-    page.locator('.bd-rename').press('Enter')
-    check(page.locator('.bd-chip', has_text='AdeptX').count() == 1, 'adept: QMK rename sticks')
-    page.reload()
-    page.locator('#offline-list .dev-item').filter(has_text='Ploopy Adept').first.click()
-    page.locator('.kb-svg .keycap').first.wait_for(timeout=10000)
-    page.locator('.bd-more').click()   # empty layers are hidden until asked for
-    check(page.locator('.bd-chip', has_text='AdeptX').count() == 1, 'adept: rename survives reload')
-    check(not errors, f'adept: page errors {errors}')
-    ctx.close()
-
-    ctx, page, errors = new_context(browser)
-    open_workspace(page, SVAL['label'])
-    keys = page.locator('.kb-svg g.key').count()
-    page.evaluate("""async () => { const { board } = await import('/board.js?v=60');
-        const a = board.adapter; const ks = a.profile.keys;
-        board.setChordBoxes([{ id: 'c1', positions: [{ row: ks[0].row, col: ks[0].col }, { row: ks[1].row, col: ks[1].col }], label: 'Esc' },
-                             { id: 'c2', positions: [{ row: ks[2].row, col: ks[2].col }, { row: ks[3].row, col: ks[3].col }], label: 'Tab', inherited: true }],
-                            (b) => { window.__chord = b.id; }); }""")
-    check(page.locator('.kb-svg .chord-box').count() == 2, 'svalboard: chord boxes drawn')
-    page.locator('.kb-svg .chord-box').first.click()
-    check(page.evaluate('window.__chord') == 'c1', 'svalboard: chord box click callback')
-    check(page.locator('.kb-svg .chord-box.inherited').count() == 1, 'svalboard: inherited chord is dashed')
-    shot(page, 'svalboard-chords')
-    check(keys > 0, 'svalboard: keys drawn')
-    check(not errors, f'svalboard: page errors {errors}')
-    ctx.close()
-
-
 RESTORE_ASK = """async () => {
-  const t = (await import('/zmk-keymap-tab.js?v=60')).zmkLiveKeymapTab();
-  const { keymapLayersData } = await import('/zmk-keymap-sync.js?v=60');
-  const { zmkBehaviors } = await import('/zmk-keycodes.js?v=60');
+  const t = (await import('/zmk-keymap-tab.js?v=61')).zmkLiveKeymapTab();
+  const { keymapLayersData } = await import('/zmk-keymap-sync.js?v=61');
+  const { zmkBehaviors } = await import('/zmk-keycodes.js?v=61');
   const live = keymapLayersData(t.keymap, zmkBehaviors());
   const snap = JSON.parse(JSON.stringify(live));
   snap[0].bindings[0].param1 = 0x70005;   // B
@@ -249,7 +187,7 @@ RESTORE_ASK = """async () => {
   window.__choice = undefined;
   t._askRestore({ savedAt: '2026-09-30T12:00:00Z', layers: snap }, live).then((c) => { window.__choice = c; });
 }"""
-DIRTY = "async () => (await import('/save-state.js?v=60')).saveState.dirty().map(d => d.source)"
+DIRTY = "async () => (await import('/save-state.js?v=61')).saveState.dirty().map(d => d.source)"
 
 
 def restore_dialog(browser):
@@ -277,7 +215,7 @@ def restore_dialog(browser):
     page.wait_for_timeout(500)
     check(cap(page, 0) == 'B', f'restore: saved copy written live, key 0 = {cap(page, 0)}')
     check(page.evaluate(DIRTY) == ['studio-keymap'], f'restore: left unsaved for the status bar Save, dirty {page.evaluate(DIRTY)}')
-    check(page.evaluate("async () => (await import('/zmk-keymap-tab.js?v=60')).zmkLiveKeymapTab().unsaved") is True, 'restore: never auto-saved')
+    check(page.evaluate("async () => (await import('/zmk-keymap-tab.js?v=61')).zmkLiveKeymapTab().unsaved") is True, 'restore: never auto-saved')
     check(not errors, f'restore: page errors {errors}')
     ctx.close()
 
@@ -286,7 +224,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = launch(p)
-        for fn in (totem, restore_dialog, imprint, nlkb16, adept_sval):
+        for fn in (totem, restore_dialog, imprint):
             try:
                 fn(browser)
             except Exception as e:  # noqa: BLE001 - report and continue

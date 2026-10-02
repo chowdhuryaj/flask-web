@@ -11,20 +11,20 @@
 //
 // Also hosts the "Hold timing" card (flask_holdtap, proto 17).
 
-import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=60';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=60';
-import { CH, V } from './flaskproto.js?v=60';
-import { board } from './board.js?v=60';
-import { saveState } from './save-state.js?v=60';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=61';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=61';
+import { CH, V } from './flaskproto.js?v=61';
+import { board } from './board.js?v=61';
+import { saveState } from './save-state.js?v=61';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
     comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
-} from './zmk-combos-codec.js?v=60';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=60';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=60';
+} from './zmk-combos-codec.js?v=61';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=61';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=61';
 
 const posText = (ps) => ps.join(' + ');
 
@@ -75,7 +75,7 @@ export class ZmkCombosTab {
             hid?.resume?.();
         }
         this.bar ??= reloadBar(CH.combos, {
-            label: 'Combos', line: 'zmk',
+            label: 'Combos',
             save: () => this.app.flask.save(CH.combos),
             reload: () => this.load(),
         });
@@ -115,7 +115,7 @@ export class ZmkCombosTab {
 
     markUnsaved() {
         if (this.bar) this.bar.markEdited();
-        else saveState.markDirty(CH.combos, 'Combos', () => this.app.flask.save(CH.combos), { line: 'zmk' });
+        else saveState.markDirty(CH.combos, 'Combos', () => this.app.flask.save(CH.combos));
     }
 
     async writeSlot(i, before = null) {

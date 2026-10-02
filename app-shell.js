@@ -14,14 +14,14 @@
 //   shell.board              the board.js singleton
 //
 // Also exported: KeyboardTab (Device › Keyboard, spec §1.3 "Device ›
-// Keyboard"): appearance, diagnostics, lock, bootloader, device info.
+// Keyboard"): appearance, diagnostics, device info.
 
-import { setCaption, bindCaptionBar } from './caption.js?v=60';
-import { board } from './board.js?v=60';
-import { el, toast } from './ui.js?v=60';
-import { familyLabel } from './profiles.js?v=60';
+import { setCaption, bindCaptionBar } from './caption.js?v=61';
+import { board } from './board.js?v=61';
+import { el } from './ui.js?v=61';
+import { familyLabel } from './zmk.js?v=61';
 import { THEMES, TEXT_SCALE, appearance, applyTheme, applyTextScale,
-         currentTheme, currentTextScale } from './themes.js?v=60';
+         currentTheme, currentTextScale } from './themes.js?v=61';
 
 export const shell = {
     regions: {},
@@ -45,10 +45,8 @@ export class KeyboardTab {
         appearance.addEventListener('appearance', this._refresh);
     }
 
-    async load() {
+    load() {
         const { app } = this;
-        const qmk = !!app.caps?.vial && !app.offline && !!app.hid?.connected;
-
         this.themes = el('div', { class: 'kb-themes', role: 'group', 'aria-label': 'Theme' },
             ...Object.entries(THEMES).map(([id, t]) => el('button', {
                 class: 'kb-theme', 'data-theme-id': id, 'aria-pressed': 'false',
@@ -74,8 +72,7 @@ export class KeyboardTab {
                 el('p', { class: 'hint', text: 'Live transport and Studio event log. Export it when the board misbehaves.' }),
                 el('button', { class: 'btn', text: 'Diagnostics…', onclick: () => app.openDiagnostics?.() })),
         ];
-        if (qmk) sections.push(this.#lockSection());
-        sections.push(await this.#infoSection());
+        sections.push(this.#infoSection());
         this.root.replaceChildren(...sections);
         this.#syncAppearance();
     }
@@ -89,44 +86,12 @@ export class KeyboardTab {
         this.scaleOut.textContent = `${Math.round(s * 100)}%`;
     }
 
-    #lockSection() {
-        const { app } = this;
-        const state = el('span', { text: app.unlocked ? 'Unlocked' : 'Locked' });
-        const lockBtn = el('button', {
-            class: 'btn', text: app.unlocked ? 'Lock' : 'Unlock…', onclick: () => app.onHudLockClick?.(),
-        });
-        const boot = el('button', {
-            class: 'btn danger', text: 'Jump to bootloader', disabled: !app.unlocked,
-            title: app.unlocked ? '' : 'Unlock the keyboard first',
-            'data-caption': 'Reboots the keyboard into its bootloader for flashing. Needs unlock.',
-            onclick: async () => {
-                if (!confirm('Reboot into the bootloader? The keyboard disconnects until you flash or replug it.')) return;
-                try { await app.vial.bootloaderJump(); } catch (e) { toast(`Bootloader jump failed: ${e.message}`, true); }
-            },
-        });
-        return el('section', {},
-            el('h3', { text: 'Unlock' }),
-            el('p', { class: 'hint', text: 'Macros, matrix reads and the bootloader jump are locked until you unlock.' }),
-            el('div', { class: 'kb-row' }, state, lockBtn, boot));
-    }
-
-    async #infoSection() {
+    #infoSection() {
         const { app } = this;
         const rows = [['Device', app.profile?.name ?? '—'], ['Family', familyLabel(app.family)]];
         if (app.offline) rows.push(['Mode', `Offline workspace: ${app.offlineWs?.label ?? ''}`]);
         if (app.protocolVersion != null) rows.push(['Flask protocol', `v${app.protocolVersion}`]);
-        else if (!app.offline && app.caps?.vial) rows.push(['Flask protocol', 'none (plain Vial)']);
-        if (app.viaVersion != null) rows.push(['VIA protocol', String(app.viaVersion)]);
-        if (app.vialVersion != null) rows.push(['Vial protocol', String(app.vialVersion)]);
         if (app.layerCount) rows.push(['Layers', String(app.layerCount)]);
-        if (app.vial && app.caps?.vial) {
-            try {
-                const c = await app.vial.dynamicEntryCounts();
-                rows.push(['Tap dance slots', String(c.tapDance)], ['Combo slots', String(c.combo)],
-                    ['Key override slots', String(c.keyOverride)]);
-                rows.push(['Macro slots', String(await app.vial.macroCount())]);
-            } catch { /* older firmware: no dynamic entries */ }
-        }
         return el('section', {},
             el('h3', { text: 'Device info' }),
             el('dl', { class: 'kb-info' }, ...rows.flatMap(([k, v]) => [el('dt', { text: k }), el('dd', { text: v })])));

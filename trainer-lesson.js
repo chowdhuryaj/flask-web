@@ -15,9 +15,9 @@
 
 import {
     Filter, findWords, makeRNG, randomSample, weightedSample, SPACE,
-} from './trainer-model.js?v=60';
-import { WORDS } from './trainer-words.js?v=60';
-import { speedToTime, wpmToCpm } from './trainer-stats.js?v=60';
+} from './trainer-model.js?v=61';
+import { WORDS } from './trainer-words.js?v=61';
+import { speedToTime, wpmToCpm } from './trainer-stats.js?v=61';
 
 /** Letters always in play, however badly they are going. keybr's floor. */
 const MIN_ALPHABET = 6;
@@ -196,7 +196,7 @@ export function allKeys(letters, keyStatsMap, settings) {
 
 /**
  * Unlock order. Frequency order is keybr's default and gives ETAOIN…; keyboard
- * order weights each letter by where it sits on THIS keyboard, so the Svalboard
+ * order weights each letter by where it sits on THIS keyboard, so a board
  * teaches the cluster centres first — the eight keys your fingers rest on —
  * before the up/down/side directions.
  */

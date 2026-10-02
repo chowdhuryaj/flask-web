@@ -1,12 +1,11 @@
 // ZMK offline preview — a device-less Cyboard Imprint workspace, so the
 // whole ZMK surface (Studio keymap editor, Mouse/RGB/Combos/Macros tabs)
-// can be beta-tested with no hardware attached. ZMK-line module: main.js
-// gets one dispatch branch; nothing QMK imports from here.
+// can be beta-tested with no hardware attached.
 //
 // Two stand-ins:
 //  - ZmkOfflineFlask — the Flask raw-HID frame (channels 0x00/0x1A/0x21/
 //    0x23/0x24/0x25) against workspace state, journaling edits for replay
-//    on the next real connect (tunables + RGB ride the shared QMK journal
+//    on the next real connect (tunables + RGB ride the shared journal
 //    shapes so offline.js syncWorkspace applies them; combo slots + macro
 //    steps live in ws.zmkDirty and replay via zmkSyncExtras below).
 //  - OfflineStudioClient — the ZMK Studio RPC client surface
@@ -19,24 +18,24 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=60';
+import { CH, V } from './flaskproto.js?v=61';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=60';
-import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=60';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=60';
-import { OfflineFlask, saveWorkspace, pendingCount, clearDirty } from './offline.js?v=60';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=60';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=60';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=61';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=61';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=61';
+import { OfflineFlask, saveWorkspace, pendingCount, clearDirty } from './offline.js?v=61';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=61';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=61';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=60';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=60';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=61';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=61';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=60';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=60';
+    from './zmk-tapdance-codec.js?v=61';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=61';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=60';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=61';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 
@@ -534,19 +533,15 @@ export function createZmkTemplate(family) {
         profile: {
             family,
             name: ZMK_FAMILY_LABELS[family],
-            matrixRows: 0, matrixCols: 0,
             keys: geomFor(family).map((k, i) => ({
                 row: 0, col: i, pos: i, label: `Key ${i}`,
                 x: k.x, y: k.y, w: k.w ?? 1, h: k.h ?? 1,
             })),
-            encoderKeys: [], encoderPushKeys: {}, displayTile: null,
-            customKeycodes: [],
             layerNames: layers.map((l) => l.name),
             decorations: ZMK_TRACKBALLS[family] ?? [],
         },
-        keymap: null,           // QMK field; the ZMK keymap lives under zmk.
         tunables: tun,
-        dirty: { km: {}, enc: {}, tun: {}, qsid: {}, td: {}, combo: {}, ko: {}, ar: {}, rgb: {}, dispText: {}, saves: [], macros: false },
+        dirty: { tun: {}, rgb: {}, saves: [] },
         zmk: {
             keymap,
             keymapSaved: structuredClone(keymap),
@@ -699,7 +694,6 @@ export function discardOfflineQueued(ws) {
 // Flask frame stand-in
 
 export class ZmkOfflineFlask extends OfflineFlask {
-    line = 'zmk';
     constructor(ws) {
         super(ws);
         normalizeZmkWorkspace(ws);
@@ -736,13 +730,12 @@ export class ZmkOfflineFlask extends OfflineFlask {
     }
 
     async setU16(ch, id, value) {
-        // Live-state ids the QMK LIVE_SET can't know about — never journal.
+        // Live-state ids — never journal.
         if (ch === CH.meta || (ch === CH.macros && id === V.macrosState)) {
             return Math.max(0, Math.min(0xFFFF, Math.round(value))) & 0xFFFF;
         }
-        // ZMK divergence from the QMK LIVE_SET: the gesture active set is a
-        // REAL persisted setting on flask_gestures (QMK's 0x11:0x02 is a
-        // transient latch toggle, hence its LIVE_SET entry upstream).
+        // The gesture active set is a REAL persisted setting on
+        // flask_gestures, so it journals like any tunable.
         // Firmware floor (flask_rgb): 0 means never blank, but any nonzero
         // value below the compiled ZMK idle timeout (30 s) blanks AT that
         // timeout — the activity-idle event is the earliest signal the module
@@ -1133,7 +1126,7 @@ export class OfflineStudioClient extends EventTarget {
     async saveChanges() {
         this.ws.zmk.keymapSaved = structuredClone(this.ws.zmk.keymap);
         // Queue the saved keymap for the next real connect (the "latest
-        // saved keymap wins" auto-sync, same idea as the QMK .vil replay).
+        // saved keymap wins" auto-sync, same idea as the keymap export/import).
         // Export shape: behavior display names are the cross-device
         // identity — the real firmware's ids differ from the sim's, and
         // the keymap tab's import applier resolves names against the
@@ -1220,7 +1213,6 @@ export class OfflineStudioClient extends EventTarget {
 export function attachZmkOffline(app, ws) {
     normalizeZmkWorkspace(ws);
     app.flask = new ZmkOfflineFlask(ws);
-    app.vial = null;
     app.zmkStudioSim = new OfflineStudioClient(ws);
     app.family = ws.family;
     app.protocolVersion = ws.protocolVersion;

@@ -10,25 +10,21 @@
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
-import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=60';
-import { board } from './board.js?v=60';
-import { openPicker } from './binding-picker.js?v=60';
-import { shell } from './app-shell.js?v=60';
-import { saveState } from './save-state.js?v=60';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=60';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=60';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=60';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=60';
-import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=60';
+import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=61';
+import { board } from './board.js?v=61';
+import { openPicker } from './binding-picker.js?v=61';
+import { shell } from './app-shell.js?v=61';
+import { saveState } from './save-state.js?v=61';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=61';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=61';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=61';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=61';
+import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=61';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=60';
-// The picker lives in zmk-picker-legacy.js (WP0 move); re-exported so
-// zmk-combos-tab / zmk-tapdance-tab keep importing it from here.
-import { buildZmkPicker } from './zmk-picker-legacy.js?v=60';
-export { buildZmkPicker };
+} from './zmk-keycodes.js?v=61';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -439,7 +435,7 @@ export class ZmkKeymapTab {
     _setUnsaved(v) {
         this.unsaved = v;
         if (v) {
-            saveState.markDirty('studio-keymap', 'Keymap', this._saveFn(), { discard: this._discardFn(), line: 'zmk' });
+            saveState.markDirty('studio-keymap', 'Keymap', this._saveFn(), { discard: this._discardFn() });
         } else {
             saveState.clean('studio-keymap');
         }
@@ -526,7 +522,7 @@ export class ZmkKeymapTab {
             get profile() {
                 return {
                     family: tab.app?.profile?.family ?? tab.app?.family,
-                    keys: tab.geomKeys, encoderKeys: [], displayTile: null,
+                    keys: tab.geomKeys,
                     labelFor: bindingCap, hoverFor: bindingHover, capAdapter: 'zmk-studio',
                     keyName: (k) => String(k.pos),
                     decorations: tab.app?.profile?.decorations ?? [],

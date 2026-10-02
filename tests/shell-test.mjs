@@ -11,9 +11,9 @@ globalThis.document = { documentElement: { style: {
     setProperty: (k, v) => rootVars.set(k, v), removeProperty: (k) => rootVars.delete(k) } } };
 
 const { THEMES, DEFAULT_THEME, applyTheme, currentTheme, applyTextScale, currentTextScale,
-        applyBoardZoom, currentBoardZoom, TEXT_SCALE, BOARD_ZOOM } = await import('../themes.js?v=60');
-const { bindCaptionBar, setCaption, setCaptionGroup, currentCaption, CAPTION_DEFAULTS } = await import('../caption.js?v=60');
-const { TAB_TABLE, TAB_GROUPS, groupOf } = await import('../tab-registry.js?v=60');
+        applyBoardZoom, currentBoardZoom, TEXT_SCALE, BOARD_ZOOM } = await import('../themes.js?v=61');
+const { bindCaptionBar, setCaption, setCaptionGroup, currentCaption, CAPTION_DEFAULTS } = await import('../caption.js?v=61');
+const { TAB_TABLE, TAB_GROUPS, groupOf } = await import('../tab-registry.js?v=61');
 let checks = 0;
 const ok = (c, m) => { assert.ok(c, m); checks++; };
 const eq = (a, b, m) => { assert.equal(a, b, m); checks++; };
@@ -28,7 +28,6 @@ for (const [ws, tabs] of Object.entries(before)) {
 eq(TAB_GROUPS.map((g) => g.id).join(), 'keys,behaviour,device,trainer', 'group order');
 // Native-only tools never get a row (AJ Q1/Q2).
 for (const id of ['gmk70', 'build', 'bench', 'bake', 'tap-calibrator', 'teleport']) ok(!TAB_TABLE.some((t) => t.id === id), id);
-// QMK Leader and CSK live in Behaviour (WP4b adds the rows).
 eq(groupOf('keyboard'), 'device', 'keyboard tab group');
 
 // ---- themes ----

@@ -1,9 +1,9 @@
-// WP3b Tap/Hold composer: encode/decode per firmware line, hand-side live
-// variant, QMK fallback message, home-row preset, hold/tap labels.
+// WP3b Tap/Hold composer: encode/decode, hand-side live variant, home-row
+// preset, hold/tap labels.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import * as C from '../behavior-catalog.js?v=60';
-import { setZmkContext } from '../zmk-keycodes.js?v=60';
+import * as C from '../behavior-catalog.js?v=61';
+import { setZmkContext } from '../zmk-keycodes.js?v=61';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -12,35 +12,6 @@ const fixture = (f) => JSON.parse(readFileSync(new URL(`./fixtures/${f}-behavior
 const LAYERS = [0, 1, 2].map((id) => ({ id, name: ['base', 'nav', 'sym'][id] }));
 const useZmk = (f) => { const fx = fixture(f); setZmkContext({ behaviors: new Map(fx.behaviors.map((d) => [d.id, d])), layers: LAYERS }); return fx; };
 const F = 0x09, SHIFT = 0x02;
-
-// ---- QMK u16 ----
-{
-    const r = C.composeTapHold({ tap: { key: F }, hold: { kind: 'mods', mods: SHIFT } }, 'qmk');
-    eq(r.ok, true);
-    eq(r.value, 0x2209, 'MT(MOD_LSFT, KC_F)');
-    eq(C.composeTapHold({ tap: { key: F }, hold: { kind: 'mods', mods: SHIFT << 4 } }, 'qmk').value, 0x3209, 'MT(MOD_RSFT, KC_F)');
-    eq(C.composeTapHold({ tap: { key: 0x2C }, hold: { kind: 'layer', layer: 2 } }, 'qmk').value, 0x422C, 'LT(2, KC_SPC)');
-    eq(C.tapHoldSpecOf(0x2209, 'qmk'), { tap: { key: F, mods: 0 }, hold: { kind: 'mods', mods: SHIFT }, timing: undefined });
-    eq(C.tapHoldSpecOf(0x422C, 'qmk').hold, { kind: 'layer', layer: 2 });
-    eq(C.tapHoldSpecOf(0x0009, 'qmk'), { tap: { key: F, mods: 0 }, hold: null });
-    for (const v of [0x2209, 0x3209, 0x2F04, 0x422C, 0x4F1E]) {
-        eq(C.composeTapHold(C.tapHoldSpecOf(v, 'qmk'), 'qmk').value, v, `qmk round trip ${v.toString(16)}`);
-    }
-    // fallbacks: shifted tap, held key, layer > 15, mixed sides, missing slots
-    const bang = C.composeTapHold({ tap: { key: 0x1E, mods: SHIFT }, hold: { kind: 'mods', mods: 0x01 } }, 'qmk');
-    eq(bang.ok, false); eq(bang.fallback, 'tap-dance');
-    ok(/can only tap a plain key/.test(bang.message) && bang.message.includes('"!"') && /tap dance/.test(bang.message), bang.message);
-    eq(C.composeTapHold({ tap: { key: F }, hold: { kind: 'key', key: 0x04 } }, 'qmk').fallback, 'tap-dance');
-    ok(/layers 0–15/.test(C.composeTapHold({ tap: { key: F }, hold: { kind: 'layer', layer: 20 } }, 'qmk').message));
-    ok(/not both/.test(C.composeTapHold({ tap: { key: F }, hold: { kind: 'mods', mods: 0x12 } }, 'qmk').message));
-    ok(/TAP key/.test(C.composeTapHold({ tap: null, hold: { kind: 'mods', mods: 2 } }, 'qmk').message));
-    ok(/modifier/.test(C.composeTapHold({ tap: { key: F }, hold: { kind: 'mods', mods: 0 } }, 'qmk').message));
-    // Nape: same keycode space
-    eq(C.composeTapHold({ tap: { key: F }, hold: { kind: 'mods', mods: SHIFT } }, 'nape').value, 0x2209);
-    eq(C.holdTapParts(0x2209, 'qmk'), { entryId: 'mod-tap', hold: '⇧', tag: '', tap: 'F' });
-    eq(C.holdTapParts(0x422C, 'qmk').hold, 'L2');
-    eq(C.holdTapParts(0x0009, 'qmk'), null);
-}
 
 // ---- ZMK Studio: live hold-tap per hand (Totem has &fht_l / &fht_r / &fht) ----
 {
@@ -89,17 +60,7 @@ const F = 0x09, SHIFT = 0x02;
 // ---- home-row preset ----
 {
     const row = (keys) => keys.map((k, i) => ({ pos: i, x: i < 4 ? i : i + 2, binding: k }));
-    const qmkRow = row([0x04, 0x16, 0x07, 0x09, 0x0D, 0x0E, 0x0F, 0x33]);   // A S D F J K L ;
-    const g = C.homeRowPlan(qmkRow, 'GACS', 'qmk');
-    eq(g.ok, true);
-    eq(g.plan.map((p) => p.value), [0x2804, 0x2416, 0x2107, 0x2209, 0x3833, 0x340F, 0x310E, 0x320D], 'GACS, pinky first: A⌘ S⌥ D⌃ F⇧ | ;⌘ L⌥ K⌃ J⇧');
-    eq(C.homeRowPlan(qmkRow, 'CAGS', 'qmk').plan[0].value, 0x2104, 'CAGS: pinky ⌃');
-    // order is by x, not by click order; an existing mod-tap keeps its tap
-    const shuffled = [...qmkRow].reverse().map((k, i) => (i === 0 ? { ...k, binding: 0x2833 } : k));
-    eq(C.homeRowPlan(shuffled, 'GACS', 'qmk').plan.map((p) => p.value).sort(), g.plan.map((p) => p.value).sort());
-    ok(/8 home keys/.test(C.homeRowPlan(qmkRow.slice(0, 7), 'GACS', 'qmk').message));
-    ok(/no plain key/.test(C.homeRowPlan(row([0x5221, 0x16, 0x07, 0x09, 0x0D, 0x0E, 0x0F, 0x33]), 'GACS', 'qmk').message));
-    // ZMK: left four on &fht_l with left mods, right four on &fht_r with right mods
+    // left four on &fht_l with left mods, right four on &fht_r with right mods
     const fx = useZmk('totem');
     const id = (n) => fx.behaviors.find((d) => d.displayName === n).id;
     const kp = id('Key Press');
@@ -108,5 +69,12 @@ const F = 0x09, SHIFT = 0x02;
     eq(z.plan.map((p) => p.value.behaviorId), [...Array(4).fill(id('Hold-Tap L (live)')), ...Array(4).fill(id('Hold-Tap R (live)'))]);
     eq(z.plan.map((p) => C.holdTapParts(p.value).hold), ['⌘', '⌥', '⌃', '⇧', 'R⌘', 'R⌥', 'R⌃', 'R⇧']);
     eq(z.plan.map((p) => p.hand), [...Array(4).fill('left'), ...Array(4).fill('right')]);
+    // order is by x, not by click order
+    const zrow = row([0x04, 0x16, 0x07, 0x09, 0x0D, 0x0E, 0x0F, 0x33].map((k) => ({ behaviorId: kp, param1: 0x70000 | k, param2: 0 })));
+    eq(C.homeRowPlan([...zrow].reverse(), 'GACS', 'zmk-studio').plan.map((p) => p.value.behaviorId).sort(),
+        z.plan.map((p) => p.value.behaviorId).sort());
+    ok(/8 home keys/.test(C.homeRowPlan(zrow.slice(0, 7), 'GACS', 'zmk-studio').message));
+    const noKey = zrow.map((k, i) => (i === 0 ? { ...k, binding: { behaviorId: id('Momentary Layer'), param1: 1, param2: 0 } } : k));
+    ok(/no plain key/.test(C.homeRowPlan(noKey, 'GACS', 'zmk-studio').message));
 }
 console.log(`taphold-test: ${checks} checks OK`);

@@ -15,11 +15,10 @@
 // side by side, thumb clusters where they physically sit. Falls back to the
 // flat index grid until the keymap tab has connected once.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=60';
-import { CH, V } from './flaskproto.js?v=60';
-import { hsvCss } from './rgb-tab.js?v=60';
-import { colorPicker } from './colorpicker.js?v=60';
-import { renderKeyboardSVG } from './keymap-tab.js?v=60';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=61';
+import { CH, V } from './flaskproto.js?v=61';
+import { colorPicker, hsvCssOf as hsvCss } from './colorpicker.js?v=61';
+import { renderKeyboardSVG } from './board.js?v=61';
 
 /**
  * LED index → key mapping over the physical layout.
@@ -350,7 +349,7 @@ export class ZmkRgbTab {
         const mappedPos = new Set(w.order.filter((p) => p != null));
         const board = renderKeyboardSVG({
             profile: {
-                keys, encoderKeys: [],
+                keys,
                 labelFor: () => '', hoverFor: () => 'click if this key just lit',
                 keyName: (k) => String(k.pos),
             },
@@ -453,7 +452,6 @@ export class ZmkRgbTab {
         const svg = renderKeyboardSVG({
             profile: {
                 keys: mapped,
-                encoderKeys: [],
                 labelFor: () => '',
                 hoverFor: (led) => {
                     const [h, s, v] = this.leds[led] ?? [0, 0, 0];

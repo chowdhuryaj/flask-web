@@ -12,7 +12,7 @@
 // window/localStorage are touched only inside functions — the node vector
 // suite imports this file for the pure conversions.
 
-/** hsv (0-255 each) → rgb (0-255 each). Mirrors rgb-tab.js's hsvCss maths. */
+/** hsv (0-255 each) → rgb (0-255 each). The one hsv->css painter. */
 export function hsvToRgb(h, s, v) {
     const hh = (h / 255) * 360, ss = s / 255, vv = v / 255;
     const c = vv * ss, x = c * (1 - Math.abs(((hh / 60) % 2) - 1)), m = vv - c;

@@ -1,7 +1,6 @@
-// Tiny DOM factories + shared widgets. Pattern lifted from AlooMapper
-// (hid-remapper config-tool-vial vial.js) — no framework, direct DOM.
+// Tiny DOM factories + shared widgets — no framework, direct DOM.
 
-import { saveState } from './save-state.js?v=60';
+import { saveState } from './save-state.js?v=61';
 
 export function el(tag, attrs, ...kids) {
     const e = document.createElement(tag);
@@ -94,7 +93,7 @@ export function renameLabel({ text, placeholder, title = 'click to rename', onCo
 /**
  * Slider row bound to a firmware value. onChange(value) must return the value
  * the firmware ECHOED (it clamps); the control adopts that echo — never its
- * own value. Same hard-won rule as the Swift app (AdeptProtocol clamp-echo).
+ * own value (clamp-echo).
  *
  * opts: { label, hint, min, max, step, value, format, onChange }
  */
@@ -228,14 +227,13 @@ if (typeof document !== 'undefined' && document.addEventListener) {
  * (CH.x) so Save runs channels in ascending order; `save` is what the status
  * bar runs for it, typically `() => flask.save(CH.x)`.
  *
- *   reloadBar(channel, {reload, save, label, line, note})
+ *   reloadBar(channel, {reload, save, label, note})
  *     reload   async () => void   re-read this screen from the device
  *     save     async () => void   persist the channel (status bar calls it)
  *     label    name shown in unsaved lists
- *     line     'qmk'|'zmk'|'nape'  for the never-register check
  *
- * Omit `save` for a channel that has none (Svalboard corner chords 0x28): the
- * bar then never registers and only reloads. State wording is the native one. */
+ * Omit `save` for a channel that has none: the bar then never registers and
+ * only reloads. State wording is the native one. */
 export const RELOAD_STATE = {
     null: SAVE_STATE.null,
     live: 'Unsaved — Save is in the status bar',
@@ -243,7 +241,7 @@ export const RELOAD_STATE = {
     saved: 'Saved ✓',
 };
 
-export function reloadBar(channel, { reload, save, label, line, note } = {}) {
+export function reloadBar(channel, { reload, save, label, note } = {}) {
     const btn = el('button', { class: 'btn small', text: 'Reload from device' });
     const state = el('span', { class: 'state', text: RELOAD_STATE.null });
     const bar = el('div', { class: 'savebar', 'data-reload-bar': '' }, btn, state);
@@ -260,7 +258,7 @@ export function reloadBar(channel, { reload, save, label, line, note } = {}) {
         saveState.markDirty(channel, label || `Channel 0x${Number(channel).toString(16)}`, async () => {
             bar.setState('saving');
             try { await save(); } catch (e) { bar.setState('live'); throw e; }
-        }, { line });
+        });
         bar.setState('live');
     };
     // The status bar's Save cleans the source; reflect it here.

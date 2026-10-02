@@ -1,10 +1,9 @@
 // The one board in the frame (spec §2.4, §3.1, §3.3, §3.4): key drawing,
 // layer bar, selection, assign + auto-advance, click-again popover,
-// undo/redo, position-pick mode, chord boxes.
+// undo/redo, position-pick mode.
 //
 // Contract other packages call (stable since WP0, all kept):
-//   board.selectedKey() → {layer, pos} | null   (QMK: pos = {row, col} or
-//                         {encoder, dir:'cw'|'ccw'}; ZMK/Nape: pos = index)
+//   board.selectedKey() → {layer, pos} | null   (pos = key index)
 //   board.assign(binding, {advance = true}) → Promise<boolean>
 //   board.pickPositions({initial = [], max, label, onChange, allowRepeat}) → stop()
 //                         allowRepeat (leader): a click always appends, so a
@@ -13,27 +12,17 @@
 // Added by WP2:
 //   board.layer / board.setLayer(i)       current layer (events: 'layer')
 //   board.undo() / board.redo()           events: 'history' (canUndo/canRedo)
-//   board.setChordBoxes(boxes|null, onClick)   boxes: [{id, positions:[pos…],
-//                         label, inherited?}]; onClick(box, evt). Read-only
-//                         render between the member keys (Svalboard chords).
-//   board.setLayerBarNote(node|null)      chord hint/warning, right of the chips
-//   board.place(inlineHost, shell.regions)  put layerBarEl + boardEl into the
-//                         frame regions when WP1 mounted them, else inline
-//   board.bind(adapter) → unbind()        a keymap tab hands over its device;
-//                         see the Adapter typedef
-//   board.refresh() / board.resetHistory() / board.showEmptyLayers()
 //   board.setZoom(f)                      writes --board-zoom (1 = 100 %);
 //                         the rail may also just set the CSS var
 //   events: 'select' 'layer' 'change' 'history'
-// Also exports renderKeyboardSVG (moved here; keymap-tab.js re-exports it),
-// baseUnit, layoutOf, splitCap for the HUD, trainer, RGB and tests.
+// Also exports renderKeyboardSVG, baseUnit, layoutOf, splitCap for the HUD,
+// trainer, RGB and tests.
 //
-// Import this file ONLY as './board.js?v=60': x.js and x.js?v=60 are two
+// Import this file ONLY as './board.js?v=61': x.js and x.js?v=61 are two
 // module instances and the singleton would split.
 
-import { el, svgEl, toast as uiToast } from './ui.js?v=60';
-import { capLabel, hoverText } from './keycodes.js?v=60';
-import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=60';
+import { el, svgEl, toast as uiToast } from './ui.js?v=61';
+import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=61';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 export const GAP = 5;
@@ -44,7 +33,7 @@ const toast = (...a) => { if (hasDom()) uiToast(...a); };   // node tests have n
 // ---------------------------------------------------------------- geometry
 
 /** Native unit formula (§2.4): wide boards shrink to fit 1000 px, narrow
- * ones (Adept) get 84 px per key unit. */
+ * ones get 84 px per key unit. */
 export function baseUnit(widthUnits) {
     return widthUnits > 8 ? Math.max(48, 1000 / widthUnits) : 84;
 }
@@ -121,14 +110,14 @@ const cleanTop = (p) => ({ ...p, top: p.top.replace(/[()]/g, ' ').replace(/\s+/g
  * one, else the label split at its last '·'. */
 export function capPartsOf(value, profile, opts = {}) {
     if (opts.partsFor) return cleanTop(opts.partsFor(value));
-    const adapter = profile.capAdapter ?? (profile.labelFor ? null : 'qmk');
+    const adapter = profile.capAdapter ?? null;
     let label;
     if (adapter) {
         const p = catalogCapParts(value, adapter);
         if (p) return cleanTop(p);            // WP3's capParts is authoritative; never re-split on '·'
         label = '';
     } else {
-        label = profile.labelFor(value);
+        label = profile.labelFor?.(value) ?? '';
     }
     return cleanTop(splitCap(label));
 }
@@ -160,7 +149,7 @@ export function fitText(text, maxW, fs, { minScale = 0.45, maxLines = 2 } = {}) 
 /** Hold/tap split for a dual-role key cap (mod-tap, layer-tap), or null. */
 export function htPartsOf(value, profile, opts = {}) {
     if (opts.partsFor) return null;
-    const adapter = profile.capAdapter ?? (profile.labelFor ? null : 'qmk');
+    const adapter = profile.capAdapter ?? null;
     return adapter ? holdTapParts(value, adapter) : null;
 }
 
@@ -199,26 +188,23 @@ const textScale = () => {
 /**
  * Shared SVG keyboard renderer: the frame's board, the HUD, the trainer and
  * the RGB painter.
- * opts: { profile, keycodeAt(row,col), encoderAt(index,cw)?, selected?,
+ * opts: { profile, keycodeAt(row,col), selected?,
  *         onSelect(sel, evt)?, onContext(sel)?, fillFor(key)?,
  *         pressed?: Set<"row,col">, marked?: Set<"row,col">, scale?,
  *         names?: 'sel'|'all', tooltips?: bool, zoomable?: bool,
- *         chords?: [{id, keys:[{row,col}], label, inherited?}],
- *         onChord?(chord, evt), partsFor?(value) → {top, main} }
+ *         partsFor?(value) → {top, main} }
  * Keys may carry r/rx/ry (degrees, key units); they draw and hit-test
  * rotated. fillFor / onContext are the RGB painter's generic hooks.
  */
 export function renderKeyboardSVG(opts) {
     const { profile } = opts;
-    const hoverFor = profile.hoverFor ?? hoverText;
+    const hoverFor = profile.hoverFor ?? (() => '');
     const keyName = profile.keyName ?? ((k) => `${k.row},${k.col}`);
     const scale = opts.scale ?? 1;
     const decorations = profile.decorations ?? [];
-    const items = [...profile.keys, ...profile.encoderKeys];
-    if (profile.displayTile) items.push(profile.displayTile);
+    const items = [...profile.keys];
     for (const d of decorations) items.push({ x: d.x - d.r, y: d.y - d.r, w: d.r * 2, h: d.r * 2 });
     const L = layoutOf(items, scale);
-    const { unit } = L;
     const ts = textScale() * Math.min(1, Math.max(scale, 0.7));
     const mainFs = 12 * ts, topFs = 9 * ts;
     const radius = (profile.family && /^(totem|imprint)/.test(profile.family) ? 5 : 6) * Math.min(1, scale + 0.2);
@@ -230,11 +216,8 @@ export function renderKeyboardSVG(opts) {
     const sel = opts.selected;
     const names = opts.names ?? 'sel';
     const lit = (set, k) => set?.has(`${k.row},${k.col}`);
-    const centres = new Map();
-
     for (const key of profile.keys) {
         const f = L.frame(key);
-        centres.set(`${key.row},${key.col}`, frameCentre(f));
         const value = opts.keycodeAt(key.row, key.col);
         const isSel = sel?.kind === 'key' && sel.row === key.row && sel.col === key.col;
         const isPressed = lit(opts.pressed, key);
@@ -302,39 +285,6 @@ export function renderKeyboardSVG(opts) {
         svg.append(g);
     }
 
-    for (const enc of profile.encoderKeys) {
-        const f = L.frame(enc);
-        const value = opts.encoderAt ? opts.encoderAt(enc.index, enc.clockwise) : 0;
-        const isSel = sel?.kind === 'enc' && sel.index === enc.index && sel.cw === enc.clockwise;
-        const caption = `Encoder ${enc.index} ${enc.clockwise ? 'CW ↻' : 'CCW ↺'} · ${hoverFor(value).split('\n')[0]}`;
-        const parts = partsOf(value, profile, opts);
-        const pick = { kind: 'enc', index: enc.index, cw: enc.clockwise };
-        const g = svgEl('g', {
-            class: 'enc' + (isSel ? ' sel' : ''), 'data-caption': caption, 'aria-label': caption,
-            role: opts.onSelect ? 'button' : null, tabindex: opts.onSelect ? 0 : null,
-            onclick: opts.onSelect ? (e) => opts.onSelect(pick, e) : null,
-            onkeydown: opts.onSelect ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opts.onSelect(pick, e); }
-            } : null,
-        });
-        const rect = svgEl('rect', {
-            class: 'enc-cap' + (isSel ? ' sel' : ''), x: f.x, y: f.y, width: f.w, height: f.h, rx: f.h / 2,
-        });
-        if (opts.tooltips !== false) rect.append(svgEl('title', { text: `Encoder ${enc.index} ${enc.clockwise ? 'CW ↻' : 'CCW ↺'}\n${hoverFor(value)}` }));
-        const fit = fitText(`${enc.clockwise ? '↻' : '↺'}${parts.top ? parts.top + ' ' : ''}${parts.main}`, f.w - 6, mainFs, { minScale: 0.5, maxLines: 1 });
-        g.append(rect, svgEl('text', {
-            class: 'cap-main', x: f.x + f.w / 2, y: f.y + f.h / 2 + fit.fs * 0.34, 'text-anchor': 'middle',
-            style: `font-size:${fit.fs}px`, text: fit.lines[0],
-        }));
-        svg.append(g);
-    }
-
-    if (profile.displayTile) {
-        const f = L.frame(profile.displayTile);
-        svg.append(svgEl('rect', { class: 'oled-tile', x: f.x, y: f.y, width: f.w, height: f.h, rx: 4 * scale }),
-            svgEl('text', { class: 'keyname', x: f.x + f.w / 2, y: f.y + f.h / 2 + 3, 'text-anchor': 'middle', text: 'OLED' }));
-    }
-
     // Decorations: physical features that are not keys (the Imprint's two
     // trackballs). `decorationLabel(d)` supplies a live caption.
     const decoLabel = opts.decorationLabel ?? profile.decorationLabel ?? (() => '');
@@ -356,29 +306,6 @@ export function renderKeyboardSVG(opts) {
             }));
     }
 
-    // Chord boxes (Svalboard corner chords): a small rounded box centred
-    // between its member keys. Solid = owned on this layer, dashed =
-    // inherited from a lower layer.
-    for (const chord of opts.chords ?? []) {
-        const pts = chord.keys.map((k) => centres.get(`${k.row},${k.col}`)).filter(Boolean);
-        if (!pts.length) continue;
-        const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
-        const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-        const bw = Math.max(28, unit * 0.46), bh = Math.max(18, unit * 0.3);
-        const fit = fitText(chord.label ?? '', bw - 4, 10 * ts, { minScale: 0.6, maxLines: 1 });
-        const g = svgEl('g', {
-            class: 'chord-box' + (chord.inherited ? ' inherited' : ''),
-            'data-caption': chord.caption ?? `Chord · ${chord.label ?? ''}`,
-            role: opts.onChord ? 'button' : null, tabindex: opts.onChord ? 0 : null,
-            onclick: opts.onChord ? (e) => { e.stopPropagation(); opts.onChord(chord, e); } : null,
-            onkeydown: opts.onChord ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opts.onChord(chord, e); }
-            } : null,
-        });
-        g.append(svgEl('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: bh / 2 }),
-            svgEl('text', { x: cx, y: cy + fit.fs * 0.34, 'text-anchor': 'middle', style: `font-size:${fit.fs}px`, text: fit.lines[0] }));
-        svg.append(g);
-    }
     return svg;
 }
 
@@ -389,9 +316,8 @@ export function renderKeyboardSVG(opts) {
  * history and drawing; the adapter owns the device.
  * @typedef {object} Adapter
  * @property {string} surface        binding-picker SURFACES key for a key
- * @property {string} [encoderSurface]
  * @property {object} app
- * @property {object} profile        keys/encoderKeys (+ r/rx/ry), labelFor, hoverFor, capAdapter
+ * @property {object} profile        keys (+ r/rx/ry), labelFor, hoverFor, capAdapter
  * @property {() => {index:number,name:string,empty:boolean,live?:boolean}[]} layers
  * @property {(layer:number, sel:object) => *} bindingAt
  * @property {(layer:number, sel:object, value:*) => Promise<boolean|void>} write
@@ -405,8 +331,7 @@ export function renderKeyboardSVG(opts) {
  * @property {(layer:number, sel:object, value:*) => void} [onWrite]  HUD repaint
  */
 
-const sameSel = (a, b) => !!a && !!b && a.kind === b.kind
-    && (a.kind === 'key' ? a.row === b.row && a.col === b.col : a.index === b.index && a.cw === b.cw);
+const sameSel = (a, b) => !!a && !!b && a.kind === b.kind && a.row === b.row && a.col === b.col;
 
 class Board extends EventTarget {
     #a = null;
@@ -415,8 +340,6 @@ class Board extends EventTarget {
     #undo = [];
     #redo = [];
     #pick = null;
-    #chords = null;
-    #note = null;
     #popover = null;
     #showEmpty = false;
     #renaming = null;
@@ -442,10 +365,10 @@ class Board extends EventTarget {
         if (!(await this.#write(layer, sel, binding))) return false;
         this.#undo.push({ layer, sel, before, after: binding });
         this.#redo = [];
-        if (advance && sel.kind === 'key') this.#sel = this.#nextKey(sel);
+        if (advance) this.#sel = this.#nextKey(sel);
         this.#afterEdit();
         this.dispatchEvent(new Event('history'));
-        if (advance && sel.kind === 'key') this.#emitSelect();
+        if (advance) this.#emitSelect();
         return true;
     }
 
@@ -489,11 +412,11 @@ class Board extends EventTarget {
     }
 
     /** 'left' | 'right' by the key's centre against the board's middle; null
-     * when unknown (encoders, no layout). */
+     * when unknown (no layout). */
     handOf(pos) {
         const a = this.#a;
         const sel = a && pos != null ? a.selOf(pos) : null;
-        if (!sel || sel.kind !== 'key') return null;
+        if (!sel) return null;
         const keys = a.profile.keys;
         const cx = (k) => frameCentreUnits(k);
         const k = keys.find((x) => x.row === sel.row && x.col === sel.col);
@@ -561,16 +484,6 @@ class Board extends EventTarget {
     async undo() { return this.#step(this.#undo, this.#redo, 'before'); }
     async redo() { return this.#step(this.#redo, this.#undo, 'after'); }
 
-    setChordBoxes(boxes, onClick) {
-        this.#chords = boxes ? { boxes, onClick } : null;
-        this.#renderBoard();
-    }
-
-    setLayerBarNote(node) {
-        this.#note = node ?? null;
-        this.#renderBar();
-    }
-
     setZoom(f) {
         if (hasDom()) document.documentElement.style.setProperty(BOARD_ZOOM_VAR, String(f));
     }
@@ -598,7 +511,6 @@ class Board extends EventTarget {
             this.#a = adapter;
             this.#sel = null;
             this.#undo = []; this.#redo = [];
-            this.#chords = null;
             this.#renaming = null;
             const n = adapter.layers().length;
             if (this.#layer >= n) this.#layer = 0;
@@ -614,7 +526,6 @@ class Board extends EventTarget {
         this.#closePopover();
         this.#a = null; this.#sel = null;
         this.#undo = []; this.#redo = [];
-        this.#chords = null;
         if (this.#barEl) { this.#barEl.replaceChildren(); this.#boardEl.replaceChildren(); }
     }
 
@@ -647,13 +558,12 @@ class Board extends EventTarget {
     #openPopover(sel, anchor) {
         const a = this.#a;
         this.#closePopover();
-        const surface = sel.kind === 'enc' ? (a.encoderSurface ?? a.surface) : a.surface;
+        const surface = a.surface;
         const value = a.bindingAt(this.#layer, sel);
-        // Loaded on demand: binding-picker pulls in the legacy ZMK picker,
-        // which imports keymap-tab, which imports this file.
+        // Loaded on demand: binding-picker imports this file.
         let closed = false, close = null;
         this.#popover = () => { closed = true; close?.(); };
-        import('./binding-picker.js?v=60').then(({ openPicker }) => {
+        import('./binding-picker.js?v=61').then(({ openPicker }) => {
             if (closed) return;
             close = openPicker({
                 surface, host: 'popover', anchor, app: a.app, value,
@@ -787,7 +697,6 @@ class Board extends EventTarget {
                 btn('＋', ops.addReason ?? 'Add a layer', () => ops.add(), !!ops.addReason));
         }
         kids.push(el('span', { class: 'bd-spacer' }));
-        if (this.#note) kids.push(this.#note);
         const hud = a.app?.hud;
         if (hud && !a.app.offline) {
             kids.push(el('button', {
@@ -810,18 +719,12 @@ class Board extends EventTarget {
             const s = a.selOf(p);
             return s && `${s.row},${s.col}`;
         }).filter(Boolean)) : null;
-        const chords = this.#chords && this.#chords.boxes.map((b) => ({
-            ...b, keys: b.positions.map((p) => a.selOf(p)).filter(Boolean),
-        }));
         const svg = renderKeyboardSVG({
             profile: a.profile, zoomable: true, tooltips: false,
-            names: pick || this.#chords ? 'all' : 'sel',
+            names: pick ? 'all' : 'sel',
             keycodeAt: (row, col) => a.bindingAt(layer, { kind: 'key', row, col }),
-            encoderAt: (index, cw) => a.bindingAt(layer, { kind: 'enc', index, cw }),
             selected: pick || a.readOnly ? null : this.#sel,
             marked,
-            chords,
-            onChord: this.#chords ? (c, e) => this.#chords.onClick?.(this.#chords.boxes.find((b) => b.id === c.id), e) : null,
             onSelect: (sel, evt) => this.#click(sel, evt),
         });
         const kids = [];

@@ -1,12 +1,11 @@
 // WP3 catalog: dedup counts, mapping, encode/decode round trips on every
-// adapter, capParts, and the flask_holdtap runtime timing backend (mocked
+// ZMK adapter, capParts, and the flask_holdtap runtime timing backend (mocked
 // device; the offline sim does not serve channel 0x2A).
 // Import stamps match binding-picker.js so module state is shared.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import * as C from '../behavior-catalog.js?v=60';
-import { setZmkContext } from '../zmk-keycodes.js?v=60';
-import { setDeviceMacroCount, setDeviceCustomKeys } from '../keycodes.js?v=60';
+import * as C from '../behavior-catalog.js?v=61';
+import { setZmkContext } from '../zmk-keycodes.js?v=61';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -128,7 +127,7 @@ for (const family of ['totem', 'imprint']) {
     }
     // every binding in the shipped keymap decodes and re-encodes to itself
     if (family === 'totem') {
-        const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=60');
+        const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=61');
         for (const layer of TOTEM_DEFAULT.layers) for (const [behaviorId, param1, param2] of layer.bindings) {
             const b = { behaviorId, param1, param2 };
             const d = C.decode(b, 'zmk-studio');
@@ -157,55 +156,6 @@ for (const family of ['totem', 'imprint']) {
     eq(C.capParts({ behaviorId: id('Mod-Tap (fast 150)'), param1: 0x700E3, param2: 0x7000B }), { top: 'Mod-tap ⌘ · fast', main: 'H' });
     eq(C.describeBinding({ behaviorId: id('Mod-Tap (fast 150)'), param1: 0x700E3, param2: 0x7000B }), 'Mod-tap ⌘ H · 150 ms');
     eq(C.describeBinding({ action: 1, param1: 0x70029 }, 'zmk-typed'), 'Esc');
-}
-
-// ---- QMK: every u16 keycode round-trips; entry params round-trip ----
-{
-    setDeviceMacroCount(16);
-    setDeviceCustomKeys([{ index: 0, name: 'DPI up', shortName: 'DPI+' }]);
-    for (let kc = 0; kc <= 0xFFFF; kc++) {
-        const d = C.decode(kc, 'qmk');
-        if (C.encode(d.entryId, d.params, 'qmk') !== kc) assert.fail(`qmk ${kc.toString(16)} → ${JSON.stringify(d)}`);
-        if (d.entryId !== 'advanced' && /\(\w/.test(Object.values(C.capParts(kc, 'qmk')).join(' '))) assert.fail(`qmk cap ${kc.toString(16)}`);
-    }
-    checks += 0x10000;
-    const cat = C.catalogFor({ family: 'svalboard', layerCount: 8, tapDanceCount: 8 });
-    eq(cat.adapter, 'qmk');
-    ok(!cat.find((e) => e.id === 'mod-tap').params.some((p) => p.key === 'timing'), 'qmk: no per-key timing');
-    eq(cat.find((e) => e.id === 'mod-tap').note, 'Tapping term: global — QMK Settings');
-    eq(C.encode('hold-layer', { layer: 1 }, 'qmk'), 0x5221, 'MO(1)');
-    eq(C.encode('mod-tap', { hold: 0x08, tap: 0x0B }, 'qmk'), 0x280B, 'MT(GUI, H)');
-    eq(C.encode('key', { key: 0x1E, mods: 0x02 }, 'qmk'), 0x021E, 'S(1) = !');
-    eq(C.capParts(0x021E, 'qmk'), { top: '', main: '!' });
-    eq(C.capParts(0x280B, 'qmk'), { top: 'Mod-tap ⌘', main: 'H' });
-    eq(C.capParts(0x4105, 'qmk'), { top: 'LT L1', main: 'B' });
-    let n = 0;
-    for (const e of cat) {
-        if (e.id === 'advanced') continue;
-        for (const params of combos(e)) {
-            const kc = C.encode(e.id, params, 'qmk');
-            eq(C.decode(kc, 'qmk').entryId, e.id, `qmk ${e.id} ${JSON.stringify(params)}`);
-            eq(C.encode(e.id, C.decode(kc, 'qmk').params, 'qmk'), kc);
-            n++;
-        }
-    }
-    ok(n > 60, `qmk combos ${n}`);
-}
-
-// ---- Nape ----
-{
-    const cat = C.catalogFor({ family: 'nape', layerCount: 9 });
-    eq(cat.map((e) => e.id), ['key', 'none', 'mod-tap', 'hold-layer', 'layer-tap', 'to-layer', 'toggle-layer', 'mouse-key', 'pointer', 'macro']);
-    for (let kc = 0; kc <= 0xFFFF; kc++) {
-        const d = C.decode(kc, 'nape');
-        if (C.encode(d.entryId, d.params, 'nape') !== kc) assert.fail(`nape ${kc.toString(16)}`);
-    }
-    checks += 0x10000;
-    for (const e of cat) for (const params of combos(e)) {
-        const kc = C.encode(e.id, params, 'nape');
-        eq(C.decode(kc, 'nape').entryId, e.id, `nape ${e.id}`);
-    }
-    eq(C.decode(0x522A, 'nape').entryId, 'pointer', 'scroll hold is a pointer control, not MO(10)');
 }
 
 // ---- flask_holdtap runtime backend (contract bytes, mocked device) ----

@@ -1,28 +1,18 @@
 // Typing trainer — the adaptive practice surface.
 //
-// A clone of keybr.com's guided trainer, wired to this app's devices. The
-// engine lives in trainer-model / trainer-stats / trainer-lesson /
-// trainer-textinput; this file is the UI and the device integration:
-//
-//   - the alphabet comes off the connected keymap (trainer-keyboard.js), so a
-//     remapped board is described correctly with no configuration;
-//   - the per-key heatmap is painted onto the real board geometry, which is the
-//     thing a browser typing test cannot do and a keyboard configurator can.
-//
-// Works with no device connected at all — the trainer is reachable from the
-// landing page, where it behaves like any other typing site over a-z.
+// A clone of keybr.com's guided trainer. The engine lives in trainer-model /
+// trainer-stats / trainer-lesson / trainer-textinput; this file is the UI.
+// It runs on browser key events and needs no device — it is reachable from the
+// landing page and as a tab, and behaves like any other typing site over a-z.
 
-import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=60';
-import { PhoneticModel, randomSeed } from './trainer-model.js?v=60';
+import { el, svgEl, card, toast, sliderRow, toggleRow, selectRow } from './ui.js?v=61';
+import { PhoneticModel, randomSeed } from './trainer-model.js?v=61';
 import {
     TrainerStore, makeResult, makeKeyStatsMap, learningRate, dailyStats,
     summaryStats, cpmToWpm, wpmToCpm, timeToSpeed,
-} from './trainer-stats.js?v=60';
-import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=60';
-import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=60';
-import { keyboardFromKeymap } from './trainer-keyboard.js?v=60';
-import { renderKeyboardSVG } from './keymap-tab.js?v=60';
-import { CH, V } from './flaskproto.js?v=60';
+} from './trainer-stats.js?v=61';
+import { DEFAULT_SETTINGS, LESSON_TYPES, makeLesson, Target } from './trainer-lesson.js?v=61';
+import { TypingSession, Attr, Feedback, liveStats } from './trainer-textinput.js?v=61';
 
 /** Attr → the class that colours one character of the lesson text. */
 const ATTR_CLASS = {
@@ -60,7 +50,6 @@ export class TrainerTab {
         this.store = new TrainerStore();
         this.settings = this.store.loadSettings(DEFAULT_SETTINGS);
         this.model = null;
-        this.keyboard = null;
         this.session = null;
         this.lesson = null;
         this.lastResult = null;
@@ -68,57 +57,14 @@ export class TrainerTab {
         this.unlocked = null;
         this.showProfile = false;
         this.showSettings = false;
-        /// Why there is no board picture, when there is none.
-        this.keyboardNote = null;
-        // Live board state, polled off the device (see #boardTick).
-        this.boardLayer = 0;
-        this.boardPressed = new Set();
-        this.boardCaps = null;      // "row,col" -> <rect>, for cheap repaints
     }
 
     async load() {
         // ~25 ms to build the 4-gram table; do it before first paint so the
         // first lesson is never an empty box.
         this.model = PhoneticModel.shared();
-        await this.#readKeyboard();
         this.render();
         this.newLesson();
-        this.#startBoardPoll();
-    }
-
-    /**
-     * Read the keymap for the alphabet and the heatmap.
-     *
-     * Reuses the keymap the Keymap tab already read when there is one — a full
-     * re-read is hundreds of HID round trips and both tabs want the same bytes.
-     */
-    async #readKeyboard() {
-        const { app } = this;
-        if (app?.profile?.keys == null || app.vial == null) {
-            this.keyboardNote = 'No keyboard connected. Connect one and the trainer '
-                + 'reads its alphabet off your real keymap and paints per-key speed '
-                + 'onto the board.';
-            return;
-        }
-        try {
-            if (app.keymap == null) {
-                app.keymap = await app.vial.readKeymap(
-                    app.layerCount, app.profile.matrixRows, app.profile.matrixCols);
-            }
-            this.keyboard = keyboardFromKeymap(app.profile, app.keymap);
-            // An absent heatmap has to be explainable. A board whose base layers
-            // hold no letters at all — a macro pad, a trackball — is a real and
-            // fine answer, but only if the panel says so instead of hiding.
-            this.keyboardNote = this.keyboard ? null
-                : `No letter keys found on ${app.profile.name}'s first two layers, `
-                  + 'so there is no layout to paint.';
-        } catch (e) {
-            // A trainer that refuses to open because a keymap read failed would
-            // be worse than one without a heatmap — but it must not go quiet.
-            console.warn('trainer: keymap unavailable', e);
-            this.keyboardNote = `Could not read the keymap: ${e.message}. `
-                + 'The lessons still work; only the board picture is missing.';
-        }
     }
 
     // ------------------------------------------------------------ lesson flow
@@ -128,25 +74,14 @@ export class TrainerTab {
     }
 
     newLesson() {
-        // Recomputed here, not just at load: the Keymap tab writes remapped
-        // keycodes straight into app.keymap, and a snapshot taken once would
-        // keep teaching letters the board no longer has. Pure arithmetic over
-        // the cached keymap — no device traffic.
-        if (this.app?.keymap && this.app?.profile?.keys) {
-            this.keyboard = keyboardFromKeymap(this.app.profile, this.app.keymap);
-        }
         const keyStatsMap = this.keyStatsMap;
         this.lesson = makeLesson({
             settings: this.settings,
             model: this.model,
-            keyboard: this.keyboard,
             keyStatsMap,
             seed: randomSeed(),
         });
         this.session = new TypingSession(this.lesson.text, this.settings);
-        // Rebuilt per lesson for the same reason the alphabet is: a remap done
-        // in the Keymap tab has to reach the picture, not just the letters.
-        this.#renderBoard();
         this.renderText();
         this.renderKeys();
         this.renderLive();
@@ -171,7 +106,7 @@ export class TrainerTab {
         // What changed as a result of this lesson is the one thing worth
         // announcing: the alphabet grew, or it did not.
         const after = makeLesson({
-            settings: this.settings, model: this.model, keyboard: this.keyboard,
+            settings: this.settings, model: this.model,
             keyStatsMap: this.keyStatsMap, seed: randomSeed(),
         });
         const grown = after.keys.included().length > before;
@@ -254,7 +189,6 @@ export class TrainerTab {
         this.progressEl = el('div', { class: 'tr-progress' }, el('span'));
         this.liveEl = el('div', { class: 'tr-live' });
         this.keysEl = el('div', { class: 'tr-keys' });
-        this.boardEl = el('div', { class: 'tr-board' });
         this.summaryEl = el('div', { class: 'tr-summary' });
         this.resultEl = el('div', { class: 'tr-result-slot' });
         this.profileEl = el('div', { class: 'tr-profile-slot' });
@@ -266,7 +200,6 @@ export class TrainerTab {
                 this.textEl,
                 this.progressEl,
                 this.liveEl),
-            this.boardEl,
             this.keysEl,
             this.summaryEl,
             this.resultEl,
@@ -381,7 +314,6 @@ export class TrainerTab {
         this.textEl.className = `tr-text ${caret}${this.textEl.classList.contains('focused') ? ' focused' : ''}`;
         this.textEl.replaceChildren(...nodes);
         this.progressEl.firstChild.style.transform = `scaleX(${this.session.progress.toFixed(4)})`;
-        this.#paintBoard();
     }
 
     renderLive() {
@@ -526,13 +458,6 @@ export class TrainerTab {
                     label: 'Natural words',
                     hint: 'Mix real words in once the unlocked letters can spell some',
                     value: s.naturalWords, onChange: set('naturalWords'),
-                }),
-                toggleRow({
-                    label: 'Keyboard order',
-                    hint: this.keyboard
-                        ? 'Unlock the keys your fingers rest on first, instead of the most frequent letters'
-                        : 'Needs a connected keyboard — no layout to read positions from',
-                    value: s.keyboardOrder, onChange: set('keyboardOrder'),
                 }),
                 toggleRow({
                     label: 'Judge current speed',
@@ -697,24 +622,11 @@ export class TrainerTab {
 
     renderProfile() {
         const results = this.store.results;
-        // The board is drawn whether or not anything has been typed yet. It does
-        // not depend on results — untyped keys simply stay unpainted — and
-        // hiding it until the first finished lesson was the reason "I don't see
-        // my layout" had no answer on a fresh profile.
-        const boardCard = this.keyboard && this.app?.profile
-            ? card('On the board', results.length
-                ? 'per-key speed painted onto your layout'
-                : 'your layout — it fills in as you type',
-                this.#heatmap())
-            : card('On the board', 'not available',
-                el('p', { class: 'faint tr-hint', text: this.keyboardNote ?? 'No keymap available yet.' }));
-
         if (results.length === 0) {
             this.profileEl.replaceChildren(
                 card('Progress', 'nothing recorded yet',
                     el('p', { class: 'faint' },
-                        'Finish a lesson and this fills with your speed history, a per-letter breakdown, and a heatmap of your per-key speed.')),
-                boardCard);
+                        'Finish a lesson and this fills with your speed history and a per-letter breakdown.')));
             return;
         }
         const sum = summaryStats(results);
@@ -740,8 +652,7 @@ export class TrainerTab {
                             el('div', { class: 'tr-hint', text: `${fmtDur(daily.today.time)} of ${this.settings.dailyGoal} min today` }))
                         : null)),
             card('Letters', 'confidence 1.00 is the target speed — the gate a new letter waits behind',
-                this.#keyTable(keys)),
-            boardCard);
+                this.#keyTable(keys)));
 
         if (this.settings.dailyGoal > 0) {
             const bar = this.profileEl.querySelector('.tr-goal span');
@@ -927,186 +838,6 @@ export class TrainerTab {
                 text: `Last ${recent.length} lessons: ${Math.round(lo)}–${Math.round(hi)} wpm`,
             }));
         return svg;
-    }
-
-    // --------------------------------------------------------- the live board
-
-    /**
-     * The picture of the keyboard under the text: the layout as it is right
-     * now, the layer the board is actually on, the keys being held, and the key
-     * to press next.
-     *
-     * Three states, and they are deliberately different colours:
-     *   - GREEN is the key the lesson wants next;
-     *   - GREY is the character just consumed, so the eye can see where it came
-     *     from without hunting;
-     *   - ACCENT is a key physically held down this instant, straight off the
-     *     matrix. Held wins over green, so pressing the right key looks like
-     *     the highlight moving rather than two keys lit at once.
-     *
-     * The SVG is rebuilt only when the LAYER changes; everything else toggles
-     * classes on the existing rects. A Svalboard board is ~280 nodes, and this
-     * repaints at 15 Hz plus once per keystroke — rebuilding every time would
-     * put that churn on the typing path, which is the one thing here that has
-     * to stay smooth.
-     */
-    #renderBoard() {
-        const { app } = this;
-        if (app?.profile?.keys == null || app.keymap == null) {
-            this.boardCaps = null;
-            this.boardEl?.replaceChildren();
-            return;
-        }
-        const svg = renderKeyboardSVG({
-            profile: app.profile,
-            keycodeAt: (row, col) => app.keymap?.[this.boardLayer]?.[row]?.[col] ?? 0,
-        });
-        // renderKeyboardSVG emits one rect.keycap per profile.keys entry, in
-        // order — that pairing is what makes the cheap repaint possible.
-        const rects = svg.querySelectorAll('rect.keycap');
-        this.boardCaps = new Map();
-        app.profile.keys.forEach((key, i) => {
-            if (rects[i]) this.boardCaps.set(`${key.row},${key.col}`, rects[i]);
-        });
-
-        this.boardLayerEl = el('span', { class: 'tr-board-layer' });
-        this.boardHintEl = el('span', { class: 'tr-hint' });
-        this.boardEl.replaceChildren(
-            el('div', { class: 'tr-board-bar' },
-                this.boardLayerEl,
-                this.boardHintEl,
-                el('span', { class: 'tr-bar-gap' }),
-                // Pressed keys ride the Vial matrix read, which the firmware
-                // gates behind unlock. Route through the header button so the
-                // lock state has exactly one owner.
-                app.unlocked ? null : el('button', {
-                    class: 'btn small', text: 'Unlock for live keys',
-                    title: 'Pressed-key highlights come from the Vial matrix read, which the firmware only answers while the keyboard is unlocked.',
-                    onclick: () => app.onHudLockClick?.(),
-                })),
-            el('div', { class: 'kb-wrap' }, svg));
-        this.#paintBoard();
-    }
-
-    /** Highlight classes only — no DOM rebuild. Safe to call per keystroke. */
-    #paintBoard() {
-        if (this.boardCaps == null) return;
-        const nextCp = this.#expectedCodePoint();
-        const nextId = this.#capIdFor(nextCp);
-        const prevId = this.#capIdFor(this.#previousCodePoint());
-        for (const [id, rect] of this.boardCaps) {
-            rect.classList.toggle('pressed', this.boardPressed.has(id));
-            rect.classList.toggle('tr-next', id === nextId);
-            rect.classList.toggle('tr-prev', id !== nextId && id === prevId);
-        }
-        if (this.boardLayerEl) this.boardLayerEl.textContent = `layer ${this.boardLayer}`;
-        if (this.boardHintEl) {
-            // A character the board cannot produce on its base layers has no
-            // cap to light. Saying so beats a picture that quietly does nothing.
-            this.boardHintEl.textContent = nextCp == null ? ''
-                : `next ${nextCp === 32 ? 'space' : String.fromCodePoint(nextCp)}`
-                  + (nextId == null ? ' — not on the base layers' : '');
-        }
-    }
-
-    /** The character the lesson is waiting for, or null when it is finished. */
-    #expectedCodePoint() {
-        const input = this.session?.input;
-        return input == null || input.completed ? null : input.at(input.pos);
-    }
-
-    /** The character just consumed — the key the fingers are leaving. */
-    #previousCodePoint() {
-        const input = this.session?.input;
-        return input == null || input.pos === 0 ? null : input.at(input.pos - 1);
-    }
-
-    #capIdFor(codePoint) {
-        if (codePoint == null || this.keyboard == null) return null;
-        const key = this.keyboard.positionOf(codePoint);
-        return key ? `${key.row},${key.col}` : null;
-    }
-
-    #startBoardPoll() {
-        if (this._boardTimer) return;
-        // ~15 Hz, the HUD's cadence: fast enough that a held key looks instant,
-        // slow enough to leave the serialized HID chain to the other tabs.
-        this._boardTimer = setInterval(() => this.#boardTick(), 66);
-    }
-
-    async #boardTick() {
-        const { app } = this;
-        // An inactive .panel is display:none. Without this check the trainer
-        // would keep reading the device at 15 Hz from behind whatever tab is
-        // open, contending with that tab's own traffic for the whole session.
-        if (this._boardBusy || this.root.offsetParent === null) return;
-        if (app?.hid == null || !app.hid.connected || app.hid.paused) return;
-        if (this.boardCaps == null) return;
-        this._boardBusy = true;
-        try {
-            if (app.caps?.hudLayer) {
-                const layer = await app.flask.getU16(CH.meta, V.metaActiveLayer);
-                if (layer !== this.boardLayer && layer < (app.layerCount || 16)) {
-                    this.boardLayer = layer;
-                    this.#renderBoard();    // the caps themselves change
-                }
-            }
-            if (app.unlocked) {
-                const rows = await app.vial.matrixState(
-                    app.profile.matrixRows, app.profile.matrixCols);
-                const next = new Set();
-                rows.forEach((bits, row) => {
-                    for (let col = 0; col < app.profile.matrixCols; col++) {
-                        if ((bits >> BigInt(col)) & 1n) next.add(`${row},${col}`);
-                    }
-                });
-                if (next.size !== this.boardPressed.size
-                    || [...next].some((k) => !this.boardPressed.has(k))) {
-                    this.boardPressed = next;
-                    this.#paintBoard();
-                }
-            } else if (this.boardPressed.size) {
-                this.boardPressed = new Set();
-                this.#paintBoard();
-            }
-        } catch (e) {
-            // Reads fail transiently while another path holds the chain. Log
-            // each DISTINCT failure once: a silently-swallowed permanent error
-            // looks exactly like a frozen board.
-            if (e?.message !== this._boardErr) {
-                this._boardErr = e?.message;
-                console.warn('trainer board poll (retrying):', e);
-            }
-        }
-        this._boardBusy = false;
-    }
-
-    #heatmap() {
-        const { app } = this;
-        const keyStatsMap = this.keyStatsMap;
-        const target = new Target(this.settings.targetSpeed);
-        const wrap = el('div', { class: 'kb-wrap' }, renderKeyboardSVG({
-            profile: app.profile,
-            keycodeAt: (row, col) => app.keymap?.[0]?.[row]?.[col] ?? 0,
-            fillFor: (key) => {
-                const cp = this.keyboard.charAt(key.row, key.col);
-                if (cp == null) return null;
-                const stats = keyStatsMap.get(cp);
-                const conf = target.confidence(
-                    this.settings.recoverKeys ? stats?.timeToType : stats?.bestTimeToType);
-                if (conf == null) return null;   // untyped keys keep the plain keycap
-                return heatColor(conf);
-            },
-        }));
-        return el('div', {},
-            wrap,
-            el('div', { class: 'tr-legend' },
-                el('span', { class: 'tr-swatch', style: `background:${heatColor(0)}` }),
-                el('span', { class: 'tr-hint', text: 'below target' }),
-                el('span', { class: 'tr-swatch', style: `background:${heatColor(1)}` }),
-                el('span', { class: 'tr-hint', text: 'at target' }),
-                el('span', { class: 'tr-swatch plain' }),
-                el('span', { class: 'tr-hint', text: 'not typed yet' })));
     }
 }
 

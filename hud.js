@@ -1,19 +1,18 @@
 // HUD: live layer + keymap + pressed keys, floating over other apps via
 // Document Picture-in-Picture (Chromium 116+), with an in-page draggable
-// corner-snapping overlay as fallback. Port of AdeptCompanion
-// HUDWindow.swift (poll cadences preserved: ~15 Hz layer/matrix, OLED
-// mirror every 4th tick).
+// corner-snapping overlay as fallback. Poll cadences: ~15 Hz layer + key
+// state, status chips every 4th tick.
 
-import { el } from './ui.js?v=60';
-import { CH, V, NLKB } from './flaskproto.js?v=60';
-import { renderKeyboardSVG } from './keymap-tab.js?v=60';
+import { el } from './ui.js?v=61';
+import { CH, V } from './flaskproto.js?v=61';
+import { renderKeyboardSVG } from './board.js?v=61';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;
 
 export class HUD {
     constructor(app) {
-        this.app = app;      // { hid, flask, vial, profile, caps, keymap, layerCount, unlocked }
+        this.app = app;      // { hid, flask, profile, caps, keymap, layerCount, readKeyState }
         this.open = false;
         this.win = null;     // PiP Window or null (fallback overlay)
         this.overlay = null;
@@ -24,7 +23,6 @@ export class HUD {
         this._timer = null;
         this._tick = 0;
         this._busy = false;
-        this.oledLines = null;
     }
 
     async toggle() {
@@ -151,7 +149,7 @@ export class HUD {
 
     _startPoll() {
         // ~15 Hz, skipping ticks while the previous one is still queued;
-        // backs off entirely while hid.paused (bulk transfers, unlock).
+        // backs off entirely while hid.paused (bulk transfers).
         this._timer = setInterval(() => this._pollTick(), 66);
     }
 
@@ -168,23 +166,13 @@ export class HUD {
                     this.render();
                 }
             }
-            if (app.unlocked) {
-                const rows = await app.vial.matrixState(app.profile.matrixRows, app.profile.matrixCols);
-                const next = new Set();
-                rows.forEach((bits, row) => {
-                    for (let col = 0; col < app.profile.matrixCols; col++) {
-                        if ((bits >> BigInt(col)) & 1n) next.add(`${row},${col}`);
-                    }
-                });
-                this._applyPressed(next);
-            } else if (app.readKeyState) {
-                // Non-Vial press feed (ZMK key-state bitmap) — no unlock
-                // concept, polled whenever the device offers it.
+            if (app.readKeyState) {
+                // ZMK key-state bitmap, polled whenever the device offers it.
                 this._applyPressed(await app.readKeyState());
             }
             const tick = this._tick++;
             // Live-action chips at ~4 Hz (every 4th tick, cheap GETs):
-            // autoscroll level (0x1A/0x05 signed; QMK + ZMK share the id)
+            // autoscroll level (0x1A/0x05 signed)
             // and flask_macros playback (0x25/0x06, ZMK line).
             if ((tick % 4) === 1 && (app.caps.autoscroll || app.caps.macros || app.caps.ballSwap)) {
                 const status = {};
@@ -201,21 +189,6 @@ export class HUD {
                     this._liveStatus = status;
                     this.renderStatus();
                 }
-            }
-            // NLKB16 OLED mirror at ~4 Hz (every 4th tick).
-            if (app.caps.displayMirror && (tick % 4) === 0) {
-                const lines = [];
-                for (let line = 0; line < NLKB.bigLines; line++) {
-                    const r = await app.flask.getBytes(CH.display, V.dispLine, [line]);
-                    // [line, invert mask, 5 chars, panel_on]
-                    lines.push({
-                        invert: r[1],
-                        text: String.fromCharCode(...r.slice(2, 2 + NLKB.visibleCols)),
-                        panelOn: r[7] !== 0,
-                    });
-                }
-                this.oledLines = lines;
-                this.renderOled();
             }
         } catch (e) {
             // Transient — next tick retries. But log each DISTINCT failure
@@ -242,18 +215,14 @@ export class HUD {
     _buildRoot() {
         this.stripEl = el('div', { class: 'layer-strip' });
         this.boardEl = el('div', { class: 'kb-wrap' });
-        this.oledEl = el('div', { class: 'mono', style: 'margin-top:4px' });
         this.statusEl = el('div', { style: 'display:flex; gap:6px; margin-top:2px; min-height:0' });
-        this.lockEl = el('button', { class: 'btn small' });
         this.hintEl = el('span', { class: 'hint' });
-        this.lockEl.addEventListener('click', () => this.app.onHudLockClick?.());
         return el('div', { class: 'hud' },
             el('div', { class: 'hud-top' },
                 el('span', { class: 'pill connected' }, el('span', { class: 'dot' }), this.app.profile.name),
                 el('span', { style: 'flex:1' }),
-                this.lockEl,
                 el('button', { class: 'btn small', text: '✕', onclick: () => this.close() })),
-            this.stripEl, this.boardEl, this.oledEl, this.statusEl, this.hintEl);
+            this.stripEl, this.boardEl, this.statusEl, this.hintEl);
     }
 
     /** Live-action chips: what the firmware is DOING right now (autoscroll
@@ -293,7 +262,6 @@ export class HUD {
         this.boardEl.replaceChildren(renderKeyboardSVG({
             profile: app.profile,
             keycodeAt: (row, col) => app.keymap?.[this.shownLayer]?.[row]?.[col] ?? 0,
-            encoderAt: null,
             pressed: this.pressed,
             // Mirror the flask_rgb painted map (ZMK line; published by the
             // RGB tab). Pressed keys keep the press highlight — an inline
@@ -309,30 +277,8 @@ export class HUD {
                 : undefined,
             scale: 0.62,
         }));
-        // Pressed-key display rides the Vial matrix-state read — devices
-        // without a Vial surface (caps.vial false) have no unlock and no
-        // matrix poll, so the button and its hint would only mislead.
-        if (app.caps.vial) {
-            this.lockEl.style.display = '';
-            this.lockEl.textContent = app.unlocked ? '🔓 Lock' : '🔒 Unlock';
-            this.hintEl.textContent = app.unlocked
-                ? (app.caps.hudLayer ? 'Live: layer follows the board; keys light on press.' : 'Keys light on press.')
-                : 'Unlock to see live key presses.';
-        } else {
-            this.lockEl.style.display = 'none';
-            this.hintEl.textContent = app.readKeyState
-                ? 'Live: layer follows the board; keys light on press.'
-                : (app.caps.hudLayer ? 'Live: layer follows the board.' : '');
-        }
-    }
-
-    renderOled() {
-        if (!this.oledLines) return;
-        this.oledEl.replaceChildren(
-            el('span', { class: 'faint', text: this.oledLines[0]?.panelOn === false ? 'OLED 🌙 ' : 'OLED ' }),
-            ...this.oledLines.map((l) => el('span', {
-                style: l.invert ? 'background:var(--text); color:var(--bg); margin-right:6px' : 'margin-right:6px',
-                text: l.text,
-            })));
+        this.hintEl.textContent = app.readKeyState
+            ? 'Live: layer follows the board; keys light on press.'
+            : (app.caps.hudLayer ? 'Live: layer follows the board.' : '');
     }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WP6 browser checks: reloadBar -> saveState wiring, never-register, unload
+"""WP6 browser checks: reloadBar -> saveState wiring, unload
 guard, and Save layout / Load on the ZMK line (Imprint offline workspace).
 
 Run:  PORT=8146 python3 serve.py   then   PORT=8146 python3 tests/browser/save.py
@@ -14,11 +14,11 @@ import harness as h  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 RELOAD_BAR = """async () => {
-  const ui = await import('./ui.js?v=60');
-  const { saveState } = await import('./save-state.js?v=60');
-  saveState.reset(); saveState.setLine('zmk');
+  const ui = await import('./ui.js?v=61');
+  const { saveState } = await import('./save-state.js?v=61');
+  saveState.reset();
   let saves = 0, reloads = 0;
-  const bar = ui.reloadBar(0x05, { label: 'DPI', line: 'zmk', save: async () => { saves++; }, reload: async () => { reloads++; } });
+  const bar = ui.reloadBar(0x05, { label: 'DPI', save: async () => { saves++; }, reload: async () => { reloads++; } });
   const row = ui.toggleRow({ label: 't', value: false, onChange: async (v) => v });
   document.body.append(ui.card('probe', null, row, bar));
   window.__probe = { saveState, bar, counts: () => ({ saves, reloads }) };
@@ -58,38 +58,32 @@ def main():
         check(page.locator('.card:has-text("probe") .state').inner_text() == 'Saved ✓', 'saved state wording')
         check(not page.evaluate("(() => { const e = new Event('beforeunload', {cancelable: true}); window.dispatchEvent(e); return e.defaultPrevented; })()"), 'unload guard released')
 
-        # Never-register: QMK corner chords 0x28 throws, ZMK tap dance 0x28 does not.
+        # ZMK tap dance 0x28 registers like any channel (it has a save step).
         res = page.evaluate("""async () => {
-          const { saveState } = await import('./save-state.js?v=60');
-          const noop = async () => {};
+          const { saveState } = await import('./save-state.js?v=61');
           saveState.reset();
-          saveState.setLine('qmk');
-          let qmk = 'no throw'; try { saveState.markDirty(0x28, 'corner', noop); } catch (e) { qmk = e.message; }
-          saveState.setLine('zmk');
-          let zmk = 'no throw'; try { saveState.markDirty(0x28, 'tap dance', noop); } catch (e) { zmk = e.message; }
-          saveState.reset(); saveState.setLine(null);
-          return [qmk, zmk];
+          let r = 'no throw'; try { saveState.markDirty(0x28, 'tap dance', async () => {}); } catch (e) { r = e.message; }
+          saveState.reset();
+          return r;
         }""")
-        check('no save step' in res[0], f'qmk 0x28 should throw: {res[0]}')
-        check(res[1] == 'no throw', f'zmk 0x28 should register: {res[1]}')
+        check(res == 'no throw', f'zmk 0x28 should register: {res}')
 
-        # Save layout / Load on the ZMK line: v2 JSON with family, round trip.
-        app_stub = "{ profile: { family: 'imprint' } }"
+        # Save layout / Load (main.js drives these two on the live keymap tab):
+        # v2 JSON with family, round trip.
+        EXPORT = "import('./zmk-keymap-tab.js?v=61').then(m => m.zmkLiveKeymapTab().exportKeymap())"
         with page.expect_download() as dl:
-            page.evaluate(f"import('./vil.js?v=60').then(m => m.saveLayoutFile({app_stub}))")
+            page.evaluate(EXPORT)
         path = dl.value.path()
         data = json.loads(Path(path).read_text())
         check([data.get('kind'), data.get('version'), data.get('family')] == ['flask-zmk-keymap', 2, 'imprint'],
               f'export header {[data.get("kind"), data.get("version"), data.get("family")]}')
         check(len(data.get('layers', [])) > 0, 'export has layers')
-        msg = page.evaluate(f"""async (text) => {{
-          const m = await import('./vil.js?v=60');
-          const r = await m.loadLayoutFile({app_stub}, new File([text], 'k.json'));
-          return [r.line, r.message];
-        }}""", json.dumps(data))
-        check(msg == ['zmk', None], f'load result {msg}')
+        page.evaluate("""async (text) => {
+          const m = await import('./zmk-keymap-tab.js?v=61');
+          await m.zmkLiveKeymapTab().importKeymap(new File([text], 'k.json'));
+        }""", json.dumps(data))
         with page.expect_download() as dl2:
-            page.evaluate(f"import('./vil.js?v=60').then(m => m.saveLayoutFile({app_stub}))")
+            page.evaluate(EXPORT)
         again = json.loads(Path(dl2.value.path()).read_text())
         check(again['layers'] == data['layers'], 'layers survive Save layout -> Load -> Save layout')
 

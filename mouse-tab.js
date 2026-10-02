@@ -1,20 +1,17 @@
-// Mouse (pointing-device) tuning tab — Adept + Svalboard. Port of
-// AdeptCompanion MouseTab.swift + ModuleViews.swift; slider ranges mirror
-// those files, but the firmware clamps are authoritative (clamp-echo).
-// Float params ride the wire ×100 (accel, smoothing factor).
+// Mouse (pointing-device) tuning tab — the Imprint's trackballs. Slider
+// ranges mirror the firmware, but the firmware clamps are authoritative
+// (clamp-echo). Float params ride the wire ×100 (accel).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=60';
-import { CH, V, slot, ADEPT_DPI_OPTIONS, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS,
-         CPI_MIN, CPI_MAX, CPI_STEP,
-         TELEPORT_TARGETS, TELEPORT_SCALE, TELEPORT_UNSET } from './flaskproto.js?v=60';
-import { renderKeyboardSVG } from './keymap-tab.js?v=60';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=61';
+import { CH, V } from './flaskproto.js?v=61';
+import { renderKeyboardSVG } from './board.js?v=61';
 
 const pct = (v) => (v / 100).toFixed(2);
 
 /**
  * Live acceleration-curve plot. Draws the firmware's exact sigmoid —
  * factor(v) = 1 − (1−m) / (1 + e^(k·(v−s)))^(g/k), params wire÷100
- * (input_processor_flask_accel.c / QMK pd_accel.c) — over the pointer
+ * (input_processor_flask_accel.c) — over the pointer
  * velocity range the sensor produces (counts/ms after CPI normalization).
  * Returns an <svg> with .update(patch) so the sliders repaint it live.
  */
@@ -53,149 +50,21 @@ export function accelCurve(initial) {
     return svg;
 }
 
-/** Plain-language read of a per-mille coordinate, so a row of percentages
- * isn't the only thing to reason about. */
-function describeTarget(x, y) {
-    const px = x / 10, py = y / 10;
-    const h = px < 20 ? 'far left'
-        : px < 40 ? 'left monitor / left half'
-            : px < 60 ? 'centre'
-                : px < 80 ? 'right monitor / right half' : 'far right';
-    return h + (py < 35 ? ', top' : py > 65 ? ', bottom' : '');
-}
-
 export class MouseTab {
     constructor(app) {
         this.app = app; // { flask, caps, family }
         this.root = el('div');
     }
 
-    /**
-     * Firmware-side cursor teleport (channel 0x26, Svalboard v12+).
-     *
-     * Coordinates are per-mille of the VIRTUAL DESKTOP, not of one screen: on a
-     * two-monitor span 250 is the middle of the left monitor.
-     *
-     * HOST MODE IS READ-ONLY HERE, deliberately. Since v15 the firmware can hand
-     * the warp to a host app (which knows the real monitor layout, so jumps can
-     * cross displays) — but a browser cannot move the OS cursor, so this app must
-     * never send the heartbeat (0x06) or ack an event frame (0x08). Doing either
-     * would latch host mode onto a host that cannot warp. The v16 firmware only
-     * goes live once an ack proves delivery, so staying silent leaves it on the
-     * digitizer path, which is the correct outcome from a browser. Crossing
-     * monitors needs the macOS Flask app.
-     */
-    async _teleportCard() {
-        const { flask, caps } = this.app;
-        const g = (ch, id) => flask.getU16(ch, id);
-        const c = card('Cursor teleport', 'jump the cursor to a fixed point',
-            el('div', { class: 'note faint' },
-                'Coordinates are percentages of your WHOLE desktop, not of one screen — on a '
-                + 'two-monitor setup 25% is the middle of the left monitor. This cannot centre '
-                + 'the cursor on the window you just tabbed to; the keyboard can\'t see window '
-                + 'positions.'),
-            toggleRow({
-                label: 'Enabled', value: await g(CH.teleport, V.tpEnabled),
-                onChange: (v) => flask.setU16(CH.teleport, V.tpEnabled, v ? 1 : 0),
-            }));
-
-        if (caps.teleportHostMode) {
-            const hostMode = await g(CH.teleport, V.tpHostMode);
-            const proven = await g(CH.teleport, V.tpSelfTest).catch(() => 0);
-            c.append(el('div', { class: 'row' },
-                el('span', { class: 'lbl' }, 'Host-side jumps',
-                    el('span', { class: 'hint', text: 'needed to cross monitors — macOS Flask app only' })),
-                el('span', { style: 'flex:1' }),
-                el('span', { class: 'muted', text: hostMode ? (proven ? 'on, proven' : 'on, not proven') : 'off' })));
-            c.append(el('div', { class: 'note faint' },
-                hostMode && !proven
-                    ? 'Host mode is on but nothing has proven it can receive the keyboard\'s event '
-                      + 'frames, so jumps are using the keyboard\'s own absolute pointer — which the '
-                      + 'OS confines to one display. Run the macOS Flask app, or turn host mode off '
-                      + 'there, to get the full desktop.'
-                    : 'A browser cannot move the OS cursor, so this page never claims host mode. '
-                      + 'Jumps use the keyboard\'s absolute pointer, which the OS confines to a '
-                      + 'single display.'));
-        }
-
-        const current = await g(CH.teleport, V.tpCurrent).catch(() => 0xFF);
-        for (let t = 0; t < TELEPORT_TARGETS; t++) {
-            const x = await g(CH.teleport, slot.teleportX(t));
-            const y = await g(CH.teleport, slot.teleportY(t));
-            const isSet = x !== TELEPORT_UNSET && y !== TELEPORT_UNSET;
-            const row = el('div', { class: 'row' },
-                el('span', { class: 'faint', style: 'width:28px', text: `T${t + 1}${current === t ? '•' : ''}` }));
-
-            if (isSet) {
-                const mk = (axis, value) => {
-                    const inp = el('input', {
-                        type: 'number', min: 0, max: 100, step: 1,
-                        value: Math.round(value / 10), style: 'width:60px',
-                    });
-                    inp.addEventListener('change', async () => {
-                        const pm = Math.max(0, Math.min(100, Number(inp.value))) * 10;
-                        try {
-                            const id = axis === 'x' ? slot.teleportX(t) : slot.teleportY(t);
-                            const echoed = await flask.setU16(CH.teleport, id, pm);
-                            inp.value = Math.round(echoed / 10);
-                        } catch (e) { toast(`Write failed: ${e.message}`, true); }
-                    });
-                    return el('span', { style: 'display:flex; gap:2px; align-items:center' },
-                        el('span', { class: 'hint', text: axis.toUpperCase() }), inp, '%');
-                };
-                row.append(mk('x', x), mk('y', y),
-                    el('span', { class: 'muted', text: describeTarget(x, y) }),
-                    el('span', { style: 'flex:1' }),
-                    el('button', {
-                        class: 'btn small', text: '✕', title: 'clear — stepping will skip it',
-                        onclick: async () => {
-                            // Clearing writes the unset sentinel, NOT 0 — zero is
-                            // the top-left corner, a perfectly valid target.
-                            await flask.setU16(CH.teleport, slot.teleportX(t), TELEPORT_UNSET);
-                            await flask.setU16(CH.teleport, slot.teleportY(t), TELEPORT_UNSET);
-                            await this.load();
-                        },
-                    }));
-            } else {
-                row.append(el('span', { class: 'muted', text: 'unset' }),
-                    el('span', { style: 'flex:1' }),
-                    el('button', {
-                        class: 'btn small', text: 'Set to centre',
-                        onclick: async () => {
-                            const mid = TELEPORT_SCALE / 2;
-                            await flask.setU16(CH.teleport, slot.teleportX(t), mid);
-                            await flask.setU16(CH.teleport, slot.teleportY(t), mid);
-                            await this.load();
-                        },
-                    }));
-            }
-            c.append(row);
-        }
-
-        c.append(
-            sliderRow({
-                label: 'Cursor handoff (ms)',
-                hint: 'how long the keyboard holds the absolute pointer before the ball takes over',
-                min: 1, max: 1000, step: 1,
-                value: await g(CH.teleport, V.tpHoldMs),
-                onChange: (v) => flask.setU16(CH.teleport, V.tpHoldMs, v),
-            }),
-            el('div', { class: 'note faint', text: 'Bind TpL / TpR to step through the targets in order, or Tp1–Tp4 to jump straight to one.' }),
-            saveBar(() => flask.save(CH.teleport)));
-        return c;
-    }
-
     async load() {
-        const { flask, caps, family } = this.app;
-        const sval = family === 'svalboard';
+        const { flask, caps } = this.app;
         const g = (ch, id) => flask.getU16(ch, id);
         const cardsRow = el('div', { class: 'cards-row' });
         this.root.replaceChildren(cardsRow);
 
         // ---- board preview with the physical trackballs ----
-        // Profile-carried decorations (ZMK line publishes them; QMK
-        // profiles define none, so nothing changes for them). Labels are
-        // live roles — ballswap-aware when the device has that channel.
+        // Profile-carried decorations. Labels are live roles — ballswap-aware
+        // when the device has that channel.
         const deco = this.app.profile?.decorations;
         if (deco?.length && this.app.profile?.keys?.length) {
             const wrap = el('div', { style: 'overflow-x:auto' });
@@ -253,68 +122,12 @@ export class MouseTab {
         cardsRow.append(accel);
         }
 
-        // ---- DPI ----
-        if (caps.dpi) {
-        const dpi = card('DPI', sval ? 'per-ball sensor CPI' : 'sensor CPI');
-        if (sval) {
-            const mk = async (label, idxId, cpiId) => {
-                const idx = await g(CH.dpi, idxId);
-                dpi.append(selectRow({
-                    label, value: idx,
-                    options: SVAL_DPI_OPTIONS.map((d, i) => ({ value: i, label: `${d} DPI` })),
-                    onChange: (v) => flask.setU16(CH.dpi, idxId, Number(v)),
-                }));
-                if (this.app.caps.rawCpi) {
-                    const cpi = await g(CH.dpi, cpiId);
-                    dpi.append(sliderRow({
-                        label: `${label} raw CPI`, hint: '0 = use the list above',
-                        min: 0, max: CPI_MAX, step: CPI_STEP, value: cpi,
-                        onChange: (v) => flask.setU16(CH.dpi, cpiId, v),
-                    }));
-                }
-            };
-            await mk('Left ball (scroll)', V.svalDpiLeft, V.svalDpiLeftCpi);
-            await mk('Right ball (cursor)', V.svalDpiRight, V.svalDpiRightCpi);
-        } else {
-            dpi.append(selectRow({
-                label: 'DPI', value: await g(CH.dpi, V.dpiIndex),
-                options: ADEPT_DPI_OPTIONS.map((d, i) => ({ value: i, label: `${d} DPI` })),
-                onChange: (v) => flask.setU16(CH.dpi, V.dpiIndex, Number(v)),
-            }));
-            if (caps.rawCpi) {
-                dpi.append(sliderRow({
-                    label: 'Raw CPI', hint: `0 = table mode; ${CPI_MIN}-${CPI_MAX} step ${CPI_STEP}`,
-                    min: 0, max: CPI_MAX, step: CPI_STEP,
-                    value: await g(CH.dpi, V.dpiCpi),
-                    onChange: (v) => flask.setU16(CH.dpi, V.dpiCpi, v),
-                }));
-            }
-        }
-        dpi.append(el('div', { class: 'note faint', text: 'DPI persists immediately — no save needed.' }));
-        cardsRow.append(dpi);
-        }
-
-        // ---- smoothing ----
-        if (caps.smoothing) {
-        cardsRow.append(card('Smoothing', 'EMA (drashna pointing_device_smoothing)',
-            toggleRow({ label: 'Enabled', value: await g(CH.smoothing, V.smoothingEnabled),
-                onChange: (v) => flask.setU16(CH.smoothing, V.smoothingEnabled, v ? 1 : 0) }),
-            sliderRow({ label: 'Factor', hint: '0 = raw, 1 = heavy', min: 0, max: 100, step: 1,
-                value: await g(CH.smoothing, V.smoothingFactor), format: pct,
-                onChange: (v) => flask.setU16(CH.smoothing, V.smoothingFactor, v) }),
-            sliderRow({ label: 'Timeout (ms)', min: 0, max: 1000, step: 25,
-                value: await g(CH.smoothing, V.smoothingTimeout),
-                onChange: (v) => flask.setU16(CH.smoothing, V.smoothingTimeout, v) }),
-            saveBar(() => flask.save(CH.smoothing))));
-        }
-
         // ---- scroll speed ----
         // ZMK line v15+ (flask_scrollscale, channel 0x29). The value is a
         // PERCENT of the divisors compiled into the keymap, not an absolute
         // rate — 100 means "exactly the firmware default", which is why the
         // slider reads in x rather than counts-per-notch. One knob drives
-        // both axes, so their base ratio survives. Caps-driven — QMK
-        // families tune scroll speed through dragscroll (0x15) instead.
+        // both axes, so their base ratio survives. Caps-driven.
         if (caps.scrollSpeed) {
         cardsRow.append(card('Scroll speed', 'how far the scroll ball travels per notch',
             sliderRow({ label: 'Speed', hint: '100% = the firmware default; higher scrolls faster per roll',
@@ -327,8 +140,7 @@ export class MouseTab {
         // ---- scroll axis snap/lock ----
         // ZMK line v9+ (flask_scrollsnap, channel 0x26): snaps slightly
         // diagonal ball rolls onto the dominant scroll axis and can lock
-        // that axis. Caps-driven like every card here — QMK families never
-        // set caps.scrollSnap (no QMK equivalent channel).
+        // that axis. Caps-driven like every card here.
         if (caps.scrollSnap) {
         cardsRow.append(card('Scroll snap', 'axis snap + lock on the scroll ball',
             toggleRow({ label: 'Enabled', value: await g(CH.scrollSnap, V.snapEnabled),
@@ -356,8 +168,8 @@ export class MouseTab {
 
         // ---- trackball role swap ----
         // ZMK line v11+ (flask_ballswap, channel 0x27): swaps the two balls'
-        // roles live (cursor <-> scroll). Caps-driven like every card here —
-        // QMK families never set caps.ballSwap. The toggle writes the base
+        // roles live (cursor <-> scroll). Caps-driven like every card here.
+        // The toggle writes the base
         // state and persists it immediately (same as the &bswap 0 key —
         // survives power cycle and reflash); &bswap 1 swaps while held and
         // shows up in the read-only "right now" line.
@@ -383,145 +195,26 @@ export class MouseTab {
                 text: 'Keys: assign “Ball Swap” in the Keymap tab — mode 0 toggles (saved), mode 1 swaps while held. Defaults live on Control 41/42.' })));
         }
 
-        // ---- drag scroll ----
-        // QMK trackballs only (caps.drag) — the Imprint runs the stock ZMK
-        // scroll chain since imprint v3. Knob shapes vary by family:
-        // per-axis divisors (Adept), emit-window tuning (Sval).
-        if (caps.drag) {
-        const perAxis = caps.dragPerAxis;
-        const drag = card('Drag scroll',
-            sval ? 'left-ball scrolling'
-                 : 'DRG_TOG / scroll layer',
-            sliderRow({ label: perAxis ? 'Horizontal divisor' : 'Divisor',
-                min: 1, max: family === 'adept' ? 64 : 120, step: 1,
-                value: await g(CH.dragScroll, V.dragDivH),
-                onChange: (v) => flask.setU16(CH.dragScroll, V.dragDivH, v) }));
-        if (perAxis) {
-            drag.append(sliderRow({ label: 'Vertical divisor',
-                min: 1, max: family === 'adept' ? 64 : 120, step: 1,
-                value: await g(CH.dragScroll, V.dragDivV),
-                onChange: (v) => flask.setU16(CH.dragScroll, V.dragDivV, v) }));
-        }
-        drag.append(toggleRow({ label: 'Inverted (natural)', value: await g(CH.dragScroll, V.dragInverted),
-            onChange: (v) => flask.setU16(CH.dragScroll, V.dragInverted, v ? 1 : 0) }));
-        if (caps.dragInvertX) {
-            drag.append(toggleRow({ label: 'Invert horizontal', hint: 'orientation correction',
-                value: await g(CH.dragScroll, V.dragInvertX),
-                onChange: (v) => flask.setU16(CH.dragScroll, V.dragInvertX, v ? 1 : 0) }));
-        }
-        if (caps.dragWindow) {
-            drag.append(
-                sliderRow({ label: 'Emit interval (ms)', hint: 'coalescing window for slow viewers',
-                    min: 0, max: 200, step: 2, value: await g(CH.dragScroll, V.dragInterval),
-                    onChange: (v) => flask.setU16(CH.dragScroll, V.dragInterval, v) }),
-                sliderRow({ label: 'Max notches/report', min: 1, max: 30, step: 1,
-                    value: await g(CH.dragScroll, V.dragMaxNotches),
-                    onChange: (v) => flask.setU16(CH.dragScroll, V.dragMaxNotches, v) }));
-        }
-        if (caps.hiresScroll) {
-            const active = await g(CH.dragScroll, V.dragHiresActive).catch(() => 0);
-            drag.append(
-                selectRow({
-                    label: 'High-res scroll',
-                    hint: 'fine-grained wheel steps instead of whole detents',
-                    value: await g(CH.dragScroll, V.dragHiresMode),
-                    options: [
-                        { value: 2, label: 'Follow the OS (recommended)' },
-                        { value: 1, label: 'Always on' },
-                        { value: 0, label: 'Off — whole detents' },
-                    ],
-                    onChange: (v) => flask.setU16(CH.dragScroll, V.dragHiresMode, Number(v)),
-                }),
-                el('div', { class: 'note faint' },
-                    `Currently ${active ? 'ON' : 'off'} for this host. `
-                    + 'Windows and Linux turn the HID resolution multiplier on and expect fine '
-                    + 'steps; macOS leaves it off and reads every step as a whole detent. The '
-                    + 'keyboard cannot see which the host chose — that is why this is a setting. '
-                    + 'If scrolling is wildly too fast, set Off; if it barely moves, set Always on.'));
-        }
-        if (caps.dragRescue) {
-            drag.append(el('button', {
-                class: 'btn small', text: 'Force scroll off (rescue)',
-                title: 'Live-state override — if the cursor is stuck in scroll mode',
-                onclick: async () => {
-                    try { await flask.setU16(CH.dragScroll, V.dragActive, 0); toast('Scroll forced off'); }
-                    catch (e) { toast(e.message, true); }
-                },
-            }));
-        }
-        drag.append(saveBar(() => flask.save(CH.dragScroll)));
-        cardsRow.append(drag);
-        }
-
-        // ---- wiggle ----
-        if (caps.wiggle) {
-            const wiggle = card('Shake to toggle', 'wiggle_ball',
-                toggleRow({ label: 'Enabled', hint: 'kill switch — off if shakes misfire during fast movement',
-                    value: await g(CH.wiggle, V.wiggleEnabled),
-                    onChange: (v) => flask.setU16(CH.wiggle, V.wiggleEnabled, v ? 1 : 0) }),
-                sliderRow({ label: 'Interval (ms)', min: 10, max: 2000, step: 10,
-                    value: await g(CH.wiggle, V.wiggleInterval),
-                    onChange: (v) => flask.setU16(CH.wiggle, V.wiggleInterval, v) }),
-                sliderRow({ label: 'Cooldown (ms)', min: 50, max: 2000, step: 10,
-                    value: await g(CH.wiggle, V.wiggleCooldown),
-                    onChange: (v) => flask.setU16(CH.wiggle, V.wiggleCooldown, v) }),
-                sliderRow({ label: 'Threshold (reversals)', min: 0, max: 20, step: 1,
-                    value: await g(CH.wiggle, V.wiggleThreshold),
-                    onChange: (v) => flask.setU16(CH.wiggle, V.wiggleThreshold, v) }),
-                saveBar(() => flask.save(CH.wiggle)));
-            cardsRow.append(wiggle);
-        }
-
         // ---- auto-mouse ----
         if (caps.autoMouse) {
             const am = card('Auto-mouse layer', 'ball motion activates a layer',
                 toggleRow({ label: 'Enabled', value: await g(CH.autoMouse, V.amEnabled),
                     onChange: (v) => flask.setU16(CH.autoMouse, V.amEnabled, v ? 1 : 0) }));
-            if (sval) {
-                // Sval: timeout is an INDEX into mh_timer_choices (persists
-                // immediately in the stock KB datablock, like DPI).
-                am.append(selectRow({
-                    label: 'Timeout', value: await g(CH.autoMouse, V.amTimeout),
-                    options: SVAL_AUTOMOUSE_TIMEOUTS.map((t, i) =>
-                        ({ value: i, label: t < 0 ? '∞ (never)' : `${t} ms` })),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, Number(v)),
-                }));
-            } else if (caps.autoMouseLatch) {
-                // ZMK flask_automouse: 0 = LATCH — the layer stays until a
-                // key that is transparent on it is pressed; that key is
-                // swallowed (it only ends auto-mouse, it never types).
-                am.append(sliderRow({
-                    label: 'Timeout',
-                    hint: '0 = stay until a non-mouse key is pressed (that key is swallowed)',
-                    min: 0, max: 5000, step: 50,
-                    value: await g(CH.autoMouse, V.amTimeout),
-                    format: (v) => v === 0 ? 'latch' : `${v} ms`,
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, v) }));
-            } else {
-                am.append(sliderRow({ label: 'Timeout (ms)', min: 100, max: 5000, step: 50,
-                    value: await g(CH.autoMouse, V.amTimeout),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, v) }));
-            }
-            if (caps.autoMouseWideThreshold) {
-                // Svalboard: a SPEED gate — cursor-ball counts inside a
-                // ~50-100 ms window, so a resting hand's slow drift never
-                // reaches it. Needs a far wider range than the Adept's
-                // per-burst accumulator. At 2000 CPI, 1 mm of ball travel ≈ 79
-                // counts, which is the only unit anyone can actually feel.
-                am.append(sliderRow({
-                    label: 'Threshold (counts)',
-                    hint: 'ball speed before the layer opens; scrolling never opens it',
-                    min: 0, max: 2040, step: 8,
-                    value: await g(CH.autoMouse, V.amThreshold),
-                    format: (v) => v === 0 ? 'any motion' : `${v} (~${(v / 79).toFixed(1)} mm)`,
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }));
-            } else {
-                am.append(sliderRow({ label: 'Threshold (counts)',
-                    hint: caps.autoMouseLatch ? 'ball travel before the layer triggers; 0 = any motion' : undefined,
-                    min: 0, max: caps.autoMouseLatch ? 200 : 60, step: 1,
-                    value: await g(CH.autoMouse, V.amThreshold),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }));
-            }
+            // flask_automouse: 0 = LATCH — the layer stays until a key that is
+            // transparent on it is pressed; that key is swallowed (it only
+            // ends auto-mouse, it never types).
+            am.append(sliderRow({
+                label: 'Timeout',
+                hint: '0 = stay until a non-mouse key is pressed (that key is swallowed)',
+                min: 0, max: 5000, step: 50,
+                value: await g(CH.autoMouse, V.amTimeout),
+                format: (v) => v === 0 ? 'latch' : `${v} ms`,
+                onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, v) }));
+            am.append(sliderRow({ label: 'Threshold (counts)',
+                hint: 'ball travel before the layer triggers; 0 = any motion',
+                min: 0, max: 200, step: 1,
+                value: await g(CH.autoMouse, V.amThreshold),
+                onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }));
             if (caps.autoMouseExtend) {
                 am.append(toggleRow({
                     label: 'Keys extend the timeout',
@@ -547,15 +240,6 @@ export class MouseTab {
                     min: 25, max: 400, step: 5,
                     value: await g(CH.autoscroll, V.asSpeedScale), format: pct,
                     onChange: (v) => flask.setU16(CH.autoscroll, V.asSpeedScale, v) }));
-            if (caps.autoscrollJog) {
-                as.append(
-                    sliderRow({ label: 'Jog deadzone', min: 0, max: 200, step: 5,
-                        value: await g(CH.autoscroll, V.asDeadzone),
-                        onChange: (v) => flask.setU16(CH.autoscroll, V.asDeadzone, v) }),
-                    sliderRow({ label: 'Jog range', min: 50, max: 2000, step: 25,
-                        value: await g(CH.autoscroll, V.asRange),
-                        onChange: (v) => flask.setU16(CH.autoscroll, V.asRange, v) }));
-            }
             if (caps.autoscrollStopOnKey) {
                 as.append(toggleRow({ label: 'Any key stops scrolling',
                     value: await g(CH.autoscroll, V.asStopOnKey),
@@ -571,65 +255,6 @@ export class MouseTab {
                 }),
                 saveBar(() => flask.save(CH.autoscroll)));
             cardsRow.append(as);
-        }
-
-        // ---- mouse buttons (0x29) ----
-        if (caps.mouseButtons) {
-            const locked = await g(CH.mouseButtons, V.mbLockMask).catch(() => 0);
-            cardsRow.append(card('Mouse buttons', 'double click + click lock',
-                sliderRow({
-                    label: 'Double-click gap (ms)',
-                    hint: 'too short and the host reads one click; too long and it reads two',
-                    min: 10, max: 500, step: 5,
-                    value: await g(CH.mouseButtons, V.mbDoubleGap),
-                    onChange: (v) => flask.setU16(CH.mouseButtons, V.mbDoubleGap, v),
-                }),
-                el('div', { class: 'row' },
-                    el('span', { class: 'lbl' }, 'Latched buttons',
-                        el('span', { class: 'hint', text: 'click lock holds these down until pressed again' })),
-                    el('span', { style: 'flex:1' }),
-                    el('span', { class: 'mono', text: locked
-                        ? [1, 2, 3, 4, 5].filter((b) => locked & (1 << (b - 1))).map((b) => `BTN${b}`).join(' ')
-                        : 'none' }),
-                    el('button', {
-                        class: 'btn small', text: 'Release all',
-                        title: 'Rescue — frees any button click lock left held',
-                        onclick: async () => {
-                            try { await flask.setU16(CH.mouseButtons, V.mbLockMask, 0); toast('Released'); }
-                            catch (e) { toast(e.message, true); }
-                        },
-                    })),
-                el('div', { class: 'note faint', text: 'Assign MsDbL/MsDbM and ClkL1–ClkL5 from the keymap picker. ClkUn releases everything from the keyboard itself.' }),
-                saveBar(() => flask.save(CH.mouseButtons))));
-        }
-
-        // ---- cursor teleport (0x26) ----
-        if (caps.teleport) cardsRow.append(await this._teleportCard());
-
-        // ---- health / freeze diagnostic ----
-        if (caps.diag) {
-            const gapEl = el('span', { class: 'mono' });
-            const upEl = el('span', { class: 'mono' });
-            const refresh = async () => {
-                try {
-                    gapEl.textContent = `${await g(CH.diag, V.diagMaxGap)} ms`;
-                    const s = await g(CH.diag, V.diagUptime);
-                    upEl.textContent = `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-                } catch { /* leave stale */ }
-            };
-            await refresh();
-            cardsRow.append(card('Health', 'freeze diagnostic',
-                el('div', { class: 'row' }, el('span', { class: 'lbl' }, 'Largest pointing-task gap',
-                    el('span', { class: 'hint', text: 'near a freeze length = firmware stall; single-digit ms = sensor/host' })),
-                    el('span', { style: 'flex:1' }), gapEl),
-                el('div', { class: 'row' }, el('span', { class: 'lbl', text: 'Uptime' }),
-                    el('span', { style: 'flex:1' }), upEl),
-                el('div', { class: 'savebar' },
-                    el('button', { class: 'btn small', text: 'Refresh', onclick: refresh }),
-                    el('button', {
-                        class: 'btn small', text: 'Reset watermark',
-                        onclick: async () => { await flask.setU16(CH.diag, V.diagMaxGap, 0); await refresh(); },
-                    }))));
         }
     }
 }

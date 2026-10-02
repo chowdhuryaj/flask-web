@@ -6,8 +6,7 @@ Run:  PORT=8139 python3 serve.py   (in the repo root)
 
 Hardware is never touched: navigator.hid and navigator.serial are replaced
 before any page script runs, so requestDevice/requestPort throw and the
-granted lists are empty. Workspaces are offline templates (TOTEM, Imprint,
-Adept) plus the Svalboard snapshot fixture seeded into localStorage.
+granted lists are empty. Workspaces are the offline templates (TOTEM, Imprint).
 
 Checks: zero page errors and console errors while opening every tab, the
 openPicker stub as sheet and popover, and each workspace's tab ids equal the pre-redesign
@@ -40,18 +39,14 @@ INIT_SCRIPT = """(seeds) => {
   Object.defineProperty(navigator, 'serial', { value: stub('getPorts', 'requestPort') });
 }"""
 
-SVAL = json.loads((FIXTURES / 'svalboard-snapshot.json').read_text())
-
 # name → landing-list label, snapshot key (tabs-before-wp0.json)
 WORKSPACES = {
     'totem': ('TOTEM (ZMK)', 'totem'),
     'imprint': ('Cyboard Imprint (ZMK)', 'imprint'),
-    'adept': ('Ploopy Adept', 'adept'),
-    'svalboard': (SVAL['label'], 'svalboard'),
 }
 
 
-def new_context(browser, viewport=(1440, 1000), seeds=(SVAL,)):
+def new_context(browser, viewport=(1440, 1000), seeds=()):
     """A context with hardware stubbed and the given workspaces seeded.
     Returns (context, page, errors); errors collects page errors and
     console errors."""
@@ -77,10 +72,10 @@ def open_workspace(page, label):
 
 
 def tab_ids(page):
-    # WP1 added Device > Keyboard and WP4b Behaviour > Leader / Shift Keys
-    # (spec 1.3), WP7 Behaviour > Hold timing; the snapshot predates them.
+    # WP1 added Device > Keyboard and WP7 Behaviour > Hold timing (spec 1.3);
+    # the snapshot predates them.
     ids = page.locator('#panels [data-panel]').evaluate_all('xs => xs.map(x => x.dataset.panel)')
-    return [i for i in ids if i not in ('keyboard', 'qmk-leader', 'qmk-shift', 'zmk-holdtiming')]
+    return [i for i in ids if i not in ('keyboard', 'zmk-holdtiming')]
 
 
 def launch(p):
@@ -88,8 +83,8 @@ def launch(p):
 
 
 CONTRACT_SMOKE = """async (surface) => {
-  const bp = await import('./binding-picker.js?v=60');
-  await import('./behavior-catalog.js?v=60');
+  const bp = await import('./binding-picker.js?v=61');
+  await import('./behavior-catalog.js?v=61');
   const problems = [];
   for (const host of ['sheet', 'popover']) {
     const close = bp.openPicker({ surface, host, anchor: document.querySelector('.keycap'),
@@ -114,9 +109,8 @@ def visit_all_tabs(page):
 
 
 def contract_smoke(page, name):
-    """openPicker stub opens and closes as sheet and popover on this line."""
-    surface = 'zmk.key' if name in ('totem', 'imprint') else 'qmk.key'
-    return page.evaluate(CONTRACT_SMOKE, surface)
+    """openPicker stub opens and closes as sheet and popover."""
+    return page.evaluate(CONTRACT_SMOKE, 'zmk.key')
 
 
 def main():

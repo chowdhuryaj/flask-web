@@ -1,6 +1,5 @@
 // ZMK binding vocabulary — naming + params for ZMK Studio bindings.
-// ZMK-line module (nothing here may be imported by a QMK module; importing
-// keycodes.js DATA is legal — dependency direction ZMK → shared data).
+// Imports the HID usage name tables from keycodes.js.
 //
 // A ZMK "keycode" is a binding {behaviorId, param1, param2}: behavior ids
 // are device-assigned at runtime (fetched over Studio RPC), params are
@@ -8,17 +7,16 @@
 // vocabulary is HID usages: param = (page << 16) | id, with implicit
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=60';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=61';
 // Circular with behavior-catalog.js (it imports this file's tables and
 // context). Safe: neither side calls the other at module-evaluation time.
-import { capParts, describeBinding, decode, entryById, withZmkContext } from './behavior-catalog.js?v=60';
+import { capParts, describeBinding, decode, entryById, withZmkContext } from './behavior-catalog.js?v=61';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;
 
-// The QMK basic/nav/f/numpad/intl tables ARE HID keyboard-page usage ids
-// (0x04..0xE7) — reuse their names/caps verbatim. (QMK media/mouse/quantum
-// tables are QMK-internal codes, NOT usages — never seed from those.)
+// The basic/nav/f/numpad/intl tables ARE HID keyboard-page usage ids
+// (0x04..0xE7) — reuse their names/caps verbatim.
 export const keyboardUsages = [...basicKeys, ...navKeys, ...fKeys, ...numpadKeys, ...intlKeys]
     .map(({ code, label, cap }) => ({ code, label, cap }));
 
@@ -148,7 +146,7 @@ export function usageFromName(name) {
 
 // ---------------------------------------------------------------------------
 // Device context registry — behaviors + layers arrive over Studio RPC after
-// connect (same pattern as keycodes.js setDeviceCustomKeys).
+// connect.
 
 let ctx = { behaviors: new Map(), layers: [] };
 

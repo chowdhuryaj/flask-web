@@ -1,24 +1,19 @@
 // ZMK-line support — everything the app knows about ZMK Flask devices
 // (the Cyboard Imprint, family "imprint"; the TOTEM 38-key split, family
-// "totem") lives HERE, and nothing
-// in the QMK modules (caps.js, profiles.js, vial*/keymap code) may special-
-// case a ZMK family. QMK and ZMK are different firmware languages: QMK
-// devices carry a Vial surface (keymap/macros/dynamic entries/QMK settings)
-// and per-family raw-HID version lines; ZMK devices have NO Vial surface at
-// all (the keymap lives in git + ZMK Studio) and speak only the Flask frame
-// via zmk-flask-modules flask_proto. The only shared layer is that frame
-// vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
+// "totem") lives HERE. The keymap lives in the firmware repo + ZMK Studio;
+// the app speaks the Flask frame (flaskproto.js CH/V/CMD) via
+// zmk-flask-modules flask_proto.
 
-import { CH, V } from './flaskproto.js?v=60';
-import { diag } from './diag.js?v=60';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=60';
+import { CH, V } from './flaskproto.js?v=61';
+import { diag } from './diag.js?v=61';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=61';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
+// The app only connects to this identity (webhid.js filters on it).
 export const ZMK_VIDPID = { vid: 0x1D50, pid: 0x615E };
 
-// meta 0x03 family codes on the ZMK line. Codes 1-3 mirror the QMK family
-// names in the shared numbering but are never reported by a ZMK device.
+// meta 0x03 family codes on the ZMK line.
 export const ZMK_FAMILY_CODES = { 4: 'imprint', 6: 'totem' };
 
 export const ZMK_FAMILIES = ['imprint', 'totem'];
@@ -40,14 +35,22 @@ export function isZmkFamily(family) {
  * or null. */
 export function zmkFamilyCandidate(vid, pid) {
     // Same VID/PID for every ZMK family — default the guess to imprint (the
-    // original board); confirmZmkFamily() resolves 4 vs 5 from meta 0x03.
+    // original board); confirmZmkFamily() resolves 4 vs 6 from meta 0x03.
     return (vid === ZMK_VIDPID.vid && pid === ZMK_VIDPID.pid) ? 'imprint' : null;
 }
 
 export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)', totem: 'TOTEM (ZMK)' };
 
-// Per-family expected protocol versions — the ZMK lines are independent of
-// every QMK line; never compare across. imprint: v2 added autoscroll
+/** Family for a VID/PID: the ZMK candidate, else 'generic' (not a Flask board). */
+export function familyOf(vid, pid) {
+    return zmkFamilyCandidate(vid, pid) ?? 'generic';
+}
+
+export function familyLabel(family) {
+    return ZMK_FAMILY_LABELS[family] ?? 'Keyboard';
+}
+
+// Per-family expected protocol versions. imprint: v2 added autoscroll
 // (0x1A); v3 dropped dragscroll (0x15 answers unhandled — the Imprint runs
 // the stock ZMK scroll chain); v4 removed autoscroll jog mode
 // (AS_DEADZONE/AS_RANGE 0x03/0x04 answer unhandled — stepped-only); v5
@@ -102,9 +105,8 @@ export async function zmkReadKeyState(flask) {
     return next;
 }
 
-/** Capability table for ZMK families — deliberately its OWN function, not
- * exceptions inside the QMK table. Anything not listed is absent on ZMK
- * (most QMK caps map to Vial surfaces or QMK-only channels). */
+/** Capability table for ZMK families: what the connected board serves,
+ * gated on the family's hardware and the firmware's protocol version. */
 export function zmkCapabilities(family, version) {
     const v = version ?? 0;
     const flask = version != null;
@@ -113,66 +115,41 @@ export function zmkCapabilities(family, version) {
     const rgb = flask && hw.rgb;             // LED strip channels exist
     return {
         flask,
-        vial: false,        // no Vial surface — ZMK keymap editing is Studio RPC
-        // Live keymap editor over ZMK Studio RPC (WebSerial) — the ZMK
-        // line's Vial equivalent. Firmware side needs CONFIG_ZMK_STUDIO=y +
-        // the studio-rpc-usb-uart snippet (the tab feature-probes and
-        // explains if absent).
+        // Live keymap editor over ZMK Studio RPC (WebSerial). Firmware side
+        // needs CONFIG_ZMK_STUDIO=y + the studio-rpc-usb-uart snippet (the
+        // tab feature-probes and explains if absent).
         zmkStudio: true,
         mouse: pointing,       // Mouse tuning tab (autoscroll + v9 accel/snap)
-        // flask_accel (0x10, v9): the QMK pd_accel sigmoid ported — same
-        // wire shape, so the shared Acceleration card drives it unchanged.
+        // flask_accel (0x10, v9): pd_accel sigmoid, x100-scaled wire values.
         accel: pointing && v >= 9,
         // flask_scrollsnap (0x26, v9): runtime axis snap/lock on the
-        // scroll ball (ZMK-line only channel).
+        // scroll ball.
         scrollSnap: pointing && v >= 9,
         // flask_scrollscale (0x29, v15): live scroll speed as a percent of
-        // the keymap's compiled divisors. ZMK-line only — the QMK families
-        // reach scroll speed through dragscroll (0x15), which this device
-        // does not compile.
+        // the keymap's compiled divisors.
         scrollSpeed: pointing && v >= 15,
         // flask_ballswap (0x27, v11): live trackball role swap — toggle
         // persists (survives reflash), momentary key swaps while held.
         ballSwap: pointing && v >= 11,
-        dpi: false,
-        smoothing: false,
-        drag: false,        // stock ZMK scroll chain (flask_scroll dropped, v3)
-        dragPerAxis: false,
-        dragWindow: false,
-        dragInvertX: false,
-        dragRescue: false,
-        // flask_gestures runtime sets (0x11, v10) — the ZMK-line Gestures
-        // tab (zmk-gestures-tab.js; QMK families' cap routes their own tab).
+        // flask_gestures runtime sets (0x11, v10) — the Gestures tab.
         gestures: pointing && v >= 10,
-        // flask_leader runtime sequences (0x19, v10) — ZMK-line Leader tab.
+        // flask_leader runtime sequences (0x19, v10) — the Leader tab.
         leader: flask && v >= 10,
-        wiggle: false,
-        // flask_automouse (0x1B, v13) — QMK wire shape, so the shared
-        // auto-mouse card drives it; the two extra flags below unlock the
-        // ZMK-only semantics (latch-at-0 timeout, extend-on-key).
+        // flask_automouse (0x1B, v13): timeout 0 = latch until a transparent
+        // key; extend re-arms the timeout on non-transparent keys.
         autoMouse: pointing && v >= 13,
         autoMouseLatch: pointing && v >= 13,
         autoMouseExtend: pointing && v >= 13,
-        wheelChords: false,
-        typing: false,
-        osShortcuts: false, // keymap-level (zmk-switch-layout)
-        numWord: false,
-        leaderTimeout: false,
         // Autoscroll (0x1A): imprint v2. Stepped-only — jog mode was
         // removed in v4 (spring-less trackball made it unusable).
         autoscroll: pointing && v >= 2,
-        autoscrollJog: false,
         autoscrollStopOnKey: pointing && v >= 2,
-        // Key-state bitmap (0x23, v5): HUD lights pressed keys without a
-        // Vial matrix read. loadZmkDevice injects app.readKeyState.
+        // Key-state bitmap (0x23, v5): HUD lights pressed keys.
+        // loadZmkDevice injects app.readKeyState.
         keyState: flask && v >= 5,
-        comboLayerMasks: false, // ZMK combos gate layers natively
-        // flask_rgb per-key per-layer map (0x21, v6) — rendered by the
-        // ZMK-line painter (zmk-rgb-tab.js), not the NLKB16 RgbTab.
+        // flask_rgb per-key per-layer map (0x21, v6) — the RGB tab painter.
         rgbMap: rgb && v >= 6,
-        // flask_combos runtime combos (0x24, v7) — the ZMK-line Combos
-        // tab (zmk-combos-tab.js). QMK devices never set this: their
-        // combos are Vial dynamic entries behind caps.vial.
+        // flask_combos runtime combos (0x24, v7) — the Combos tab.
         combos: flask && v >= 7,
         // v9: keys-per-slot RO value (0x04) sizes the slot frame; v7/v8
         // firmware is fixed at the codec's 4-key default.
@@ -183,14 +160,12 @@ export function zmkCapabilities(family, version) {
         // v14: per-combo timeout/prior-idle/layer (slot v3 0x12) — the
         // imported devicetree combos' knobs, editable per slot.
         combosTimed: flask && v >= 14,
-        // flask_csk custom shift keys (0x16, v14) — the ZMK-line Shift tab.
-        // QMK devices drive their CSK via the u16 pair tables; this flag
-        // is ZMK-only (slot frame at 0x50).
+        // flask_csk custom shift keys (0x16, v14) — the Shift tab.
         customShift: flask && v >= 14,
         // flask_tapdance runtime tap dances (0x28, v14) — wizard +
         // composer &ftd assignment.
         tapDance: flask && v >= 14,
-        // rgbmap global brightness (0x0B, v14) — native-BRI analog.
+        // rgbmap global brightness (0x0B, v14).
         rgbBrightness: rgb && v >= 14,
         // rgbmap idle blank timeout (0x0C, v16): seconds of KEYBOARD idle
         // before the strip blanks; 0 = never. The strip going dark is also
@@ -203,18 +178,9 @@ export function zmkCapabilities(family, version) {
         // flask_rgb effect engine (0x21 values 0x04-0x08, v9) — the
         // whole-strip animations under the painted map.
         rgbEffects: rgb && v >= 9,
-        // flask_macros runtime macros (0x25, v8) — the ZMK-line Macros
-        // tab (zmk-macros-tab.js). QMK macros are Vial dynamic macros
-        // behind caps.vial; this flag is ZMK-only.
+        // flask_macros runtime macros (0x25, v8) — the Macros tab.
         macros: flask && v >= 8,
-        display: false,
-        displayWidgets: false,
-        bigDisplay: false,
-        displayMirror: false,
-        vialRGB: false,
-        diag: false,
         hudLayer: flask,    // meta 0x02 active layer — always on the ZMK line
-        rawCpi: false,
     };
 }
 
@@ -241,30 +207,24 @@ export const ZMK_LEADER_FN_PRESET = {
     imprint: { digits: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], fKey: 28 },
 };
 
-/** Editor profile for a ZMK device — no Vial definition to build from, so
- * the editor renders tuning tabs only. */
+/** Editor profile for a ZMK device (Studio's own layout replaces the keys
+ * after load). */
 export function zmkProfile(family) {
     return {
         family,
         name: ZMK_FAMILY_LABELS[family],
-        matrixRows: 0,
-        matrixCols: 0,
         // totem: the shared layout (zmk-totem-layout.js) — the same positions
         // the offline preview serves; Studio's own layout replaces it after
         // load. imprint stays empty (unchanged).
         keys: family === 'totem'
             ? TOTEM_GEOM.map((k, i) => ({ row: 0, col: i, pos: i, label: `Key ${i}`, x: k.x, y: k.y, w: k.w, h: k.h }))
             : [],
-        encoderKeys: [],
         // Imprint: mirrors config/imprint.keymap layer order (Cyboard-ZMK repo);
         // cosmetic only — the ZMK keymap tab republishes the device's real
         // names after its Studio load.
         layerNames: family === 'totem'
             ? ['Base', 'Layer 1', 'Layer 2', 'Layer 3', 'Layer 4', 'Layer 5']
             : ['Base', 'Control', 'Fn', 'Mouse', 'Snipe', 'Num'],
-        displayTile: null,
-        encoderPushKeys: {},
-        customKeycodes: [],
         decorations: ZMK_TRACKBALLS[family] ?? [],
     };
 }
