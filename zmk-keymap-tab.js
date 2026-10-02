@@ -285,7 +285,15 @@ export class ZmkKeymapTab {
             const when = snap.savedAt ? new Date(snap.savedAt).toLocaleString() : 'an unknown time';
             const list = el('div', { class: 'restore-diff', 'data-restore-diff': '', hidden: true,
                 style: 'max-height:240px; overflow:auto; margin-top:8px; font-size:12px' });
-            const label = (b) => (b ? `${b.behavior ?? `#${b.behaviorId}`}${b.param1 ? ` ${(b.param1 >>> 0).toString(16)}` : ''}` : '—');
+            // Saved bindings name their behavior (ids drift across builds): resolve
+            // by name on this device, then describe like the board does.
+            const byName = new Map([...zmkBehaviors()].map(([id, d]) => [d.displayName, id]));
+            const label = (b) => {
+                if (!b) return '—';
+                const id = (b.behavior && byName.get(b.behavior)) ?? b.behaviorId;
+                try { return bindingDescribe({ behaviorId: id, param1: b.param1 >>> 0, param2: b.param2 >>> 0 }); }
+                catch { return b.behavior ?? `#${b.behaviorId}`; }
+            };
             for (const c of d.changed) {
                 const rows = c.positions.map((p) => el('div', { class: 'mono' },
                     `key ${p}: keyboard ${label(live[c.layer]?.bindings?.[p])} · saved ${label(snap.layers[c.layer]?.bindings?.[p])}`));
