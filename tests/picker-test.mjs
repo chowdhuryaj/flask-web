@@ -42,6 +42,7 @@ eq(surfaceEntries('zmk.comboOutput').find((e) => e.id === 'mod-tap').params.some
     eq(ids('zmk.key').includes('adaptive'), true, 'keymap picker offers Adaptive key');
     eq(ids('zmk.comboOutput').includes('adaptive'), true, 'combo output may fire an adaptive set');
     eq(ids('zmk.adaptiveStep').includes('adaptive'), false, 'adaptive step: no recursion');
+    eq(ids('zmk.tapDanceStep').filter((i) => ['tap-dance', 'adaptive'].includes(i)), [], 'F01: tap-dance step offers neither Tap Dance nor Adaptive Key');
     eq(ids('zmk.adaptiveStep').filter((i) => ['leader', 'tap-dance'].includes(i)), [], 'adaptive step: no leader / tap dance');
     eq(ids('zmk.adaptiveStep').includes('macro'), true, 'adaptive step: macro slot allowed');
     eq(SURFACES['zmk.adaptiveTrigger'].stores, 'usage + mods', 'trigger stores usage + mods');
