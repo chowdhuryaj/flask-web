@@ -159,6 +159,10 @@ def imprint(browser):
     open_workspace(page, 'Cyboard Imprint (ZMK)')
     check(page.locator('.kb-svg g.key').count() == 70, 'imprint: 70 keys')
     check(inside_frame(page) == 0, 'imprint: every key inside the frame')
+    # WP7 item 7: dual-role caps draw the HOLD band + tap line (home-row mods)
+    ht = page.locator('#board-slot .kb-svg g.key.ht')
+    check(ht.count() >= 8 and page.locator('#board-slot .kb-svg g.key.ht .cap-holdband').count() == ht.count(),
+          f'imprint: banded hold/tap caps, got {ht.count()}')
     key(page, 12).click()
     shot(page, 'imprint-selected')
     page.locator('.bd-chip').nth(1).click()
@@ -169,6 +173,7 @@ def imprint(browser):
     ctx, page, errors = new_context(browser)
     open_workspace(page, 'TOTEM (ZMK)')
     check(inside_frame(page) == 0, 'totem: rotated thumbs inside the frame')
+    check(page.locator('#board-slot .kb-svg g.key.ht .cap-holdband').count() >= 8, 'totem: banded hold/tap caps')
     ctx.close()
 
 
