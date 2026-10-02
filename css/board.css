@@ -28,10 +28,10 @@
 .kb-svg .cap-top { fill: var(--muted); font-weight: 600; }
 .kb-svg .key.sel .cap-top { fill: var(--accent-text); }
 /* Dual-role caps (WP3b): tinted HOLD band on top, TAP below, tiny markers. */
-.kb-svg .cap-holdband { fill: color-mix(in srgb, var(--accent) 16%, transparent); pointer-events: none; }
+.kb-svg .cap-holdband { fill: color-mix(in srgb, var(--accent) 24%, transparent); pointer-events: none; }
 .kb-svg .cap-hold { fill: var(--accent-text); font-weight: 600; }
 .kb-svg .cap-mark { fill: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-.kb-svg .key.sel .cap-holdband { fill: color-mix(in srgb, var(--accent) 28%, transparent); }
+.kb-svg .key.sel .cap-holdband { fill: color-mix(in srgb, var(--accent) 36%, transparent); }
 .kb-svg .key.pressed .cap-mark { fill: #fff; }
 .kb-svg .keyname { fill: var(--faint); font-size: 8px; font-weight: 400; }
 .kb-svg .enc { cursor: pointer; outline: none; }

@@ -172,8 +172,9 @@ function drawHoldTap(g, f, ht, { mid, innerW, mainFs, topFs, radius }) {
         d: `M${f.x},${f.y + bandH} V${f.y + r} Q${f.x},${f.y} ${f.x + r},${f.y} H${f.x + f.w - r} Q${f.x + f.w},${f.y} ${f.x + f.w},${f.y + r} V${f.y + bandH} Z`,
     }));
     const markFs = Math.max(6, topFs * 0.78);
-    const holdText = ht.tag ? `${ht.hold} · ${ht.tag}` : ht.hold;
-    const holdFit = fitText(holdText, innerW - markFs * 0.58 * 5, topFs * 1.1, { minScale: 0.55, maxLines: 1 });
+    // 'live' is every Totem hold-tap: noise on a cap (caption and cells keep it).
+    const holdText = ht.tag && ht.tag !== 'live' ? `${ht.hold} · ${ht.tag}` : ht.hold;
+    const holdFit = fitText(holdText, innerW - markFs * 0.58 * 5, topFs * 1.3, { minScale: 0.55, maxLines: 1 });
     const t = svgEl('text', { class: 'cap-hold', x: mid, y: f.y + bandH * 0.68, 'text-anchor': 'middle', 'data-hold': ht.hold });
     t.append(svgEl('tspan', { class: 'cap-mark', style: `font-size:${markFs}px`, text: 'hold ' }),
         svgEl('tspan', { style: `font-size:${holdFit.fs}px`, text: holdFit.lines[0] }));

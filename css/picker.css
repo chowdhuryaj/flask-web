@@ -95,3 +95,34 @@
   .bp-entry { grid-template-columns: 1fr; }
   .bp-entry > .bp-assign { grid-column: 1; grid-row: auto; justify-self: start; }
 }
+
+/* ---- Tap/Hold composer (WP3b) ---- */
+.bp-th-open { white-space: nowrap; }
+.bp-head { flex-wrap: wrap; }
+.bp-th { display: flex; flex-direction: column; gap: var(--sp-4); }
+.bp-th-slots { display: flex; align-items: stretch; gap: var(--sp-3); }
+.bp-th-plus { align-self: center; color: var(--faint); font-weight: 600; }
+.bp-th-slot {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left;
+  border: 1px solid var(--keycap-border); background: var(--keycap); color: var(--text); font: inherit;
+}
+.bp-th-slot[data-slot="hold"] { background: color-mix(in srgb, var(--accent) 10%, var(--keycap)); }
+.bp-th-slot.on { border: 2px solid var(--accent); padding: 7px 9px; }
+.bp-th-label { font-size: 0.625rem; font-weight: 700; letter-spacing: .08em; color: var(--accent-text); }
+.bp-th-slot[data-slot="tap"] .bp-th-label { color: var(--muted); }
+.bp-th-value { font-size: var(--fs-md); font-weight: 600; }
+.bp-th-slot.empty .bp-th-value { color: var(--faint); font-weight: 500; }
+.bp-th-sub { font-size: var(--fs-xs); color: var(--muted); }
+.bp-th-pane { display: flex; flex-direction: column; gap: var(--sp-4); }
+.bp-th-mods { position: static; }
+.bp-th-result { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; font-size: var(--fs-sm); }
+.bp-th-ok { font-weight: 600; }
+.bp-th-result.bad { color: var(--warn); }
+.bp-th-actions { display: flex; gap: var(--sp-3); align-items: center; }
+
+/* renderBindingCell(): dual-role outputs in rows and tiles. */
+.bp-cell { white-space: nowrap; }
+.bp-cell.ht { display: inline-flex; gap: 6px; align-items: baseline; }
+.bp-cell i { font-style: normal; font-size: 0.625rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.bp-cell-hold { padding: 0 5px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-text); }

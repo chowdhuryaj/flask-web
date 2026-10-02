@@ -15,9 +15,11 @@ import { el } from './ui.js?v=49';
 import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=49';
 import { captureOneKey } from './zmk-capture.js?v=49';
 import { saveState } from './save-state.js?v=1';
+import { board } from './board.js?v=1';
 import {
     CATALOG_GROUPS, catalogFor, decode, encode, capParts, describeBinding, keySections, modsText,
-    resolveTiming, timingBackendNow, attachHoldtap, HOLDTAP, TIMING_PARAM,
+    resolveTiming, timingBackendNow, attachHoldtap, HOLDTAP, TIMING_PARAM, adapterOf,
+    composeTapHold, tapHoldSpecOf, holdTapParts, homeRowPlan,
 } from './behavior-catalog.js?v=1';
 
 /**
@@ -119,14 +121,22 @@ export function openPicker({ surface, value = null, host = 'sheet', anchor, titl
     let dispose = () => {};
     const close = () => { if (!closed) { closed = true; dispose(); } };
     const pick = (v) => { if (host !== 'docked') close(); onPick(v); };
-    const view = buildPickerBody({ surface, value, app, position, host, onPick: pick });
+    const followBoard = host === 'docked' && KEYMAP_SURFACES.has(surface) && value == null;
+    const view = buildPickerBody({ surface, value: followBoard ? board.bindingOf() : value, app, position, host, onPick: pick });
     const body = view.root;
+    // A docked keymap picker shows the selected key's binding (and opens the
+    // Tap/Hold composer pre-filled on a mod-tap / layer-tap).
+    const follow = () => view.setValue(board.bindingOf());
+    if (followBoard) { board.addEventListener('select', follow); board.addEventListener('change', follow); }
     const onKey = (e) => { if (e.key === 'Escape' && !view.capturing()) close(); };
 
     if (host === 'docked') {
         if (!anchor) throw new Error('openPicker: docked host needs an anchor container');
         anchor.append(body);
-        dispose = () => { view.stop(); body.remove(); };
+        dispose = () => {
+            view.stop(); body.remove();
+            if (followBoard) { board.removeEventListener('select', follow); board.removeEventListener('change', follow); }
+        };
         close.setValue = view.setValue;
     } else if (host === 'popover') {
         const r = anchor?.getBoundingClientRect() ?? { left: 16, bottom: 16 };
@@ -197,6 +207,13 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     let heldMods = current?.entryId === 'key' && modsAllowed ? current.params.mods ?? 0 : 0;
     let stopCapture = null;
     const state = new Map();   // entryId → params being edited
+    let currentValue = value;
+    const isKeymap = KEYMAP_SURFACES.has(surface);
+    const posNow = () => position ?? (isKeymap ? board.selectedKey()?.pos ?? null : null);
+    const handNow = () => (isKeymap ? board.handOf(posNow()) : null);
+    // Tap/Hold composer state, or null (WP3b).
+    let th = null;
+    let stopPick = null;
 
     const root = el('div', { class: 'picker bp', 'data-host': host, 'data-surface': surface });
     const search = el('input', { type: 'search', class: 'bp-search', placeholder: 'Search keys and behaviors…',
@@ -213,6 +230,9 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     root.addEventListener('pointerleave', () => setCap(''));
 
     search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); render(); });
+    const thBtn = el('button', { class: 'btn small bp-th-open', 'data-act': 'taphold',
+        'data-caption': 'Tap for one key, hold for a modifier or a layer. Keeps the current key as the TAP.',
+        onclick: () => { openComposer(currentValue); render(); } });
     captureBtn.addEventListener('click', () => {
         if (stopCapture) { stopCapture(); return; }
         captureBtn.textContent = 'Press a key… (Esc cancels)';
@@ -220,11 +240,19 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         stopCapture = captureOneKey((usage) => {
             const { mods, id } = usageParts(usage);
             const isMod = id >= 0xE0 && id <= 0xE7;
+            if (th && !th.preset) {
+                const k = { key: id, mods: isMod ? 0 : mods };
+                if (th.slot === 'hold' && th.holdKind === 'key') th.holdKey = k;
+                else { th.tap = k; th.slot = 'hold'; }
+                render();
+                return;
+            }
             assign('key', { key: id, mods: modsAllowed && !isMod ? mods : 0 });
         }, { onStop: () => { stopCapture = null; captureBtn.textContent = '⌨ Press a key'; captureBtn.classList.remove('primary'); } });
     });
 
-    const head = el('div', { class: 'bp-head' }, search, keyEntry ? captureBtn : null);
+    const htIds = () => entries.filter((e) => e.id === 'mod-tap' || e.id === 'layer-tap').map((e) => e.id);
+    const head = el('div', { class: 'bp-head' }, search, keyEntry ? captureBtn : null, htIds().length > 0 && keyEntry ? thBtn : null);
     root.append(head, chips, bodyEl, caption);
 
     // Live hold-tap timing (ZMK proto ≥ 17): probe once, re-render when known.
@@ -236,16 +264,18 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         let v;
         try { v = encode(entryId, params, adapter); } catch (err) { setCap(String(err.message)); return; }
         const e = entries.find((x) => x.id === entryId);
-        if (adapter === 'zmk-studio' && e && params.live && params.live !== 'off' && position != null) {
+        if (adapter === 'zmk-studio' && e && params.live && params.live !== 'off' && posNow() != null) {
             const be = timingBackendNow();
             if (be.runtime) {
                 const r = resolveTiming(entryId, params.timing ?? TIMING_PARAM.default,
                     e.device.filter((d) => d.set.live).map((d) => ({ behaviorId: d.behaviorId, ms: null, live: true, side: d.set.live })),
                     { side: params.live });
-                r?.write?.(position).catch((err) => setCap(`Timing not written: ${err.message}`));
+                const pos = posNow();
+                if (pos != null) r?.write?.(pos).catch((err) => setCap(`Timing not written: ${err.message}`));
             }
         }
         current = decode(v, adapter);
+        currentValue = v;
         onPick(v);
         if (root.isConnected) render();
     }
@@ -264,6 +294,10 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         entries = surfaceEntries(surface, app);
         renderChips();
         bodyEl.replaceChildren();
+        const cur = current?.entryId;
+        thBtn.textContent = cur === 'key' ? '⇅ Make this a tap-hold' : '⇅ Tap-hold';
+        thBtn.classList.toggle('primary', !!th);
+        if (th) { chips.hidden = true; bodyEl.append(th.preset ? presetView() : composerView()); return; }
         if (query) return renderSearch();
         if (group === 'keys') renderKeys(bodyEl, (key, mods) => assign('key', { key, mods }), true);
         for (const e of entries.filter((x) => x.group === group && !['key', 'trans', 'none'].includes(x.id))) bodyEl.append(entryRow(e));
@@ -547,6 +581,226 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         return `${modsText(mods)}${capParts(encode('key', { key, mods: 0 }, adapter), adapter).main}`;
     }
 
+    // ---- Tap/Hold composer (WP3b) ----
+    // Native Svalboard flow, one panel: TAP slot (any key) + HOLD slot
+    // (modifiers, a layer, or on ZMK any key). Apply writes MT()/LT() on
+    // QMK/Nape, &fht_l / &fht_r / &fht (live) or the compiled hold-tap on ZMK.
+
+    function openComposer(v) {
+        const spec = v == null ? null : tapHoldSpecOf(v, adapter);
+        const hold = spec?.hold;
+        th = {
+            tap: spec?.tap ?? null,
+            holdKind: hold?.kind ?? (htIds().includes('mod-tap') ? 'mods' : 'layer'),
+            mods: hold?.kind === 'mods' ? hold.mods : 0,
+            // Left mods by default; the key's hand only picks the ZMK live node.
+            right: hold?.kind === 'mods' ? !!(hold.mods & 0xF0) : false,
+            layer: hold?.kind === 'layer' ? hold.layer : layerOptions()[1]?.value ?? layerOptions()[0]?.value ?? 1,
+            holdKey: hold?.kind === 'key' ? { key: hold.key, mods: hold.mods ?? 0 } : null,
+            timing: spec?.timing ?? TIMING_PARAM.default,
+            slot: spec?.tap ? 'hold' : 'tap',
+            readTiming: !!hold,
+        };
+    }
+
+    function layerOptions() {
+        const e = entries.find((x) => x.id === 'layer-tap');
+        const p = e?.params.find((x) => x.kind === 'layer');
+        return p ? optionsOf(e, p) : [];
+    }
+
+    function thSpec() {
+        const mods4 = th.mods & 0xF ? th.mods & 0xF : (th.mods >> 4) & 0xF;
+        const hold = th.holdKind === 'mods' ? (mods4 ? { kind: 'mods', mods: th.right ? mods4 << 4 : mods4 } : { kind: 'mods', mods: 0 })
+            : th.holdKind === 'layer' ? { kind: 'layer', layer: th.layer }
+                : th.holdKey ? { kind: 'key', ...th.holdKey } : null;
+        return { tap: th.tap, hold, hand: handNow(), timing: th.timing };
+    }
+
+    const tapCap = (k) => (k ? capParts(encode('key', { key: k.key, mods: k.mods ?? 0 }, adapter), adapter) : null);
+    const tapText = (k) => { const c = tapCap(k); return c ? `${c.top}${c.main}` : ''; };
+
+    function holdText() {
+        if (th.holdKind === 'mods') {
+            const m4 = th.mods & 0xF || (th.mods >> 4) & 0xF;
+            return m4 ? modsText(th.right ? m4 << 4 : m4) : '';
+        }
+        if (th.holdKind === 'layer') return layerOptions().find((o) => o.value === th.layer)?.label ?? `Layer ${th.layer}`;
+        return th.holdKey ? tapText(th.holdKey) : '';
+    }
+
+    function slotBtn(which, label, valueText, sub) {
+        return el('button', {
+            class: 'bp-th-slot' + (th.slot === which ? ' on' : '') + (valueText ? '' : ' empty'),
+            'data-slot': which, 'aria-pressed': String(th.slot === which),
+            'data-caption': which === 'tap' ? 'TAP: the key a quick press sends. Pick it below or press it.' : 'HOLD: what the key does while held.',
+            onclick: () => { th.slot = which; render(); },
+        }, el('span', { class: 'bp-th-label', text: label }),
+        el('span', { class: 'bp-th-value', text: valueText || 'pick…' }),
+        el('span', { class: 'bp-th-sub', text: sub }));
+    }
+
+    function composerView() {
+        const wrap = el('div', { class: 'bp-th', 'data-composer': '' });
+        const r = composeTapHold(thSpec(), adapter);
+        wrap.append(el('div', { class: 'bp-th-slots' },
+            slotBtn('tap', 'TAP', tapText(th.tap), 'quick press'),
+            el('span', { class: 'bp-th-plus', 'aria-hidden': 'true', text: '+' }),
+            slotBtn('hold', 'HOLD', holdText(), 'press and hold')));
+        const pane = el('div', { class: 'bp-th-pane' });
+        if (th.slot === 'tap') {
+            pane.append(el('div', { class: 'bp-note', text: 'TAP key: click one, or use ⌨ Press a key.' }));
+            renderKeys(pane, (key, mods) => { th.tap = { key, mods: mods ?? 0 }; th.slot = 'hold'; render(); }, false);
+        } else {
+            pane.append(holdKinds());
+            if (th.holdKind === 'mods') pane.append(holdMods());
+            else if (th.holdKind === 'layer') {
+                pane.append(el('div', { class: 'bp-chips' }, ...layerOptions().map((o) => el('button', {
+                    class: 'bp-key labeled' + (o.value === th.layer ? ' on' : ''), 'data-layer': o.value,
+                    'data-caption': `Hold for ${o.label}`, onclick: () => { th.layer = o.value; render(); },
+                }, el('span', { class: 'bp-top', text: 'hold' }), el('span', { text: o.cap ?? o.label })))));
+            } else {
+                pane.append(el('div', { class: 'bp-note', text: 'HOLD key: held down for as long as you hold.' }));
+                renderKeys(pane, (key, mods) => { th.holdKey = { key, mods: mods ?? 0 }; render(); }, false);
+            }
+        }
+        wrap.append(pane);
+        const t = timingRow(r);
+        if (t) wrap.append(t);
+        const res = el('div', { class: 'bp-th-result' + (r.ok ? '' : ' bad'), role: 'status' });
+        if (r.ok) {
+            res.append(el('span', { class: 'bp-th-ok', text: `Hold ${holdText()} · Tap ${tapText(th.tap)}` }),
+                r.via ? el('span', { class: 'bp-note', text: ` via ${r.via}` }) : null);
+        } else {
+            res.append(el('span', { text: r.message }));
+            if (r.fallback === 'tap-dance' && entries.some((e) => e.id === 'tap-dance')) {
+                res.append(el('button', { class: 'btn small', text: 'Use a tap dance', 'data-act': 'th-fallback',
+                    onclick: () => { th = null; group = 'run'; render(); } }));
+            }
+        }
+        wrap.append(res);
+        const canPreset = isKeymap && host !== 'popover' && htIds().includes('mod-tap') && board.adapter;
+        wrap.append(el('div', { class: 'bp-th-actions' },
+            el('button', { class: 'btn small primary', text: 'Apply', 'data-act': 'th-apply', disabled: !r.ok,
+                onclick: () => { if (!r.ok) return; th = null; assign(r.entryId, r.params); } }),
+            el('button', { class: 'btn small', text: 'Back', 'data-act': 'th-back', onclick: () => { th = null; render(); } }),
+            el('span', { class: 'bd-spacer', style: 'flex:1' }),
+            canPreset ? el('button', { class: 'btn small', text: 'Home-row mods…', 'data-act': 'hrm',
+                'data-caption': 'Make the 8 home keys tap-holds with modifiers in one step.',
+                onclick: () => { th.preset = { order: 'GACS', timing: 280, picked: [] }; startPick(); render(); } }) : null));
+        return wrap;
+    }
+
+    function holdKinds() {
+        const kinds = [];
+        if (htIds().includes('mod-tap')) kinds.push(['mods', 'Modifiers']);
+        if (htIds().includes('layer-tap')) kinds.push(['layer', 'Layer']);
+        if (isZmk && htIds().includes('mod-tap')) kinds.push(['key', 'Key']);
+        return el('span', { class: 'bp-ctl bp-seg', role: 'radiogroup', 'aria-label': 'Hold does' },
+            el('label', { text: 'Hold does' }),
+            ...kinds.map(([k, label]) => el('button', { class: 'chip' + (th.holdKind === k ? ' on' : ''), role: 'radio',
+                'aria-checked': String(th.holdKind === k), 'data-kind': k, text: label,
+                onclick: () => { th.holdKind = k; render(); } })));
+    }
+
+    function holdMods() {
+        const m4 = th.mods & 0xF || (th.mods >> 4) & 0xF;
+        const row = el('div', { class: 'bp-mods bp-th-mods' });
+        for (const m of MOD_CHIPS) {
+            row.append(el('button', { class: 'chip bp-th-mod' + (m4 & m.bit ? ' on' : ''), text: `${m.g} ${m.n}`, title: m.n,
+                'data-mod': m.g, 'aria-pressed': String(!!(m4 & m.bit)),
+                onclick: () => { th.mods = m4 ^ m.bit; render(); } }));
+        }
+        row.append(el('span', { class: 'bp-ctl bp-seg', role: 'radiogroup', 'aria-label': 'Side' },
+            ...[['L', false, 'Left'], ['R', true, 'Right']].map(([t, v, n]) => el('button', {
+                class: 'chip' + (th.right === v ? ' on' : ''), role: 'radio', 'aria-checked': String(th.right === v), text: n,
+                'data-caption': `${n}-side modifiers (${t}⇧ …)`, onclick: () => { th.right = v; render(); } }))));
+        return row;
+    }
+
+    function timingRow(r) {
+        if (adapter === 'qmk' || adapter === 'nape') return el('div', { class: 'bp-note', text: 'Tapping term: global — QMK Settings.' });
+        const be = timingBackendNow();
+        const live = r.ok && r.params.live && r.params.live !== 'off';
+        const pos = posNow();
+        if (live && be.runtime && pos != null) {
+            if (th.readTiming) {
+                th.readTiming = false;
+                be.read(pos).then((ms) => { th && (th.timing = ms); if (th && root.isConnected) render(); }).catch(() => {});
+            }
+            const val = el('output', { class: 'bp-ms', text: `${th.timing} ms` });
+            const slider = el('input', { type: 'range', min: TIMING_PARAM.min, max: TIMING_PARAM.max, step: TIMING_PARAM.step, value: th.timing,
+                'aria-label': `Tapping term for key ${pos}`,
+                'data-caption': `Tapping term for key ${pos}: hold longer than this to get the hold. Written live with Apply.` });
+            slider.addEventListener('input', () => { th.timing = Number(slider.value); val.textContent = `${th.timing} ms`; });
+            return el('span', { class: 'bp-ctl bp-timing' }, el('label', { text: 'Tapping term' }), slider, val);
+        }
+        if (live) return el('div', { class: 'bp-note', text: be.runtime ? 'Timing: live per key; select the key to set it.'
+            : `Timing: the key's own live slot (firmware default). The slider needs protocol ${HOLDTAP.minProto}.` });
+        return el('div', { class: 'bp-note', text: 'Timing: compiled into the keymap.' });
+    }
+
+    // ---- Home-row mods preset ----
+    const QWERTY = [0x04, 0x16, 0x07, 0x09, 0x0D, 0x0E, 0x0F, 0x33];
+    const COLEMAK = [0x04, 0x15, 0x16, 0x17, 0x11, 0x08, 0x0C, 0x12];
+    function guessHome() {
+        const all = board.positions();
+        for (const want of [QWERTY, COLEMAK]) {
+            const got = want.map((k) => all.find((p) => { const s = tapHoldSpecOf(p.binding, adapter); return s?.tap?.key === k && !s.tap.mods; })?.pos);
+            if (got.every((p) => p != null)) return got;
+        }
+        return [];
+    }
+    function startPick() {
+        stopPick?.();
+        const initial = guessHome();
+        th.preset.picked = initial;
+        stopPick = board.pickPositions({ initial, max: 8, label: 'Home-row mods: click the 8 home keys',
+            onChange: (p) => { if (th?.preset) { th.preset.picked = p; render(); } } });
+    }
+    function presetView() {
+        const pr = th.preset;
+        const wrap = el('div', { class: 'bp-th', 'data-preset': '' });
+        wrap.append(el('div', { class: 'bp-entry-head' }, el('strong', { text: 'Home-row mods' }),
+            el('span', { class: 'bp-desc', text: 'Each home key keeps its letter as TAP and holds a modifier, pinky to index, mirrored on the right hand.' })));
+        const ORDERS = { GACS: '⌘ ⌥ ⌃ ⇧', CAGS: '⌃ ⌥ ⌘ ⇧' };
+        wrap.append(el('span', { class: 'bp-ctl bp-seg', role: 'radiogroup', 'aria-label': 'Order' }, el('label', { text: 'Order' }),
+            ...Object.entries(ORDERS).map(([o, g]) => el('button', { class: 'chip' + (pr.order === o ? ' on' : ''), role: 'radio',
+                'aria-checked': String(pr.order === o), 'data-order': o, text: `${o} · ${g}`,
+                onclick: () => { pr.order = o; render(); } }))));
+        const be = timingBackendNow();
+        if (adapter === 'zmk-studio' && be.runtime) {
+            const val = el('output', { class: 'bp-ms', text: `${pr.timing} ms` });
+            const slider = el('input', { type: 'range', min: TIMING_PARAM.min, max: TIMING_PARAM.max, step: TIMING_PARAM.step, value: pr.timing,
+                'aria-label': 'Shared tapping term for the 8 keys' });
+            slider.addEventListener('input', () => { pr.timing = Number(slider.value); val.textContent = `${pr.timing} ms`; });
+            wrap.append(el('span', { class: 'bp-ctl bp-timing' }, el('label', { text: 'Tapping term (all 8)' }), slider, val));
+        }
+        const keys = board.positions().filter((p) => pr.picked.some((q) => JSON.stringify(q) === JSON.stringify(p.pos)));
+        const plan = homeRowPlan(keys, pr.order, adapter, { timing: pr.timing });
+        wrap.append(el('div', { class: 'bp-th-result' + (plan.ok ? '' : ' bad'), role: 'status',
+            text: plan.ok ? plan.plan.map((p) => { const h = holdTapParts(p.value, adapter); return `${h.tap}=${h.hold}`; }).join('  ')
+                : `${pr.picked.length} of 8 keys picked on the board. ${pr.picked.length === 8 ? plan.message : ''}` }));
+        wrap.append(el('div', { class: 'bp-th-actions' },
+            el('button', { class: 'btn small primary', text: 'Apply to 8 keys', 'data-act': 'hrm-apply', disabled: !plan.ok,
+                onclick: async () => {
+                    stopPick?.(); stopPick = null;
+                    const done = await board.assignMany(plan.plan.map((p) => ({ pos: p.pos, value: p.value })));
+                    if (adapter === 'zmk-studio' && be.runtime) {
+                        for (const p of plan.plan) {
+                            if (decode(p.value, adapter).params.live === 'off') continue;
+                            try { await be.write(p.pos, pr.timing); } catch (err) { setCap(`Timing not written: ${err.message}`); }
+                        }
+                    }
+                    th = null;
+                    render();
+                    setCap(done ? 'Home-row mods applied. One undo reverts all 8.' : 'Some keys were not written.');
+                } }),
+            el('button', { class: 'btn small', text: 'Cancel', 'data-act': 'hrm-cancel',
+                onclick: () => { stopPick?.(); stopPick = null; th.preset = null; render(); } })));
+        return wrap;
+    }
+
     // ---- Advanced: device leftovers with metadata-driven params ----
     function advancedComposer(e) {
         const wrap = el('div', { class: 'bp-params' });
@@ -603,13 +857,21 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         return wrap;
     }
 
+    if (['mod-tap', 'layer-tap'].includes(current?.entryId) && htIds().includes(current.entryId)) openComposer(value);
     render();
     setCap('');
     return {
         root,
-        setValue(v) { current = v == null ? null : safeDecode(v, adapter); state.clear(); render(); },
+        setValue(v) {
+            current = v == null ? null : safeDecode(v, adapter);
+            currentValue = v;
+            state.clear();
+            if (!th?.preset) th = null;
+            if (['mod-tap', 'layer-tap'].includes(current?.entryId) && htIds().includes(current.entryId)) openComposer(v);
+            render();
+        },
         focus() { (host === 'docked' ? null : search)?.focus(); },
-        stop() { stopCapture?.(); },
+        stop() { stopCapture?.(); stopPick?.(); },
         capturing: () => !!stopCapture,
     };
 }
@@ -629,4 +891,23 @@ function markHoldtapDirty() {
 export function valueLabel(value, surface) {
     const adapter = SURFACES[surface]?.adapter;
     return describeBinding(value, adapter);
+}
+
+/**
+ * A binding as a small inline cell for row / tile outputs (combo, macro,
+ * leader, tap dance). Dual-role bindings show labelled HOLD and TAP parts;
+ * anything else is the one-line description. For WP4a / WP4b.
+ * @param {*} binding  adapter-typed value (QMK u16, Studio or typed ZMK)
+ * @param {string} [surfaceOrAdapter]  a SURFACES key or an adapter name;
+ *        default: guessed from the value (pass 'nape' for Nape u16)
+ * @returns {HTMLSpanElement}
+ */
+export function renderBindingCell(binding, surfaceOrAdapter) {
+    const adapter = SURFACES[surfaceOrAdapter]?.adapter ?? surfaceOrAdapter ?? adapterOf(binding);
+    let ht = null, text = '';
+    try { ht = holdTapParts(binding, adapter); text = describeBinding(binding, adapter); } catch { text = '?'; }
+    if (!ht) return el('span', { class: 'bp-cell', text });
+    return el('span', { class: 'bp-cell ht', title: text, 'aria-label': `Hold ${ht.hold}, tap ${ht.tap}` },
+        el('span', { class: 'bp-cell-hold' }, el('i', { text: 'hold' }), ` ${ht.hold}${ht.tag ? ` · ${ht.tag}` : ''}`),
+        el('span', { class: 'bp-cell-tap' }, el('i', { text: 'tap' }), ` ${ht.tap}`));
 }
