@@ -96,6 +96,10 @@ def main():
         check(page.locator('.kb-svg .keycap.picked').count() == 1, 'board pick set reverted to the first key')
         # Done leaves pick mode; the draft stays incomplete
         page.locator('.bd-banner button', has_text='Done').click()
+        # the abandoned 1-key draft (key 3) never reached the device
+        page.wait_for_timeout(200)
+        ones = [c for c in ws(page, 'totem')['zmk']['combos'] if len([p for p in c['positions'] if p is not None]) == 1]
+        check(not ones, f'abandoned draft left a 1-key slot on the device: {ones}')
 
         # -- a new valid combo: 20 + 21 -> Esc, and the one Save counts it
         page.locator('[data-act="new"]').click()

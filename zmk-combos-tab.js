@@ -128,19 +128,25 @@ export class ZmkCombosTab {
             this.render();
             return;
         }
+        // A combo needs 2+ keys. With fewer (a new draft mid-pick, or a combo
+        // being re-picked) the device gets an EMPTY slot and the row keeps
+        // its local draft, so an abandoned draft never leaves a 1-key slot.
+        const local = this.slots[i];
+        const wire = local.positions.length < 2 ? this.emptySlot(i) : local;
+        const adopt = (echo) => { if (wire === local) this.slots[i] = echo; };
         try {
             if (this.timed) {
                 const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV3,
-                    encodeComboSlotV3(i, this.slots[i], this.maxKeys), 1);
-                this.slots[i] = decodeComboSlotV3(r, this.maxKeys); // adopt the echo
+                    encodeComboSlotV3(i, wire, this.maxKeys), 1);
+                adopt(decodeComboSlotV3(r, this.maxKeys)); // adopt the echo
             } else if (this.typed) {
                 const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV2,
-                    encodeComboSlotV2(i, this.slots[i], this.maxKeys), 1);
-                this.slots[i] = decodeComboSlotV2(r, this.maxKeys); // adopt the echo
+                    encodeComboSlotV2(i, wire, this.maxKeys), 1);
+                adopt(decodeComboSlotV2(r, this.maxKeys)); // adopt the echo
             } else {
                 const r = await this.app.flask.setBytes(CH.combos, V.combosSlot,
-                    encodeComboSlot(i, comboTypedToLegacy(this.slots[i]), this.maxKeys), 1);
-                this.slots[i] = comboSlotToTyped(decodeComboSlot(r, this.maxKeys));
+                    encodeComboSlot(i, comboTypedToLegacy(wire), this.maxKeys), 1);
+                adopt(comboSlotToTyped(decodeComboSlot(r, this.maxKeys)));
             }
             this.warn.delete(i);
             this.markUnsaved();
