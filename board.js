@@ -31,7 +31,7 @@
 
 import { el, svgEl, toast as uiToast } from './ui.js?v=49';
 import { capLabel, hoverText } from './keycodes.js?v=49';
-import { capParts as catalogCapParts } from './behavior-catalog.js?v=1';
+import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=1';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 export const GAP = 5;
@@ -80,6 +80,12 @@ export function layoutOf(items, scale = 1) {
         return { x, y, w, h, r, cx, cy };
     };
     return { unit, frame, width: (maxX - minX) * unit + PAD * 2, height: (maxY - minY) * unit + PAD * 2 };
+}
+
+/** A key's centre x in key units, rotation included. */
+function frameCentreUnits(k) {
+    const c = keyCorners(k);
+    return c.reduce((s, p) => s + p[0], 0) / c.length;
 }
 
 /** Where the centre of a frame ends up after its rotation. */
@@ -147,6 +153,37 @@ export function fitText(text, maxW, fs, { minScale = 0.45, maxLines = 2 } = {}) 
     if (wide(s, f) <= maxW) return { lines: [s], fs: f };
     const keep = Math.max(1, Math.floor(maxW / (0.58 * f)) - 1);
     return { lines: [s.slice(0, keep) + '…'], fs: f };
+}
+
+/** Hold/tap split for a dual-role key cap (mod-tap, layer-tap), or null. */
+export function htPartsOf(value, profile, opts = {}) {
+    if (opts.partsFor) return null;
+    const adapter = profile.capAdapter ?? (profile.labelFor ? null : 'qmk');
+    return adapter ? holdTapParts(value, adapter) : null;
+}
+
+// Dual-role cap: a tinted HOLD band on top ("hold ⇧ · live"), the TAP key
+// below ("tap F"). The tiny words are the markers; the band is the cue that
+// survives a glance and the rotated Totem thumbs (the group rotates as one).
+function drawHoldTap(g, f, ht, { mid, innerW, mainFs, topFs, radius }) {
+    const bandH = f.h * 0.42, r = Math.min(radius, bandH / 2);
+    g.append(svgEl('path', {
+        class: 'cap-holdband',
+        d: `M${f.x},${f.y + bandH} V${f.y + r} Q${f.x},${f.y} ${f.x + r},${f.y} H${f.x + f.w - r} Q${f.x + f.w},${f.y} ${f.x + f.w},${f.y + r} V${f.y + bandH} Z`,
+    }));
+    const markFs = Math.max(6, topFs * 0.78);
+    // 'live' is every Totem hold-tap: noise on a cap (caption and cells keep it).
+    const holdText = ht.tag && ht.tag !== 'live' ? `${ht.hold} · ${ht.tag}` : ht.hold;
+    const holdFit = fitText(holdText, innerW - markFs * 0.58 * 5, topFs * 1.3, { minScale: 0.55, maxLines: 1 });
+    const t = svgEl('text', { class: 'cap-hold', x: mid, y: f.y + bandH * 0.68, 'text-anchor': 'middle', 'data-hold': ht.hold });
+    t.append(svgEl('tspan', { class: 'cap-mark', style: `font-size:${markFs}px`, text: 'hold ' }),
+        svgEl('tspan', { style: `font-size:${holdFit.fs}px`, text: holdFit.lines[0] }));
+    const tapFit = fitText(ht.tap, innerW - markFs * 0.58 * 4, mainFs, { minScale: 0.5, maxLines: 1 });
+    const m = svgEl('text', { class: 'cap-main cap-tap', x: mid, y: f.y + bandH + (f.h - bandH) * 0.62, 'text-anchor': 'middle', 'data-tap': ht.tap });
+    m.append(svgEl('tspan', { class: 'cap-mark', style: `font-size:${markFs}px`, text: 'tap ' }),
+        svgEl('tspan', { style: `font-size:${tapFit.fs}px`, text: tapFit.lines[0] }));
+    g.classList.add('ht');
+    g.append(t, m);
 }
 
 const textScale = () => {
@@ -232,6 +269,15 @@ export function renderKeyboardSVG(opts) {
         g.append(rect);
         const mid = f.x + f.w / 2;
         const innerW = f.w - 6;
+        const ht = htPartsOf(value, profile, opts);
+        if (ht) {
+            drawHoldTap(g, f, ht, { mid, innerW, mainFs, topFs, radius });
+            if (names === 'all' || (names === 'sel' && isSel)) {
+                g.append(svgEl('text', { class: 'keyname', x: f.x + f.w - 4, y: f.y + f.h - 4, 'text-anchor': 'end', text: keyName(key) }));
+            }
+            svg.append(g);
+            continue;
+        }
         const main = fitText(parts.main, innerW, mainFs, { minScale: 0.45, maxLines: 2 });
         const top = parts.top ? fitText(parts.top, innerW, topFs, { minScale: 0.6, maxLines: 1 }) : null;
         // Stacked pair: hold part above, tap part below; a lone main centres.
@@ -429,6 +475,61 @@ class Board extends EventTarget {
         return () => stop(false);
     }
 
+    // ---- public: WP3b additions (tap-hold composer, home-row preset) ----
+
+    /** Current binding at a public pos on the shown layer (default: the selection). */
+    bindingOf(pos = this.selectedKey()?.pos) {
+        const a = this.#a;
+        const sel = a && pos != null ? a.selOf(pos) : null;
+        return sel ? a.bindingAt(this.#layer, sel) : null;
+    }
+
+    /** 'left' | 'right' by the key's centre against the board's middle; null
+     * when unknown (encoders, no layout). */
+    handOf(pos) {
+        const a = this.#a;
+        const sel = a && pos != null ? a.selOf(pos) : null;
+        if (!sel || sel.kind !== 'key') return null;
+        const keys = a.profile.keys;
+        const cx = (k) => frameCentreUnits(k);
+        const k = keys.find((x) => x.row === sel.row && x.col === sel.col);
+        if (!k) return null;
+        const xs = keys.map(cx);
+        return cx(k) < (Math.min(...xs) + Math.max(...xs)) / 2 ? 'left' : 'right';
+    }
+
+    /** Every key on the shown layer: [{pos, x, binding}] (x in key units). */
+    positions() {
+        const a = this.#a;
+        if (!a) return [];
+        return a.profile.keys.map((k) => {
+            const sel = { kind: 'key', row: k.row, col: k.col };
+            return { pos: a.posOf(sel), x: frameCentreUnits(k), binding: a.bindingAt(this.#layer, sel) };
+        });
+    }
+
+    /** Write several keys as ONE undo step: [{pos, value}]. Stops at the
+     * first refused write (already-written keys stay in the step). */
+    async assignMany(list) {
+        const a = this.#a;
+        if (!a || a.readOnly || this.#pick || !list.length) return false;
+        const layer = this.#layer;
+        const batch = [];
+        for (const { pos, value } of list) {
+            const sel = a.selOf(pos);
+            if (!sel) continue;
+            const before = a.bindingAt(layer, sel);
+            if (!(await this.#write(layer, sel, value))) break;
+            batch.push({ layer, sel, before, after: value });
+        }
+        if (!batch.length) return false;
+        this.#undo.push({ layer, sel: batch[0].sel, batch });
+        this.#redo = [];
+        this.#afterEdit();
+        this.dispatchEvent(new Event('history'));
+        return batch.length === list.length;
+    }
+
     // ---- public: WP2 additions ----
 
     get layer() { return this.#layer; }
@@ -589,7 +690,8 @@ class Board extends EventTarget {
         const a = this.#a;
         const e = from[from.length - 1];
         if (!a || a.readOnly || !e) return false;
-        if (!(await this.#write(e.layer, e.sel, e[field]))) return false;
+        const steps = e.batch ? (field === 'before' ? [...e.batch].reverse() : e.batch) : [e];
+        for (const s of steps) if (!(await this.#write(s.layer, s.sel, s[field]))) return false;
         from.pop();
         to.push(e);
         // Show what changed.

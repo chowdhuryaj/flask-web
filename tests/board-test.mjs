@@ -192,4 +192,28 @@ eq(baseUnit(40), 48, 'unit never below 48');
     eq(last, null, 'no change event without a click');
 }
 
+// ---- WP3b: handOf, positions, bindingOf, assignMany = one undo step ----
+{
+    const keys = [0, 1, 2, 3, 6, 7, 8, 9].map((x, c) => ({ row: 0, col: c, x, y: 0, w: 1, h: 1 }));
+    const map = [[4, 22, 7, 9, 13, 14, 15, 51]];
+    const adapter = {
+        surface: 'qmk.key', app: {}, profile: { family: 'x', keys, encoderKeys: [] },
+        layers: () => [{ index: 0, name: 'base', empty: false }],
+        bindingAt: (l, s) => map[l][s.col], async write(l, s, v) { map[l][s.col] = v; }, posOf: (s) => s.col,
+        selOf: (p) => (Number.isInteger(p) ? { kind: 'key', row: 0, col: p } : null),
+    };
+    const b = new Board();
+    b.bind(adapter);
+    eq(b.handOf(0), 'left'); eq(b.handOf(3), 'left'); eq(b.handOf(4), 'right'); eq(b.handOf(99), null);
+    eq(b.positions().map((p) => p.binding), map[0]);
+    b.select({ kind: 'key', row: 0, col: 3 });
+    eq(b.bindingOf(), 9);
+    eq(await b.assignMany([{ pos: 0, value: 0x2804 }, { pos: 7, value: 0x3833 }]), true);
+    eq([map[0][0], map[0][7]], [0x2804, 0x3833]);
+    await b.undo();
+    eq([map[0][0], map[0][7]], [4, 51], 'one undo restores the whole batch');
+    await b.redo();
+    eq([map[0][0], map[0][7]], [0x2804, 0x3833], 'redo reapplies it');
+}
+
 console.log(`board-test: ${checks} checks OK`);

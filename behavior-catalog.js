@@ -892,6 +892,144 @@ export function describeBinding(binding, adapter = adapterOf(binding)) {
     return `${(t ? top.replace(/ · (fast|slow)$/, '') : top) || e.name} ${main}`.trim() + t;
 }
 
+// ---------------------------------------------------------------------------
+// Tap/Hold composer (WP3b). The native Svalboard picker builds MT() from a
+// ⌃⇧⌥⌘ row + "MT" toggle + key, and LT() from a layer + tap grid
+// (KeycodePicker.swift). Here both are one spec: a TAP key and a HOLD
+// (modifiers, a layer, or on ZMK any key), encoded per firmware line.
+
+/**
+ * Hold/tap split of a dual-role binding, for labelled caps and cells.
+ * @returns {{entryId: 'mod-tap'|'layer-tap', hold: string, tag: string, tap: string}|null}
+ *   hold  '⇧', 'R⌘', 'L1' / layer name, or the held key's cap
+ *   tag   '', 'live', 'fast', 'slow', 'smart', 'combo', 'autoshift', 'shared'
+ *   tap   the tap key's cap, held modifiers included ('⇧1' reads '!')
+ */
+export function holdTapParts(binding, adapter = adapterOf(binding)) {
+    let d;
+    try { d = decode(binding, adapter); } catch { return null; }
+    const p = d.params;
+    if (d.entryId !== 'mod-tap' && d.entryId !== 'layer-tap') return null;
+    const k = keyCap(adapter, p.tap, p.tapMods ?? 0);
+    const hold = d.entryId === 'layer-tap' ? layerText(adapter, p.layer)
+        : p.holdKey != null ? usageCap(p.holdKey) : modsText(p.hold);
+    return { entryId: d.entryId, hold: hold || '·', tag: timingTag(p).replace(/^ · /, ''), tap: (k.top + k.main) || '·' };
+}
+
+const MOD_LETTER = { C: 0x01, S: 0x02, A: 0x04, G: 0x08 };
+
+/** Live hold-tap sides this ZMK device compiles ('left' | 'right' | 'any'),
+ * from its "Hold-Tap L/R (live)" nodes (&fht_l / &fht_r / &fht). */
+export function liveSides() {
+    return variantsOf('mod-tap').filter((v) => v.set.live && !v.set.helper).map((v) => v.set.live);
+}
+
+/** The live variant for a key on `hand`: its own side, else the no-rule
+ * node, else none ('off' = compiled timing). */
+export function liveSideFor(hand, sides = liveSides()) {
+    if (hand && sides.includes(hand)) return hand;
+    if (sides.includes('any')) return 'any';
+    return sides[0] ?? 'off';
+}
+
+/**
+ * Tap + Hold → a binding for `adapter`, or a reason it can't be stored.
+ * @param {object} spec
+ * @param {{key:number, mods?:number}|null} spec.tap
+ * @param {{kind:'mods', mods:number}|{kind:'layer', layer:number}|{kind:'key', key:number, mods?:number}|null} spec.hold
+ * @param {'left'|'right'|null} [spec.hand]  the key's hand (ZMK live variant)
+ * @param {number} [spec.timing]  ms (ZMK live slot / nearest compiled variant)
+ * @returns {{ok:true, value:*, entryId:string, params:object, via:string}
+ *          |{ok:false, message:string, fallback?:'tap-dance'}}
+ */
+export function composeTapHold({ tap, hold, hand = null, timing } = {}, adapter) {
+    if (!tap?.key) return { ok: false, message: 'Pick the TAP key.' };
+    if (!hold) return { ok: false, message: 'Pick what HOLD does.' };
+    if (hold.kind === 'mods' && !(hold.mods & 0xFF)) return { ok: false, message: 'Pick at least one modifier to hold.' };
+    const tapMods = tap.mods & 0xFF;
+    const qmkLike = adapter === 'qmk' || adapter === 'nape';
+    if (qmkLike) {
+        const fw = adapter === 'nape' ? 'Nape' : 'QMK';
+        const tapName = keyCap(adapter, tap.key, tapMods);
+        const tapText = tapName.top + tapName.main;
+        if (tap.key > 0xFF || tapMods) {
+            return { ok: false, fallback: 'tap-dance',
+                message: `${fw} ${hold.kind === 'layer' ? 'LT()' : 'MT()'} can only tap a plain key; "${tapText}" carries a modifier or is not a basic key. Use a tap dance (tap ${tapText}, hold ${hold.kind === 'layer' ? 'the layer' : modsText(hold.mods ?? 0)}).` };
+        }
+        if (hold.kind === 'key') return { ok: false, fallback: 'tap-dance', message: `${fw} holds only modifiers or a layer. Holding a key needs a tap dance.` };
+        if (hold.kind === 'layer' && !(hold.layer >= 0 && hold.layer <= 15)) {
+            return { ok: false, fallback: 'tap-dance', message: `${fw} LT() reaches layers 0–15 only. Layer ${hold.layer} needs a tap dance.` };
+        }
+        if (hold.kind === 'mods' && (hold.mods & 0x0F) && (hold.mods & 0xF0)) {
+            return { ok: false, message: `${fw} MT() holds left or right modifiers, not both. Pick one side.` };
+        }
+    }
+    const isStudio = adapter === 'zmk-studio';
+    let entryId, params;
+    if (hold.kind === 'layer') {
+        entryId = 'layer-tap';
+        params = { layer: hold.layer, tap: tap.key, ...(tapMods ? { tapMods } : {}) };
+    } else {
+        entryId = 'mod-tap';
+        params = hold.kind === 'key'
+            ? { hold: 0, holdKey: keyToUsage(hold.key, hold.mods ?? 0), tap: tap.key, ...(tapMods ? { tapMods } : {}) }
+            : { hold: hold.mods & 0xFF, tap: tap.key, ...(tapMods ? { tapMods } : {}) };
+        if (isStudio) params.live = liveSideFor(hand);
+    }
+    if (!qmkLike) params.timing = timing ?? TIMING_PARAM.default;
+    let value;
+    try { value = encode(entryId, params, adapter); } catch {
+        return { ok: false, message: `This keyboard has no ${entryId === 'layer-tap' ? 'layer-tap' : 'mod-tap'} behavior for this slot.` };
+    }
+    const bid = adapter === 'zmk-typed' ? value.behaviorId : value?.behaviorId;
+    const via = qmkLike ? (entryId === 'layer-tap' ? 'LT()' : 'MT()') : behaviorsNow().get(bid)?.displayName ?? '';
+    return { ok: true, value, entryId, params, via };
+}
+
+/** A decoded mod-tap / layer-tap → composer spec ({tap, hold}); a plain key
+ * → {tap, hold: null}; anything else → null. */
+export function tapHoldSpecOf(binding, adapter) {
+    let d;
+    try { d = decode(binding, adapter); } catch { return null; }
+    const p = d.params;
+    if (d.entryId === 'key') return { tap: { key: p.key, mods: p.mods ?? 0 }, hold: null };
+    if (d.entryId === 'layer-tap') return { tap: { key: p.tap, mods: p.tapMods ?? 0 }, hold: { kind: 'layer', layer: p.layer }, timing: p.timing };
+    if (d.entryId === 'mod-tap') {
+        const hold = p.holdKey != null ? { kind: 'key', ...usageToKey(p.holdKey) } : { kind: 'mods', mods: p.hold };
+        return { tap: { key: p.tap, mods: p.tapMods ?? 0 }, hold, timing: p.timing };
+    }
+    return null;
+}
+
+/**
+ * Home-row mods preset. `keys` = 8 positions [{pos, x, binding}] in any
+ * order; sorted by x, the left four get `order` pinky→index (GACS: pinky ⌘,
+ * ring ⌥, middle ⌃, index ⇧) as left mods, the right four the mirror as
+ * right mods. Each keeps its current key (or current tap) as TAP.
+ * @param {'GACS'|'CAGS'|string} order  four letters of C S A G
+ * @returns {{ok:true, plan:{pos:*, value:*, hand:string}[]}|{ok:false, message:string}}
+ */
+export function homeRowPlan(keys, order, adapter, { timing } = {}) {
+    if (keys.length !== 8) return { ok: false, message: `Pick 8 home keys (${keys.length} picked).` };
+    const bits = [...String(order).toUpperCase()].map((c) => MOD_LETTER[c]);
+    if (bits.length !== 4 || bits.some((b) => !b) || new Set(bits).size !== 4) return { ok: false, message: `Unknown mod order ${order}.` };
+    const sorted = [...keys].sort((a, b) => a.x - b.x);
+    const left = sorted.slice(0, 4), right = sorted.slice(4).reverse();
+    const plan = [];
+    for (const [hand, list] of [['left', left], ['right', right]]) {
+        for (let i = 0; i < 4; i++) {
+            const k = list[i];
+            const spec = tapHoldSpecOf(k.binding, adapter);
+            if (!spec) return { ok: false, message: `Key ${JSON.stringify(k.pos)} has no plain key to keep as the tap.` };
+            const mods = hand === 'left' ? bits[i] : bits[i] << 4;
+            const r = composeTapHold({ tap: spec.tap, hold: { kind: 'mods', mods }, hand, timing }, adapter);
+            if (!r.ok) return { ok: false, message: `Key ${JSON.stringify(k.pos)}: ${r.message}` };
+            plan.push({ pos: k.pos, value: r.value, hand });
+        }
+    }
+    return { ok: true, plan };
+}
+
 /** Keys-group grid sections (§4.5), the same for every adapter:
  * [{id, label, keys: [{key, mods, label, cap}]}]. `key` is the Key entry's
  * key param (HID usage id); Shifted symbols carry mods ⇧. */
