@@ -245,7 +245,7 @@ export function parseKeymap(src) {
             case 'zmk,behavior-flask-tapdance': md = meta(range('Tap dance slot', 0, FLASK_TD_SLOTS - 1)); break;
             case 'zmk,behavior-flask-leader': md = meta(); break;
             case 'zmk,behavior-macro-one-param': md = meta(usage('Param')); break;
-            case 'zmk,behavior-macro': case 'zmk,behavior-mod-morph': md = meta(); break;
+            case 'zmk,behavior-macro': case 'zmk,behavior-mod-morph': case 'zmk,behavior-tap-dance': md = meta(); break;
             default: md = []; // third-party (adaptive-key, tri-state, switch-layout-*, leader-key): no metadata
         }
         add(n.label ?? n.name, str(n.props['display-name']) ?? '', md);

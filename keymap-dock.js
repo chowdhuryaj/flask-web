@@ -34,7 +34,7 @@ const SECTION_CATEGORY = {
     nav: 'Navigation', function: 'F-keys', numpad: 'Keypad', intl: 'Intl',
 };
 const ENTRY_CATEGORY = {
-    'caps-word': 'Key behaviours', repeat: 'Key behaviours', 'grave-escape': 'Key behaviours', swapper: 'Key behaviours',
+    'caps-word': 'Key behaviours', repeat: 'Key behaviours', 'grave-escape': 'Key behaviours', swapper: 'Key behaviours', 'super-delete': 'Key behaviours',
     'one-shot-mod': 'Key behaviours', 'key-toggle': 'Key behaviours',
     'hold-layer': 'Layers', 'toggle-layer': 'Layers', 'to-layer': 'Layers', 'one-shot-layer': 'Layers',
     'smart-layer': 'Layers', 'num-word': 'Layers', 'layer-tap': 'Layers',

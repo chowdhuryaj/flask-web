@@ -234,6 +234,9 @@ export const CATALOG = [
         [{ key: 'key', kind: 'key' }, { key: 'mods', kind: 'mods', default: 0 }], ['Key Toggle'], { tag: 'Toggle' }),
     E('swapper', 'modifiers', 'Swapper', 'Hold to cycle windows (⌘-Tab style).', [], ['Swapper'], { tag: 'Swapper' }),
     E('grave-escape', 'modifiers', 'Grave/Escape', 'Esc, or ` with Shift/GUI.', [], ['Grave/Escape'], { tag: 'Esc/`' }),
+    E('super-delete', 'modifiers', 'Super Delete',
+        'Tap ⌫ · 2 taps ⌥⌫ (word) · 3 taps ⌘⌫ (line). Hold on the last tap to repeat. With Shift: forward delete ⌦ · ⌥⌦ · ⌘⌦.',
+        [], ['Super Delete'], { tag: 'Super ⌫' }),
 
     E('hold-layer', 'layers', 'Hold layer', 'Layer is on while held.', [{ key: 'layer', kind: 'layer' }], ['Momentary Layer'], { tag: 'Hold' }),
     E('layer-tap', 'layers', 'Layer-tap', 'Hold for a layer, tap for a key.',
