@@ -120,7 +120,7 @@ export function openPicker({ surface, value = null, host = 'sheet', anchor, titl
     let closed = false;
     let dispose = () => {};
     const close = () => { if (!closed) { closed = true; dispose(); } };
-    const pick = (v) => { if (host !== 'docked') close(); onPick(v); };
+    const pick = (v) => { if (host !== 'docked') close(); return onPick(v); };
     const followBoard = host === 'docked' && KEYMAP_SURFACES.has(surface) && value == null;
     const view = buildPickerBody({ surface, value: followBoard ? board.bindingOf() : value, app, position, host, onPick: pick });
     const body = view.root;
@@ -264,19 +264,29 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         let v;
         try { v = encode(entryId, params, adapter); } catch (err) { setCap(String(err.message)); return; }
         const e = entries.find((x) => x.id === entryId);
-        if (adapter === 'zmk-studio' && e && params.live && params.live !== 'off' && posNow() != null) {
+        // Live timing is per KEY-POSITION slot. A helper ('fixed' / variant)
+        // runs from its own slot, so writing the key's slot would be wrong.
+        let timing = null;
+        if (adapter === 'zmk-studio' && e && params.live && params.live !== 'off'
+            && params.live !== 'fixed' && params.variant == null && posNow() != null) {
             const be = timingBackendNow();
             if (be.runtime) {
                 const r = resolveTiming(entryId, params.timing ?? TIMING_PARAM.default,
-                    e.device.filter((d) => d.set.live).map((d) => ({ behaviorId: d.behaviorId, ms: null, live: true, side: d.set.live })),
+                    e.device.filter((d) => d.set.live && !d.set.helper).map((d) => ({ behaviorId: d.behaviorId, ms: null, live: true, side: d.set.live })),
                     { side: params.live });
-                const pos = posNow();
-                if (pos != null) r?.write?.(pos).catch((err) => setCap(`Timing not written: ${err.message}`));
+                if (r?.write) timing = { write: r.write, pos: posNow() };   // pos before the board advances
             }
         }
         current = decode(v, adapter);
         currentValue = v;
-        onPick(v);
+        const res = onPick(v);
+        // Timing only once the binding write landed (board.assign → false
+        // on a refused Studio write), so a failure leaves 0x2A untouched.
+        if (timing) {
+            Promise.resolve(res).then((ok) => {
+                if (ok !== false) return timing.write(timing.pos);
+            }).catch((err) => setCap(`Timing not written: ${err.message}`));
+        }
         if (root.isConnected) render();
     }
 
@@ -788,9 +798,10 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
                 onclick: async () => {
                     stopPick?.(); stopPick = null;
                     const done = await board.assignMany(plan.plan.map((p) => ({ pos: p.pos, value: p.value })));
-                    if (adapter === 'zmk-studio' && be.runtime) {
+                    if (done && adapter === 'zmk-studio' && be.runtime) {   // timing only after the bindings landed
                         for (const p of plan.plan) {
-                            if (decode(p.value, adapter).params.live === 'off') continue;
+                            const lv = decode(p.value, adapter).params;
+                            if (!lv.live || lv.live === 'off' || lv.live === 'fixed' || lv.variant != null) continue;
                             try { await be.write(p.pos, pr.timing); } catch (err) { setCap(`Timing not written: ${err.message}`); }
                         }
                     }

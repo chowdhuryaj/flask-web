@@ -657,7 +657,7 @@ class Board extends EventTarget {
             if (closed) return;
             close = openPicker({
                 surface, host: 'popover', anchor, app: a.app, value,
-                onPick: (v) => { this.#popover = null; this.assign(v, { advance: false }); },
+                onPick: (v) => { this.#popover = null; return this.assign(v, { advance: false }); },
             });
         });
     }
