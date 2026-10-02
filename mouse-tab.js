@@ -2,9 +2,9 @@
 // ranges mirror the firmware, but the firmware clamps are authoritative
 // (clamp-echo). Float params ride the wire ×100 (accel).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=62';
-import { CH, V } from './flaskproto.js?v=62';
-import { renderKeyboardSVG } from './board.js?v=62';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=63';
+import { CH, V } from './flaskproto.js?v=63';
+import { renderKeyboardSVG } from './board.js?v=63';
 
 const pct = (v) => (v / 100).toFixed(2);
 

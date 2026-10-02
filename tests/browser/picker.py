@@ -22,8 +22,8 @@ OUT = H.ROOT / 'tests' / 'artifacts' / 'picker'
 SHOTS = Path(os.environ['WP3_SHOTS']) if os.environ.get('WP3_SHOTS') else None
 
 OPEN = """async ({surface, host, title, position, live}) => {
-  const bp = await import('./binding-picker.js?v=62');
-  const cat = await import('./behavior-catalog.js?v=62');
+  const bp = await import('./binding-picker.js?v=63');
+  const cat = await import('./behavior-catalog.js?v=63');
   window.__picked = [];
   let app = {};
   if (live) {

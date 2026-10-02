@@ -32,7 +32,7 @@ const locks = {
 
 // ---- fake Studio serial ports ----
 const { encodeFrame, FrameDecoder, readFields, fBytes, fVarint, fString, StudioClient } =
-    await import('../zmk-studio.js?v=62');
+    await import('../zmk-studio.js?v=63');
 const varint = (f, n) => f.find((x) => x.field === n && x.wire === 0)?.value;
 const bytes = (f, n) => f.find((x) => x.field === n && x.wire === 2)?.bytes;
 
@@ -153,8 +153,8 @@ const want = (n) => async (c) => (await c.getPhysicalLayouts()).layouts[0].keys.
 
 // ---- keymap tab: WC-01 lock, WC-09 refuse, WC-11 unsaved ----
 setSerial([]);
-const { ZmkKeymapTab, _serialLockState } = await import('../zmk-keymap-tab.js?v=62');
-const { board } = await import('../board.js?v=62');
+const { ZmkKeymapTab, _serialLockState } = await import('../zmk-keymap-tab.js?v=63');
+const { board } = await import('../board.js?v=63');
 board.bind = () => {};
 const mkTab = (over = {}) => {
     const t = new ZmkKeymapTab({ profile: { family: 'totem' }, ...over });
@@ -249,7 +249,7 @@ const loadable = (t, { unsaved, keys }) => {
 
 // ---- flaskproto: NaN and live-action retries ----
 {
-    const { FlaskProto, CH, V } = await import('../flaskproto.js?v=62');
+    const { FlaskProto, CH, V } = await import('../flaskproto.js?v=63');
     const seen = [];
     const hid = { request: async (p, e, o) => { seen.push([p, o]); return [p[0], p[1], p[2], p[3], p[4]]; } };
     const fp = new FlaskProto(hid);

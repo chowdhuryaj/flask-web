@@ -12,11 +12,11 @@
 // 24-31); the base is matched by page+id (its mod bits are ignored by the
 // firmware). Same slot-list pattern as the Leader tab.
 
-import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=62';
-import { CH, V } from './flaskproto.js?v=62';
-import { usageFromName } from './zmk-keycodes.js?v=62';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=62';
-import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty } from './zmk-csk-codec.js?v=62';
+import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=63';
+import { CH, V } from './flaskproto.js?v=63';
+import { usageFromName } from './zmk-keycodes.js?v=63';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=63';
+import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty } from './zmk-csk-codec.js?v=63';
 
 // One-click starters (AJ's examples). Encodings ride usageFromName so the
 // table stays data — names must exist in zmk-keycodes.js. shiftedMods =

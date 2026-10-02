@@ -2,9 +2,9 @@
 // through the Studio sim, resolves device-only behaviors, queues a diff-only
 // pendingKeymap on save, and is never reseeded over unsynced edits.
 import assert from 'node:assert/strict';
-import { loadWorkspace } from '../offline.js?v=62';
+import { loadWorkspace } from '../offline.js?v=63';
 import { seedWorkspaceFromDevice, seedWorkspaceFromSnapshot, zmkSyncExtras, createZmkTemplate,
-         OfflineStudioClient } from '../zmk-offline.js?v=62';
+         OfflineStudioClient } from '../zmk-offline.js?v=63';
 
 const mem = new Map();
 globalThis.localStorage ??= {

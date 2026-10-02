@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flask</title>
-  <link rel="stylesheet" href="styles.css?v=62">
-  <link rel="stylesheet" href="css/shell.css?v=62">
-  <link rel="stylesheet" href="css/board.css?v=62">
-  <link rel="stylesheet" href="css/picker.css?v=62">
-  <link rel="stylesheet" href="css/keymap.css?v=62">
-  <link rel="stylesheet" href="css/hud.css?v=62">
-  <link rel="stylesheet" href="css/extras.css?v=62">
+  <link rel="stylesheet" href="styles.css?v=63">
+  <link rel="stylesheet" href="css/shell.css?v=63">
+  <link rel="stylesheet" href="css/board.css?v=63">
+  <link rel="stylesheet" href="css/picker.css?v=63">
+  <link rel="stylesheet" href="css/keymap.css?v=63">
+  <link rel="stylesheet" href="css/hud.css?v=63">
+  <link rel="stylesheet" href="css/extras.css?v=63">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚗️</text></svg>">
 </head>
 <body>
@@ -33,7 +33,7 @@
       <span class="sb-seg warn" id="offline-seg" style="display:none">
         <span id="offline-msg"></span>
         <button class="btn small ghost" id="offline-exit">Exit unplugged</button>
-        <button id="offline-discard" hidden aria-hidden="true" tabindex="-1"></button>
+        <button class="btn small ghost" id="offline-discard" hidden data-caption="Drop the changes queued for the keyboard. Asks first.">Discard queued</button>
       </span>
       <span class="spacer"></span>
       <div class="tb-group" role="group" aria-label="History">
@@ -134,6 +134,6 @@
     </div>
   </main>
 
-  <script type="module" src="main.js?v=62"></script>
+  <script type="module" src="main.js?v=63"></script>
 </body>
 </html>

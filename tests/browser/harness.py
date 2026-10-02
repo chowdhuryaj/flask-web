@@ -84,8 +84,8 @@ def launch(p):
 
 
 CONTRACT_SMOKE = """async (surface) => {
-  const bp = await import('./binding-picker.js?v=62');
-  await import('./behavior-catalog.js?v=62');
+  const bp = await import('./binding-picker.js?v=63');
+  await import('./behavior-catalog.js?v=63');
   const problems = [];
   for (const host of ['sheet', 'popover']) {
     const close = bp.openPicker({ surface, host, anchor: document.querySelector('.keycap'),

@@ -7,10 +7,10 @@
 // vocabulary is HID usages: param = (page << 16) | id, with implicit
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=62';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=63';
 // Circular with behavior-catalog.js (it imports this file's tables and
 // context). Safe: neither side calls the other at module-evaluation time.
-import { capParts, describeBinding, decode, entryById, withZmkContext } from './behavior-catalog.js?v=62';
+import { capParts, describeBinding, decode, entryById, withZmkContext } from './behavior-catalog.js?v=63';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;

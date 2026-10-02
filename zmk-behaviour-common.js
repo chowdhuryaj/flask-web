@@ -1,14 +1,14 @@
 // Shared bits of the ZMK Behaviour tabs (WP4a): the picker call, typed-value
 // plumbing, the click-blur guard, and app.slotSummary for WP3's slot chips.
 
-import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v=62';
-import { usageLabel } from './zmk-keycodes.js?v=62';
-import { decode, isRecursiveOutput } from './behavior-catalog.js?v=62';
+import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v=63';
+import { usageLabel } from './zmk-keycodes.js?v=63';
+import { decode, isRecursiveOutput } from './behavior-catalog.js?v=63';
 export { isRecursiveOutput };
-import { CH, V } from './flaskproto.js?v=62';
-import { decodeComboSlotV2, decodeComboSlotV3, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=62';
-import { decodeTdStep } from './zmk-tapdance-codec.js?v=62';
-import { decodeLeaderSlot } from './zmk-output-codec.js?v=62';
+import { CH, V } from './flaskproto.js?v=63';
+import { decodeComboSlotV2, decodeComboSlotV3, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=63';
+import { decodeTdStep } from './zmk-tapdance-codec.js?v=63';
+import { decodeLeaderSlot } from './zmk-output-codec.js?v=63';
 
 /** After ANY button click inside `root`, drop focus from it. A key-generated
  * Enter or Space (a combo firing Enter, say) would otherwise re-click the
@@ -168,7 +168,7 @@ const macroBehavior = (o) => {
 
 async function liveKeymapLayers() {
     try {
-        const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=62');
+        const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=63');
         return zmkLiveKeymapTab()?.keymap?.layers ?? null;
     } catch { return null; }
 }

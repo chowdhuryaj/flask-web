@@ -18,28 +18,28 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=62';
+import { CH, V } from './flaskproto.js?v=63';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=62';
-import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=62';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=62';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=63';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=63';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=63';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
-         describeChanges, BASE_PREFIX } from './offline.js?v=62';
-import { saveState } from './save-state.js?v=62';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=62';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=62';
+         describeChanges, BASE_PREFIX } from './offline.js?v=63';
+import { saveState } from './save-state.js?v=63';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=63';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=63';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=62';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=62';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=63';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=63';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=62';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=62';
+    from './zmk-tapdance-codec.js?v=63';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=63';
 import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
-         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=62';
+         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=63';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=62';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=63';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 

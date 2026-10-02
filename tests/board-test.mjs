@@ -2,10 +2,10 @@
 // selection, auto-advance, undo/redo, position-pick mode. The drawn SVG and
 // popover are covered by tests/browser/board.py.
 import assert from 'node:assert/strict';
-import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText, DRAG_TYPE } from '../board.js?v=62';
-import { setZmkContext, bindingCap, bindingHover, isZmkBinding } from '../zmk-keycodes.js?v=62';
-import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=62';
-import { TOTEM_GEOM } from '../zmk-totem-layout.js?v=62';
+import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText, DRAG_TYPE } from '../board.js?v=63';
+import { setZmkContext, bindingCap, bindingHover, isZmkBinding } from '../zmk-keycodes.js?v=63';
+import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=63';
+import { TOTEM_GEOM } from '../zmk-totem-layout.js?v=63';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
