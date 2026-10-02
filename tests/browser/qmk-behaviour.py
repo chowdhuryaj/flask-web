@@ -5,9 +5,9 @@ the Adept workspace.
 Run:  PORT=8152 python3 serve.py
       PORT=8152 python3 tests/browser/qmk-behaviour.py
 
-No hardware: harness.py stubs navigator.hid/serial. The offline sim has no
-corner-chord geometry, so offline.js is served with a small patch that gives
-channel 0x28 four chords. Screenshots: tests/artifacts/qmk-behaviour/ and,
+No hardware: harness.py stubs navigator.hid/serial. Channel 0x28 chords come
+from the fixture's corner data (offline.js, WP7): the real seed geometry with
+four bound chords. Screenshots: tests/artifacts/qmk-behaviour/ and,
 with WP4B_SHOTS=dir, copies named wp4b-*.png for the report.
 """
 import json
@@ -41,28 +41,6 @@ def shot(page, name):
         shutil.copy(p, SHOTS / f'wp4b-{name}.png')
 
 
-CHORD_PATCH = """
-;{
-  const _gb = OfflineFlask.prototype.getBytes, _gu = OfflineFlask.prototype.getU16;
-  OfflineFlask.prototype.getU16 = async function (ch, id) {
-    if (ch === CH.corner && id === V.ccDefCount) return 4;
-    return _gu.call(this, ch, id);
-  };
-  OfflineFlask.prototype.getBytes = async function (ch, id, payload = []) {
-    if (ch === CH.corner && id === V.ccDef) { const d = payload[0]; return [d, (d << 3) | 1, (d << 3) | 2, 0]; }
-    if (ch === CH.corner && id === V.ccLayers) return [payload[0], 0, 0];
-    if (ch === CH.corner && id === V.ccOut) return [payload[0], payload[1], 0x00, 0x04 + payload[0]];
-    return _gb.call(this, ch, id, payload);
-  };
-}
-"""
-
-
-def patch_offline(ctx):
-    def handler(route):
-        body = (H.ROOT / 'offline.js').read_text() + CHORD_PATCH
-        route.fulfill(status=200, content_type='text/javascript', body=body)
-    ctx.route(re.compile(r'.*/offline\.js(\?.*)?$'), handler)
 
 
 def goto_tab(page, group, tab):
@@ -86,7 +64,6 @@ def select_key(page, n=0):
 
 def svalboard(browser):
     ctx, page, errors = H.new_context(browser)
-    patch_offline(ctx)
     H.open_workspace(page, H.SVAL['label'])
     key = H.SVAL['key']
 

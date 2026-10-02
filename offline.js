@@ -10,7 +10,7 @@
 // real keymap.
 
 import { el, modal, toast } from './ui.js?v=60';
-import { CH, V, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=60';
+import { CH, V, CC, EXPECTED_PROTOCOL, NLKB } from './flaskproto.js?v=60';
 import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=60';
 import { buildProfile, familyLabel, keyName, encoderCount } from './profiles.js?v=60';
 import { describe } from './keycodes.js?v=60';
@@ -155,7 +155,10 @@ const tk = (ch, id) => `${ch}:${id}`;
 export class OfflineFlask {
     constructor(ws) { this.ws = ws; }
 
-    async getU16(ch, id) { return this.ws.tunables[tk(ch, id)]?.val ?? 0; }
+    async getU16(ch, id) {
+        if (ch === CH.corner && id === V.ccDefCount && this.ws.corner?.defs) return this.ws.corner.defs.length;
+        return this.ws.tunables[tk(ch, id)]?.val ?? 0;
+    }
     async getI16(ch, id) { return ((await this.getU16(ch, id)) << 16) >> 16; }
 
     async setU16(ch, id, value) {
@@ -196,10 +199,29 @@ export class OfflineFlask {
         if (ch === CH.display && id >= 0x30 && id <= 0x33) {
             return [...new TextEncoder().encode(this.ws.dispText[id - 0x30] ?? '')];
         }
+        // Corner chords (0x28) from the snapshot (captureSnapshot / fixture):
+        // geometry [def, p0, p1, flags], own-layer mask [def, hi, lo], and the
+        // resolved output [def, layer, kc hi, kc lo].
+        const cc = this.ws.corner;
+        if (ch === CH.corner && cc) {
+            const def = payload[0];
+            if (id === V.ccDef) return [def, ...(cc.defs[def] ?? [CC.posNone, CC.posNone, 0])];
+            if (id === V.ccLayers) { const m = cc.own?.[def] ?? 0; return [def, m >> 8, m & 0xFF]; }
+            if (id === V.ccOut) {
+                const layer = payload[1];
+                // ponytail: a layer without its own capture inherits layer 0;
+                // the firmware's real inheritance is only captured for own layers.
+                const kc = cc.out?.[layer]?.[def] ?? cc.out?.[0]?.[def] ?? 0;
+                return [def, layer, kc >> 8, kc & 0xFF];
+            }
+        }
         return new Array(29).fill(0);
     }
 
     async setBytes(ch, id, payload) {
+        // Chord outputs persist on the SET itself and have no offline queue:
+        // refuse rather than drop the edit silently.
+        if (ch === CH.corner) throw new Error('chords are read-only offline (connect the keyboard to edit)');
         if (ch === CH.rgbMap) {
             const put = (layer, led, h, s, v) => {
                 this.ws.rgbmap ??= Array.from({ length: NLKB.rgbLayers },
@@ -589,6 +611,31 @@ export async function captureSnapshot(app, device) {
                 list: MacroCodec.decode(await app.vial.readMacroBuffer(bufferSize), count) };
         }
     } catch (e) { console.warn('macro snapshot failed:', e); }
+    // Corner chords (0x28): geometry, own-layer masks, and the outputs of
+    // layer 0 plus each def's own layers (not every resolved layer: that is
+    // defs x layers frames on every connect).
+    try {
+        if (app.caps?.cornerCombos) {
+            const g = (id, p, n) => app.flask.getBytes(CH.corner, id, p, n);
+            const count = await app.flask.getU16(CH.corner, V.ccDefCount);
+            const cc = { defs: [], own: [], out: {} };
+            for (let def = 0; def < count; def++) {
+                const geo = await g(V.ccDef, [def], 1);
+                cc.defs.push(Array.from(geo.slice(1, 1 + CC.maxKeys + 1)));
+                const m = await g(V.ccLayers, [def], 1);
+                const mask = (m[1] << 8) | m[2];
+                cc.own.push(mask);
+                if (cc.defs[def].slice(0, CC.maxKeys).every((p) => p === CC.posNone)) continue;
+                for (let layer = 0; layer < Math.min(16, app.layerCount); layer++) {
+                    if (layer && !(mask & (1 << layer))) continue;
+                    const o = await g(V.ccOut, [def, layer], 2);
+                    const kc = (o[2] << 8) | o[3];
+                    if (kc) (cc.out[layer] ??= {})[def] = kc;
+                }
+            }
+            ws.corner = cc;
+        }
+    } catch (e) { console.warn('chord snapshot failed:', e); }
 
     saveWorkspace(ws);
 }
