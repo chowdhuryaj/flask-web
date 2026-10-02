@@ -568,7 +568,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
                         .catch((err) => setCap(`Timing not written: ${err.message}`));
                 }
             });
-            if (current?.entryId === e.id && !p._read) {
+            if (!p._read) {   // the slot's real term, never a 200 ms default
                 p._read = true;
                 be.read(position).then((ms) => { p.timing = ms; slider.value = ms; val.textContent = `${ms} ms`; }).catch(() => {});
             }
@@ -609,7 +609,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
             holdKey: hold?.kind === 'key' ? { key: hold.key, mods: hold.mods ?? 0 } : null,
             timing: spec?.timing ?? TIMING_PARAM.default,
             slot: spec?.tap ? 'hold' : 'tap',
-            readTiming: !!hold,
+            readTiming: true,   // the key's live slot, never a 200 ms default
         };
     }
 
