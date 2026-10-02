@@ -11,6 +11,8 @@ const before = JSON.parse(readFileSync(new URL('./fixtures/tabs-before-wp0.json'
 const RELABEL = { 'zmk-shift': 'Shift Keys' };
 const REGROUP = { chords: 'device' };
 const WP4B_NEW = new Set(['qmk-leader', 'qmk-shift']);
+// WP7 added Behaviour › Hold timing on ZMK boards with flask_holdtap (caps.holdtap).
+const WP7_NEW = new Set(['zmk-holdtiming']);
 let checks = 0;
 
 for (const [ws, tabs] of Object.entries(before)) {
@@ -19,7 +21,7 @@ for (const [ws, tabs] of Object.entries(before)) {
         : { family: ws.split('-')[0], caps: capabilities(ws.split('-')[0], before[`${ws}@version`]) };
     // WP1 added Device › Keyboard (spec §1.3); everything else is unchanged.
     // WP4b added Behaviour › Leader / Shift Keys on QMK typing boards (§1.3).
-    const now = tabsFor(app).filter((t) => t.id !== 'keyboard' && !WP4B_NEW.has(t.id));
+    const now = tabsFor(app).filter((t) => t.id !== 'keyboard' && !WP4B_NEW.has(t.id) && !WP7_NEW.has(t.id));
     assert.deepEqual(now.map((t) => t.id), tabs.map((t) => t[0]), `${ws}: tab ids/order`);
     for (const [i, [id, label, group]] of tabs.entries()) {
         assert.equal(now[i].label, RELABEL[id] ?? label, `${ws}/${id}: label`);
@@ -40,6 +42,7 @@ const SPEC_1_3 = {
     'nape-macros': 'behaviour', 'nape-settings': 'device',
     keyboard: 'device',
     'qmk-leader': 'behaviour', 'qmk-shift': 'behaviour',
+    'zmk-holdtiming': 'behaviour',
 };
 const groupIds = new Set(TAB_GROUPS.map((g) => g.id));
 for (const [id, group] of Object.entries(SPEC_1_3)) {
@@ -71,6 +74,18 @@ for (const [ws, typing] of [['svalboard', true], ['adept', true], ['nlkb16', tru
 }
 assert.deepEqual(tabsFor({ family: 'svalboard', caps: capabilities('svalboard', 23) }).filter((t) => t.group === 'behaviour').map((t) => t.label),
     ['Macros', 'Tap Dance', 'Combos', 'Key Overrides', 'Chords', 'Leader', 'Shift Keys']); checks++;
+// WP7: Hold timing only with caps.holdtap (proto >= 17 and 0x2A answering,
+// probed by main.js), on ZMK only, right after Leader.
+{
+    const caps = (fam, ht) => ({ ...capabilities(fam, 17), holdtap: ht });
+    const beh = (fam, ht) => tabsFor({ family: fam, caps: caps(fam, ht) }).filter((t) => t.group === 'behaviour').map((t) => t.id);
+    assert.ok(beh('totem', true).includes('zmk-holdtiming')); checks++;
+    assert.equal(beh('totem', true).at(-1), 'zmk-holdtiming'); checks++;
+    assert.ok(!beh('totem', false).includes('zmk-holdtiming')); checks++;
+    assert.ok(!beh('imprint', undefined).includes('zmk-holdtiming')); checks++;
+    assert.ok(!beh('svalboard', true).includes('zmk-holdtiming'), 'never on QMK'); checks++;
+    assert.equal(TAB_TABLE.find((t) => t.id === 'zmk-holdtiming').label, 'Hold timing'); checks++;
+}
 assert.deepEqual(tabsFor({ trainerOnly: true }).map((t) => t.id), ['trainer']); checks++;
 // Rows sharing an id must agree on label and group.
 for (const t of TAB_TABLE) {

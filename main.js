@@ -35,6 +35,7 @@ import { shell } from './app-shell.js?v=60';
 import { installCaptions, setCaptionGroup } from './caption.js?v=60';
 import { saveState } from './save-state.js?v=60';
 import { board } from './board.js?v=60';
+import { attachHoldtap } from './behavior-catalog.js?v=60';
 import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=60';
 
 // ---------- app state ----------
@@ -255,6 +256,7 @@ async function loadZmkDevice(device) {
     setMode('device');
     $('vil-save').style.display = $('vil-load').style.display = HAS_LAYOUT_DISPATCH ? '' : 'none';
     updateStatus(device);
+    await probeHoldtap();
     buildTabs();
     // Pre-autoscroll (v<2) firmware can yield a single empty Mouse tab but
     // never zero tabs; guard anyway — TABS[0] on [] is a connect crash.
@@ -313,7 +315,7 @@ function disconnectUI() {
 
 // ---------- offline mode ----------
 
-function startOffline(key, family) {
+async function startOffline(key, family) {
     app.trainerOnly = false;    // same trap as connectFlow's
     const zmk = isZmkFamily(family);
     const ws = loadWorkspace(key) ?? (zmk ? createZmkTemplate(family) : createTemplate(family));
@@ -349,6 +351,7 @@ function startOffline(key, family) {
     $('device-name').textContent = ws.label;
     $('offline-seg').style.display = '';
     updateOfflineBanner();
+    await probeHoldtap();
     buildTabs();
     showTab(zmk ? 'zmk-keymap' : 'keymap');
 }
@@ -417,6 +420,14 @@ const GROUP_CAPTION = {
     device: 'Device: tune and administer this keyboard.',
     trainer: 'Trainer: practise typing.',
 };
+
+/** caps.holdtap for the Behaviour › Hold timing row: ZMK proto >= 17 and
+ * channel 0x2A answers GET SLOT_COUNT (attachHoldtap, memoized per client). */
+async function probeHoldtap() {
+    if (!app.caps || !isZmkFamily(app.family)) return;
+    try { app.caps.holdtap = !!(await attachHoldtap(app)); }
+    catch { app.caps.holdtap = false; }
+}
 
 function buildTabs() {
     TABS.length = 0;

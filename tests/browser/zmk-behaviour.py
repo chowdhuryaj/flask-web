@@ -125,9 +125,12 @@ def main():
         page.wait_for_timeout(300)
         check(page.evaluate("document.activeElement?.tagName") != 'BUTTON', 'Reload button blurred after click')
 
-        # -- Hold timing card
-        card = page.locator('[data-card="hold-timing"]')
-        check(card.count() == 1, 'Hold timing card present on Totem (proto 17, 0x2A answers)')
+        # -- Hold timing: its own Behaviour tab (WP7), no longer under Combos
+        check(page.locator('[data-panel="zmk-combos"] [data-card="hold-timing"]').count() == 0, 'Hold timing card left the Combos tab')
+        go(page, 'Behaviour', 'Hold timing')
+        card = page.locator('[data-panel="zmk-holdtiming"] [data-card="hold-timing"]')
+        card.wait_for(timeout=5000)
+        check(card.count() == 1, 'Hold timing tab present on Totem (proto 17, 0x2A answers)')
         card.scroll_into_view_if_needed()
         names = card.locator('.row .lbl').all_inner_texts()
         check('Control combo (32+33)' in names and 'Sym autoshift digits' in names, f'virtual slots labelled from SLOT_INFO: {names}')
@@ -186,6 +189,7 @@ def main():
         # -- Imprint: gesture direction picker
         ctx, page, errors = H.new_context(browser, seeds=())
         H.open_workspace(page, 'Cyboard Imprint (ZMK)')
+        check(page.locator('#panels [data-panel="zmk-holdtiming"]').count() == 0, 'no Hold timing tab on Imprint (0x2A answers 0xFF)')
         page.locator('.tab-groups button').filter(has_text='Device').click()
         page.locator('.tab-row button[data-tab]').filter(has_text='Gestures').click()
         page.wait_for_timeout(500)

@@ -25,7 +25,6 @@ import {
 } from './zmk-combos-codec.js?v=60';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=60';
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=60';
-import { holdTimingCard } from './zmk-holdtiming-card.js?v=60';
 
 const posText = (ps) => ps.join(' + ');
 
@@ -75,8 +74,6 @@ export class ZmkCombosTab {
         } finally {
             hid?.resume?.();
         }
-        try { this.timingCard = await holdTimingCard(this.app); }
-        catch (e) { this.timingCard = null; console.warn('hold timing card:', e); }
         this.bar ??= reloadBar(CH.combos, {
             label: 'Combos', line: 'zmk',
             save: () => this.app.flask.save(CH.combos),
@@ -410,11 +407,7 @@ export class ZmkCombosTab {
                     class: 'btn primary', text: '＋ New combo', 'data-act': 'new',
                     onclick: () => this.addCombo(),
                 }),
-                el('span', { class: 'note faint', text: `${used} of ${this.slotCount} slots in use` }),
-                this.timingCard ? el('button', {
-                    class: 'btn small', text: 'Hold timing ↓', title: 'per-key and combo hold-tap timing',
-                    onclick: () => this.timingCard.scrollIntoView({ block: 'start' }),
-                }) : null),
+                el('span', { class: 'note faint', text: `${used} of ${this.slotCount} slots in use` })),
             this.bar);
 
         this.root.replaceChildren(controls,
@@ -422,7 +415,6 @@ export class ZmkCombosTab {
             visible.length ? el('span') : el('div', {
                 class: 'note faint',
                 text: 'No combos yet. ＋ New combo, then click at least two keys on the board and choose an output.',
-            }),
-            this.timingCard);
+            }));
     }
 }

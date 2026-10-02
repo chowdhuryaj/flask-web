@@ -152,3 +152,17 @@ export async function holdTimingCard(app) {
         reloadBar(ch, { label: 'Hold-tap timing', line: 'zmk', save: () => be.save(), reload }));
     return body;
 }
+
+/** Behaviour › Hold timing (registry row 'zmk-holdtiming', gated on
+ * caps.holdtap: proto >= 17 and 0x2A answering). */
+export class ZmkHoldTimingTab {
+    constructor(app) {
+        this.app = app;
+        this.root = el('div');
+    }
+
+    async load() {
+        const c = await holdTimingCard(this.app);
+        this.root.replaceChildren(c ?? el('p', { class: 'muted', text: 'This keyboard has no live hold-tap timing (flask_holdtap, channel 0x2A).' }));
+    }
+}

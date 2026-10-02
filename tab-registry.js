@@ -30,6 +30,7 @@ import { ZmkLeaderTab } from './zmk-leader-tab.js?v=60';
 import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=60';
 import { ZmkShiftTab } from './zmk-shift-tab.js?v=60';
 import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=60';
+import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=60';
 import { ZmkTestTab } from './zmk-test-tab.js?v=60';
 import { ZmkModesTab } from './zmk-modes-tab.js?v=60';
 import { MouseTab } from './mouse-tab.js?v=60';
@@ -101,6 +102,10 @@ export const TAB_TABLE = [
     // §1.3: renamed "Shift" → "Shift Keys" (native label).
     { id: 'zmk-shift', label: 'Shift Keys', group: 'behaviour', when: (a) => a.caps.customShift && zmk(a), ctor: ZmkShiftTab },
     { id: 'zmk-leader', label: 'Leader', group: 'behaviour', when: (a) => a.caps.leader, ctor: ZmkLeaderTab },
+    // AJ-Q4 / WP7: per-key and virtual-slot hold-tap timing (flask_holdtap,
+    // 0x2A). caps.holdtap is set by main.js's async probe: proto >= 17 AND
+    // GET 2A 01 answers (Imprint and older Totem images answer 0xFF).
+    { id: 'zmk-holdtiming', label: 'Hold timing', group: 'behaviour', when: (a) => zmk(a) && !!a.caps.holdtap, ctor: ZmkHoldTimingTab },
     // Modes are app-side snapshots, so any ZMK board has them.
     { id: 'zmk-modes', label: 'Modes', group: 'device', when: zmk, ctor: ZmkModesTab },
     { id: 'zmk-test', label: 'Test', group: 'device', when: zmk, ctor: ZmkTestTab },
