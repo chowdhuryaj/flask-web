@@ -16,12 +16,12 @@
 // Also exported: KeyboardTab (Device › Keyboard, spec §1.3 "Device ›
 // Keyboard"): appearance, diagnostics, lock, bootloader, device info.
 
-import { setCaption, bindCaptionBar } from './caption.js?v=1';
-import { board } from './board.js?v=1';
-import { el, toast } from './ui.js?v=49';
-import { familyLabel } from './profiles.js?v=49';
+import { setCaption, bindCaptionBar } from './caption.js?v=60';
+import { board } from './board.js?v=60';
+import { el, toast } from './ui.js?v=60';
+import { familyLabel } from './profiles.js?v=60';
 import { THEMES, TEXT_SCALE, appearance, applyTheme, applyTextScale,
-         currentTheme, currentTextScale } from './themes.js?v=1';
+         currentTheme, currentTextScale } from './themes.js?v=60';
 
 export const shell = {
     regions: {},

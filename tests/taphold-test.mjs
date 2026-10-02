@@ -2,8 +2,8 @@
 // variant, QMK fallback message, home-row preset, hold/tap labels.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import * as C from '../behavior-catalog.js?v=1';
-import { setZmkContext } from '../zmk-keycodes.js?v=49';
+import * as C from '../behavior-catalog.js?v=60';
+import { setZmkContext } from '../zmk-keycodes.js?v=60';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };

@@ -18,7 +18,7 @@
 -->
 <meta charset="utf-8">
 <title>Flask dev harness — Svalboard tabs</title>
-<link rel="stylesheet" href="styles.css?v=49">
+<link rel="stylesheet" href="styles.css?v=60">
 <style>
   body { padding: 12px; }
   h2 { margin: 18px 0 6px; font-size: 14px; }
@@ -29,15 +29,15 @@
 <div id="mounts"></div>
 
 <script type="module">
-import { capabilities } from './caps.js?v=49';
-import { CH, V } from './flaskproto.js?v=49';
-import { TypingTab } from './typing-tab.js?v=49';
-import { QmkLeaderTab } from './qmk-leader-tab.js?v=1';
-import { QmkShiftTab } from './qmk-shift-tab.js?v=1';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=49';
-import { CornerTab } from './corner-tab.js?v=49';
-import { MouseTab } from './mouse-tab.js?v=49';
-import { setDeviceCustomKeys } from './keycodes.js?v=49';
+import { capabilities } from './caps.js?v=60';
+import { CH, V } from './flaskproto.js?v=60';
+import { TypingTab } from './typing-tab.js?v=60';
+import { QmkLeaderTab } from './qmk-leader-tab.js?v=60';
+import { QmkShiftTab } from './qmk-shift-tab.js?v=60';
+import { GesturesTab, ChordsTab } from './gestures-tab.js?v=60';
+import { CornerTab } from './corner-tab.js?v=60';
+import { MouseTab } from './mouse-tab.js?v=60';
+import { setDeviceCustomKeys } from './keycodes.js?v=60';
 
 /** Plausible-but-fake device. Returns a value for every id rather than
  * throwing, so a tab that reads something it shouldn't still renders — the

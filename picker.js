@@ -1,9 +1,9 @@
 // QMK picker helpers for the slot-grid tabs (kcCell, makePickerHost) and
 // the legacy buildPicker entry point. The picker itself is binding-picker.js.
 
-import { el, toast } from './ui.js?v=49';
-import { describe, capLabel } from './keycodes.js?v=49';
-import { buildPickerBody } from './binding-picker.js?v=1';
+import { el, toast } from './ui.js?v=60';
+import { describe, capLabel } from './keycodes.js?v=60';
+import { buildPickerBody } from './binding-picker.js?v=60';
 
 /**
  * Legacy entry point (keymap-tab, makePickerHost): the catalog picker for

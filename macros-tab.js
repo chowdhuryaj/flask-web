@@ -5,11 +5,11 @@
 // journals the whole decoded macro list; sync replays it (and reports the
 // unlock requirement if the board arrives locked).
 
-import { el, card, toast } from './ui.js?v=49';
-import { MacroCodec } from './vialproto.js?v=49';
-import { openPicker } from './binding-picker.js?v=1';
-import { encode } from './behavior-catalog.js?v=1';
-import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow, bindingCell } from './tiles.js?v=1';
+import { el, card, toast } from './ui.js?v=60';
+import { MacroCodec } from './vialproto.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { encode } from './behavior-catalog.js?v=60';
+import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow, bindingCell } from './tiles.js?v=60';
 
 const STEP_KINDS = [
     ['text', 'Type text'], ['tap', 'Tap key'], ['down', 'Hold key down'], ['up', 'Release key'], ['delay', 'Delay'],

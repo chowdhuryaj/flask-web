@@ -2,10 +2,10 @@
 // editor, paste-to-selected-key, and the slot-summary registry that feeds
 // the picker's "M3 · types 'hello'" chips (app.slotSummary).
 
-import { el, toast, modal } from './ui.js?v=49';
-import { kcCell } from './picker.js?v=49';
-import { capLabel } from './keycodes.js?v=49';
-import { board } from './board.js?v=1';
+import { el, toast, modal } from './ui.js?v=60';
+import { kcCell } from './picker.js?v=60';
+import { capLabel } from './keycodes.js?v=60';
+import { board } from './board.js?v=60';
 
 // THE one place WP4b tabs turn a QMK keycode into something to show: tiles,
 // macro steps, tap dance rows, leader outputs, chord boxes. Swap these two

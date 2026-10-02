@@ -13,9 +13,9 @@
 
 import { CH, V, slot, GESTURE_SETS, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS,
          WC_BUTTONS, NLKB, SL_SEQS, SL_OUT_POS, SNIPPET_COUNT, SNIPPET_KEYS,
-         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=49';
-import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=49';
-import { encoderCount } from './profiles.js?v=49';
+         CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=60';
+import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=60';
+import { encoderCount } from './profiles.js?v=60';
 
 // ---------- tuning dump spec (mirrors AppModel.tuningDumpSpec) ----------
 // Replayed in THIS order on restore: DPI index ids come before raw-CPI ids
@@ -514,7 +514,7 @@ export function downloadText(filename, text) {
 export async function layoutLine(app) {
     const family = app.profile?.family ?? app.family;
     if (family === 'nape') return 'nape';
-    const { isZmkFamily } = await import('./zmk.js?v=51');
+    const { isZmkFamily } = await import('./zmk.js?v=60');
     return isZmkFamily(family) ? 'zmk' : 'qmk';
 }
 
@@ -529,11 +529,11 @@ export async function saveLayoutFile(app) {
         return { line, filename };
     }
     if (line === 'nape') {
-        const { buildNapeExport, downloadNapeExport } = await import('./nape-export.js?v=49');
+        const { buildNapeExport, downloadNapeExport } = await import('./nape-export.js?v=60');
         downloadNapeExport(await buildNapeExport(app));
         return { line, filename: null };
     }
-    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=50');
+    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=60');
     const kt = zmkLiveKeymapTab();
     if (!kt?.keymap) throw new Error('the keymap is still loading');
     await kt.exportKeymap();
@@ -553,7 +553,7 @@ export async function loadLayoutFile(app, file, { ask = (t) => confirm(t) } = {}
         return { line, message, warn: stats.notes.length > 0 };
     }
     if (line === 'nape') {
-        const { applyNapeImport } = await import('./nape-export.js?v=49');
+        const { applyNapeImport } = await import('./nape-export.js?v=60');
         let data;
         try { data = JSON.parse(await file.text()); } catch { throw new Error('that file is not valid JSON'); }
         if (data.firmware && data.firmware !== app.napeFirmware
@@ -570,7 +570,7 @@ export async function loadLayoutFile(app, file, { ask = (t) => confirm(t) } = {}
                 : `Restored: ${report.map((r) => r.name).join(', ')}`,
         };
     }
-    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=50');
+    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=60');
     const kt = zmkLiveKeymapTab();
     if (!kt?.keymap) throw new Error('the keymap is still loading');
     await kt.importKeymap(file);

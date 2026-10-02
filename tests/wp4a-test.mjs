@@ -15,11 +15,11 @@ let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
 
-const { findDuplicateCombo, comboPosKey, COMBO_ACTION } = await import('../zmk-combos-codec.js?v=49');
-const { encodeHoldtapSlot, decodeHoldtapSlot, decodeHoldtapInfo, clampTerm } = await import('../zmk-holdtap-codec.js?v=1');
-const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=50');
-const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=49');
-const { holdtapBackend } = await import('../behavior-catalog.js?v=1');
+const { findDuplicateCombo, comboPosKey, COMBO_ACTION } = await import('../zmk-combos-codec.js?v=60');
+const { encodeHoldtapSlot, decodeHoldtapSlot, decodeHoldtapInfo, clampTerm } = await import('../zmk-holdtap-codec.js?v=60');
+const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=60');
+const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=60');
+const { holdtapBackend } = await import('../behavior-catalog.js?v=60');
 
 // ---- duplicate combos ----
 {

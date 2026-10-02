@@ -26,12 +26,12 @@
 // Also exports renderKeyboardSVG (moved here; keymap-tab.js re-exports it),
 // baseUnit, layoutOf, splitCap for the HUD, trainer, RGB and tests.
 //
-// Import this file ONLY as './board.js?v=1': x.js and x.js?v=1 are two
+// Import this file ONLY as './board.js?v=60': x.js and x.js?v=60 are two
 // module instances and the singleton would split.
 
-import { el, svgEl, toast as uiToast } from './ui.js?v=49';
-import { capLabel, hoverText } from './keycodes.js?v=49';
-import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=1';
+import { el, svgEl, toast as uiToast } from './ui.js?v=60';
+import { capLabel, hoverText } from './keycodes.js?v=60';
+import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=60';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 export const GAP = 5;
@@ -649,7 +649,7 @@ class Board extends EventTarget {
         // which imports keymap-tab, which imports this file.
         let closed = false, close = null;
         this.#popover = () => { closed = true; close?.(); };
-        import('./binding-picker.js?v=1').then(({ openPicker }) => {
+        import('./binding-picker.js?v=60').then(({ openPicker }) => {
             if (closed) return;
             close = openPicker({
                 surface, host: 'popover', anchor, app: a.app, value,

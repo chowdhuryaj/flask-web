@@ -12,8 +12,8 @@ globalThis.localStorage ??= {
     get length() { return this._m.size; },
 };
 
-const { SaveState, assertRegistrable, NEVER_REGISTER } = await import('../save-state.js');
-const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js');
+const { SaveState, assertRegistrable, NEVER_REGISTER } = await import('../save-state.js?v=60');
+const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=60');
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -147,8 +147,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- old ZMK export (v2 JSON with `family`) still imports and round-trips ----
 {
-    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js');
-    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js');
+    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js?v=60');
+    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js?v=60');
     const old = JSON.parse(fixture('zmk-export-v2.json'));
     eq([old.kind, old.version, old.family], ['flask-zmk-keymap', 2, 'imprint'], 'fixture has the v2 header with family');
     ok(isModePayload(old), 'old file is a valid mode payload');
@@ -169,9 +169,9 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- old QMK .vil still imports and round-trips ----
 {
-    const { createTemplate, OfflineFlask, OfflineVial } = await import('../offline.js');
-    const { capabilities } = await import('../caps.js');
-    const { importVil, exportVil } = await import('../vil.js');
+    const { createTemplate, OfflineFlask, OfflineVial } = await import('../offline.js?v=60');
+    const { capabilities } = await import('../caps.js?v=60');
+    const { importVil, exportVil } = await import('../vil.js?v=60');
     const text = fixture('adept-export.vil');
     const old = JSON.parse(text);
     const ws = createTemplate('adept');
@@ -192,8 +192,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- offline queue count feeds the status bar ----
 {
-    const { createTemplate, OfflineVial } = await import('../offline.js');
-    const { offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js');
+    const { createTemplate, OfflineVial } = await import('../offline.js?v=60');
+    const { offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=60');
     const ws = createTemplate('adept');
     eq(offlineQueued(ws), 0);
     await new OfflineVial(ws).setKeycode(0, 0, 0, 4);

@@ -5,10 +5,10 @@
 // whole buffer is rewritten every save. Escapes recorded by Keychron's app are
 // preserved verbatim rather than reinterpreted (see macroToText).
 
-import { el, card, toast } from './ui.js?v=49';
-import { macroToText, macroFromText } from './nape-proto.js?v=49';
-import { encode } from './behavior-catalog.js?v=1';
-import { tile, tileGrid, openSheet, pasteToKey, addSummary } from './tiles.js?v=1';
+import { el, card, toast } from './ui.js?v=60';
+import { macroToText, macroFromText } from './nape-proto.js?v=60';
+import { encode } from './behavior-catalog.js?v=60';
+import { tile, tileGrid, openSheet, pasteToKey, addSummary } from './tiles.js?v=60';
 
 const summary = (bytes) => {
     if (!bytes?.length) return '';

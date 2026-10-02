@@ -9,9 +9,9 @@
 // via zmk-flask-modules flask_proto. The only shared layer is that frame
 // vocabulary (flaskproto.js CH/V/CMD) — both firmwares implement it.
 
-import { CH, V } from './flaskproto.js?v=49';
-import { diag } from './diag.js?v=49';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=50';
+import { CH, V } from './flaskproto.js?v=60';
+import { diag } from './diag.js?v=60';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=60';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.

@@ -9,8 +9,8 @@
 // so they go on ANY key of ANY layer with ANY tap key — unlike CUSTOM(41),
 // which needs a matching entry in the per-(layer,column) tap-hold table.
 
-import { buildPickerBody } from './binding-picker.js?v=1';
-import { napeKeyLabel, modsLabel, basicKeyName } from './nape-proto.js?v=49';
+import { buildPickerBody } from './binding-picker.js?v=60';
+import { napeKeyLabel, modsLabel, basicKeyName } from './nape-proto.js?v=60';
 
 /**
  * Nape adapter entry point (surface 'nape.key'): the catalog picker with

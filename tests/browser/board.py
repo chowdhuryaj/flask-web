@@ -39,7 +39,7 @@ def cap(page, i):
 
 
 def selected(page):
-    return page.evaluate("""async () => (await import('/board.js?v=1')).board.selectedKey()""")
+    return page.evaluate("""async () => (await import('/board.js?v=60')).board.selectedKey()""")
 
 
 def pick_zmk_key(page, name):
@@ -80,19 +80,19 @@ def totem(browser):
     check(selected(page) == {'layer': 0, 'pos': 1}, 'totem: popover pick does not advance')
 
     # Undo restores both keys, in order; redo reapplies.
-    page.evaluate("async () => (await import('/board.js?v=1')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
     check(cap(page, 1) == 'W', f'totem: undo restores key 1, got {cap(page, 1)}')
-    page.evaluate("async () => (await import('/board.js?v=1')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
     check(cap(page, 0) == 'Q', f'totem: undo restores key 0, got {cap(page, 0)}')
-    page.evaluate("async () => (await import('/board.js?v=1')).board.redo()")
+    page.evaluate("async () => (await import('/board.js?v=60')).board.redo()")
     check(cap(page, 0) == 'A', f'totem: redo reapplies key 0, got {cap(page, 0)}')
 
     # Save-state: the edit registered; discard clears it and restores the device keymap.
-    n = page.evaluate("async () => (await import('/save-state.js?v=1')).saveState.dirty().map(d => d.source)")
+    n = page.evaluate("async () => (await import('/save-state.js?v=60')).saveState.dirty().map(d => d.source)")
     check(n == ['studio-keymap'], f'totem: studio-keymap registered with save-state, got {n}')
-    page.evaluate("""async () => { const t = (await import('/zmk-keymap-tab.js?v=50')).zmkLiveKeymapTab(); await t.discardChanges(); }""")
+    page.evaluate("""async () => { const t = (await import('/zmk-keymap-tab.js?v=60')).zmkLiveKeymapTab(); await t.discardChanges(); }""")
     check(cap(page, 0) == 'Q', f'totem: discard restores key 0, got {cap(page, 0)}')
-    check(page.evaluate("async () => (await import('/save-state.js?v=1')).saveState.dirty().length") == 0,
+    check(page.evaluate("async () => (await import('/save-state.js?v=60')).saveState.dirty().length") == 0,
           'totem: discard cleans save-state')
 
     # Layer switch + rename + remove/add.
@@ -117,7 +117,7 @@ def totem(browser):
 
     # Position-pick mode.
     page.locator('.bd-chip', has_text='base').first.click()
-    page.evaluate("""async () => { const { board } = await import('/board.js?v=1');
+    page.evaluate("""async () => { const { board } = await import('/board.js?v=60');
         window.__picks = []; window.__stop = board.pickPositions({ initial: [3], max: 2, label: 'Pick positions for Combo 1', onChange: (p) => { window.__picks = p; } }); }""")
     key(page, 4).click()
     check(page.evaluate('window.__picks') == [3, 4], f'totem: pick mode reports click order, got {page.evaluate("window.__picks")}')
@@ -210,7 +210,7 @@ def adept_sval(browser):
     ctx, page, errors = new_context(browser)
     open_workspace(page, SVAL['label'])
     keys = page.locator('.kb-svg g.key').count()
-    page.evaluate("""async () => { const { board } = await import('/board.js?v=1');
+    page.evaluate("""async () => { const { board } = await import('/board.js?v=60');
         const a = board.adapter; const ks = a.profile.keys;
         board.setChordBoxes([{ id: 'c1', positions: [{ row: ks[0].row, col: ks[0].col }, { row: ks[1].row, col: ks[1].col }], label: 'Esc' },
                              { id: 'c2', positions: [{ row: ks[2].row, col: ks[2].col }, { row: ks[3].row, col: ks[3].col }], label: 'Tab', inherited: true }],

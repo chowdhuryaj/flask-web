@@ -15,11 +15,11 @@
 // chord), which is also the .vil wire order — a chord is found by the finger it
 // belongs to rather than by hunting the board picture.
 
-import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=49';
-import { openPicker } from './binding-picker.js?v=1';
-import { board } from './board.js?v=1';
-import { reloadRow, bindingCell, bindingText } from './tiles.js?v=1';
-import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=49';
+import { el, card, sliderRow, toggleRow, selectRow, toast } from './ui.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { board } from './board.js?v=60';
+import { reloadRow, bindingCell, bindingText } from './tiles.js?v=60';
+import { CH, V, CC, ccDefName, ccRow, ccCol } from './flaskproto.js?v=60';
 
 /** Which layer the wire frames are addressed with when outputs are universal.
  * The [def, layer] shape survived v19 for compatibility; the firmware ignores

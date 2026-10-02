@@ -1,9 +1,9 @@
 // WP4b: tile summaries (feed the picker's slot chips) and the channel 0x28 rule.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { macroSummary } from '../macros-tab.js';
-import { tdSummary } from '../entries-tab.js';
-import { encode } from '../behavior-catalog.js?v=1';
+import { macroSummary } from '../macros-tab.js?v=60';
+import { tdSummary } from '../entries-tab.js?v=60';
+import { encode } from '../behavior-catalog.js?v=60';
 
 let checks = 0;
 const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
@@ -22,7 +22,7 @@ eq(encode('macro', { slot: 2 }, 'qmk'), 0x7702);
 
 // Channel 0x28 has no save step on the QMK line (spec 3.2): the Chords tab
 // must never touch the save registry.
-const corner = readFileSync(new URL('../corner-tab.js', import.meta.url), 'utf8');
+const corner = readFileSync(new URL('../corner-tab.js?v=60', import.meta.url), 'utf8');
 assert.ok(!/reloadBar|saveState|saveBar|markDirty|flask\.save/.test(corner.replace(/\/\/.*$/gm, '')), 'corner-tab.js registers or saves a channel');
 checks++;
 console.log(`tiles-test: ${checks} checks OK`);

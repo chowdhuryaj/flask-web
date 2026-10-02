@@ -3,8 +3,8 @@
 // and every §1.3 tab id has its §1.3 group.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { capabilities } from '../caps.js';
-import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js';
+import { capabilities } from '../caps.js?v=60';
+import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js?v=60';
 
 const before = JSON.parse(readFileSync(new URL('./fixtures/tabs-before-wp0.json', import.meta.url)));
 // Deliberate changes from §1.3; anything else differing is a regression.

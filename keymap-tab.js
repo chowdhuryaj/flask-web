@@ -3,11 +3,11 @@
 // writes the device and docks the picker. renderKeyboardSVG moved to board.js
 // and is re-exported so hud.js, the trainer and the RGB painter keep working.
 
-import { el, toast, card } from './ui.js?v=49';
-import { openPicker } from './binding-picker.js?v=1';
-import { board, renderKeyboardSVG } from './board.js?v=1';
-import { shell } from './app-shell.js?v=2';
-import { encoderCount, setLayerName, applyStoredLayerNames } from './profiles.js?v=49';
+import { el, toast, card } from './ui.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { board, renderKeyboardSVG } from './board.js?v=60';
+import { shell } from './app-shell.js?v=60';
+import { encoderCount, setLayerName, applyStoredLayerNames } from './profiles.js?v=60';
 
 export { renderKeyboardSVG };
 

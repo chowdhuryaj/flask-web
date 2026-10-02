@@ -25,13 +25,13 @@
 import {
     capLabel, describe, lookup, R, mediaKeys, mouseKeys, rgbKeys, deviceCustoms, macroKeys,
     basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols,
-} from './keycodes.js?v=49';
+} from './keycodes.js?v=60';
 import {
     zmkBehaviors, zmkLayers, layerName, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
-} from './zmk-keycodes.js?v=49';
-import { napeKeyLabel, napeKeycodeGroups, KC as NKC, QK as NQK } from './nape-proto.js?v=49';
-import { isZmkFamily } from './zmk.js?v=51';
+} from './zmk-keycodes.js?v=60';
+import { napeKeyLabel, napeKeycodeGroups, KC as NKC, QK as NQK } from './nape-proto.js?v=60';
+import { isZmkFamily } from './zmk.js?v=60';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [

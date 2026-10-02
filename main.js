@@ -2,40 +2,40 @@
 // runs the post-connect load sequence (handshake → definition → keymap),
 // drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=49';
-import { diag } from './diag.js?v=49';
-import { FlaskHID } from './webhid.js?v=49';
-import { renderPreflight } from './preflight.js?v=49';
-import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=49';
+import { el, toast, modal } from './ui.js?v=60';
+import { diag } from './diag.js?v=60';
+import { FlaskHID } from './webhid.js?v=60';
+import { renderPreflight } from './preflight.js?v=60';
+import { FlaskProto, EXPECTED_PROTOCOL, CH, V } from './flaskproto.js?v=60';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=51';
-import { VialClient } from './vialclient.js?v=49';
-import { parseDefinition } from './vialdef.js?v=49';
-import { buildProfile, familyOf, familyLabel } from './profiles.js?v=49';
-import { loadNapeDevice, isNapeFamily } from './nape.js?v=49';
-import { capabilities } from './caps.js?v=49';
-import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=49';
-import { CommandPalette } from './command-palette.js?v=50';
-import { HUD } from './hud.js?v=49';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=49';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=60';
+import { VialClient } from './vialclient.js?v=60';
+import { parseDefinition } from './vialdef.js?v=60';
+import { buildProfile, familyOf, familyLabel } from './profiles.js?v=60';
+import { loadNapeDevice, isNapeFamily } from './nape.js?v=60';
+import { capabilities } from './caps.js?v=60';
+import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=60';
+import { CommandPalette } from './command-palette.js?v=60';
+import { HUD } from './hud.js?v=60';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=60';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=50';
+         zmkSyncExtras, zmkPendingCount, zmkClearDirty } from './zmk-offline.js?v=60';
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
-         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=49';
-import * as vil from './vil.js?v=49';
-import * as zmkOffline from './zmk-offline.js?v=50';
+         maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=60';
+import * as vil from './vil.js?v=60';
+import * as zmkOffline from './zmk-offline.js?v=60';
 const { exportVil, importVil, downloadText } = vil;
 // WP6 (not yet on this branch) adds vil.saveLayoutFile / loadLayoutFile, the
 // per-line Save layout / Load dispatch. Namespace access is undefined until
 // then, so each use below falls back to the .vil path.
 const HAS_LAYOUT_DISPATCH = typeof vil.saveLayoutFile === 'function';
-import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=2';
-import { shell } from './app-shell.js?v=2';
-import { installCaptions, setCaptionGroup } from './caption.js?v=1';
-import { saveState } from './save-state.js?v=1';
-import { board } from './board.js?v=1';
-import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=1';
+import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=60';
+import { shell } from './app-shell.js?v=60';
+import { installCaptions, setCaptionGroup } from './caption.js?v=60';
+import { saveState } from './save-state.js?v=60';
+import { board } from './board.js?v=60';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=60';
 
 // ---------- app state ----------
 

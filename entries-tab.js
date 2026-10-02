@@ -6,12 +6,12 @@
 // TD tiles paste TD(n) onto the selected key (the pencil edits). Combos and
 // overrides have no keycode to paste, so their tiles open the editor.
 
-import { el, card, toast, reloadBar } from './ui.js?v=49';
-import { TapDance, Combo, KeyOverride } from './vialproto.js?v=49';
-import { CH, slot } from './flaskproto.js?v=49';
-import { openPicker } from './binding-picker.js?v=1';
-import { encode, modsText } from './behavior-catalog.js?v=1';
-import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow, bindingCell, bindingText } from './tiles.js?v=1';
+import { el, card, toast, reloadBar } from './ui.js?v=60';
+import { TapDance, Combo, KeyOverride } from './vialproto.js?v=60';
+import { CH, slot } from './flaskproto.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { encode, modsText } from './behavior-catalog.js?v=60';
+import { tile, tileGrid, openSheet, pasteToKey, addSummary, reloadRow, bindingCell, bindingText } from './tiles.js?v=60';
 
 const pick = (app, surface, value, title, onPick) => openPicker({ surface, value, host: 'sheet', title, app, onPick });
 const cap = bindingText;

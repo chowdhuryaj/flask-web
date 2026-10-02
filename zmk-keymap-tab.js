@@ -10,24 +10,24 @@
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
-import { el, toast, card, SAVE_STATE } from './ui.js?v=49';
-import { board } from './board.js?v=1';
-import { openPicker } from './binding-picker.js?v=1';
-import { shell } from './app-shell.js?v=2';
-import { saveState } from './save-state.js?v=1';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=49';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=50';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=49';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=49';
-import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=51';
+import { el, toast, card, SAVE_STATE } from './ui.js?v=60';
+import { board } from './board.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { shell } from './app-shell.js?v=60';
+import { saveState } from './save-state.js?v=60';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=60';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=60';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=60';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=60';
+import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=60';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=49';
+} from './zmk-keycodes.js?v=60';
 // The picker lives in zmk-picker-legacy.js (WP0 move); re-exported so
 // zmk-combos-tab / zmk-tapdance-tab keep importing it from here.
-import { buildZmkPicker } from './zmk-picker-legacy.js?v=1';
+import { buildZmkPicker } from './zmk-picker-legacy.js?v=60';
 export { buildZmkPicker };
 
 // One serial client for the whole page: tab instances are discarded on HID

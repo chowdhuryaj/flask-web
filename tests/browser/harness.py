@@ -67,11 +67,13 @@ def new_context(browser, viewport=(1440, 1000), seeds=(SVAL,)):
 
 def open_workspace(page, label):
     """From the landing page, open the offline workspace whose button
-    contains `label`, and wait for the first tab to finish rendering."""
+    contains `label`, and wait for the first tab to finish rendering.
+    The board is pinned in #board-slot above the palette (one app-shell
+    instance); a board left inline in a panel means a stamp split."""
     page.goto(URL)
     page.locator('#offline-list .dev-item').filter(has_text=label).first.click()
     page.locator('#panels .panel.active').wait_for()
-    page.locator('.kb-svg .keycap').first.wait_for(timeout=10000)
+    page.locator('#board-slot .kb-svg .keycap').first.wait_for(timeout=10000)
 
 
 def tab_ids(page):
@@ -86,8 +88,8 @@ def launch(p):
 
 
 CONTRACT_SMOKE = """async (surface) => {
-  const bp = await import('./binding-picker.js?v=1');
-  await import('./behavior-catalog.js?v=1');
+  const bp = await import('./binding-picker.js?v=60');
+  await import('./behavior-catalog.js?v=60');
   const problems = [];
   for (const host of ['sheet', 'popover']) {
     const close = bp.openPicker({ surface, host, anchor: document.querySelector('.keycap'),

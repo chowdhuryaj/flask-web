@@ -9,12 +9,12 @@
 //
 // Reads every value ONCE into `this.s` and renders from that.
 
-import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=49';
+import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=60';
 import {
     CH, V, slot, osName, SNIPPET_COUNT, SNIPPET_LEN, SNIPPET_KEYS, CYCLOTAB_KEYS,
-} from './flaskproto.js?v=49';
-import { openPicker } from './binding-picker.js?v=1';
-import { announceEdit, bindingCell } from './tiles.js?v=1';
+} from './flaskproto.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { announceEdit, bindingCell } from './tiles.js?v=60';
 
 /** "3: Regards," — what a snippet reads as in a dropdown. */
 function snippetLabel(index, text) {

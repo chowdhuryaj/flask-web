@@ -9,13 +9,13 @@
 // Reads every value once into `this.s` and renders from that (Super Leader is
 // 16 sequences x 7 slots; re-reading after each pick made it unusable).
 
-import { el, card, sliderRow, toast, reloadBar } from './ui.js?v=49';
+import { el, card, sliderRow, toast, reloadBar } from './ui.js?v=60';
 import {
     CH, V, slot, LEADER_SEQS, LEADER_KEYS, SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS,
     OUTPUT_KIND, SNIPPET_COUNT,
-} from './flaskproto.js?v=49';
-import { openPicker } from './binding-picker.js?v=1';
-import { announceEdit, bindingCell } from './tiles.js?v=1';
+} from './flaskproto.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { announceEdit, bindingCell } from './tiles.js?v=60';
 
 /** "3: Regards," : what a snippet reads as in a dropdown. */
 const snippetLabel = (index, text) => {

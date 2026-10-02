@@ -14,8 +14,8 @@ import harness as h  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 RELOAD_BAR = """async () => {
-  const ui = await import('./ui.js?v=49');
-  const { saveState } = await import('./save-state.js?v=1');
+  const ui = await import('./ui.js?v=60');
+  const { saveState } = await import('./save-state.js?v=60');
   saveState.reset(); saveState.setLine('zmk');
   let saves = 0, reloads = 0;
   const bar = ui.reloadBar(0x05, { label: 'DPI', line: 'zmk', save: async () => { saves++; }, reload: async () => { reloads++; } });
@@ -60,7 +60,7 @@ def main():
 
         # Never-register: QMK corner chords 0x28 throws, ZMK tap dance 0x28 does not.
         res = page.evaluate("""async () => {
-          const { saveState } = await import('./save-state.js?v=1');
+          const { saveState } = await import('./save-state.js?v=60');
           const noop = async () => {};
           saveState.reset();
           saveState.setLine('qmk');
@@ -76,20 +76,20 @@ def main():
         # Save layout / Load on the ZMK line: v2 JSON with family, round trip.
         app_stub = "{ profile: { family: 'imprint' } }"
         with page.expect_download() as dl:
-            page.evaluate(f"import('./vil.js?v=49').then(m => m.saveLayoutFile({app_stub}))")
+            page.evaluate(f"import('./vil.js?v=60').then(m => m.saveLayoutFile({app_stub}))")
         path = dl.value.path()
         data = json.loads(Path(path).read_text())
         check([data.get('kind'), data.get('version'), data.get('family')] == ['flask-zmk-keymap', 2, 'imprint'],
               f'export header {[data.get("kind"), data.get("version"), data.get("family")]}')
         check(len(data.get('layers', [])) > 0, 'export has layers')
         msg = page.evaluate(f"""async (text) => {{
-          const m = await import('./vil.js?v=49');
+          const m = await import('./vil.js?v=60');
           const r = await m.loadLayoutFile({app_stub}, new File([text], 'k.json'));
           return [r.line, r.message];
         }}""", json.dumps(data))
         check(msg == ['zmk', None], f'load result {msg}')
         with page.expect_download() as dl2:
-            page.evaluate(f"import('./vil.js?v=49').then(m => m.saveLayoutFile({app_stub}))")
+            page.evaluate(f"import('./vil.js?v=60').then(m => m.saveLayoutFile({app_stub}))")
         again = json.loads(Path(dl2.value.path()).read_text())
         check(again['layers'] == data['layers'], 'layers survive Save layout -> Load -> Save layout')
 

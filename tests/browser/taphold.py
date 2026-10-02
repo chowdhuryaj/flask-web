@@ -35,19 +35,19 @@ def shot(page, name):
         page.screenshot(path=str(Path(SHOTS) / f'wp3b-{name}.png'), full_page=True)
 
 
-KEY_INDEX = """(cap) => [...document.querySelectorAll('#panels .panel.active .kb-svg g.key')]
+KEY_INDEX = """(cap) => [...document.querySelectorAll('#board-slot .kb-svg g.key')]
     .findIndex(g => [...g.querySelectorAll('.cap-main')].map(t => t.textContent).join('') === cap)"""
 BINDING = """async (pos) => {
-  const { board } = await import('/board.js?v=1');
-  const C = await import('/behavior-catalog.js?v=1');
+  const { board } = await import('/board.js?v=60');
+  const C = await import('/behavior-catalog.js?v=60');
   const v = board.bindingOf(pos ?? undefined);
   return { v, d: C.describeBinding(v, board.adapter.profile.capAdapter ?? 'qmk'),
-           via: v && typeof v === 'object' ? (await import('/zmk-keycodes.js?v=49')).zmkBehaviors().get(v.behaviorId)?.displayName : null };
+           via: v && typeof v === 'object' ? (await import('/zmk-keycodes.js?v=60')).zmkBehaviors().get(v.behaviorId)?.displayName : null };
 }"""
 
 
 def keys(page):
-    return page.locator('#panels .panel.active .kb-svg g.key')
+    return page.locator('#board-slot .kb-svg g.key')
 
 
 def picker(page):
@@ -59,7 +59,7 @@ def make_taphold(page, cap, label):
     check(i >= 0, f'{label}: a key reads {cap}')
     g = keys(page).nth(i)
     g.click()
-    pos = page.evaluate("async () => (await import('/board.js?v=1')).board.selectedKey().pos")
+    pos = page.evaluate("async () => (await import('/board.js?v=60')).board.selectedKey().pos")
     bp = picker(page)
     bp.locator('[data-act="taphold"]').click()
     check(bp.locator('[data-composer]').count() == 1, f'{label}: composer opens')
@@ -103,13 +103,13 @@ def totem(browser):
     check(pop.locator('.bp-th-slot[data-slot="tap"] .bp-th-value').text_content() == 'F', 'totem: TAP pre-filled F')
     shot(page, 'totem-prefilled')
     page.keyboard.press('Escape')
-    page.evaluate("async () => (await import('/board.js?v=1')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
     page.wait_for_timeout(200)
     g = keys(page).nth(i)
     check(g.locator('.cap-holdband').count() == 0 and g.locator('.cap-main').text_content() == 'F', 'totem: undo restores plain F')
 
     # rotated thumbs keep their labels (the default keymap has live hold-taps there)
-    thumbs = page.evaluate("""() => [...document.querySelectorAll('#panels .panel.active .kb-svg g.key.ht')]
+    thumbs = page.evaluate("""() => [...document.querySelectorAll('#board-slot .kb-svg g.key.ht')]
         .filter(g => g.getAttribute('transform')).length""")
     check(thumbs > 0, f'totem: {thumbs} rotated thumb caps draw hold/tap labels')
 
@@ -118,17 +118,17 @@ def totem(browser):
     bp = picker(page)
     bp.locator('[data-act="taphold"]').click()
     bp.locator('[data-act="hrm"]').click()
-    picked = page.locator('#panels .panel.active .kb-svg .keycap.picked').count()
+    picked = page.locator('#board-slot .kb-svg .keycap.picked').count()
     check(picked == 8, f'totem: home row pre-picked ({picked})')
     bp.locator('[data-order="GACS"]').click()
     shot(page, 'totem-homerow-pick')
     check(not bp.locator('[data-act="hrm-apply"]').is_disabled(), 'totem: preset Apply enabled')
     bp.locator('[data-act="hrm-apply"]').click()
     page.wait_for_timeout(400)
-    ht = page.locator('#panels .panel.active .kb-svg g.key.ht .cap-hold').evaluate_all('xs => xs.map(x => x.textContent)')
+    ht = page.locator('#board-slot .kb-svg g.key.ht .cap-hold').evaluate_all('xs => xs.map(x => x.textContent)')
     check(sum(1 for t in ht if any(m in t for m in '⌘⌥⌃⇧')) >= 8 and not any('live' in t for t in ht), f'totem: home-row caps {ht}')
     shot(page, 'totem-homerow')
-    page.evaluate("async () => (await import('/board.js?v=1')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
     page.wait_for_timeout(300)
     check(page.evaluate(KEY_INDEX, 'F') >= 0, 'totem: one undo reverts the preset')
     check(not errors, f'totem: no page errors {errors}')
@@ -143,7 +143,7 @@ def svalboard(browser):
     check(b['v'] == 0x2209, f'svalboard: MT(MOD_LSFT, KC_F) = 0x2209, got {b}')
     assert_labelled(page, i, 'F', 'svalboard')
     shot(page, 'svalboard-cap')
-    page.evaluate("async () => (await import('/board.js?v=1')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
     page.wait_for_timeout(200)
     check(page.evaluate(BINDING, pos)['v'] == 0x09, 'svalboard: undo restores KC_F')
     # fallback: a shifted tap can't be MT() on QMK
@@ -157,7 +157,7 @@ def svalboard(browser):
     check('can only tap a plain key' in res and bp.locator('[data-act="th-apply"]').is_disabled(), f'svalboard: fallback message "{res}"')
     check(bp.locator('[data-act="th-fallback"]').count() == 1, 'svalboard: offers a tap dance instead')
     shot(page, 'svalboard-fallback')
-    cell = page.evaluate("""async () => { const bp = await import('/binding-picker.js?v=1');
+    cell = page.evaluate("""async () => { const bp = await import('/binding-picker.js?v=60');
       return [bp.renderBindingCell(0x2209, 'qmk.comboOutput').textContent, bp.renderBindingCell(0x09, 'qmk').textContent,
               bp.renderBindingCell(0x2209, 'qmk').querySelector('.bp-cell-hold') != null]; }""")
     check(cell == ['hold ⇧tap F', 'F', True], f'renderBindingCell labels hold/tap: {cell}')

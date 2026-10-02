@@ -11,9 +11,9 @@ globalThis.document = { documentElement: { style: {
     setProperty: (k, v) => rootVars.set(k, v), removeProperty: (k) => rootVars.delete(k) } } };
 
 const { THEMES, DEFAULT_THEME, applyTheme, currentTheme, applyTextScale, currentTextScale,
-        applyBoardZoom, currentBoardZoom, TEXT_SCALE, BOARD_ZOOM } = await import('../themes.js');
-const { bindCaptionBar, setCaption, setCaptionGroup, currentCaption, CAPTION_DEFAULTS } = await import('../caption.js');
-const { TAB_TABLE, TAB_GROUPS, groupOf } = await import('../tab-registry.js');
+        applyBoardZoom, currentBoardZoom, TEXT_SCALE, BOARD_ZOOM } = await import('../themes.js?v=60');
+const { bindCaptionBar, setCaption, setCaptionGroup, currentCaption, CAPTION_DEFAULTS } = await import('../caption.js?v=60');
+const { TAB_TABLE, TAB_GROUPS, groupOf } = await import('../tab-registry.js?v=60');
 let checks = 0;
 const ok = (c, m) => { assert.ok(c, m); checks++; };
 const eq = (a, b, m) => { assert.equal(a, b, m); checks++; };

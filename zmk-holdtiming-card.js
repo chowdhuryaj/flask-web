@@ -7,13 +7,13 @@
 // holdTimingCard(app) resolves to the card, or null when the board has no
 // flask_holdtap (proto < 17, or 0x2A answers 0xFF).
 
-import { el, card, toast, reloadBar } from './ui.js?v=49';
-import { attachHoldtap, HOLDTAP, describeBinding } from './behavior-catalog.js?v=1';
-import { saveState } from './save-state.js?v=1';
-import { board } from './board.js?v=1';
+import { el, card, toast, reloadBar } from './ui.js?v=60';
+import { attachHoldtap, HOLDTAP, describeBinding } from './behavior-catalog.js?v=60';
+import { saveState } from './save-state.js?v=60';
+import { board } from './board.js?v=60';
 import {
     HOLDTAP_FLAVORS, HOLDTAP_TERM, decodeHoldtapSlot, encodeHoldtapSlot, clampTerm,
-} from './zmk-holdtap-codec.js?v=1';
+} from './zmk-holdtap-codec.js?v=60';
 
 const FLAVOR_LABELS = ['Hold-preferred', 'Balanced', 'Tap-preferred', 'Tap unless interrupted'];
 const ch = HOLDTAP.channel;

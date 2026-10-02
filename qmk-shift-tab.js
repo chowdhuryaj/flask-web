@@ -3,10 +3,10 @@
 // the same way. Channel CH.customShift: an enable flag plus CSK_SLOTS
 // (base, shifted) pairs.
 
-import { el, card, toast, toggleRow, reloadBar } from './ui.js?v=49';
-import { CH, V, slot, CSK_SLOTS } from './flaskproto.js?v=49';
-import { openPicker } from './binding-picker.js?v=1';
-import { bindingCell } from './tiles.js?v=1';
+import { el, card, toast, toggleRow, reloadBar } from './ui.js?v=60';
+import { CH, V, slot, CSK_SLOTS } from './flaskproto.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { bindingCell } from './tiles.js?v=60';
 
 // Spec 3.8 presets: base → what Shift+base types.
 const PRESETS = [

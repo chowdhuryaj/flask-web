@@ -11,16 +11,16 @@
 //                gesture codecs call param1 `param`.
 //   'nape'       number, a Nape u16 keycode
 
-import { el } from './ui.js?v=49';
-import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=49';
-import { captureOneKey } from './zmk-capture.js?v=49';
-import { saveState } from './save-state.js?v=1';
-import { board } from './board.js?v=1';
+import { el } from './ui.js?v=60';
+import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=60';
+import { captureOneKey } from './zmk-capture.js?v=60';
+import { saveState } from './save-state.js?v=60';
+import { board } from './board.js?v=60';
 import {
     CATALOG_GROUPS, catalogFor, decode, encode, capParts, describeBinding, keySections, modsText,
     resolveTiming, timingBackendNow, attachHoldtap, HOLDTAP, TIMING_PARAM, adapterOf,
     composeTapHold, tapHoldSpecOf, holdTapParts, homeRowPlan,
-} from './behavior-catalog.js?v=1';
+} from './behavior-catalog.js?v=60';
 
 /**
  * Every surface a picker can serve (spec §4.7). `hide` lists catalog group

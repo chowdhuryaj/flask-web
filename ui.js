@@ -1,7 +1,7 @@
 // Tiny DOM factories + shared widgets. Pattern lifted from AlooMapper
 // (hid-remapper config-tool-vial vial.js) — no framework, direct DOM.
 
-import { saveState } from './save-state.js?v=1';
+import { saveState } from './save-state.js?v=60';
 
 export function el(tag, attrs, ...kids) {
     const e = document.createElement(tag);

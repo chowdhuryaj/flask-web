@@ -10,12 +10,12 @@
 // labelled by index until named at the bench, because guessing it once already
 // produced a wrong map.
 
-import { el, toast } from './ui.js?v=49';
-import { board } from './board.js?v=1';
-import { openPicker } from './binding-picker.js?v=1';
-import { shell } from './app-shell.js?v=2';
-import { KC, napeKeyLabel, setScrollMode } from './nape-proto.js?v=49';
-import { napeProfile, saveKeyName, napeColLabel } from './nape.js?v=49';
+import { el, toast } from './ui.js?v=60';
+import { board } from './board.js?v=60';
+import { openPicker } from './binding-picker.js?v=60';
+import { shell } from './app-shell.js?v=60';
+import { KC, napeKeyLabel, setScrollMode } from './nape-proto.js?v=60';
+import { napeProfile, saveKeyName, napeColLabel } from './nape.js?v=60';
 
 let activeAbort = null;   // board listeners of the superseded instance
 
