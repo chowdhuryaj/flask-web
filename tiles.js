@@ -5,15 +5,26 @@
 import { el, toast, modal } from './ui.js?v=60';
 import { kcCell } from './picker.js?v=60';
 import { capLabel } from './keycodes.js?v=60';
+import { renderBindingCell } from './binding-picker.js?v=60';
+import { holdTapParts } from './behavior-catalog.js?v=60';
 import { board } from './board.js?v=60';
 
 // THE one place WP4b tabs turn a QMK keycode into something to show: tiles,
-// macro steps, tap dance rows, leader outputs, chord boxes. Swap these two
-// for wp3b's tap/hold label helper at integration; nothing else changes.
-/** Short text for a keycode ('' when unset). */
-export const bindingText = (kc) => (kc ? capLabel(kc) : '');
-/** Clickable cell showing a keycode. */
-export const bindingCell = (kc, onClick, title) => kcCell(kc, onClick, title);
+// macro steps, tap dance rows, leader outputs, chord boxes. Dual-role
+// keycodes (MT/LT) use wp3b's labelled hold/tap parts.
+const htOf = (kc) => (kc ? holdTapParts(kc, 'qmk') : null);
+/** Short text for a keycode ('' when unset): "F · hold ⇧" for a mod-tap. */
+export const bindingText = (kc) => {
+    const ht = htOf(kc);
+    return ht ? `${ht.tap} · hold ${ht.hold}` : kc ? capLabel(kc) : '';
+};
+/** Clickable cell showing a keycode; a mod-tap / layer-tap shows the
+ * renderBindingCell HOLD and TAP parts. */
+export const bindingCell = (kc, onClick, title) => {
+    const b = kcCell(kc, onClick, title);
+    if (htOf(kc)) b.replaceChildren(renderBindingCell(kc, 'qmk'));
+    return b;
+};
 
 /** Announce a live write so the nearest card's reload bar registers its
  * channel with the status-bar Save (see ui.js reloadBar). */

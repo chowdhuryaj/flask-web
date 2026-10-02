@@ -1,7 +1,7 @@
 // Shared bits of the ZMK Behaviour tabs (WP4a): the picker call, typed-value
 // plumbing, the click-blur guard, and app.slotSummary for WP3's slot chips.
 
-import { openPicker, valueLabel } from './binding-picker.js?v=60';
+import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v=60';
 import { usageLabel } from './zmk-keycodes.js?v=60';
 
 /** After ANY button click inside `root`, drop focus from it. A key-generated
@@ -20,13 +20,24 @@ export function typedOf(o) {
         behaviorId: o.behaviorId ?? 0, param2: (o.param2 ?? 0) >>> 0 };
 }
 
-/** Row-button text for a typed output ('' when none). The ONE place the
- * Behaviour tabs turn a binding into words: swap this for wp3b's helper. */
+/** One-line text for a typed output ('' when none): titles, chips, labels. */
 export function outText(o, surface) {
     const v = typedOf(o);
     if (!v) return '';
     try { return valueLabel(v, surface); }
     catch { return o.action === 1 ? usageLabel(v.param1) : `#${v.behaviorId}`; }
+}
+
+/** A typed output as wp3b's binding cell (hold-tap: labelled HOLD and TAP
+ * parts), or null when none. The ONE place Behaviour tab cells draw a
+ * binding. `text` overrides the words of a non-hold-tap cell (combos name
+ * compiled devicetree macros). */
+export function outCell(o, surface, text) {
+    const v = typedOf(o);
+    if (!v) return null;
+    const cell = renderBindingCell(v, surface);
+    if (text && !cell.classList.contains('ht')) cell.textContent = text;
+    return cell;
 }
 
 /** Open the shared sheet picker. onPick gets a normalised typed value

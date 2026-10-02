@@ -15,7 +15,7 @@ import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel, reloadBa
 import { CH, V } from './flaskproto.js?v=60';
 import { renderKeyboardSVG } from './keymap-tab.js?v=60';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=60';
-import { blurClicks, pickOutput, outText, installSlotSummary } from './zmk-behaviour-common.js?v=60';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=60';
 import { OUTPUT_ACTION, GESTURE_DIR_LABELS, encodeGestureSlot, decodeGestureSlot }
     from './zmk-output-codec.js?v=60';
 
@@ -121,7 +121,7 @@ export class ZmkGesturesTab {
                 onclick: () => this.pickDir(dir),
             },
                 el('div', { class: 'note faint', text: GESTURE_DIR_LABELS[dir] }),
-                el('div', { text: outText(o, 'zmk.typedOutput') || '—' }));
+                el('div', {}, outCell(o, 'zmk.typedOutput') ?? '—'));
         }
         cells[4] = el('div', {
             class: 'note faint',

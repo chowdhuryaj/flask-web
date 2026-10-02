@@ -71,6 +71,12 @@ def main():
         # -- the seeded table: R+F (3+13) is slot 7, Enter
         slot7 = page.locator('[data-combo="7"]')
         check('3 + 13' in slot7.inner_text(), 'slot 7 reads 3 + 13')
+        # -- hold-tap outputs (combos z / x: Layer-Tap ... combo) draw labelled HOLD and TAP parts
+        ht = page.locator('#panels .panel.active [data-combo] [data-act="output"] .bp-cell.ht')
+        check(ht.count() >= 2, f'hold-tap combo outputs use renderBindingCell, got {ht.count()}')
+        if ht.count():
+            t = ht.first.inner_text().lower()
+            check('hold' in t and 'tap' in t, f'hold-tap cell names both parts: {t!r}')
 
         # -- duplicate refusal: new combo, pick 3 then 13 on the board
         page.locator('[data-act="new"]').click()

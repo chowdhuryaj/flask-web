@@ -19,7 +19,7 @@ import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from '.
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=60';
 import { CH, V } from './flaskproto.js?v=60';
 import { usageCap } from './zmk-keycodes.js?v=60';   // macroSummary letters only
-import { blurClicks, pickOutput, outText, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=60';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=60';
 import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=60';
 import {
     MACRO_ACTION, MACRO_ACTION_LABELS,
@@ -268,7 +268,7 @@ export class ZmkMacrosTab {
                         this.writeStep(m, s).then(() => this.render());
                     },
                 }),
-            }, step.param ? outText({ action: 1, param1: step.param }, 'zmk.macroKey') : 'key…');
+            }, step.param ? outCell({ action: 1, param1: step.param }, 'zmk.macroKey') : 'key…');
         } else {
             const val = el('span', { class: 'val', text: `${step.param} ms` });
             const slider = el('input', {

@@ -12,7 +12,7 @@
 import { el, card, toggleRow, modal, toast, reloadBar } from './ui.js?v=60';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=60';
 import { CH, V } from './flaskproto.js?v=60';
-import { blurClicks, pickOutput, outText, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=60';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=60';
 import {
     TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg,
     tdDanceLength, tdSlotIsEmpty,
@@ -188,9 +188,8 @@ export class ZmkTapDanceTab {
             el('button', {
                 class: 'btn small' + (t > len ? ' faint' : ''), 'data-tap': t,
                 title: t > len ? 'fill the earlier taps first; a dance is a contiguous run' : 'pick this tap count\'s output',
-                text: o.action !== TD_ACTION.none ? outText(o, 'zmk.tapDanceStep') : 'Choose output…',
                 onclick: () => this.pickStep(i, t),
-            })));
+            }, o.action !== TD_ACTION.none ? outCell(o, 'zmk.tapDanceStep') : 'Choose output…')));
 
         const termInput = el('input', {
             type: 'number', min: 0, max: 1000, value: s.termMs || '',

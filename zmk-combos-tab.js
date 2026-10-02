@@ -24,7 +24,7 @@ import {
     comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
 } from './zmk-combos-codec.js?v=60';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=60';
-import { blurClicks, pickOutput, outText, installSlotSummary } from './zmk-behaviour-common.js?v=60';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=60';
 import { holdTimingCard } from './zmk-holdtiming-card.js?v=60';
 
 const posText = (ps) => ps.join(' + ');
@@ -359,9 +359,8 @@ export class ZmkCombosTab {
                     : this.positionFallback(i),
                 el('button', {
                     class: 'btn small', 'data-act': 'output',
-                    text: out ? `Output: ${out}` : 'Choose output…',
                     onclick: () => this.pickOutputFor(i),
-                })),
+                }, out ? ['Output: ', outCell(s, 'zmk.comboOutput', out)] : 'Choose output…')),
             warn ? el('div', { class: 'note', role: 'alert', 'data-warn': '', text: warn }) : null,
             this.timed ? this.timingStrip(i) : null);
     }

@@ -12,7 +12,7 @@ import { board } from './board.js?v=60';
 import { kpParam } from './zmk-keycodes.js?v=60';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty }
     from './zmk-output-codec.js?v=60';
-import { blurClicks, pickOutput, outText } from './zmk-behaviour-common.js?v=60';
+import { blurClicks, pickOutput, outText, outCell } from './zmk-behaviour-common.js?v=60';
 
 export class ZmkLeaderTab {
     constructor(app) {
@@ -218,9 +218,9 @@ export class ZmkLeaderTab {
                     onclick: () => this.togglePick(i),
                 }) : this.positionFallback(i),
                 el('button', {
-                    class: 'btn small', text: out ? `Output: ${out}` : 'Choose output…',
+                    class: 'btn small', 'data-act': 'output',
                     onclick: () => this.pickOutputFor(i),
-                })));
+                }, out ? ['Output: ', outCell(s, 'zmk.typedOutput')] : 'Choose output…')));
     }
 
     /** Numeric fallback when no board is bound. */
