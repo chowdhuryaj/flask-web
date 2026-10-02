@@ -15,7 +15,7 @@ import { CH, V, slot, GESTURE_SETS, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS,
          WC_BUTTONS, NLKB, SL_SEQS, SL_OUT_POS, SNIPPET_COUNT, SNIPPET_KEYS,
          CYCLOTAB_KEYS, TELEPORT_TARGETS, CC } from './flaskproto.js?v=60';
 import { QMK_SETTINGS, MacroCodec, TapDance, Combo, KeyOverride, AltRepeat } from './vialproto.js?v=60';
-import { encoderCount } from './profiles.js?v=60';
+import { encoderCount, familyLabel } from './profiles.js?v=60';
 
 // ---------- tuning dump spec (mirrors AppModel.tuningDumpSpec) ----------
 // Replayed in THIS order on restore: DPI index ids come before raw-CPI ids
@@ -135,6 +135,9 @@ export async function exportVil(app) {
         layout_options: -1,
         vial_protocol: app.vialVersion ?? 6,
         via_protocol: app.viaVersion ?? 9,
+        // Flask extension: which board family wrote this, so an Adept file
+        // is refused on a Svalboard (vial-gui ignores unknown keys).
+        flask_family: app.family ?? 'generic',
     };
 
     // QMK settings (supported ∩ catalog).
@@ -285,6 +288,13 @@ export async function importVil(app, text) {
     const json = JSON.parse(text);
     if (!Array.isArray(json.layout)) throw new Error('not a .vil file (no layout)');
     const stats = { applied: 0, skipped: 0, notes: [] };
+    const fam = app.family ?? 'generic';
+    if (typeof json.flask_family === 'string' && json.flask_family !== fam) {
+        throw new Error(`this file is for a ${familyLabel(json.flask_family) ?? json.flask_family}, not a ${familyLabel(fam) ?? fam}; nothing was changed`);
+    }
+    if (json.flask_family == null) {
+        stats.notes.push('file has no keyboard family (older export), so check it came from this board');
+    }
 
     // Keymap — only slots that parse; shape-clamped to the device.
     const rows = app.profile.matrixRows, cols = app.profile.matrixCols;

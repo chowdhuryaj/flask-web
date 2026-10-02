@@ -213,7 +213,16 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     eq(again.layout, old.layout, 'layout identical');
     eq(again.encoder_layout, old.encoder_layout, 'encoders identical');
     eq(again.flask_tunings, old.flask_tunings, 'flask_tunings identical');
-    eq(Object.keys(again).sort(), Object.keys(old).sort(), 'same top-level keys');
+    eq(Object.keys(again).filter((k) => k !== 'flask_family').sort(), Object.keys(old).sort(), 'same top-level keys');
+    // F6: old file (no family) loads with a warning note; new exports carry
+    // the family and a mismatched one is refused before any write.
+    ok(stats.notes.some((n) => /no keyboard family/.test(n)), 'old file warns');
+    eq(again.flask_family, 'adept', 'export writes the family');
+    eq((await importVil(app, JSON.stringify(again))).notes.filter((n) => /family/.test(n)), [], 'matching family: no warning');
+    let writes = 0;
+    const sval = { ...app, family: 'svalboard', vial: { setKeycode: async () => { writes++; } } };
+    await assert.rejects(importVil(sval, JSON.stringify(again)), /for a Ploopy Adept, not a Svalboard/);
+    eq(writes, 0, 'mismatched family: nothing written');
 }
 
 // ---- offline queue count feeds the status bar ----
