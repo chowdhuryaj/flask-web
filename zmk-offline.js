@@ -24,6 +24,7 @@ import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWAR
 import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=61';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=61';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty } from './offline.js?v=61';
+import { saveState } from './save-state.js?v=61';
 import { LOCK_UNLOCKED } from './zmk-studio.js?v=61';
 import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=61';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
@@ -680,14 +681,34 @@ export function offlineQueued(ws) {
     return pendingCount(ws) + zmkPendingCount(ws);
 }
 
-/** The status bar's "Discard queued": drop both lines' journals. Returns how
- * many entries were dropped (0 = nothing was queued, nothing touched). */
-export function discardOfflineQueued(ws) {
+function dropJournals(ws) {
     const n = offlineQueued(ws);
     if (!n) return 0;
     clearDirty(ws);
     zmkClearDirty(ws);
     return n;
+}
+
+/** Offline half of saveState.discardAll(): drop the queued journals AND every
+ * unsaved mark still registered. Why both: "Discard queued" used to touch only
+ * the journals, while the status bar's "Save N unsaved" counter lives in
+ * saveState, so it never moved. saveState.discard() only reverts sources that
+ * brought a discard fn (the Studio keymap); combo/tunable marks have no device
+ * to revert offline, so they are dropped here. Returns entries dropped. */
+export function discardOfflineAll(ws, state = saveState) {
+    let n = dropJournals(ws);
+    for (const { source } of state.dirty()) { state.clean(source); n++; }
+    return n;
+}
+
+/** The status bar's current "Discard queued" button (main.js). Same effect as
+ * window.flaskDiscardAll(); kept so the old handler is fixed without edits.
+ * Returns how many entries were dropped (0 = nothing queued or unsaved). */
+export function discardOfflineQueued(ws, state = saveState) {
+    const n = dropJournals(ws);
+    const unsaved = state.dirty().length;
+    if (unsaved) state.discardAll();   // async: keymap revert, then leftovers; counter follows via 'change'
+    return n + unsaved;
 }
 
 // ---------------------------------------------------------------------------
@@ -1222,6 +1243,9 @@ export function attachZmkOffline(app, ws) {
     app.keymap = null;
     app.unlocked = false;
     app.readKeyState = async () => new Set();
+    // The one Discard (window.flaskDiscardAll) also clears this workspace's queue.
+    app._offlineDiscardHook?.();
+    app._offlineDiscardHook = saveState.addDiscardHook(() => (app.offlineWs === ws ? discardOfflineAll(ws) : 0));
 }
 
 /**

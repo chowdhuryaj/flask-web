@@ -14,6 +14,11 @@
 //   saveState.discard() → {discarded: source[], failed: {source, error} | null}
 //       runs every discard fn (same order); sources without one are left alone.
 //   saveState.canDiscard()                       any dirty source can be discarded
+//   saveState.discardAll() → {discarded, failed, queued}   THE one Discard (also
+//       window.flaskDiscardAll()): discard() plus every registered hook
+//       (offline: drops the queued journal and any unsaved mark that has no
+//       device behind it). Safe to call when nothing is dirty.
+//   saveState.addDiscardHook(fn) → remove fn     fn() → number of entries dropped
 //   saveState.summary() → 'Save 3 unsaved' | ''  the status bar text
 //   saveState.reset()                            drop everything (disconnect)
 //   saveState.addEventListener('change', …)      fires on every change
@@ -31,6 +36,7 @@ const order = (a, b) => {
 
 class SaveState extends EventTarget {
     #sources = new Map();   // source → {label, save, discard}
+    #hooks = new Set();     // discardAll extras (offline queue)
 
     markDirty(source, label, saveFn, opts = {}) {
         if (typeof saveFn !== 'function') throw new Error(`markDirty(${source}): saveFn required`);
@@ -65,6 +71,22 @@ class SaveState extends EventTarget {
             discarded.push(source);
         }
         return { discarded, failed: null };
+    }
+
+    addDiscardHook(fn) {
+        this.#hooks.add(fn);
+        return () => this.#hooks.delete(fn);
+    }
+
+    async discardAll() {
+        const r = await this.discard();
+        r.queued = 0;
+        if (r.failed) return r;
+        for (const h of [...this.#hooks]) {
+            try { r.queued += (await h()) || 0; }
+            catch (error) { r.failed = { source: 'hook', error }; break; }
+        }
+        return r;
     }
 
     clean(source) {
@@ -109,4 +131,5 @@ function guardUnload(on) {
 }
 
 export const saveState = new SaveState();
+if (typeof window !== 'undefined') window.flaskDiscardAll = () => saveState.discardAll();
 export { SaveState };   // tests make their own instance
