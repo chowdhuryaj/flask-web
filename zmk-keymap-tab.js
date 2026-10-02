@@ -13,7 +13,7 @@
 import { el, toast, card, SAVE_STATE } from './ui.js?v=49';
 import { board } from './board.js?v=1';
 import { openPicker } from './binding-picker.js?v=1';
-import { shell } from './app-shell.js?v=1';
+import { shell } from './app-shell.js?v=2';
 import { saveState } from './save-state.js?v=1';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=49';
 import { zmkApplyPendingKeymap } from './zmk-offline.js?v=50';
