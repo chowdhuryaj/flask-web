@@ -6,7 +6,9 @@
 //   board.selectedKey() → {layer, pos} | null   (QMK: pos = {row, col} or
 //                         {encoder, dir:'cw'|'ccw'}; ZMK/Nape: pos = index)
 //   board.assign(binding, {advance = true}) → Promise<boolean>
-//   board.pickPositions({initial = [], max, label, onChange}) → stop()
+//   board.pickPositions({initial = [], max, label, onChange, allowRepeat}) → stop()
+//                         allowRepeat (leader): a click always appends, so a
+//                         sequence may hit the same key twice; the caller removes
 //   board.addEventListener('select', …)   detail = selectedKey()
 // Added by WP2:
 //   board.layer / board.setLayer(i)       current layer (events: 'layer')
@@ -448,8 +450,10 @@ class Board extends EventTarget {
     }
 
     /** Position-pick mode for combos and leader sequences (§3.4). Click order
-     * is kept; `initial` comes first. One mode at a time. */
-    pickPositions({ initial = [], max, label, onChange } = {}) {
+     * is kept; `initial` comes first. One mode at a time. A click on a picked
+     * key removes it, unless `allowRepeat` (leader sequences: "a, a"), where
+     * every click appends and the caller owns removal. */
+    pickPositions({ initial = [], max, label, onChange, allowRepeat = false } = {}) {
         this.#pick?.stop(true);
         const key = (p) => JSON.stringify(p);
         const state = { positions: [...initial], max, label, onChange, savedSel: this.#sel };
@@ -463,7 +467,7 @@ class Board extends EventTarget {
         };
         state.stop = stop;
         state.toggle = (pos) => {
-            const i = state.positions.findIndex((p) => key(p) === key(pos));
+            const i = allowRepeat ? -1 : state.positions.findIndex((p) => key(p) === key(pos));
             if (i >= 0) state.positions.splice(i, 1);
             else if (max != null && state.positions.length >= max) { toast(`At most ${max} positions`); return; }
             else state.positions.push(pos);

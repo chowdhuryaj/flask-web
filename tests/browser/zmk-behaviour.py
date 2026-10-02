@@ -153,6 +153,13 @@ def main():
         # -- other Totem tabs: pickers
         go(page, 'Behaviour', 'Leader')
         page.locator('[data-act], button', has_text='＋ New sequence').first.click()
+        # a sequence may repeat a key (a, a): the 2nd click appends, never toggles off
+        key(page, 3).click()
+        key(page, 3).click()
+        page.wait_for_timeout(300)
+        chips = page.locator('[data-seq]').last.locator('button', has_text='pos 3')
+        check(chips.count() == 2, f'leader pick mode allows a repeated key, got {chips.count()} chips')
+        check('2 picked' in page.locator('.bd-banner').inner_text() or '2 of' in page.locator('.bd-banner').inner_text(), 'banner counts the repeat')
         page.locator('.bd-banner button', has_text='Done').click()
         page.locator('[data-seq] button', has_text='Choose output').first.click()
         sheet = page.locator('.picker-sheet')

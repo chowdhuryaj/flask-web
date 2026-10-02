@@ -143,7 +143,7 @@ export class ZmkLeaderTab {
         if (!board.adapter) { this.render(); return; }   // numeric fallback on the row
         this.editing = i;
         this._stopPick = board.pickPositions({
-            initial: [...this.slots[i].positions], max: this.maxKeys,
+            initial: [...this.slots[i].positions], max: this.maxKeys, allowRepeat: true,
             label: `Click the keys of Sequence ${i} in order`,
             onChange: (ps) => { this.slots[i].positions = ps; this.writeSlot(i); },
         });
