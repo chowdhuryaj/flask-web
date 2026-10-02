@@ -11,23 +11,23 @@
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
-import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=61';
-import { board } from './board.js?v=61';
-import { createDock } from './keymap-dock.js?v=61';
-import { createInspector } from './keymap-inspector.js?v=61';
-import { encode } from './behavior-catalog.js?v=61';
-import { shell } from './app-shell.js?v=61';
-import { saveState } from './save-state.js?v=61';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=61';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=61';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=61';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=61';
-import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=61';
+import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=62';
+import { board } from './board.js?v=62';
+import { createDock } from './keymap-dock.js?v=62';
+import { createInspector } from './keymap-inspector.js?v=62';
+import { encode } from './behavior-catalog.js?v=62';
+import { shell } from './app-shell.js?v=62';
+import { saveState } from './save-state.js?v=62';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=62';
+import { zmkApplyPendingKeymap } from './zmk-offline.js?v=62';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=62';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=62';
+import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=62';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=61';
+} from './zmk-keycodes.js?v=62';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -261,7 +261,7 @@ export class ZmkKeymapTab {
      * back different (remapped elsewhere, settings_reset, fresh board) gets
      * a dialog, never a silent restore: Keep keyboard (default) adopts the
      * board as the new snapshot; Restore saved copy writes it LIVE (the
-     * status bar Save persists it, ⟲ undoes); Show differences lists them.
+     * top bar Save persists it, ⟲ undoes); Show differences lists them.
      * Nothing is auto-saved (WP7: the old silent restore + save overwrote
      * AJ's remaps). Closing the dialog decides nothing; it asks again next
      * connect. Skipped in the sim (the workspace has its own persistence). */
@@ -315,7 +315,7 @@ export class ZmkKeymapTab {
                 onclick: () => { list.hidden = !list.hidden; show.textContent = list.hidden ? 'Show differences' : 'Hide differences'; } });
             back = modal('Keymap differs', el('div', { 'data-restore-dialog': '' },
                 el('p', { 'data-restore-summary': '', text: keymapDiffSummary(d) + '.' }),
-                el('p', { class: 'faint', text: `Saved copy from ${when}. Keep keyboard makes the keyboard's keymap the saved copy. Restore writes the saved copy live; Save in the status bar keeps it.` }),
+                el('p', { class: 'faint', text: `Saved copy from ${when}. Keep keyboard makes the keyboard's keymap the saved copy. Restore writes the saved copy live; Save in the top bar keeps it.` }),
                 list), [keep, restore, show]);
             back.addEventListener('keydown', (e) => { if (e.key === 'Escape') done(null); });
             obs.observe(document.body, { childList: true });
@@ -334,7 +334,7 @@ export class ZmkKeymapTab {
             { kind: 'flask-zmk-keymap', version: 2, family: this._family(), layers: snap.layers }, { quiet: true });
         if (!res || res.stopped) { this._preRestore = null; return; }   // applier already toasted
         const skipNote = res.skipped ? `, ${res.skipped} unresolvable skipped` : '';
-        toast(`Saved copy restored live (${res.wrote} keys, ${res.renamed} names${skipNote}). Save in the status bar keeps it; ⟲ in the toolbar undoes.`);
+        toast(`Saved copy restored live (${res.wrote} keys, ${res.renamed} names${skipNote}). Save in the top bar keeps it; ⟲ in the toolbar undoes.`);
         this.render();
     }
 

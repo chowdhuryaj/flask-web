@@ -15,16 +15,16 @@
 // Playback stops at the first empty step, so the editor keeps live steps
 // compacted: deleting a row shifts the tail up and rewrites the suffix.
 
-import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=61';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=61';
-import { CH, V } from './flaskproto.js?v=61';
-import { usageCap } from './zmk-keycodes.js?v=61';   // macroSummary letters only
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=61';
-import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=61';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=62';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=62';
+import { CH, V } from './flaskproto.js?v=62';
+import { usageCap } from './zmk-keycodes.js?v=62';   // macroSummary letters only
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=62';
+import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=62';
 import {
     MACRO_ACTION, MACRO_ACTION_LABELS,
     decodeMacroStep, encodeMacroStep, macroIsEmpty, macroLiveSteps,
-} from './zmk-macros-codec.js?v=61';
+} from './zmk-macros-codec.js?v=62';
 
 /** Short text for the picker's slot chips: "types 'hello'" or "3 steps". */
 export function macroSummary(steps) {
@@ -112,6 +112,18 @@ export class ZmkMacrosTab {
         if (i < 0) { toast(`All ${this.slotCount} macro slots are in use`, true); return; }
         this.drafts.add(i);
         this.render();
+        this.reveal(i);
+    }
+
+    /** Scroll the new card into view and focus it (same as combos' reveal). */
+    reveal(i) {
+        const card = this.root.querySelector(`[data-macro="${i}"]`);
+        if (!card) return;
+        card.setAttribute('tabindex', '-1');
+        card.classList.add('x-new');
+        card.scrollIntoView({ block: 'start' });
+        card.focus({ preventScroll: true });
+        setTimeout(() => card.classList.remove('x-new'), 1600);
     }
 
     async clearSlot(m) {
@@ -298,7 +310,7 @@ export class ZmkMacrosTab {
         const live = macroLiveSteps(this.steps[m]);
         const fam = this.app.profile?.family ?? 'imprint';
         const customName = zmkSlotName(fam, 'macros', m);
-        return el('div', { class: 'card', style: live.length ? '' : 'opacity:0.75' },
+        return el('div', { class: 'card', 'data-macro': m, style: live.length ? '' : 'opacity:0.75' },
             el('div', { class: 'row' },
                 el('span', { class: 'lbl' }, renameLabel({
                     text: customName || `Macro ${m}`,

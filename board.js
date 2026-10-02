@@ -18,12 +18,12 @@
 // Also exports renderKeyboardSVG, baseUnit, layoutOf, splitCap for the HUD,
 // trainer, RGB and tests.
 //
-// Import this file ONLY as './board.js?v=61': x.js and x.js?v=61 are two
+// Import this file ONLY as './board.js?v=62': x.js and x.js?v=62 are two
 // module instances and the singleton would split.
 
-import { el, svgEl, toast as uiToast } from './ui.js?v=61';
-import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=61';
-import { legendOf } from './legend.js?v=61';
+import { el, svgEl, toast as uiToast } from './ui.js?v=62';
+import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=62';
+import { legendOf } from './legend.js?v=62';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 /** dataTransfer type a palette tile drags: JSON of an adapter binding. */
@@ -160,6 +160,7 @@ export function htPartsOf(value, profile, opts = {}) {
 // sub-label under it, colour by kind (legend.js). Sizes follow the key, not a
 // fixed px, so a rotated thumb key reads like its neighbours; the SVG is then
 // scaled to the pane (--board-fit) so sub-labels are 0.27 of a key.
+const SUB_MIN_PX = 10;
 function drawLegend(g, f, lg, { mid, innerW, k }) {
     const u = Math.min(f.w, f.h);
     const mainFs = u * 0.38 * k, subFs = u * 0.27 * k;
@@ -174,7 +175,9 @@ function drawLegend(g, f, lg, { mid, innerW, k }) {
     if (sub) {
         g.append(svgEl('text', {
             class: 'cap-sub s-' + (lg.subKind || 'dim'), x: mid, y: f.y + f.h * 0.82, 'text-anchor': 'middle',
-            style: `font-size:${sub.fs}px`, text: sub.lines[0], 'data-hold': lg.sub,
+            // never under SUB_MIN_PX on screen: the SVG is scaled by fit × zoom (CSS vars)
+            style: `font-size:max(${sub.fs}px, calc(${SUB_MIN_PX}px / (var(--board-fit, 1) * var(${BOARD_ZOOM_VAR}, 1))))`,
+            text: sub.lines[0], 'data-hold': lg.sub,
         }));
     }
 }

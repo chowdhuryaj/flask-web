@@ -11,9 +11,9 @@
 // Until WP1 binds a bar, setCaption only records the text (no DOM effect).
 
 export const CAPTION_DEFAULTS = {
-    keys: 'Select a key on the keyboard, then click a key here to assign it — the selection auto-advances.',
-    behaviour: 'Changes apply live · Save in the status bar keeps them.',
-    device: 'Changes apply live · Save in the status bar keeps them.',
+    keys: 'Select a key, then click a palette key to assign it. Tap-hold: the inspector\'s Tap and Hold boxes.',
+    behaviour: 'Changes apply live · Save in the top bar keeps them.',
+    device: 'Changes apply live · Save in the top bar keeps them.',
     trainer: '',
 };
 

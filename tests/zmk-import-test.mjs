@@ -12,7 +12,7 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
 
 // F3: importKeymap applies module state only after a clean keymap import.
 {
-    const { ZmkKeymapTab } = await import('../zmk-keymap-tab.js?v=61');
+    const { ZmkKeymapTab } = await import('../zmk-keymap-tab.js?v=62');
     const run = async (r) => {
         let paused = 0;
         const t = Object.create(ZmkKeymapTab.prototype);
@@ -29,8 +29,8 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
 // F4: combo import refuses duplicate key sets (file slots, and compiled
 // defaults on pre-v14 Totem), before writing any slot.
 {
-    const { applyFlaskState } = await import('../zmk-export.js?v=61');
-    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=61');
+    const { applyFlaskState } = await import('../zmk-export.js?v=62');
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=62');
     const run = async (slots, { timed = true, family = 'imprint' } = {}) => {
         const writes = [];
         const app = {

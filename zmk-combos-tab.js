@@ -2,7 +2,7 @@
 // Native frame (spec 3.4): "+ New combo" makes a draft row and puts the main
 // board in pick mode ("Pick keys for Combo N"); the output opens the shared
 // BindingPicker sheet; window / idle / layer stay as row fields. Edits are
-// LIVE; the status bar's Save persists (reloadBar -> saveState).
+// LIVE; the top bar's Save persists (reloadBar -> saveState).
 //
 // Since v14 the keymap's devicetree combos ARE runtime slots (compiled
 // defaults), so they all list and edit here. Two live combos on the same
@@ -11,20 +11,20 @@
 //
 // Also hosts the "Hold timing" card (flask_holdtap, proto 17).
 
-import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=61';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=61';
-import { CH, V } from './flaskproto.js?v=61';
-import { board, capPartsOf, htPartsOf } from './board.js?v=61';
-import { saveState } from './save-state.js?v=61';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=62';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=62';
+import { CH, V } from './flaskproto.js?v=62';
+import { board, capPartsOf, htPartsOf } from './board.js?v=62';
+import { saveState } from './save-state.js?v=62';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
     comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
-} from './zmk-combos-codec.js?v=61';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=61';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=61';
+} from './zmk-combos-codec.js?v=62';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=62';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=62';
 
 /** A key position's legend on the BASE layer ("Q", "Esc", a tap-hold's tap),
  * or the raw index when the board has no keymap bound yet. */

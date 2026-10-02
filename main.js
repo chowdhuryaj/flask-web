@@ -2,27 +2,27 @@
 // runs the post-connect load sequence (handshake, family confirm, offline
 // replay, tabs), drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=61';
-import { diag } from './diag.js?v=61';
-import { FlaskHID } from './webhid.js?v=61';
-import { renderPreflight } from './preflight.js?v=61';
-import { FlaskProto } from './flaskproto.js?v=61';
+import { el, toast, modal } from './ui.js?v=62';
+import { diag } from './diag.js?v=62';
+import { FlaskHID } from './webhid.js?v=62';
+import { renderPreflight } from './preflight.js?v=62';
+import { FlaskProto } from './flaskproto.js?v=62';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=61';
-import { CommandPalette } from './command-palette.js?v=61';
-import { HUD } from './hud.js?v=61';
+         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=62';
+import { CommandPalette } from './command-palette.js?v=62';
+import { HUD } from './hud.js?v=62';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued } from './zmk-offline.js?v=61';
+         zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued } from './zmk-offline.js?v=62';
 import { loadWorkspace, saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline,
-         workspaceKey } from './offline.js?v=61';
-import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=61';
-import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=61';
-import { shell } from './app-shell.js?v=61';
-import { installCaptions, setCaptionGroup } from './caption.js?v=61';
-import { saveState } from './save-state.js?v=61';
-import { board } from './board.js?v=61';
-import { attachHoldtap } from './behavior-catalog.js?v=61';
-import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=61';
+         workspaceKey } from './offline.js?v=62';
+import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=62';
+import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=62';
+import { shell } from './app-shell.js?v=62';
+import { installCaptions, setCaptionGroup } from './caption.js?v=62';
+import { saveState } from './save-state.js?v=62';
+import { board } from './board.js?v=62';
+import { attachHoldtap } from './behavior-catalog.js?v=62';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=62';
 
 function downloadText(filename, text) {
     const a = document.createElement('a');

@@ -1,8 +1,8 @@
 // WP3 surfaces (§4.7): what each picker surface shows, per device.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SURFACES, surfaceEntries } from '../binding-picker.js?v=61';
-import { setZmkContext } from '../zmk-keycodes.js?v=61';
+import { SURFACES, surfaceEntries } from '../binding-picker.js?v=62';
+import { setZmkContext } from '../zmk-keycodes.js?v=62';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };

@@ -1,6 +1,6 @@
 // Tiny DOM factories + shared widgets — no framework, direct DOM.
 
-import { saveState } from './save-state.js?v=61';
+import { saveState } from './save-state.js?v=62';
 
 export function el(tag, attrs, ...kids) {
     const e = document.createElement(tag);
@@ -211,7 +211,7 @@ export function saveBar(onSave, note) {
 
 // A live write (sliderRow/toggleRow/selectRow) bubbles 'flask-edit'. The
 // nearest card's reload bar turns that into a saveState registration, so the
-// ONE Save in the status bar knows about it. Rows need no channel knowledge.
+// ONE Save in the top bar knows about it. Rows need no channel knowledge.
 function announceEdit(node) {
     node.dispatchEvent(new CustomEvent('flask-edit', { bubbles: true }));
 }
@@ -223,20 +223,20 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 }
 
 /** Per-channel "Reload from device" bar. Replaces saveBar: there is no Save
- * button here, the status bar owns Save (saveState). `channel` is the source id
+ * button here, the top bar owns Save (saveState). `channel` is the source id
  * (CH.x) so Save runs channels in ascending order; `save` is what the status
  * bar runs for it, typically `() => flask.save(CH.x)`.
  *
  *   reloadBar(channel, {reload, save, label, note})
  *     reload   async () => void   re-read this screen from the device
- *     save     async () => void   persist the channel (status bar calls it)
+ *     save     async () => void   persist the channel (top bar calls it)
  *     label    name shown in unsaved lists
  *
  * Omit `save` for a channel that has none: the bar then never registers and
  * only reloads. State wording is the native one. */
 export const RELOAD_STATE = {
     null: SAVE_STATE.null,
-    live: 'Unsaved — Save is in the status bar',
+    live: 'Unsaved — Save is in the top bar',
     saving: 'Saving…',
     saved: 'Saved ✓',
 };
@@ -261,7 +261,7 @@ export function reloadBar(channel, { reload, save, label, note } = {}) {
         });
         bar.setState('live');
     };
-    // The status bar's Save cleans the source; reflect it here.
+    // The top bar's Save cleans the source; reflect it here.
     const onChange = () => {
         if (!bar.isConnected) { saveState.removeEventListener('change', onChange); return; }
         if (mine && !saveState.dirty().some((d) => d.source === channel)) { mine = false; bar.setState('saved'); }

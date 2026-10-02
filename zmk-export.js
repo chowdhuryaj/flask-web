@@ -9,19 +9,19 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=61';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=61';
+import { CH, V } from './flaskproto.js?v=62';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=62';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=61';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=61';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=61';
+         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=62';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=62';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=62';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=61';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=61';
+    from './zmk-output-codec.js?v=62';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=62';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=61';
+    from './zmk-tapdance-codec.js?v=62';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -475,4 +475,4 @@ export async function saveFlaskChannels(app, channels) {
 }
 
 // window.flaskExportKeymap / window.flaskPrintLayers (side-effect import; see zmk-extras.js)
-import './zmk-extras.js?v=61';
+import './zmk-extras.js?v=62';

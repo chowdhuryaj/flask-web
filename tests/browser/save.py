@@ -14,8 +14,8 @@ import harness as h  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 RELOAD_BAR = """async () => {
-  const ui = await import('./ui.js?v=61');
-  const { saveState } = await import('./save-state.js?v=61');
+  const ui = await import('./ui.js?v=62');
+  const { saveState } = await import('./save-state.js?v=62');
   saveState.reset();
   let saves = 0, reloads = 0;
   const bar = ui.reloadBar(0x05, { label: 'DPI', save: async () => { saves++; }, reload: async () => { reloads++; } });
@@ -43,7 +43,7 @@ def main():
         page.wait_for_timeout(100)
         check(page.evaluate("window.__probe.saveState.dirty().map(d => d.source)") == [5], 'edit registers channel 5')
         check(page.evaluate("window.__probe.saveState.summary()") == 'Save 1 unsaved', 'summary text')
-        check(page.locator('.card:has-text("probe") .state').inner_text() == 'Unsaved — Save is in the status bar', 'live state wording')
+        check(page.locator('.card:has-text("probe") .state').inner_text() == 'Unsaved — Save is in the top bar', 'live state wording')
         # beforeunload guard is armed while dirty and gone after.
         check(page.evaluate("(() => { const e = new Event('beforeunload', {cancelable: true}); window.dispatchEvent(e); return e.defaultPrevented; })()"), 'unload guard armed')
         # Reload does not clear dirty (the edit is still unsaved on the device).
@@ -60,7 +60,7 @@ def main():
 
         # ZMK tap dance 0x28 registers like any channel (it has a save step).
         res = page.evaluate("""async () => {
-          const { saveState } = await import('./save-state.js?v=61');
+          const { saveState } = await import('./save-state.js?v=62');
           saveState.reset();
           let r = 'no throw'; try { saveState.markDirty(0x28, 'tap dance', async () => {}); } catch (e) { r = e.message; }
           saveState.reset();
@@ -70,7 +70,7 @@ def main():
 
         # Save layout / Load (main.js drives these two on the live keymap tab):
         # v2 JSON with family, round trip.
-        EXPORT = "import('./zmk-keymap-tab.js?v=61').then(m => m.zmkLiveKeymapTab().exportKeymap())"
+        EXPORT = "import('./zmk-keymap-tab.js?v=62').then(m => m.zmkLiveKeymapTab().exportKeymap())"
         with page.expect_download() as dl:
             page.evaluate(EXPORT)
         path = dl.value.path()
@@ -79,7 +79,7 @@ def main():
               f'export header {[data.get("kind"), data.get("version"), data.get("family")]}')
         check(len(data.get('layers', [])) > 0, 'export has layers')
         page.evaluate("""async (text) => {
-          const m = await import('./zmk-keymap-tab.js?v=61');
+          const m = await import('./zmk-keymap-tab.js?v=62');
           await m.zmkLiveKeymapTab().importKeymap(new File([text], 'k.json'));
         }""", json.dumps(data))
         with page.expect_download() as dl2:

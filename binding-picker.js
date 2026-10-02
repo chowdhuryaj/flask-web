@@ -9,16 +9,16 @@
 //                0 none, 1 usage, 2 macro slot, 3 behavior). Leader and
 //                gesture codecs call param1 `param`.
 
-import { el } from './ui.js?v=61';
-import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=61';
-import { captureOneKey } from './zmk-capture.js?v=61';
-import { saveState } from './save-state.js?v=61';
-import { board } from './board.js?v=61';
+import { el } from './ui.js?v=62';
+import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=62';
+import { captureOneKey } from './zmk-capture.js?v=62';
+import { saveState } from './save-state.js?v=62';
+import { board } from './board.js?v=62';
 import {
     CATALOG_GROUPS, catalogFor, decode, encode, capParts, describeBinding, keySections, modsText,
     resolveTiming, timingBackendNow, attachHoldtap, HOLDTAP, TIMING_PARAM, adapterOf,
     composeTapHold, tapHoldSpecOf, holdTapParts, homeRowPlan,
-} from './behavior-catalog.js?v=61';
+} from './behavior-catalog.js?v=62';
 
 /**
  * Every surface a picker can serve (spec §4.7). `hide` lists catalog group

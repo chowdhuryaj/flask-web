@@ -1,8 +1,8 @@
 // Shared bits of the ZMK Behaviour tabs (WP4a): the picker call, typed-value
 // plumbing, the click-blur guard, and app.slotSummary for WP3's slot chips.
 
-import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v=61';
-import { usageLabel } from './zmk-keycodes.js?v=61';
+import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v=62';
+import { usageLabel } from './zmk-keycodes.js?v=62';
 
 /** After ANY button click inside `root`, drop focus from it. A key-generated
  * Enter or Space (a combo firing Enter, say) would otherwise re-click the

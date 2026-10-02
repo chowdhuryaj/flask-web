@@ -1,19 +1,19 @@
 // "Hold timing" card (AJ-Q4): one row per flask_holdtap slot (channel 0x2A,
 // proto >= 17). Key slots link to their board key; virtual slots (combo and
 // autoshift hold-taps) are labelled from 0x52 SLOT_INFO. Each row: 50-1000 ms
-// slider, flavor, quick-tap, prior-idle, reset. Edits are live; the status
+// slider, flavor, quick-tap, prior-idle, reset. Edits are live; the top
 // bar's Save writes flash (saveState source 0x2A).
 //
 // holdTimingCard(app) resolves to the card, or null when the board has no
 // flask_holdtap (proto < 17, or 0x2A answers 0xFF).
 
-import { el, card, toast, reloadBar } from './ui.js?v=61';
-import { attachHoldtap, HOLDTAP, describeBinding } from './behavior-catalog.js?v=61';
-import { saveState } from './save-state.js?v=61';
-import { board } from './board.js?v=61';
+import { el, card, toast, reloadBar } from './ui.js?v=62';
+import { attachHoldtap, HOLDTAP, describeBinding } from './behavior-catalog.js?v=62';
+import { saveState } from './save-state.js?v=62';
+import { board } from './board.js?v=62';
 import {
     HOLDTAP_FLAVORS, HOLDTAP_TERM, decodeHoldtapSlot, encodeHoldtapSlot, clampTerm,
-} from './zmk-holdtap-codec.js?v=61';
+} from './zmk-holdtap-codec.js?v=62';
 
 const ch = HOLDTAP.channel;
 

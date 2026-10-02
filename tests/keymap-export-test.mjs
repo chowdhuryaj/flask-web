@@ -8,8 +8,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {}, key: () => null, length: 0 };
-const { TOTEM_DEFAULT: T } = await import('../zmk-totem-default.js?v=61');
-const { exportKeymapText, usageToDt } = await import('../zmk-dt-export.js?v=61');
+const { TOTEM_DEFAULT: T } = await import('../zmk-totem-default.js?v=62');
+const { exportKeymapText, usageToDt } = await import('../zmk-dt-export.js?v=62');
 
 let checks = 0;
 const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
