@@ -4,15 +4,18 @@
 // (get_physical_layouts), layers/bindings (get_keymap), and the behavior
 // catalog (behaviors subsystem) all arrive over the wire on connect.
 //
-// The board, layer bar, selection, undo and click-again popover live in
-// board.js (spec §3.1, §3.3); this file is the Studio controller behind them:
+// The board, layer rail, selection and undo live in board.js (spec §3.1, §3.3);
+// the palette dock and the key inspector are keymap-dock.js / keymap-inspector.js
+// (look-shell). This file is the Studio controller behind them:
 // it reads/writes the device, owns the layer structure ops, and hands
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
 import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=61';
 import { board } from './board.js?v=61';
-import { openPicker } from './binding-picker.js?v=61';
+import { createDock } from './keymap-dock.js?v=61';
+import { createInspector } from './keymap-inspector.js?v=61';
+import { encode } from './behavior-catalog.js?v=61';
 import { shell } from './app-shell.js?v=61';
 import { saveState } from './save-state.js?v=61';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=61';
@@ -529,7 +532,7 @@ export class ZmkKeymapTab {
                 };
             },
             layers: () => tab.keymap.layers.map((l, index) => ({
-                index, name: l.name || `Layer ${index}`, empty: l.bindings.every(emptyBinding),
+                index, id: l.id, name: l.name || `Layer ${index}`, empty: l.bindings.every(emptyBinding),
             })),
             bindingAt: (layer, sel) => tab.keymap.layers[layer]?.bindings[sel.col] ?? null,
             write: (layer, sel, binding) => tab._writeBinding(layer, sel.col, binding),
@@ -838,6 +841,10 @@ export class ZmkKeymapTab {
     // ---- rendering ----
 
     render() {
+        if (this.state !== 'ready') {      // the dock lives in the panel; side + state strip are shell regions
+            shell.regions.side?.replaceChildren();
+            shell.regions.boardState?.replaceChildren();
+        }
         switch (this.state) {
         case 'unsupported':
             this.root.replaceChildren(card('Keymap', 'ZMK Studio',
@@ -870,62 +877,78 @@ export class ZmkKeymapTab {
             return;
         }
         case 'ready': {
-            const boardHost = el('div');
-            const rest = el('div', {});
-            this.root.replaceChildren(card(this.deviceName ?? 'Keymap',
-                `${this.keymap.layers.length} layers · ZMK Studio`, boardHost, rest));
+            this.root.replaceChildren(this._buildDock().root);
             board.bind(this.adapter);
-            board.place(boardHost, shell.regions);
-            this._buildKeysBody(rest);
+            board.place(null, shell.regions);
+            this._dock.refresh(this.app);
+            const side = shell.regions.side;
+            if (side && this._inspector) { side.replaceChildren(this._inspector.root); this._inspector.render(); }
+            this._updateSaveBar?.();
             return;
         }
         }
     }
 
-    /** Keys-group content under the board: state line, type-to-assign, undo
-     * restore, hint, docked picker. Save/Discard/Export/Import are the status
-     * bar's (save-state, WP6); exportKeymap/importKeymap stay as methods. */
-    _buildKeysBody(host) {
+    /** The palette dock + key inspector, built once per tab instance (render()
+     * runs on every rename / layer op and must not drop the search, category
+     * or armed modifiers). Save/Discard are the top bar's (save-state);
+     * exportKeymap/importKeymap stay as methods. */
+    _buildDock() {
+        if (this._dock) return this._dock;
         // Type-to-assign: while armed, physical keypresses assign to the
         // selected key (and auto-advance) instead of reaching the browser —
         // preventDefault at window capture phase keeps ⌘S/⌘W/Tab etc from
         // firing. Esc disarms. Modifier-only presses assign the bare mod;
         // mod+key assigns the modified usage (ZMK implicit-mod bits).
-        const capture = el('button', { class: 'btn small', text: '⌨ Type-to-assign' });
+        const capture = el('button', { class: 'btn small', type: 'button', text: '⌨ Type-to-assign' });
         capture.addEventListener('click', () => this._setCapture(!this._captureOn, capture));
         this._captureBtn = capture;
-        const note = el('span', { class: 'state' });
-        const bar = el('div', { class: 'bd-tabbar' },
-            note, el('span', { style: 'flex:1' }), capture,
+        this._dock = createDock({ app: this.app, assign: (b) => board.assign(b), tools: [capture] });
+        this._inspector = createInspector({ app: this.app, dock: this._dock });
+        this._updateSaveBar = () => this._renderStateStrip();
+        this._installShortcuts();
+        return this._dock;
+    }
+
+    /** The one-line state under the board: Live / Saved / Offline, and the
+     * restore-undo button. */
+    _renderStateStrip() {
+        const host = shell.regions.boardState;
+        if (!host) return;
+        // Canonical live/saved vocabulary (spec §3.2, ui.js SAVE_STATE).
+        const offline = !!this.app?.offline;
+        const live = offline || this.unsaved;
+        host.dataset.state = live ? 'live' : 'saved';
+        const text = offline ? 'Offline: edits queue until the keyboard connects'
+            : this.unsaved ? 'Live — reverts on power-off · Save is in the top bar' : SAVE_STATE.saved;
+        host.replaceChildren(el('span', { class: 'dot', 'aria-hidden': 'true' }), el('span', { text }),
             ...(this._preRestore ? [el('button', {
-                class: 'btn small', text: '⟲ Undo restore',
+                class: 'btn small ghost', type: 'button', text: '⟲ Undo restore',
                 'data-caption': 'Put back the keymap the keyboard had before Restore saved copy',
                 onclick: () => this._undoKeymapRestore(),
             })] : []));
-        this._updateSaveBar = () => {
-            // Canonical live/saved vocabulary (spec §3.2, ui.js SAVE_STATE).
-            if (this.app?.offline) {   // nothing reaches a keyboard until it connects
-                bar.dataset.state = 'live';
-                note.textContent = 'Offline: edits queue until the keyboard connects';
-                return;
+    }
+
+    /** Keymap shortcuts: undo / redo, Esc, Delete. Only while this tab is
+     * showing, never inside a text field, never while Type-to-assign owns keys. */
+    _installShortcuts() {
+        this._shortcutAbort?.abort();
+        this._shortcutAbort = new AbortController();
+        window.addEventListener('keydown', (e) => {
+            if (this._captureOn || this.app?.palette?.open || e.defaultPrevented) return;
+            if (!this.root.closest('.panel.active') || this.state !== 'ready') return;
+            const t = e.target;
+            if (t?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+            const mod = e.metaKey || e.ctrlKey;
+            const k = e.key.toLowerCase();
+            if (mod && k === 'z') { e.preventDefault(); (e.shiftKey ? board.redo() : board.undo()); }
+            else if (mod && k === 'y') { e.preventDefault(); board.redo(); }
+            else if (!mod && e.key === 'Escape') { if (this._inspector?.escape()) e.preventDefault(); }
+            else if (!mod && (e.key === 'Delete' || e.key === 'Backspace') && board.selectedKey()) {
+                e.preventDefault();
+                board.assign(encode('trans', {}, 'zmk-studio'), { advance: false });
             }
-            bar.dataset.state = this.unsaved ? 'live' : 'saved';
-            note.textContent = this.unsaved
-                ? 'Live — reverts on power-off · Save is in the status bar'
-                : SAVE_STATE.saved;
-        };
-        this._updateSaveBar();
-        const pickerHost = el('div');
-        host.replaceChildren(bar,
-            el('div', { class: 'faint', style: 'margin-top:6px; font-size:12px' },
-                'Click a key, then pick a binding; click it again for a popover. '
-                + (this.app?.offline ? 'Edits queue until the keyboard connects.' : 'Writes apply immediately.')),
-            pickerHost);
-        this.closePicker?.();
-        this.closePicker = openPicker({
-            surface: 'zmk.key', host: 'docked', anchor: pickerHost, app: this.app,
-            onPick: (binding) => board.assign(binding),
-        });
+        }, { signal: this._shortcutAbort.signal });
     }
 
     _setCapture(on, btn = this._captureBtn) {

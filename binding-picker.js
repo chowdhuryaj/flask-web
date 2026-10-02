@@ -102,8 +102,8 @@ export function openPicker({ surface, value = null, host = 'sheet', anchor, titl
     const followBoard = host === 'docked' && KEYMAP_SURFACES.has(surface) && value == null;
     const view = buildPickerBody({ surface, value: followBoard ? board.bindingOf() : value, app, position, host, onPick: pick });
     const body = view.root;
-    // A docked keymap picker shows the selected key's binding (and opens the
-    // Tap/Hold composer pre-filled on a mod-tap / layer-tap).
+    // A docked keymap picker shows the selected key's binding. (The Keymap screen
+    // now uses keymap-dock.js and the inspector; this stays for the other surfaces.)
     const follow = () => view.setValue(board.bindingOf());
     if (followBoard) { board.addEventListener('select', follow); board.addEventListener('change', follow); }
     const onKey = (e) => { if (e.key === 'Escape' && !view.capturing()) close(); };
@@ -844,8 +844,10 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
             current = v == null ? null : safeDecode(v, adapter);
             currentValue = v;
             state.clear();
+            // A new value (the board advanced to another key) closes the composer; it
+            // never re-opens one by itself, so after Apply the picker stays on the
+            // tab the user was on instead of jumping to the Modifiers form.
             if (!th?.preset) th = null;
-            if (['mod-tap', 'layer-tap'].includes(current?.entryId) && htIds().includes(current.entryId)) openComposer(v);
             render();
         },
         focus() { (host === 'docked' ? null : search)?.focus(); },

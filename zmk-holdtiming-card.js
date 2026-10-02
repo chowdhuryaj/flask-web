@@ -15,8 +15,98 @@ import {
     HOLDTAP_FLAVORS, HOLDTAP_TERM, decodeHoldtapSlot, encodeHoldtapSlot, clampTerm,
 } from './zmk-holdtap-codec.js?v=61';
 
-const FLAVOR_LABELS = ['Hold-preferred', 'Balanced', 'Tap-preferred', 'Tap unless interrupted'];
 const ch = HOLDTAP.channel;
+
+/** The four hold-tap flavours, in wire order (HOLDTAP_FLAVORS), each with the
+ * one line a person needs to choose between them. */
+export const FLAVOR_INFO = [
+    { label: 'Hold-preferred', info: 'Pressing any other key while this is down makes it a hold at once. Fast, but rolls can misfire.' },
+    { label: 'Balanced', info: 'Holds if another key is pressed and released first, or when the term runs out. A good default.' },
+    { label: 'Tap-preferred', info: 'Only a long press counts as a hold. Pressing another key first still gives the tap.' },
+    { label: 'Tap unless interrupted', info: 'Holds only if another key is pressed meanwhile. Pressed alone it taps, even after a long press.' },
+];
+
+/** Four flavour buttons. `compact` drops the sentence (it becomes the tooltip). */
+export function flavorPicker(value, onChange, { compact = false } = {}) {
+    const wrap = el('div', { class: 'ht-flavors' + (compact ? ' compact' : ''), role: 'radiogroup', 'aria-label': 'Flavour' });
+    const paint = (v) => wrap.querySelectorAll('button').forEach((b) => {
+        const on = Number(b.dataset.flavor) === v;
+        b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
+    });
+    FLAVOR_INFO.forEach((f, i) => wrap.append(el('button', {
+        class: 'flavor', type: 'button', role: 'radio', 'data-flavor': i, title: f.info, 'data-caption': f.info,
+        onclick: () => { paint(i); onChange(i); },
+    }, el('b', { text: f.label }), compact ? null : el('span', { text: f.info }))));
+    paint(value);
+    wrap.set = paint;
+    return wrap;
+}
+
+/**
+ * The per-key timing card for the Keymap inspector: tapping term with a
+ * tap | hold bar, the four flavours with their explanations, and the advanced
+ * quick-tap / prior-idle numbers. Edits are live; the top bar's Save writes
+ * flash (saveState source 0x2A). Resolves to null when the board has no
+ * flask_holdtap (so the caller can say "compiled timing").
+ */
+export async function keyTimingCard(app, pos) {
+    const dirty = (be) => saveState.markDirty(ch, 'Hold-tap timing', () => be.save());
+    let be = null;
+    be = await attachHoldtap(app, { onDirty: () => be && dirty(be) });
+    if (!be || pos == null) return null;
+    let s;
+    try { s = await be.readSlot(pos); } catch { return null; }
+    const flask = app.flask;
+    const termVal = el('output', { class: 'ht-term mono', text: `${s.term} ms` });
+    const bar = el('div', { class: 'ht-bar', 'aria-hidden': 'true' }, el('i', { class: 'ht-bar-tap' }), el('i', { class: 'ht-bar-hold' }));
+    const paintBar = (ms) => {
+        const f = Math.min(1, ms / 500);
+        bar.firstChild.style.flexBasis = `${f * 100}%`;
+        bar.firstChild.textContent = f > 0.18 ? 'tap' : '';
+        bar.lastChild.textContent = f < 0.8 ? 'hold' : '';
+    };
+    const slider = el('input', { type: 'range', min: HOLDTAP_TERM.min, max: HOLDTAP_TERM.max, step: 10, value: s.term,
+        'aria-label': `Tapping term for key ${pos}`,
+        'data-caption': 'How long the key may stay down and still count as a tap. Past this it is a hold. Live; Save keeps it.' });
+    paintBar(s.term);
+    slider.addEventListener('input', () => { termVal.textContent = `${slider.value} ms`; paintBar(Number(slider.value)); });
+    const fail = (e) => toast(`Hold timing write failed: ${e.message}`, true);
+    slider.addEventListener('change', async () => {
+        try { s.term = await be.write(pos, clampTerm(Number(slider.value))); slider.value = s.term; termVal.textContent = `${s.term} ms`; paintBar(s.term); }
+        catch (e) { fail(e); }
+    });
+    // Full-slot write (flavour / quick / idle); re-read so the backend cache
+    // matches and the slider's next write cannot revert them.
+    const put = async (patch) => {
+        const next = { ...(await be.readSlot(pos)), ...patch };
+        const echo = decodeHoldtapSlot(await flask.setBytes(ch, HOLDTAP.slot, encodeHoldtapSlot(next), 1));
+        s = await be.readSlot(echo.slot);
+        dirty(be);
+    };
+    const flavors = flavorPicker(s.flavor, async (v) => { try { await put({ flavor: v }); } catch (e) { fail(e); flavors.set(s.flavor); } });
+    const num = (field, label, hint) => {
+        const input = el('input', { type: 'number', min: 0, max: 1000, value: s[field], 'aria-label': label });
+        input.addEventListener('change', async () => {
+            try { await put({ [field]: Math.max(0, Math.min(1000, Number(input.value) || 0)) }); input.value = s[field]; }
+            catch (e) { fail(e); }
+        });
+        return el('label', { class: 'ht-num', 'data-caption': hint }, el('span', { text: label }), input, el('em', { text: 'ms' }));
+    };
+    const reset = el('button', { class: 'btn small ghost', type: 'button', text: 'Reset to default', 'data-caption': 'Back to the compiled timing for this key.',
+        onclick: async () => {
+            try { await be.reset(pos); s = await be.readSlot(pos); slider.value = s.term; termVal.textContent = `${s.term} ms`; paintBar(s.term); flavors.set(s.flavor); }
+            catch (e) { toast(`Reset failed: ${e.message}`, true); }
+        } });
+    return el('section', { class: 'ht-card', 'data-card': 'key-timing' },
+        el('h4', { text: 'Timing' }),
+        el('div', { class: 'ht-term-row' }, slider, termVal),
+        bar,
+        el('h5', { text: 'Flavour' }), flavors,
+        el('details', { class: 'ht-adv' }, el('summary', { text: 'Advanced' }),
+            num('quick', 'Quick-tap', 'Pressing again within this time of a tap repeats the tap, never a hold. 0 = off. Good for key repeat.'),
+            num('idle', 'Prior idle', 'A hold only counts if no other key was typed in the last this-many ms. 0 = off. Good for home-row mods.')),
+        el('div', { class: 'ht-foot' }, reset));
+}
 
 export async function holdTimingCard(app) {
     const dirty = (be) => saveState.markDirty(ch, 'Hold-tap timing', () => be.save());
@@ -83,13 +173,10 @@ export async function holdTimingCard(app) {
                 announce(slider);
             } catch (e) { toast(`Hold timing write failed: ${e.message}`, true); }
         });
-        const flavor = el('select', { 'aria-label': 'flavor' },
-            ...FLAVOR_LABELS.map((t, i) => el('option', { value: i, text: t })));
-        flavor.value = String(row.s.flavor);
-        flavor.addEventListener('change', async () => {
-            try { await putSlot(row, { flavor: Number(flavor.value) }); announce(flavor); }
-            catch (e) { toast(`Hold timing write failed: ${e.message}`, true); }
-        });
+        const flavor = flavorPicker(row.s.flavor, async (v) => {
+            try { await putSlot(row, { flavor: v }); announce(flavor); }
+            catch (e) { toast(`Hold timing write failed: ${e.message}`, true); flavor.set(row.s.flavor); }
+        }, { compact: true });
         const num = (field, title) => {
             const input = el('input', { type: 'number', min: 0, max: 1000, value: row.s[field],
                 title, 'aria-label': title, style: 'width:64px' });
