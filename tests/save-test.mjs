@@ -136,6 +136,18 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     kt = mk({ wrote: 3 }, true);
     eq(await writeBaseline(kt, {}, async () => { after++; }), true, 'clean import + save -> baseline');
     eq(kt.calls, ['apply', 'save']);
+    // F2: Studio saves first; module channels save only after it, and a
+    // failed Studio save never reaches the channel saves.
+    kt = mk({ wrote: 3 }, true);
+    const order = [];
+    eq(await writeBaseline(kt, {}, async () => { order.push('modules-live'); },
+        async () => { order.push('channels'); kt.calls.push('channels'); }), true);
+    eq(kt.calls, ['apply', 'save', 'channels'], 'Studio save before channel saves');
+    kt = mk({ wrote: 3 }, false);
+    eq(await writeBaseline(kt, {}, async () => {}, async () => { kt.calls.push('channels'); }), false);
+    eq(kt.calls, ['apply', 'save'], 'failed Studio save never saves channels');
+    kt = mk({ wrote: 3 }, true);
+    eq(await writeBaseline(kt, {}, async () => {}, async () => false), false, 'failed channel save -> no baseline');
     // saveChanges resolving undefined (older tab build) is not a success.
     kt = mk({ wrote: 1 }, undefined);
     eq(await writeBaseline(kt, {}), false, 'only an explicit true counts');
@@ -165,6 +177,20 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     eq(old.flask.accel.takeoff, 321, 'fixture carries a non-default value');
     eq(again, old.flask, 'export after import equals the old file byte for byte (as JSON)');
     eq(JSON.stringify(again), JSON.stringify(old.flask), 'serialises identically');
+
+    // F2: save:false applies live with zero saves and reports the channels.
+    const saved = [];
+    const realSave = app.flask.save.bind(app.flask);
+    app.flask.save = async (ch) => { saved.push(ch); return realSave(ch); };
+    const live = await applyFlaskState(app, old.flask, { save: false });
+    eq(saved, [], 'save:false never saves');
+    ok(live.channels.length > 1, 'channels to save reported');
+    const { saveFlaskChannels } = await import('../zmk-export.js?v=60');
+    let n = 0;
+    app.flask.save = async (ch) => { n++; if (ch === live.channels[1]) throw new Error('nope'); };
+    const sr = await saveFlaskChannels(app, live.channels);
+    eq([sr.ok, n], [false, 2], 'channel saves stop at the first failure');
+    ok(sr.failure.includes('nope'));
 }
 
 // ---- old QMK .vil still imports and round-trips ----

@@ -133,12 +133,15 @@ export function modeSummary(mode) {
 }
 
 /** Make-baseline write sequence. Resolves true only when the keymap landed
- * AND the save succeeded, so the caller marks the baseline on true alone.
+ * AND every save succeeded, so the caller marks the baseline on true alone.
  * kt.saveChanges() must resolve false (and have toasted) on failure.
- * afterApply may resolve false (module sections failed) to stop before the save. */
-export async function writeBaseline(kt, data, afterApply) {
+ * afterApply applies module sections LIVE (no flash) and may resolve false
+ * to stop before any save. afterSave persists module channels, only after
+ * the Studio save landed; it resolves false on its first failed channel. */
+export async function writeBaseline(kt, data, afterApply, afterSave) {
     const r = await kt.applyKeymapData(data, { quiet: true });
     if (r === null || r.stopped) return false;   // refused, or import stopped partway
     if (afterApply && (await afterApply()) === false) return false;   // module sections failed: not a clean import
-    return (await kt.saveChanges()) === true;
+    if ((await kt.saveChanges()) !== true) return false;   // Studio first
+    return !(afterSave && (await afterSave()) === false);
 }

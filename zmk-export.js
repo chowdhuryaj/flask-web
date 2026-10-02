@@ -443,5 +443,18 @@ async function applyFlaskStateInner(app, data, save = true) {
             try { await flask.save(ch); } catch (e) { failures.push(`save 0x${ch.toString(16)}: ${e.message}`); }
         }
     }
-    return { applied, failures, saved: save ? saves.length : 0 };
+    return { applied, failures, saved: save ? saves.length : 0, channels: saves };
+}
+
+/** Save module channels in order, stopping at the first failure (Make
+ * baseline: a partial flash write must not continue past an error). */
+export async function saveFlaskChannels(app, channels) {
+    app.hid?.pause?.();
+    try {
+        for (const ch of channels) {
+            try { await app.flask.save(ch); }
+            catch (e) { return { ok: false, failure: `save 0x${ch.toString(16)}: ${e.message}` }; }
+        }
+        return { ok: true };
+    } finally { app.hid?.resume?.(); }
 }

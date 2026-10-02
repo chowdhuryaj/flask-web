@@ -21,7 +21,7 @@
 
 import { el, card, toast, modal } from './ui.js?v=60';
 import { saveState } from './save-state.js?v=60';
-import { applyFlaskState } from './zmk-export.js?v=60';
+import { applyFlaskState, saveFlaskChannels } from './zmk-export.js?v=60';
 import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=60';
 import {
     modesStoreKey, emptyStore, normalizeStore, addMode, renameMode,
@@ -137,14 +137,21 @@ export class ZmkModesTab {
                 onclick: () => {
                     back.remove();
                     this._guard(async () => {
+                        let channels = [];
                         const ok = await writeBaseline(kt, mode.data, async () => {
                             if (mode.data.flask && this.app?.flask && this.app?.caps?.flask) {
-                                const f = await applyFlaskState(this.app, mode.data.flask);   // saves
+                                // Live only: nothing hits flash until Studio saved.
+                                const f = await applyFlaskState(this.app, mode.data.flask, { save: false });
                                 if (f.failures.length) {
                                     toast(`${f.failures.length} section(s) failed (${f.failures[0]}); baseline not written`, true);
                                     return false;
                                 }
+                                channels = f.channels;
                             }
+                        }, async () => {
+                            const s = await saveFlaskChannels(this.app, channels);
+                            if (!s.ok) toast(`Keymap saved, but ${s.failure}; baseline not marked`, true);
+                            return s.ok;
                         });
                         if (!ok) return;   // import stopped or save failed: the error toast stays, no baseline
                         saveState.clean('studio-keymap');   // the baseline save just persisted the keymap
