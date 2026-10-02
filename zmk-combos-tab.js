@@ -1,160 +1,41 @@
 // ZMK Combos tab — flask_combos runtime combos (channel 0x24, proto v7).
-// UI copies nickcoutsos/keymap-editor's combos mode: one card per combo
-// with the output binding as a keycap tile on the left and a mini board on
-// the right with the combo's key positions highlighted; click keys on the
-// mini board to toggle membership (device keys-per-slot), click the tile to pick the
-// output. "Add New Combo" takes the first free slot; trash empties it.
+// Native frame (spec 3.4): "+ New combo" makes a draft row and puts the main
+// board in pick mode ("Pick keys for Combo N"); the output opens the shared
+// BindingPicker sheet; window / idle / layer stay as row fields. Edits are
+// LIVE; the status bar's Save persists (reloadBar -> saveState).
 //
-// Differences from Coutsos (compile-time .keymap editing) by design:
-//  - edits are LIVE on the device (write-through), Save persists;
-//  - outputs are typed since v12 (usage / macro / any Studio behavior);
-//  - per-combo timeout / prior-idle / layer since v14 (proto 14) — the
-//    keymap's devicetree combos were IMPORTED into runtime slots as
-//    compiled defaults, so they all show up and edit here now (pre-v14
-//    firmware kept them invisible and the timeout global).
+// Since v14 the keymap's devicetree combos ARE runtime slots (compiled
+// defaults), so they all list and edit here. Two live combos on the same
+// position set freeze the board on press (bench 2026-10-01: R+F, positions
+// 3+13, is slot 7 "ent" on the Totem), so a duplicate is refused.
 //
-// Board geometry rides app.profile.keys, which the ZMK Keymap tab publishes
-// after its Studio load; before that a numeric position fallback renders.
+// Also hosts the "Hold timing" card (flask_holdtap, proto 17).
 
-import { el, card, sliderRow, toggleRow, saveBar, modal, toast, renameLabel } from './ui.js?v=49';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=49';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=51';
 import { CH, V } from './flaskproto.js?v=49';
-import { renderKeyboardSVG } from './keymap-tab.js?v=49';
-import {
-    keyboardUsages, consumerUsages, kpParam, cpParam,
-    usageCap, usageLabel, usageFromName,
-} from './zmk-keycodes.js?v=49';
+import { board } from './board.js?v=1';
+import { saveState } from './save-state.js?v=1';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
-    comboSlotToTyped, comboTypedToLegacy,
+    comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo,
 } from './zmk-combos-codec.js?v=49';
-import { zmkBehaviors } from './zmk-keycodes.js?v=49';
-import { buildZmkPicker } from './zmk-keymap-tab.js?v=50';
-import { captureOneKey } from './zmk-capture.js?v=49';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=50';
+import { blurClicks, pickOutput, outText, installSlotSummary } from './zmk-behaviour-common.js?v=1';
+import { holdTimingCard } from './zmk-holdtiming-card.js?v=1';
 
-// Shared with the keymap picker's mod chips + tap-hold composer (same
-// circular-import pattern as buildZmkPicker: only used inside functions).
-export const MODS = [
-    { bit: 0x01, glyph: '⌃', label: 'Ctrl' },
-    { bit: 0x02, glyph: '⇧', label: 'Shift' },
-    { bit: 0x04, glyph: '⌥', label: 'Alt' },
-    { bit: 0x08, glyph: '⌘', label: 'GUI' },
-];
-
-/** Modal usage picker (keycode + implicit modifiers → encoded u32). Shared
- * by the ZMK Combos and Macros tabs — onApply(usage) fires on Apply. */
-export function pickUsage(title, currentUsage, onApply) {
-    let mods = (currentUsage >>> 24) & 0xFF;
-    const baseOf = (u) => u & 0xFFFFFF;
-    let base = baseOf(currentUsage);
-
-    const apply = () => {
-        onApply(base ? (((mods << 24) | base) >>> 0) : 0);
-        back.remove();
-    };
-
-    const preview = el('span', {
-        class: 'code',
-        style: 'font-size:1.1em; padding:4px 10px; min-width:60px; text-align:center',
-    });
-    const refreshPreview = () => {
-        const u = base ? (((mods << 24) | base) >>> 0) : 0;
-        preview.textContent = u ? usageCap(u) : '—';
-        preview.title = u ? usageLabel(u) : 'no key picked';
-    };
-
-    const modBtns = MODS.map((m) => {
-        const btn = el('button', {
-            class: 'btn small' + ((mods & m.bit) ? ' primary' : ''),
-            text: `${m.glyph} ${m.label}`,
-            title: `left ${m.label} held with the key`,
-            onclick: () => {
-                mods ^= m.bit;
-                btn.classList.toggle('primary', !!(mods & m.bit));
-                refreshPreview();
-            },
-        });
-        return btn;
-    });
-
-    // Press-to-pick: arm window key capture and adopt the pressed key
-    // (with any held modifiers), the keymap editor's type-to-assign in every
-    // settings-tab picker. A second click (or Esc) disarms.
-    let captureStop = null;
-    const syncMods = () => modBtns.forEach((b, i) =>
-        b.classList.toggle('primary', !!(mods & MODS[i].bit)));
-    const pressBtn = el('button', {
-        class: 'btn small',
-        title: 'press the physical key you want (chords capture their modifiers)',
-        text: '⌨ Press a key',
-    });
-    const setArmed = (on) => {
-        pressBtn.classList.toggle('primary', on);
-        pressBtn.textContent = on ? '⌨ Press a key… (Esc)' : '⌨ Press a key';
-    };
-    pressBtn.addEventListener('click', () => {
-        if (captureStop) { captureStop(); return; }
-        setArmed(true);
-        captureStop = captureOneKey((param) => {
-            mods = (param >>> 24) & 0xFF;
-            base = baseOf(param);
-            syncMods();
-            refreshPreview();
-            buildChips(search.value);
-        }, { onStop: () => { captureStop = null; setArmed(false); } });
-    });
-
-    const chipsWrap = el('div', {
-        style: 'display:flex; flex-wrap:wrap; gap:4px; max-height:260px; overflow-y:auto; margin-top:8px',
-    });
-    const buildChips = (filter = '') => {
-        const q = filter.trim().toLowerCase();
-        const match = (k) => !q || k.label.toLowerCase().includes(q)
-            || k.cap.toLowerCase().includes(q);
-        const chip = (k, toParam) => el('button', {
-            class: 'btn small' + (baseOf(toParam(k.code)) === base ? ' primary' : ''),
-            text: k.cap, title: k.label,
-            onclick: () => { base = baseOf(toParam(k.code)); refreshPreview(); buildChips(search.value); },
-        });
-        chipsWrap.replaceChildren(
-            ...keyboardUsages.filter(match).map((k) => chip(k, kpParam)),
-            ...consumerUsages.filter(match).map((k) => chip(k, cpParam)));
-    };
-    const search = el('input', {
-        type: 'text', placeholder: 'Search keys… (name or cap)',
-        style: 'width:100%',
-        oninput: () => {
-            const hit = usageFromName(search.value);
-            if (hit != null) { base = baseOf(hit); refreshPreview(); }
-            buildChips(search.value);
-        },
-    });
-
-    const body = el('div', {},
-        el('div', { class: 'row' },
-            el('span', { class: 'lbl', text: 'Key' }),
-            el('span', { style: 'flex:1' }), preview),
-        el('div', { style: 'display:flex; gap:6px; margin:8px 0; align-items:center; flex-wrap:wrap' },
-            ...modBtns, el('span', { style: 'flex:1' }), pressBtn),
-        search, chipsWrap);
-
-    const back = modal(title, body, [
-        el('button', { class: 'btn small', text: 'Cancel', onclick: () => { captureStop?.(); back.remove(); } }),
-        el('button', { class: 'btn small primary', text: 'Apply', onclick: () => { captureStop?.(); apply(); } }),
-    ]);
-    refreshPreview();
-    buildChips();
-    return back;
-}
+const posText = (ps) => ps.join(' + ');
 
 export class ZmkCombosTab {
     constructor(app) {
         this.app = app;
-        this.root = el('div');
+        this.root = blurClicks(el('div'));
         this.drafts = new Set(); // empty slots kept visible while editing
+        this.warn = new Map();   // slot -> refusal text, shown on its row
+        installSlotSummary(app);
     }
 
     async load() {
@@ -178,8 +59,6 @@ export class ZmkCombosTab {
             // v14 timed slots: per-combo timeout / prior-idle / layer (the
             // imported devicetree combos' knobs) ride the SLOT_V3 frame.
             this.timed = !!this.app.caps?.combosTimed;
-            this.macroSlots = (this.typed && this.app.caps?.macros)
-                ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
                 if (this.timed) {
@@ -196,10 +75,51 @@ export class ZmkCombosTab {
         } finally {
             hid?.resume?.();
         }
+        try { this.timingCard = await holdTimingCard(this.app); }
+        catch (e) { this.timingCard = null; console.warn('hold timing card:', e); }
+        this.bar ??= reloadBar(CH.combos, {
+            label: 'Combos', line: 'zmk',
+            save: () => this.app.flask.save(CH.combos),
+            reload: () => this.load(),
+        });
         this.render();
     }
 
+    /** Compiled devicetree combos that are NOT runtime slots (pre-v14
+     * firmware). On v14+ they are slots, so the slot scan already covers
+     * them and a deleted default must stay re-addable. */
+    dtDefaults() {
+        return !this.timed && this.app.profile?.family === 'totem' ? TOTEM_DEFAULT.combos : [];
+    }
+
+    duplicateText(dup) {
+        if (dup.kind === 'default') return `the keymap's compiled combo ${dup.index}`;
+        const s = this.slots[dup.index];
+        const out = outText(s, 'zmk.comboOutput');
+        return `Combo ${dup.index} (${posText(s.positions)}${out ? ` → ${out}` : ''})`;
+    }
+
+    /** Refusal text when `positions` would duplicate a live combo, else ''. */
+    refusal(i, positions) {
+        const dup = findDuplicateCombo(this.slots, i, positions, this.dtDefaults());
+        return dup ? `Same keys as ${this.duplicateText(dup)}. Two combos on one key set freeze the board, so this one was not written.` : '';
+    }
+
+    markUnsaved() {
+        if (this.bar) this.bar.markEdited();
+        else saveState.markDirty(CH.combos, 'Combos', () => this.app.flask.save(CH.combos), { line: 'zmk' });
+    }
+
     async writeSlot(i, before = null) {
+        // Central guard: every path that makes a slot live routes here.
+        const why = !comboSlotV2IsEmpty(this.slots[i]) && this.refusal(i, this.slots[i].positions);
+        if (why) {
+            if (before) this.slots[i] = before;
+            this.warn.set(i, why);
+            toast(why, true);
+            this.render();
+            return;
+        }
         try {
             if (this.timed) {
                 const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV3,
@@ -214,6 +134,8 @@ export class ZmkCombosTab {
                     encodeComboSlot(i, comboTypedToLegacy(this.slots[i]), this.maxKeys), 1);
                 this.slots[i] = comboSlotToTyped(decodeComboSlot(r, this.maxKeys));
             }
+            this.warn.delete(i);
+            this.markUnsaved();
         } catch (e) {
             // Revert the optimistic local edit — keeping it made the UI lie
             // about what the device holds (bench 2026-07-11, timeouts).
@@ -223,188 +145,136 @@ export class ZmkCombosTab {
         this.render();
     }
 
-    addCombo() {
-        const i = this.slots.findIndex((s, idx) =>
-            comboSlotV2IsEmpty(s) && !this.drafts.has(idx));
-        if (i < 0) { toast(`All ${this.slotCount} combo slots are in use`, true); return; }
-        // An EMPTY slot can still carry position junk: firmware that boots
-        // its table zero-filled reads back as pos 0 × maxKeys (bench
-        // 2026-07-12 — every draft started with 6-8 phantom position-0
-        // entries that each took a click to remove). A draft always starts
-        // from a clean slate; the first write persists the real content.
-        this.slots[i] = this.emptySlot(i);
-        this.drafts.add(i);
-        this.render();
-    }
-
     emptySlot(i) {
         return { slot: i, positions: [], action: COMBO_ACTION.none,
             behaviorId: 0, param1: 0, param2: 0,
             timeoutMs: 0, priorIdleMs: 0, layer: COMBO_LAYER_ANY };
     }
 
+    addCombo() {
+        const i = this.slots.findIndex((s, idx) =>
+            comboSlotV2IsEmpty(s) && !this.drafts.has(idx));
+        if (i < 0) { toast(`All ${this.slotCount} combo slots are in use`, true); return; }
+        // An EMPTY slot can still carry position junk (zero-filled boot
+        // tables read back as pos 0 x maxKeys). A draft starts clean; the
+        // first write persists the real content.
+        this.slots[i] = this.emptySlot(i);
+        this.drafts.add(i);
+        this.render();
+        this.startPick(i);
+    }
+
     async clearSlot(i) {
+        if (this.editing === i) this.stopPick();
         this.slots[i] = this.emptySlot(i);
         this.drafts.delete(i);
+        this.warn.delete(i);
         await this.writeSlot(i);
     }
 
-    togglePosition(i, pos) {
+    // ---- position picking: on the main board ----
+
+    stopPick() {
+        this._stopPick?.();
+        this._stopPick = null;
+        this._pickWatch?.disconnect();
+        this._pickWatch = null;
+        this.editing = null;
+    }
+
+    startPick(i) {
+        this.stopPick();
+        if (!board.adapter) { this.render(); return; }   // numeric fallback on the row
+        this.editing = i;
+        const start = (initial) => {
+            this._stopPick = board.pickPositions({
+                initial, max: this.maxKeys, label: `Pick keys for Combo ${i}`,
+                onChange: (ps) => this.setPositions(i, ps, start),
+            });
+        };
+        start([...this.slots[i].positions]);
+        // Leaving the tab must end pick mode, or a click on the Keys tab
+        // would edit this combo instead of the key.
+        const panel = this.root.closest('.panel');
+        if (panel) {
+            this._pickWatch = new MutationObserver(() => {
+                if (!panel.classList.contains('active')) { this.stopPick(); this.render(); }
+            });
+            this._pickWatch.observe(panel, { attributes: true, attributeFilter: ['class'] });
+        }
+        this.render();
+    }
+
+    togglePick(i) {
+        // The board's own Done button ends pick mode without telling us.
+        const live = this.editing === i && document.querySelector('.bd-banner');
+        if (live) this.stopPick(); else this.startPick(i);
+        this.render();
+    }
+
+    /** Positions came from the board (or the numeric fallback). `restart`
+     * re-enters pick mode with the old set when the new one is refused. */
+    setPositions(i, positions, restart) {
         const s = this.slots[i];
         const before = { ...s, positions: [...s.positions] };
-        const at = s.positions.indexOf(pos);
-        if (at >= 0) s.positions.splice(at, 1);
-        else if (s.positions.length < this.maxKeys) s.positions.push(pos);
-        else { toast(`Combos take up to ${this.maxKeys} keys`, true); return; }
+        const why = this.refusal(i, positions);
+        if (why) {
+            this.warn.set(i, why);
+            toast(why, true);
+            restart?.([...before.positions]);
+            this.render();
+            return;
+        }
+        s.positions = positions.slice(0, this.maxKeys);
         this.writeSlot(i, before);
     }
 
     // ---- output picker ----
 
-    /** Describe a typed output for the tile / hint. */
-    outputDesc(s, { cap = false } = {}) {
-        switch (s.action) {
-        case COMBO_ACTION.usage:
-            return cap ? usageCap(s.param1) : usageLabel(s.param1);
-        case COMBO_ACTION.macro:
-            return cap ? `M${s.param1}` : `Macro ${s.param1}`;
-        case COMBO_ACTION.behavior: {
-            const d = zmkBehaviors().get(s.behaviorId);
-            const name = d?.displayName || `behavior #${s.behaviorId}`;
-            const params = [s.param1, s.param2].filter((p) => p !== 0);
-            return cap ? name.split(' ').map((w) => w[0]).join('').slice(0, 4)
-                : `${name}${params.length ? ' (' + params.join(', ') + ')' : ''}`;
-        }
-        default:
-            return '';
-        }
-    }
-
-    _applyOutput(i, patch) {
+    _applyOutput(i, v) {
         const before = { ...this.slots[i], positions: [...this.slots[i].positions] };
         Object.assign(this.slots[i], {
             action: COMBO_ACTION.none, behaviorId: 0, param1: 0, param2: 0,
-        }, patch);
+        }, v.action ? v : {});
         this.writeSlot(i, before);
     }
 
-    pickOutput(i) {
-        const s = this.slots[i];
-        if (!this.typed) {
-            // pre-v12 firmware: usage-only, straight to the keycode picker
-            pickUsage(`Combo ${i} output`, s.action === COMBO_ACTION.usage ? s.param1 : 0,
-                (usage) => this._applyOutput(i,
-                    usage ? { action: COMBO_ACTION.usage, param1: usage } : {}));
-            return;
-        }
-        // v12 typed output: keycode / macro / any Studio behavior (tap-hold,
-        // layer key…) — the behavior list needs the Keymap tab's catalog.
-        const behaviors = zmkBehaviors();
-        const macroSlots = this.macroSlots ?? 0;
-        const rows = [
-            el('button', {
-                class: 'btn small primary', text: '⌨ Keycode…',
-                onclick: () => {
-                    back.remove();
-                    pickUsage(`Combo ${i} output`,
-                        s.action === COMBO_ACTION.usage ? s.param1 : 0,
-                        (usage) => this._applyOutput(i,
-                            usage ? { action: COMBO_ACTION.usage, param1: usage } : {}));
-                },
-            }),
-        ];
-        if (macroSlots > 0) {
-            const sel = el('select', {}, ...Array.from({ length: macroSlots }, (_, m) =>
-                el('option', {
-                    value: m, text: `Macro ${m}`,
-                    selected: s.action === COMBO_ACTION.macro && s.param1 === m,
-                })));
-            rows.push(el('div', { style: 'display:flex; gap:6px; align-items:center' },
-                el('button', {
-                    class: 'btn small', text: '▶ Play macro',
-                    onclick: () => {
-                        back.remove();
-                        this._applyOutput(i, { action: COMBO_ACTION.macro, param1: Number(sel.value) });
-                    },
-                }), sel));
-        }
-        if (behaviors.size) {
-            rows.push(el('div', { class: 'note faint', style: 'margin-top:6px',
-                text: 'Or any behavior — tap-holds and layer keys work; the combo behaves like a key at its first position:' }));
-            rows.push(buildZmkPicker({
-                keyPressId: null,
-                onPick: (b) => {
-                    back.remove();
-                    this._applyOutput(i, {
-                        action: COMBO_ACTION.behavior, behaviorId: b.behaviorId,
-                        param1: b.param1 >>> 0, param2: b.param2 >>> 0,
-                    });
-                },
-            }));
-        } else {
-            rows.push(el('div', { class: 'note faint',
-                text: 'Behavior outputs need the device behavior catalog — open the Keymap tab once first.' }));
-        }
-        rows.push(el('button', {
-            class: 'btn small', text: '∅ Clear output',
-            onclick: () => { back.remove(); this._applyOutput(i, {}); },
-        }));
-        const back = modal(`Combo ${i} output`, el('div', {
-            style: 'display:flex; flex-direction:column; gap:8px',
-        }, ...rows), []);
-    }
-
-    // ---- position selection ----
-
-    miniBoard(i) {
-        const geom = this.app.profile?.keys;
-        const s = this.slots[i];
-        if (!geom?.length) return this.positionFallback(i);
-
-        const pressed = new Set(s.positions.map((p) => `0,${p}`));
-        const mini = {
-            keys: geom, encoderKeys: [],
-            labelFor: () => '', hoverFor: () => 'click to toggle membership',
-            keyName: (k) => String(k.pos),
-        };
-        return renderKeyboardSVG({
-            profile: mini,
-            scale: 0.42,
-            keycodeAt: () => null,
-            pressed,
-            selected: null,
-            onSelect: (sel) => this.togglePosition(i, sel.col),
+    pickOutputFor(i) {
+        pickOutput({
+            app: this.app,
+            // pre-v12 firmware stores a usage only
+            surface: this.typed ? 'zmk.comboOutput' : 'zmk.macroKey',
+            title: `Combo ${i} output`, value: this.slots[i],
+            onPick: (v) => this._applyOutput(i, v),
         });
     }
 
-    /** Numeric fallback until the Keymap tab has published device geometry. */
+    // ---- rows ----
+
+    /** Numeric fallback when no board is bound (Keymap tab not loaded). */
     positionFallback(i) {
         const s = this.slots[i];
         const posInput = el('input', {
-            type: 'number', min: 0, max: 254, placeholder: 'position #',
-            style: 'width:100px',
+            type: 'number', min: 0, max: 254, placeholder: 'position #', style: 'width:100px',
         });
-        return el('div', {},
-            el('div', { class: 'note faint', text: 'Open the Keymap tab once to load board geometry — picking keys by click needs it. Until then, add positions by number:' }),
-            el('div', { style: 'display:flex; gap:4px; align-items:center; flex-wrap:wrap' },
-                ...s.positions.map((p) => el('button', {
-                    class: 'btn small primary', text: `pos ${p} ✕`,
-                    onclick: () => this.togglePosition(i, p),
-                })),
-                posInput,
-                el('button', {
-                    class: 'btn small', text: 'Add',
-                    onclick: () => {
-                        const p = Number(posInput.value);
-                        if (Number.isInteger(p) && p >= 0 && p < COMBO_POS_NONE) {
-                            this.togglePosition(i, p);
-                        }
-                    },
-                })));
+        return el('div', { style: 'display:flex; gap:4px; align-items:center; flex-wrap:wrap' },
+            ...s.positions.map((p) => el('button', {
+                class: 'btn small primary', text: `${p} ✕`,
+                onclick: () => this.setPositions(i, s.positions.filter((x) => x !== p)),
+            })),
+            posInput,
+            el('button', {
+                class: 'btn small', text: 'Add',
+                onclick: () => {
+                    const p = Number(posInput.value);
+                    if (!Number.isInteger(p) || p < 0 || p >= COMBO_POS_NONE || s.positions.includes(p)) return;
+                    if (s.positions.length >= this.maxKeys) { toast(`Combos take up to ${this.maxKeys} keys`, true); return; }
+                    this.setPositions(i, [...s.positions, p]);
+                },
+            }));
     }
 
-    /** Per-combo timing/layer strip (v14 timed slots). Inputs commit ONCE
-     * on change — writeSlot re-renders, so no blur double-commit path. */
+    /** Per-combo timing/layer fields (v14 timed slots). */
     timingStrip(i) {
         const s = this.slots[i];
         const commit = (patch) => {
@@ -414,18 +284,16 @@ export class ZmkCombosTab {
         };
         const num = (value, title, placeholder, onCommit) => el('input', {
             type: 'number', min: 0, max: 2000, value: value || '',
-            placeholder, title,
-            style: 'width:72px',
+            placeholder, title, 'aria-label': title, style: 'width:72px',
             onchange: (e) => onCommit(Math.max(0, Math.min(2000, Number(e.target.value) || 0))),
         });
         const layerNames = this.app.profile?.layerNames ?? [];
         const layerCount = Math.max(layerNames.length, 6);
         const layerSel = el('select', {
-            title: 'layer this combo fires on',
+            title: 'layer this combo fires on', 'aria-label': 'Only on layer',
             onchange: (e) => commit({ layer: Number(e.target.value) }),
         },
-            el('option', { value: COMBO_LAYER_ANY, text: 'All layers',
-                selected: s.layer === COMBO_LAYER_ANY }),
+            el('option', { value: COMBO_LAYER_ANY, text: 'All layers', selected: s.layer === COMBO_LAYER_ANY }),
             ...Array.from({ length: layerCount }, (_, l) => el('option', {
                 value: l, text: layerNames[l] ? `${l}: ${layerNames[l]}` : `Layer ${l}`,
                 selected: s.layer === l,
@@ -433,61 +301,65 @@ export class ZmkCombosTab {
         return el('div', {
             style: 'display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px',
         },
-            el('span', { class: 'note faint', text: 'timeout' }),
-            num(s.timeoutMs, 'candidate window for THIS combo, ms — 0 inherits the global timeout',
+            el('span', { class: 'note faint', text: 'Window (ms)' }),
+            num(s.timeoutMs, 'candidate window for THIS combo, ms; 0 inherits the global window',
                 'global', (v) => commit({ timeoutMs: v })),
-            el('span', { class: 'note faint', text: 'prior idle' }),
-            num(s.priorIdleMs, 'only fire when the last non-modifier tap is at least this old, ms — guards against typing rolls; 0 = off',
+            el('span', { class: 'note faint', text: 'Needs idle before (ms)' }),
+            num(s.priorIdleMs, 'only fire when the last non-modifier tap is at least this old, ms; guards against typing rolls; 0 = off',
                 'off', (v) => commit({ priorIdleMs: v })),
-            el('span', { class: 'note faint', text: 'layer' }),
+            el('span', { class: 'note faint', text: 'Only on layer' }),
             layerSel);
     }
 
     comboCard(i) {
         const s = this.slots[i];
         const live = !comboSlotV2IsEmpty(s);
-        const hasOut = s.action !== COMBO_ACTION.none;
-        const tile = el('button', {
-            class: 'code',
-            style: 'min-width:72px; min-height:44px; font-size:1.05em',
-            title: hasOut ? this.outputDesc(s) : 'pick the combo output',
-            onclick: () => this.pickOutput(i),
-        }, hasOut ? this.outputDesc(s, { cap: true }) : 'output…');
-
+        const out = outText(s, 'zmk.comboOutput');
+        const auto = s.positions.length
+            ? `${posText(s.positions)} → ${out || '…'}` : `New combo`;
         const fam = this.app.profile?.family ?? 'imprint';
-        const customName = zmkSlotName(fam, 'combos', i);
-        return el('div', { class: 'card', style: live ? '' : 'opacity:0.75' },
+        const custom = zmkSlotName(fam, 'combos', i);
+        const picking = this.editing === i;
+        const warn = this.warn.get(i);
+
+        return el('div', { class: 'card', 'data-combo': i, style: live ? '' : 'opacity:0.85' },
             el('div', { class: 'row' },
                 el('span', { class: 'lbl' }, renameLabel({
-                    text: customName || `Combo ${i}`,
-                    placeholder: `Combo ${i}`,
+                    text: custom || auto, placeholder: auto,
                     onCommit: (v) => { zmkSetSlotName(fam, 'combos', i, v); this.render(); },
                 }),
                     el('span', {
                         class: 'hint',
-                        text: live ? `${s.positions.length} keys → ${this.outputDesc(s)}`
-                            : 'incomplete — needs ≥ 2 keys and an output',
+                        text: live ? `Combo ${i}` : `Combo ${i} · incomplete: needs 2 or more keys and an output`,
                     })),
                 el('span', { style: 'flex:1' }),
                 el('button', {
-                    class: 'btn small', text: '🗑', title: 'empty this combo slot',
+                    class: 'btn small', text: 'Delete', title: 'empty this combo slot',
                     onclick: () => this.clearSlot(i),
                 })),
-            el('div', { style: 'display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap' },
-                el('div', {},
-                    el('div', { class: 'note faint', text: 'output' }), tile),
-                el('div', { style: 'flex:1; overflow-x:auto' }, this.miniBoard(i))),
+            el('div', { style: 'display:flex; gap:10px; align-items:center; flex-wrap:wrap' },
+                board.adapter
+                    ? el('button', {
+                        class: 'btn small' + (picking ? ' primary' : ''), 'data-act': 'keys',
+                        text: picking ? 'Done picking keys' : (s.positions.length ? 'Change keys' : 'Pick keys'),
+                        title: 'toggle keys on the main board',
+                        onclick: () => this.togglePick(i),
+                    })
+                    : this.positionFallback(i),
+                el('button', {
+                    class: 'btn small', 'data-act': 'output',
+                    text: out ? `Output: ${out}` : 'Choose output…',
+                    onclick: () => this.pickOutputFor(i),
+                })),
+            warn ? el('div', { class: 'note', role: 'alert', 'data-warn': '', text: warn }) : null,
             this.timed ? this.timingStrip(i) : null);
     }
 
     render() {
         const { flask } = this.app;
-        // Visible = any slot with CONTENT (or an open draft) — not just
-        // "live" slots. comboSlotIsEmpty is the firmware's fire rule
-        // (usage + ≥2 keys), so filtering on it alone made a combo VANISH
-        // the moment you unchecked one key mid-edit (bench 5: "combos
-        // delete themselves") — the 1-key slot was still on the device,
-        // just unreachable. The card already renders the incomplete state.
+        // Visible = any slot with CONTENT (or an open draft), not just live
+        // ones: filtering on the fire rule made a combo VANISH the moment
+        // you unpicked one key mid-edit (bench 5: "combos delete themselves").
         const visible = this.slots
             .map((s, i) => i)
             .filter((i) => {
@@ -497,13 +369,13 @@ export class ZmkCombosTab {
             });
         const used = this.slots.filter((s) => !comboSlotV2IsEmpty(s)).length;
 
-        const controls = card('Runtime combos',
-            'press keys together, get a keycode — live-editable, unlike ZMK\'s devicetree combos',
+        const controls = card('Combos',
+            'press keys together, get an output; live-editable',
             toggleRow({
                 label: 'Combos enabled',
                 hint: this.timed
-                    ? 'master switch for ALL combos — the keymap\'s combos live in these slots since v14'
-                    : 'master switch for RUNTIME combos (slots stay stored) — the '
+                    ? 'master switch for ALL combos; the keymap\'s combos live in these slots since v14'
+                    : 'master switch for RUNTIME combos (slots stay stored); the '
                     + 'firmware\'s compiled devicetree combos have no off switch',
                 value: this.enabled,
                 onChange: async (val) => {
@@ -512,9 +384,9 @@ export class ZmkCombosTab {
                 },
             }),
             sliderRow({
-                label: 'Timeout',
+                label: 'Window',
                 hint: this.timed
-                    ? 'default candidate window, ms — a combo\'s own timeout overrides it'
+                    ? 'default candidate window, ms; a combo\'s own window overrides it'
                     : 'candidate window for all combos, ms',
                 min: 10, max: 2000, step: 5, value: this.timeout,
                 format: (v) => `${v} ms`,
@@ -525,17 +397,18 @@ export class ZmkCombosTab {
             }),
             el('div', { class: 'savebar' },
                 el('button', {
-                    class: 'btn primary', text: 'Add New Combo',
+                    class: 'btn primary', text: '＋ New combo', 'data-act': 'new',
                     onclick: () => this.addCombo(),
                 }),
                 el('span', { class: 'note faint', text: `${used} of ${this.slotCount} slots in use` })),
-            saveBar(() => flask.save(CH.combos)));
+            this.bar);
 
         this.root.replaceChildren(controls,
             ...visible.map((i) => this.comboCard(i)),
             visible.length ? el('span') : el('div', {
                 class: 'note faint',
-                text: 'No combos yet — Add New Combo, click at least two keys on the mini board, pick an output.',
-            }));
+                text: 'No combos yet. ＋ New combo, then click at least two keys on the board and choose an output.',
+            }),
+            this.timingCard);
     }
 }
