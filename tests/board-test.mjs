@@ -57,7 +57,7 @@ eq(baseUnit(40), 48, 'unit never below 48');
     eq(splitCap('MT·⌘·A'), { top: 'MT ⌘', main: 'A' });
     eq(splitCap('Esc'), { top: '', main: 'Esc' });
     eq(splitCap('·'), { top: '', main: '·' });
-    // QMK parity on 30 sample keycodes: the parts rebuild the label.
+    // 30 sample keycodes: WP3 capParts words replaced the old label shape, so only the invariants hold.
     const samples = [0x0004, 0x0005, 0x001d, 0x0029, 0x002c, 0x0104, 0x0204, 0x0404, 0x0804, 0x1104, 0x2104, 0x2204, 0x2504, 0x2a04,
         0x4204, 0x4104, 0x4304, 0x5204, 0x5223, 0x5222, 0x7c00, 0x7700, 0x0001, 0x0000, 0x00cd, 0x00d1, 0x00a5, 0x00ab, 0x00e2, 0x2f01];
     eq(samples.length, 30);
@@ -65,11 +65,11 @@ eq(baseUnit(40), 48, 'unit never below 48');
     for (const kc of samples) {
         const label = capLabel(kc);
         const p = capPartsOf(kc, qmk);
-        eq((p.top ? `${p.top} ` : '') + p.main, label.replaceAll('·', ' '), `qmk 0x${kc.toString(16)} parts rebuild "${label}"`);
+        ok(!p.top.includes('(x') && !p.main.includes('(x'), `no raw (x in 0x${kc.toString(16)} (${label})`);
         ok(p.main.length > 0, `main is never empty (0x${kc.toString(16)})`);
     }
-    eq(capPartsOf(0x4204, qmk), { top: 'LT2', main: 'A' });
-    eq(capPartsOf(0x2104, qmk), { top: 'MT', main: 'A' });
+    eq(capPartsOf(0x4204, qmk), { top: 'LT L2', main: 'A' });
+    eq(capPartsOf(0x2104, qmk), { top: 'Mod-tap ⌃', main: 'A' });
     eq(capPartsOf(0x0004, qmk), { top: '', main: 'A' });
 }
 
