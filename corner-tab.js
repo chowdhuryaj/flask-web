@@ -88,17 +88,28 @@ export class CornerTab {
         if (!panel) return;
         this._obs = new MutationObserver(() => this._board());
         this._obs.observe(panel, { attributes: true, attributeFilter: ['class'] });
+        // A .vil load, reconnect or device switch rebuilds every panel (and
+        // clears the chord overlay, main.js renderTabStrip). The old tab must
+        // then stop listening, or it repaints its stale chords on a layer pick.
+        this._ac = new AbortController();
         board.addEventListener('layer', () => {
+            if (!this.root.isConnected) { this._dispose(); return; }
             if (this._active() && this.app.caps.cornerPerLayer && board.layer !== this.layer) this._switchLayer(board.layer);
-        });
+        }, { signal: this._ac.signal });
+    }
+
+    _dispose() {
+        this._ac?.abort();
+        this._obs?.disconnect();
     }
 
     _active() {
         const p = this.root.parentElement;
-        return !!p && (!p.classList.contains('panel') || p.classList.contains('active'));
+        return !!p && p.isConnected && (!p.classList.contains('panel') || p.classList.contains('active'));
     }
 
     _board() {
+        if (!this.root.isConnected) { this._dispose(); return; }   // dead panel: never touch the board
         if (!this._active()) { board.setChordBoxes(null); board.setLayerBarNote(null); return; }
         const boxes = [];
         for (let def = 0; def < this.defCount; def++) {

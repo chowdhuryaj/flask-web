@@ -165,6 +165,41 @@ def svalboard(browser):
     ctx.close()
 
 
+def corner_stale(browser):
+    """Final-verify R1: after a .vil load rebuilds the panels, the old
+    Chords tab must not repaint its chord boxes on a layer pick."""
+    # v18: per-layer chord outputs, so the Chords tab follows board layer picks.
+    ctx, page, errors = H.new_context(browser, seeds=({**H.SVAL, 'protocolVersion': 18},))
+    H.open_workspace(page, H.SVAL['label'])
+    goto_tab(page, 'Behaviour', 'corner')
+    page.wait_for_timeout(500)
+    check(page.locator('.kb-svg .chord-box').count() == 4, 'stale: chords drawn before the load')
+    page.locator('.bd-more').click()   # empty layers are hidden until asked for
+    with page.expect_download() as dl:
+        page.locator('#vil-save').click()
+    path = OUT / 'stale-roundtrip.vil'
+    OUT.mkdir(parents=True, exist_ok=True)
+    dl.value.save_as(str(path))
+    page.set_input_files('#vil-file', str(path))
+    page.wait_for_timeout(1200)
+    check(page.locator('.kb-svg .chord-box').count() == 0, f'stale: boxes left after .vil load: {page.locator(".kb-svg .chord-box").count()}')
+    goto_tab(page, 'Behaviour', 'macros')
+    page.locator('.bd-chip').nth(1).click()
+    page.wait_for_timeout(600)
+    check(page.locator('.kb-svg .chord-box').count() == 0, f'stale: old Chords tab repainted on a layer pick: {page.locator(".kb-svg .chord-box").count()}')
+    page.locator('.bd-chip').nth(0).click()
+    goto_tab(page, 'Behaviour', 'corner')
+    page.wait_for_timeout(500)
+    page.locator('.bd-chip').nth(1).click()
+    page.wait_for_timeout(600)
+    n = page.locator('.kb-svg .chord-box').count()
+    check(n == 4, f'stale: new Chords tab draws its own boxes on layer 1: {n}')
+    shot(page, 'svalboard-chords-after-vil')
+    errors = [e for e in errors if 'Hardware disabled' not in e]
+    check(not errors, f'stale errors: {errors}')
+    ctx.close()
+
+
 def adept(browser):
     ctx, page, errors = H.new_context(browser)
     H.open_workspace(page, 'Ploopy Adept')
@@ -199,7 +234,7 @@ def dev_harness(browser):
 def main():
     with sync_playwright() as p:
         browser = H.launch(p)
-        for fn in (svalboard, adept, dev_harness):
+        for fn in (svalboard, corner_stale, adept, dev_harness):
             try:
                 fn(browser)
             except Exception as e:  # noqa: BLE001

@@ -475,6 +475,10 @@ function renderTabNav() {
 function renderTabStrip() {
     renderTabNav();
     const panels = $('panels');
+    // Every panel is about to be replaced: an overlay a dead tab painted
+    // (corner chord boxes, bar note) must not outlive it.
+    board.setChordBoxes(null);
+    board.setLayerBarNote(null);
     panels.replaceChildren(...TABS.map((t) => {
         t.instance = new t.ctor(app);
         t.panel = el('div', { class: 'panel', 'data-panel': t.id }, t.instance.root);
