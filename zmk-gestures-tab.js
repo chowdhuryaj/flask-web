@@ -11,11 +11,11 @@
 // and the board render with the physical trackballs sits above the editor
 // (both balls stroke gestures).
 
-import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel } from './ui.js?v=49';
+import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel, reloadBar } from './ui.js?v=49';
 import { CH, V } from './flaskproto.js?v=49';
 import { renderKeyboardSVG } from './keymap-tab.js?v=49';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=51';
-import { pickTypedOutput, outputLabel } from './zmk-leader-tab.js?v=49';
+import { blurClicks, pickOutput, outText, installSlotSummary } from './zmk-behaviour-common.js?v=1';
 import { OUTPUT_ACTION, GESTURE_DIR_LABELS, encodeGestureSlot, decodeGestureSlot }
     from './zmk-output-codec.js?v=49';
 
@@ -32,7 +32,8 @@ const SET_HINTS = ['arrows', 'editing', 'media', 'tab-nav'];
 export class ZmkGesturesTab {
     constructor(app) {
         this.app = app;
-        this.root = el('div');
+        this.root = blurClicks(el('div'));
+        installSlotSummary(app);
         this.set = 0;
         this.sets = [];     // [set][dir] typed outputs — all sets, cached
     }
@@ -63,6 +64,11 @@ export class ZmkGesturesTab {
         } finally {
             hid?.resume?.();
         }
+        this.bar ??= reloadBar(CH.gestures, {
+            label: 'Gestures', line: 'zmk',
+            save: () => this.app.flask.save(CH.gestures),
+            reload: () => this.load(),
+        });
         this.render();
     }
 
@@ -77,6 +83,7 @@ export class ZmkGesturesTab {
             const r = await this.app.flask.setBytes(CH.gestures, V.gesturesSlot,
                 encodeGestureSlot(this.set, dir, this.outputs[dir]), 2);
             this.sets[this.set][dir] = decodeGestureSlot(r);
+            this.bar?.markEdited();
         } catch (e) {
             toast(`Gesture write failed: ${e.message}`, true);
         }
@@ -85,12 +92,15 @@ export class ZmkGesturesTab {
 
     pickDir(dir) {
         const o = this.outputs[dir];
-        pickTypedOutput(`${this.setName(this.set)} · ${GESTURE_DIR_LABELS[dir]}`, o, this.macroSlots,
-            (out) => {
-                o.action = out.action;
-                o.param = out.param;
+        pickOutput({
+            app: this.app, surface: 'zmk.typedOutput',
+            title: `${this.setName(this.set)} · ${GESTURE_DIR_LABELS[dir]}`, value: o,
+            onPick: (v) => {
+                o.action = v.action;
+                o.param = v.action ? v.param1 : 0;
                 this.writeDir(dir);
-            });
+            },
+        });
     }
 
     compass() {
@@ -106,12 +116,12 @@ export class ZmkGesturesTab {
             cells[r * 3 + c] = el('button', {
                 class: 'code',
                 style: `min-height:52px; ${empty ? 'opacity:0.55' : ''}`,
-                title: `${GESTURE_DIR_LABELS[dir]} — ${outputLabel(o)}`
+                title: `${GESTURE_DIR_LABELS[dir]} — ${outText(o, 'zmk.typedOutput') || 'none'}`
                     + ((dir & 1) && empty ? ' (empty diagonal falls back to the nearest cardinal)' : ''),
                 onclick: () => this.pickDir(dir),
             },
                 el('div', { class: 'note faint', text: GESTURE_DIR_LABELS[dir] }),
-                el('div', { text: outputLabel(o, { cap: true }) }));
+                el('div', { text: outText(o, 'zmk.typedOutput') || '—' }));
         }
         cells[4] = el('div', {
             class: 'note faint',
@@ -157,7 +167,7 @@ export class ZmkGesturesTab {
             }));
 
         const controls = card('Runtime gestures',
-            'hold the gesture key, stroke a ball — outputs fire per ratchet step',
+            'hold the gesture key, stroke a ball; outputs fire per ratchet step',
             toggleRow({
                 label: 'Gestures enabled',
                 hint: 'master switch; the tables stay stored while off',
@@ -186,18 +196,10 @@ export class ZmkGesturesTab {
                     this.render();
                 },
             }),
-            el('div', { class: 'savebar' },
-                el('span', { style: 'flex:1' }),
-                el('button', {
-                    class: 'btn small', text: 'Save to keyboard',
-                    onclick: async () => {
-                        try { await flask.save(CH.gestures); toast('Gesture sets saved'); }
-                        catch (e) { toast(`Save failed: ${e.message}`, true); }
-                    },
-                })));
+            this.bar);
 
         const editor = card('Edit set',
-            'each direction fires a keycode or plays a macro; empty diagonals fall back to cardinals — click the set name to rename',
+            'each direction fires a keycode or plays a macro; empty diagonals fall back to cardinals. Click the set name to rename',
             el('div', { class: 'row' },
                 el('span', { class: 'lbl' }, renameLabel({
                     text: this.setName(this.set),

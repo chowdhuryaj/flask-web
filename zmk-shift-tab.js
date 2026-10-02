@@ -8,14 +8,14 @@
 //   base ⌫ → shifted ⌦      ⇧⌫ deletes forward
 //   base H → shifted ⇧R     ⇧h types R   (the replacement's own shift)
 //
-// The shifted PICKER's modifier chips encode into the replacement (bits
+// The shifted picker's modifier row encodes into the replacement (bits
 // 24-31); the base is matched by page+id (its mod bits are ignored by the
 // firmware). Same slot-list pattern as the Leader tab.
 
-import { el, card, toggleRow, toast } from './ui.js?v=49';
+import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=49';
 import { CH, V } from './flaskproto.js?v=49';
-import { pickUsage } from './zmk-combos-tab.js?v=49';
-import { usageCap, usageLabel, usageFromName } from './zmk-keycodes.js?v=49';
+import { usageCap, usageFromName } from './zmk-keycodes.js?v=49';
+import { blurClicks, pickOutput, outText, installSlotSummary } from './zmk-behaviour-common.js?v=1';
 import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty } from './zmk-csk-codec.js?v=49';
 
 // One-click starters (AJ's examples). Encodings ride usageFromName so the
@@ -30,8 +30,9 @@ const PRESETS = [
 export class ZmkShiftTab {
     constructor(app) {
         this.app = app;
-        this.root = el('div');
+        this.root = blurClicks(el('div'));
         this.drafts = new Set();
+        installSlotSummary(app);
     }
 
     async load() {
@@ -48,6 +49,11 @@ export class ZmkShiftTab {
         } finally {
             hid?.resume?.();
         }
+        this.bar ??= reloadBar(CH.customShift, {
+            label: 'Shift keys', line: 'zmk',
+            save: () => this.app.flask.save(CH.customShift),
+            reload: () => this.load(),
+        });
         this.render();
     }
 
@@ -56,6 +62,7 @@ export class ZmkShiftTab {
             const r = await this.app.flask.setBytes(CH.customShift, V.cskSlot,
                 encodeCskSlot(i, this.slots[i]), 1);
             this.slots[i] = decodeCskSlot(r); // adopt the echo
+            this.bar?.markEdited();
         } catch (e) {
             if (before) this.slots[i] = before;
             toast(`Shift-pair write failed: ${e.message}`, true);
@@ -98,19 +105,23 @@ export class ZmkShiftTab {
     pickSide(i, side) {
         const s = this.slots[i];
         const title = side === 'base'
-            ? `Pair ${i} — base key (what you press)`
-            : `Pair ${i} — shifted output (what ⇧+key types)`;
-        pickUsage(title, s[side], (usage) => {
-            const before = { ...s };
-            // A duplicate base would shadow the earlier slot — refuse.
-            if (side === 'base' && usage
-                && this.slots.some((o, oi) => oi !== i && o.base === (usage >>> 0)
-                    && !cskSlotIsEmpty(o))) {
-                toast('That base key already has a shift pair', true);
-                return;
-            }
-            this.slots[i][side] = usage >>> 0;
-            this.writeSlot(i, before);
+            ? `Pair ${i}: base key (what you press)`
+            : `Pair ${i}: shifted output (what ⇧+key types)`;
+        pickOutput({
+            app: this.app, surface: side === 'base' ? 'zmk.cskBase' : 'zmk.cskShifted', title,
+            value: s[side] ? { action: 1, param1: s[side] } : null,
+            onPick: (v) => {
+                const usage = (v.action === 1 ? v.param1 : 0) >>> 0;
+                const before = { ...s };
+                // A duplicate base would shadow the earlier slot — refuse.
+                if (side === 'base' && usage
+                    && this.slots.some((o, oi) => oi !== i && o.base === usage && !cskSlotIsEmpty(o))) {
+                    toast('That base key already has a shift pair', true);
+                    return;
+                }
+                this.slots[i][side] = usage;
+                this.writeSlot(i, before);
+            },
         });
     }
 
@@ -122,7 +133,7 @@ export class ZmkShiftTab {
             el('button', {
                 class: 'code',
                 style: 'min-width:72px; min-height:44px; font-size:1.05em',
-                title: value ? usageLabel(value) : `pick the ${hint}`,
+                title: value ? outText({ action: 1, param1: value }, 'zmk.cskShifted') : `pick the ${hint}`,
                 onclick: () => this.pickSide(i, side),
             }, value ? usageCap(value) : `${hint}…`));
 
@@ -132,12 +143,12 @@ export class ZmkShiftTab {
                     el('span', {
                         class: 'hint',
                         text: live
-                            ? `⇧ ${usageLabel(s.base)} types ${usageLabel(s.shifted)}`
-                            : 'incomplete — pick both sides',
+                            ? `⇧ ${outText({ action: 1, param1: s.base }, 'zmk.cskBase')} types ${outText({ action: 1, param1: s.shifted }, 'zmk.cskShifted')}`
+                            : 'incomplete: pick both sides',
                     })),
                 el('span', { style: 'flex:1' }),
                 el('button', {
-                    class: 'btn small', text: '🗑', title: 'empty this pair',
+                    class: 'btn small', text: 'Delete', title: 'empty this pair',
                     onclick: () => this.clearSlot(i),
                 })),
             el('div', { style: 'display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap' },
@@ -173,23 +184,16 @@ export class ZmkShiftTab {
                     onclick: () => this.addPreset(p),
                 })),
                 el('span', { class: 'note faint', text: `${used}/${this.slotCount} slots used` }),
-                el('span', { style: 'flex:1' }),
-                el('button', {
-                    class: 'btn small', text: 'Save to keyboard',
-                    onclick: async () => {
-                        try { await flask.save(CH.customShift); toast('Shift pairs saved'); }
-                        catch (e) { toast(`Save failed: ${e.message}`, true); }
-                    },
-                })),
+                ),
+            this.bar,
             el('div', { class: 'note faint',
-                text: 'The shifted picker\'s modifier chips ride the replacement — e.g. pick R with ⇧ for h→R. '
-                    + 'Edits are live; Save persists across power-off.' }));
+                text: 'The shifted picker\'s modifier row rides the replacement, e.g. pick R with ⇧ for h→R. Edits are live.' }));
 
         this.root.replaceChildren(controls,
             ...visible.map((i) => this.pairCard(i)),
             visible.length ? el('span') : el('div', {
                 class: 'note faint',
-                text: 'No pairs yet — use a preset or ＋ New pair, then pick the base key and its shifted output.',
+                text: 'No pairs yet. Use a preset or ＋ New pair, then pick the base key and its shifted output.',
             }));
     }
 }

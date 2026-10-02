@@ -9,25 +9,31 @@
 // tapping term ("behavior modification settings" — timing, AJ 2026-07-12);
 // term 0 = the firmware default 200 ms.
 
-import { el, card, toggleRow, modal, toast } from './ui.js?v=49';
+import { el, card, toggleRow, modal, toast, reloadBar } from './ui.js?v=49';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=51';
 import { CH, V } from './flaskproto.js?v=49';
-import { pickUsage } from './zmk-combos-tab.js?v=49';
-import { usageCap, usageLabel, zmkBehaviors } from './zmk-keycodes.js?v=49';
-import { buildZmkPicker } from './zmk-keymap-tab.js?v=50';
+import { blurClicks, pickOutput, outText, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=1';
 import {
     TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg,
     tdDanceLength, tdSlotIsEmpty,
 } from './zmk-tapdance-codec.js?v=49';
 
-const TAP_WORDS = ['Single tap', 'Double tap', 'Triple tap', 'Quad tap',
-    '5 taps', '6 taps', '7 taps', '8 taps'];
+const TAP_WORDS = ['1 tap', '2 taps', '3 taps', '4 taps', '5 taps', '6 taps', '7 taps', '8 taps'];
+
+/** Chip text for the picker: "A / Esc" (first three outputs). */
+export function danceSummary(slot) {
+    if (!slot) return '';
+    return slot.taps.slice(0, tdDanceLength(slot.taps)).slice(0, 3)
+        .map((o) => outText(o, 'zmk.tapDanceStep')).join(' / ');
+}
 
 export class ZmkTapDanceTab {
     constructor(app) {
         this.app = app;
-        this.root = el('div');
+        this.root = blurClicks(el('div'));
         this.drafts = new Set();
+        installSlotSummary(app);
+        registerSummary('tap-dance', (i) => danceSummary(this.slots?.[i]));
     }
 
     async load() {
@@ -52,6 +58,11 @@ export class ZmkTapDanceTab {
         } finally {
             hid?.resume?.();
         }
+        this.bar ??= reloadBar(CH.tapDance, {
+            label: 'Tap dances', line: 'zmk',
+            save: () => this.app.flask.save(CH.tapDance),
+            reload: () => this.load(),
+        });
         this.render();
     }
 
@@ -60,6 +71,7 @@ export class ZmkTapDanceTab {
             const r = await this.app.flask.setBytes(CH.tapDance, V.tdStep,
                 encodeTdStep(i, t, this.slots[i].taps[t]), 2);
             this.slots[i].taps[t] = decodeTdStep(r); // adopt the echo
+            this.bar?.markEdited();
         } catch (e) {
             toast(`Tap-dance write failed: ${e.message}`, true);
         }
@@ -71,6 +83,7 @@ export class ZmkTapDanceTab {
             const r = await this.app.flask.setBytes(CH.tapDance, V.tdCfg,
                 encodeTdCfg(i, termMs), 1);
             this.slots[i].termMs = decodeTdCfg(r).termMs;
+            this.bar?.markEdited();
         } catch (e) {
             toast(`Term write failed: ${e.message}`, true);
         }
@@ -91,6 +104,7 @@ export class ZmkTapDanceTab {
         try {
             for (let t = 0; t < this.maxTaps; t++) await this.writeStepQuiet(i, t);
             await this.app.flask.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(i, 0), 1);
+            this.bar?.markEdited();
         } catch (e) {
             toast(`Clear failed: ${e.message}`, true);
         }
@@ -103,78 +117,17 @@ export class ZmkTapDanceTab {
         this.slots[i].taps[t] = decodeTdStep(r);
     }
 
-    /** Output description for a tap step. */
-    stepDesc(o, { cap = false } = {}) {
-        switch (o.action) {
-        case TD_ACTION.usage:
-            return cap ? usageCap(o.param1) : usageLabel(o.param1);
-        case TD_ACTION.macro:
-            return cap ? `M${o.param1}` : `Macro ${o.param1}`;
-        case TD_ACTION.behavior: {
-            const d = zmkBehaviors().get(o.behaviorId);
-            const name = d?.displayName || `behavior #${o.behaviorId}`;
-            return cap ? name.split(' ').map((w) => w[0]).join('').slice(0, 4) : name;
-        }
-        default:
-            return '';
-        }
-    }
-
     pickStep(i, t) {
         const o = this.slots[i].taps[t];
-        const behaviors = zmkBehaviors();
-        const apply = (patch) => {
-            Object.assign(this.slots[i].taps[t], {
-                action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0,
-            }, patch);
-            this.writeStep(i, t);
-        };
-        const rows = [
-            el('button', {
-                class: 'btn small primary', text: '⌨ Keycode…',
-                onclick: () => {
-                    back.remove();
-                    pickUsage(`${TAP_WORDS[t]} output`,
-                        o.action === TD_ACTION.usage ? o.param1 : 0,
-                        (usage) => apply(usage
-                            ? { action: TD_ACTION.usage, param1: usage } : {}));
-                },
-            }),
-        ];
-        if (this.macroSlots > 0) {
-            const sel = el('select', {}, ...Array.from({ length: this.macroSlots }, (_, m) =>
-                el('option', {
-                    value: m, text: `Macro ${m}`,
-                    selected: o.action === TD_ACTION.macro && o.param1 === m,
-                })));
-            rows.push(el('div', { style: 'display:flex; gap:6px; align-items:center' },
-                el('button', {
-                    class: 'btn small', text: '▶ Play macro',
-                    onclick: () => {
-                        back.remove();
-                        apply({ action: TD_ACTION.macro, param1: Number(sel.value) });
-                    },
-                }), sel));
-        }
-        if (behaviors.size) {
-            rows.push(el('div', { class: 'note faint', style: 'margin-top:6px',
-                text: 'Or any behavior — a held dance holds it (mods and layers work):' }));
-            rows.push(buildZmkPicker({
-                keyPressId: null,
-                onPick: (b) => {
-                    back.remove();
-                    apply({ action: TD_ACTION.behavior, behaviorId: b.behaviorId,
-                        param1: b.param1 >>> 0, param2: b.param2 >>> 0 });
-                },
-            }));
-        }
-        rows.push(el('button', {
-            class: 'btn small', text: '∅ Clear this tap',
-            onclick: () => { back.remove(); apply({}); },
-        }));
-        const back = modal(`Dance ${i} — ${TAP_WORDS[t]}`, el('div', {
-            style: 'display:flex; flex-direction:column; gap:8px',
-        }, ...rows), []);
+        pickOutput({
+            app: this.app, surface: 'zmk.tapDanceStep', title: `Dance ${i}: ${TAP_WORDS[t]}`, value: o,
+            onPick: (v) => {
+                Object.assign(this.slots[i].taps[t], {
+                    action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0,
+                }, v.action ? v : {});
+                this.writeStep(i, t);
+            },
+        });
     }
 
     /** The creation wizard: name → term → per-tap outputs, then points at
@@ -197,7 +150,7 @@ export class ZmkTapDanceTab {
             style: 'width:100px',
         });
         const stepsNote = el('div', { class: 'note faint',
-            text: `Pick outputs on the Dance ${i} card after Create — `
+            text: `Pick outputs on the Dance ${i} card after Create: `
                 + `${TAP_WORDS.slice(0, this.maxTaps).join(' / ').toLowerCase()}.` });
         const back = modal('New tap dance', el('div', {
             style: 'display:flex; flex-direction:column; gap:8px',
@@ -207,8 +160,8 @@ export class ZmkTapDanceTab {
             el('label', { text: 'Tapping term (ms)' }), termInput,
             stepsNote,
             el('div', { class: 'note faint',
-                text: 'Then bind it: Keymap tab → pick a key → behavior "Tap Dance" → slot '
-                    + `${i}. The wizard leaves the slot as a draft until it has outputs.` })), [
+                text: 'Then bind it: Keys → pick a key → Run › Tap dance → slot '
+                    + `${i}. The slot stays a draft until it has outputs.` })), [
             el('button', { class: 'btn small', text: 'Cancel',
                 onclick: () => { this.drafts.delete(i); back.remove(); this.render(); } }),
             el('button', { class: 'btn small primary', text: 'Create', onclick: async () => {
@@ -218,7 +171,7 @@ export class ZmkTapDanceTab {
                 back.remove();
                 if (term) await this.writeTerm(i, term);
                 this.render();
-                toast(`Dance ${i} created — pick its tap outputs, then bind &ftd ${i} in the Keymap tab`);
+                toast(`Dance ${i} created. Pick its tap outputs, then bind it from Keys › Run › Tap dance`);
             } }),
         ]);
     }
@@ -230,17 +183,14 @@ export class ZmkTapDanceTab {
         const fam = this.app.profile?.family ?? 'imprint';
         const customName = zmkSlotName(fam, 'tapdance', i);
 
-        const stepTiles = s.taps.map((o, t) => el('div', {},
-            el('div', { class: 'note faint', text: TAP_WORDS[t] || `${t + 1} taps` }),
+        const stepRows = s.taps.map((o, t) => el('div', { class: 'row', style: 'gap:8px' },
+            el('span', { class: 'faint', style: 'width:56px', text: TAP_WORDS[t] || `${t + 1} taps` }),
             el('button', {
-                class: 'code',
-                style: 'min-width:64px; min-height:40px'
-                    + (t > len ? '; opacity:0.45' : ''),
-                title: o.action !== TD_ACTION.none ? this.stepDesc(o)
-                    : (t > len ? 'fill the earlier taps first — a dance is a contiguous run'
-                        : 'pick this tap count\'s output'),
+                class: 'btn small' + (t > len ? ' faint' : ''), 'data-tap': t,
+                title: t > len ? 'fill the earlier taps first; a dance is a contiguous run' : 'pick this tap count\'s output',
+                text: o.action !== TD_ACTION.none ? outText(o, 'zmk.tapDanceStep') : 'Choose output…',
                 onclick: () => this.pickStep(i, t),
-            }, o.action !== TD_ACTION.none ? this.stepDesc(o, { cap: true }) : '—')));
+            })));
 
         const termInput = el('input', {
             type: 'number', min: 0, max: 1000, value: s.termMs || '',
@@ -258,18 +208,18 @@ export class ZmkTapDanceTab {
                     el('span', {
                         class: 'hint',
                         text: live
-                            ? `${len} tap${len > 1 ? 's' : ''} configured — bind as Tap Dance slot ${i}`
-                            : 'no outputs yet — pick at least the single tap',
+                            ? `${danceSummary(s)} · Keys picker: Run › Tap dance ${i}`
+                            : 'no outputs yet: pick at least the 1 tap',
                     })),
                 el('span', { style: 'flex:1' }),
                 el('button', {
-                    class: 'btn small', text: '🗑', title: 'empty this dance',
+                    class: 'btn small', text: 'Delete', title: 'empty this dance',
                     onclick: () => this.clearSlot(i),
                 })),
-            el('div', { style: 'display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap' },
-                ...stepTiles,
-                el('div', {},
-                    el('div', { class: 'note faint', text: 'term (ms)' }), termInput)));
+            ...stepRows,
+            el('div', { class: 'row', style: 'gap:8px' },
+                el('span', { class: 'faint', style: 'width:56px', text: 'Term' }), termInput,
+                el('span', { class: 'note faint', text: 'ms (0 = firmware default 200)' })));
     }
 
     render() {
@@ -295,16 +245,10 @@ export class ZmkTapDanceTab {
                     onclick: () => this.openWizard(),
                 }),
                 el('span', { class: 'note faint', text: `${used}/${this.slotCount} slots used` }),
-                el('span', { style: 'flex:1' }),
-                el('button', {
-                    class: 'btn small', text: 'Save to keyboard',
-                    onclick: async () => {
-                        try { await flask.save(CH.tapDance); toast('Tap dances saved'); }
-                        catch (e) { toast(`Save failed: ${e.message}`, true); }
-                    },
-                })),
+                ),
+            this.bar,
             el('div', { class: 'note faint',
-                text: 'Bind a dance to a key in the Keymap tab: behavior "Tap Dance", param = the slot number. Edits are live; Save persists across power-off.' }));
+                text: 'Bind a dance to a key from Keys › Run › Tap dance. Edits are live.' }));
 
         this.root.replaceChildren(controls,
             ...visible.map((i) => this.danceCard(i)),

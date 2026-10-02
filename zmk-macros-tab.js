@@ -1,7 +1,7 @@
 // ZMK Macros tab — flask_macros runtime macros (channel 0x25, proto v8).
 // One card per macro slot: an ordered step list (Tap / Press / Release /
-// Wait), each step's key picked with the shared usage modal (combos tab),
-// wait times on an inline slider. Edits are LIVE on the device
+// Wait), each step's key picked with the shared BindingPicker sheet
+// (zmk.macroKey), wait times on an inline slider. Edits are LIVE on the device
 // (write-through); Save persists; ▶ plays the slot over the protocol's
 // live-state value (nothing has to be bound to a key to test it).
 //
@@ -15,22 +15,36 @@
 // Playback stops at the first empty step, so the editor keeps live steps
 // compacted: deleting a row shifts the tail up and rewrites the suffix.
 
-import { el, card, sliderRow, toggleRow, saveBar, toast, renameLabel } from './ui.js?v=49';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=49';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=51';
 import { CH, V } from './flaskproto.js?v=49';
-import { usageCap, usageLabel } from './zmk-keycodes.js?v=49';
-import { pickUsage } from './zmk-combos-tab.js?v=49';
+import { usageCap } from './zmk-keycodes.js?v=49';
+import { blurClicks, pickOutput, outText, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=1';
 import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=49';
 import {
     MACRO_ACTION, MACRO_ACTION_LABELS,
     decodeMacroStep, encodeMacroStep, macroIsEmpty, macroLiveSteps,
 } from './zmk-macros-codec.js?v=49';
 
+/** Short text for the picker's slot chips: "types 'hello'" or "3 steps". */
+export function macroSummary(steps) {
+    const live = macroLiveSteps(steps ?? []);
+    if (!live.length) return '';
+    const caps = live.map((st) => (st.action === MACRO_ACTION.tap && st.param ? usageCap(st.param) : null));
+    if (caps.every((c) => c && c.length === 1)) {
+        const t = caps.join('').toLowerCase();
+        return `types '${t.length > 12 ? t.slice(0, 12) + '…' : t}'`;
+    }
+    return `${live.length} step${live.length === 1 ? '' : 's'}`;
+}
+
 export class ZmkMacrosTab {
     constructor(app) {
         this.app = app;
-        this.root = el('div');
+        this.root = blurClicks(el('div'));
         this.drafts = new Set(); // empty slots kept visible while editing
+        installSlotSummary(app);
+        registerSummary('macro', (m) => macroSummary(this.steps?.[m]));
     }
 
     async load() {
@@ -61,6 +75,11 @@ export class ZmkMacrosTab {
         } finally {
             hid?.resume?.();
         }
+        this.bar ??= reloadBar(CH.macros, {
+            label: 'Macros', line: 'zmk',
+            save: () => this.app.flask.save(CH.macros),
+            reload: () => this.load(),
+        });
         this.render();
     }
 
@@ -70,6 +89,7 @@ export class ZmkMacrosTab {
                 encodeMacroStep(m, s, this.steps[m][s]), 2);
             const step = decodeMacroStep(r); // adopt the echo (normalized)
             this.steps[m][s] = { action: step.action, param: step.param };
+            this.bar?.markEdited();
         } catch (e) {
             toast(`Macro write failed: ${e.message}`, true);
         }
@@ -238,10 +258,15 @@ export class ZmkMacrosTab {
             paramEl = el('button', {
                 class: 'code',
                 style: 'min-width:64px',
-                title: step.param ? usageLabel(step.param) : 'pick the key',
-                onclick: () => pickUsage(`Macro ${m} step ${s + 1} key`, step.param, (usage) => {
-                    step.param = usage;
-                    this.writeStep(m, s).then(() => this.render());
+                title: step.param ? outText({ action: 1, param1: step.param }, 'zmk.macroKey') : 'pick the key',
+                onclick: () => pickOutput({
+                    app: this.app, surface: 'zmk.macroKey',
+                    title: `Macro ${m} step ${s + 1} key`,
+                    value: step.param ? { action: 1, param1: step.param } : null,
+                    onPick: (v) => {
+                        step.param = v.action === 1 ? v.param1 : 0;
+                        this.writeStep(m, s).then(() => this.render());
+                    },
                 }),
             }, step.param ? usageCap(step.param) : 'key…');
         } else {
@@ -283,8 +308,8 @@ export class ZmkMacrosTab {
                     el('span', {
                         class: 'hint',
                         text: live.length
-                            ? `${live.length} step${live.length === 1 ? '' : 's'} — bind with &fmac ${m} (Keymap tab → Behaviors)`
-                            : 'empty — add a step below',
+                            ? `${macroSummary(this.steps[m])} · Keys picker: Run › Macro ${m}`
+                            : 'empty: add a step below',
                     })),
                 el('span', { style: 'flex:1' }),
                 el('button', {
@@ -300,7 +325,7 @@ export class ZmkMacrosTab {
                     onclick: () => this.play(m),
                 }),
                 el('button', {
-                    class: 'btn small', text: '🗑', title: 'empty this macro slot',
+                    class: 'btn small', text: 'Delete', title: 'empty this macro slot',
                     onclick: () => this.clearSlot(m),
                 })),
             ...live.map((_, s) => this.stepRow(m, s)),
@@ -320,7 +345,7 @@ export class ZmkMacrosTab {
         const used = this.steps.filter((st) => !macroIsEmpty(st)).length;
 
         const controls = card('Runtime macros',
-            'typed step sequences played from a key (&fmac) or the ▶ button — live-editable, unlike ZMK\'s devicetree macros',
+            'typed step sequences played from a key or the ▶ button; live-editable, unlike ZMK\'s devicetree macros',
             toggleRow({
                 label: 'Macros enabled',
                 hint: 'master switch; also stops a running macro',
@@ -352,7 +377,7 @@ export class ZmkMacrosTab {
             }),
             el('div', { class: 'savebar' },
                 el('button', {
-                    class: 'btn primary', text: 'Add New Macro',
+                    class: 'btn primary', text: '＋ New macro',
                     onclick: () => this.addMacro(),
                 }),
                 el('button', {
@@ -363,13 +388,13 @@ export class ZmkMacrosTab {
                     },
                 }),
                 el('span', { class: 'note faint', text: `${used} of ${this.slotCount} slots in use` })),
-            saveBar(() => flask.save(CH.macros)));
+            this.bar);
 
         this.root.replaceChildren(controls,
             ...visible.map((m) => this.macroCard(m)),
             visible.length ? el('span') : el('div', {
                 class: 'note faint',
-                text: 'No macros yet — Add New Macro, add steps, pick keys, then ▶ to test.',
+                text: 'No macros yet. ＋ New macro, add steps, pick keys, then ▶ Play to test.',
             }));
     }
 }

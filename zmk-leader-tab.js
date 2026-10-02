@@ -1,80 +1,23 @@
 // ZMK Leader tab — flask_leader runtime sequences (channel 0x19, proto
 // v10). ZMK-line module: press &fled, then a key sequence from the table
 // fires a typed output — a usage tap or a flask_macros slot. Sequences are
-// ORDERED key positions (unlike combos' unordered sets), so the mini board
-// APPENDS on click and the chip row shows the order.
-//
-// pickTypedOutput (exported; the Gestures tab shares it) wraps the combos
-// tab's usage picker with the action choice: keycode / macro / none.
+// ORDERED key positions (unlike combos' unordered sets): pick them in order
+// on the main board; the row shows the order. Outputs use the shared
+// BindingPicker (zmk.typedOutput).
 
-import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=49';
+import { el, card, sliderRow, toggleRow, toast, reloadBar } from './ui.js?v=49';
 import { CH, V } from './flaskproto.js?v=49';
 import { ZMK_LEADER_FN_PRESET } from './zmk.js?v=51';
-import { renderKeyboardSVG } from './keymap-tab.js?v=49';
-import { pickUsage } from './zmk-combos-tab.js?v=49';
-import { usageCap, usageLabel, kpParam } from './zmk-keycodes.js?v=49';
+import { board } from './board.js?v=1';
+import { kpParam } from './zmk-keycodes.js?v=49';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty }
     from './zmk-output-codec.js?v=49';
-
-/** Label for a typed output. */
-export function outputLabel(o, { cap = false } = {}) {
-    if (o.action === OUTPUT_ACTION.usage) return cap ? usageCap(o.param) : usageLabel(o.param);
-    if (o.action === OUTPUT_ACTION.macro) return cap ? `M${o.param}` : `Macro ${o.param}`;
-    return cap ? 'output…' : 'none';
-}
-
-/** Typed-output picker: choose keycode (→ usage modal) / macro slot / none.
- * onApply({action, param}). Shared by the Leader and Gestures tabs. */
-export function pickTypedOutput(title, current, macroSlots, onApply) {
-    const back = el('div', {
-        style: 'position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:60;'
-            + 'display:flex; align-items:center; justify-content:center',
-        onclick: (e) => { if (e.target === back) back.remove(); },
-    });
-    const done = (out) => { back.remove(); onApply(out); };
-
-    const macroRow = el('div', { style: 'display:flex; gap:6px; align-items:center' });
-    if (macroSlots > 0) {
-        const sel = el('select', {},
-            ...Array.from({ length: macroSlots }, (_, i) =>
-                el('option', {
-                    value: i, text: `Macro ${i}`,
-                    selected: current.action === OUTPUT_ACTION.macro && current.param === i,
-                })));
-        macroRow.append(
-            el('button', {
-                class: 'btn small', text: 'Play macro',
-                onclick: () => done({ action: OUTPUT_ACTION.macro, param: Number(sel.value) }),
-            }), sel);
-    }
-
-    back.append(el('div', { class: 'card', style: 'min-width:260px' },
-        el('div', { class: 'row' }, el('b', { text: title })),
-        el('div', { style: 'display:flex; flex-direction:column; gap:8px; margin-top:6px' },
-            el('button', {
-                class: 'btn small primary', text: current.action === OUTPUT_ACTION.usage
-                    ? `Keycode… (now ${usageLabel(current.param)})` : 'Keycode…',
-                onclick: () => {
-                    back.remove();
-                    pickUsage(title, current.action === OUTPUT_ACTION.usage ? current.param : 0,
-                        (usage) => onApply(usage
-                            ? { action: OUTPUT_ACTION.usage, param: usage }
-                            : { action: OUTPUT_ACTION.none, param: 0 }));
-                },
-            }),
-            macroRow,
-            el('button', {
-                class: 'btn small', text: 'None (empty)',
-                onclick: () => done({ action: OUTPUT_ACTION.none, param: 0 }),
-            }),
-            el('button', { class: 'btn small', text: 'Cancel', onclick: () => back.remove() }))));
-    document.body.append(back);
-}
+import { blurClicks, pickOutput, outText } from './zmk-behaviour-common.js?v=1';
 
 export class ZmkLeaderTab {
     constructor(app) {
         this.app = app;
-        this.root = el('div');
+        this.root = blurClicks(el('div'));
         this.drafts = new Set();
     }
 
@@ -97,6 +40,11 @@ export class ZmkLeaderTab {
         } finally {
             hid?.resume?.();
         }
+        this.bar ??= reloadBar(CH.leader, {
+            label: 'Leader', line: 'zmk',
+            save: () => this.app.flask.save(CH.leader),
+            reload: () => this.load(),
+        });
         this.render();
     }
 
@@ -105,6 +53,7 @@ export class ZmkLeaderTab {
             const r = await this.app.flask.setBytes(CH.leader, V.leaderSlot,
                 encodeLeaderSlot(i, this.slots[i], this.maxKeys), 1);
             this.slots[i] = decodeLeaderSlot(r, this.maxKeys);
+            this.bar?.markEdited();
         } catch (e) {
             toast(`Leader write failed: ${e.message}`, true);
         }
@@ -115,8 +64,10 @@ export class ZmkLeaderTab {
         const i = this.slots.findIndex((s, idx) =>
             leaderSlotIsEmpty(s) && !this.drafts.has(idx));
         if (i < 0) { toast(`All ${this.slotCount} leader slots are in use`, true); return; }
+        this.slots[i] = { seq: i, positions: [], action: 0, param: 0 };
         this.drafts.add(i);
         this.render();
+        this.startPick(i);
     }
 
     /** F-key preset (AJ's 2026-07-12 spec): leader→1..9 = F1-F9, leader→0
@@ -161,7 +112,8 @@ export class ZmkLeaderTab {
                     encodeLeaderSlot(i, this.slots[i], this.maxKeys), 1);
                 this.slots[i] = decodeLeaderSlot(r, this.maxKeys);
             }
-            toast(`${todo.length} F-key sequences added — Save to persist`);
+            this.bar?.markEdited();
+            toast(`${todo.length} F-key sequences added`);
         } catch (e) {
             toast(`F-key preset failed: ${e.message}`, true);
         } finally {
@@ -176,89 +128,114 @@ export class ZmkLeaderTab {
         await this.writeSlot(i);
     }
 
-    /** Sequences are ordered: board clicks APPEND (up to maxKeys); the chip
-     * row removes. */
-    appendPosition(i, pos) {
-        const s = this.slots[i];
-        if (s.positions.length >= this.maxKeys) {
-            toast(`Sequences take up to ${this.maxKeys} keys`, true);
-            return;
+    // ---- position picking: in order, on the main board ----
+
+    stopPick() {
+        this._stopPick?.();
+        this._stopPick = null;
+        this._pickWatch?.disconnect();
+        this._pickWatch = null;
+        this.editing = null;
+    }
+
+    startPick(i) {
+        this.stopPick();
+        if (!board.adapter) { this.render(); return; }   // numeric fallback on the row
+        this.editing = i;
+        this._stopPick = board.pickPositions({
+            initial: [...this.slots[i].positions], max: this.maxKeys,
+            label: `Click the keys of Sequence ${i} in order`,
+            onChange: (ps) => { this.slots[i].positions = ps; this.writeSlot(i); },
+        });
+        // Leaving the tab ends pick mode (else a Keys-tab click edits this).
+        const panel = this.root.closest('.panel');
+        if (panel) {
+            this._pickWatch = new MutationObserver(() => {
+                if (!panel.classList.contains('active')) { this.stopPick(); this.render(); }
+            });
+            this._pickWatch.observe(panel, { attributes: true, attributeFilter: ['class'] });
         }
-        s.positions.push(pos);
-        this.writeSlot(i);
+        this.render();
+    }
+
+    togglePick(i) {
+        const live = this.editing === i && document.querySelector('.bd-banner');
+        if (live) this.stopPick(); else this.startPick(i);
+        this.render();
     }
 
     removePosition(i, at) {
         this.slots[i].positions.splice(at, 1);
-        this.writeSlot(i);
+        // The board keeps its own copy while picking: resync it.
+        this.writeSlot(i).then(() => { if (this.editing === i) this.startPick(i); });
     }
 
-    pickOutput(i) {
+    pickOutputFor(i) {
         const s = this.slots[i];
-        pickTypedOutput(`Sequence ${i} output`, s, this.macroSlots, (out) => {
-            s.action = out.action;
-            s.param = out.param;
-            this.writeSlot(i);
-        });
-    }
-
-    miniBoard(i) {
-        const geom = this.app.profile?.keys;
-        if (!geom?.length) {
-            return el('div', { class: 'note faint',
-                text: 'Open the Keymap tab once to load board geometry.' });
-        }
-        const pressed = new Set(this.slots[i].positions.map((p) => `0,${p}`));
-        return renderKeyboardSVG({
-            profile: {
-                keys: geom, encoderKeys: [],
-                labelFor: () => '', hoverFor: () => 'click to append to the sequence',
-                keyName: (k) => String(k.pos),
+        pickOutput({
+            app: this.app, surface: 'zmk.typedOutput', title: `Sequence ${i} output`, value: s,
+            onPick: (v) => {
+                s.action = v.action;
+                s.param = v.action ? v.param1 : 0;
+                this.writeSlot(i);
             },
-            scale: 0.42,
-            keycodeAt: () => null,
-            pressed,
-            selected: null,
-            onSelect: (sel) => this.appendPosition(i, sel.col),
         });
     }
 
     seqCard(i) {
         const s = this.slots[i];
         const live = !leaderSlotIsEmpty(s);
+        const out = outText(s, 'zmk.typedOutput');
+        const picking = this.editing === i;
         const chips = el('div', { style: 'display:flex; gap:4px; flex-wrap:wrap; align-items:center' },
             s.positions.length
                 ? s.positions.map((p, at) => el('button', {
                     class: 'btn small primary', text: `${at + 1}· pos ${p} ✕`,
-                    title: 'remove this step',
+                    title: 'remove this key from the sequence',
                     onclick: () => this.removePosition(i, at),
                 }))
-                : el('span', { class: 'note faint', text: 'click keys below, in order' }));
+                : el('span', { class: 'note faint', text: 'no keys yet' }));
 
-        return el('div', { class: 'card', style: live ? '' : 'opacity:0.75' },
+        return el('div', { class: 'card', 'data-seq': i, style: live ? '' : 'opacity:0.85' },
             el('div', { class: 'row' },
-                el('span', { class: 'lbl' }, el('b', { text: `Sequence ${i}` }),
+                el('span', { class: 'lbl' }, el('b', {
+                    text: s.positions.length ? `${s.positions.join(' → ')} → ${out || '…'}` : `Sequence ${i}`,
+                }),
                     el('span', {
                         class: 'hint',
-                        text: live ? `${s.positions.length} keys → ${outputLabel(s)}`
-                            : 'incomplete — needs ≥ 1 key and an output',
+                        text: live ? `Sequence ${i}` : `Sequence ${i} · incomplete: needs 1 or more keys and an output`,
                     })),
                 el('span', { style: 'flex:1' }),
                 el('button', {
-                    class: 'btn small', text: '🗑', title: 'empty this slot',
-                    onclick: () => this.clearSlot(i),
+                    class: 'btn small', text: 'Delete', title: 'empty this slot',
+                    onclick: () => { if (this.editing === i) this.stopPick(); this.clearSlot(i); },
                 })),
             chips,
-            el('div', { style: 'display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-top:6px' },
-                el('div', {},
-                    el('div', { class: 'note faint', text: 'output' }),
-                    el('button', {
-                        class: 'code',
-                        style: 'min-width:72px; min-height:44px; font-size:1.05em',
-                        title: 'pick the sequence output',
-                        onclick: () => this.pickOutput(i),
-                    }, outputLabel(s, { cap: true }))),
-                el('div', { style: 'flex:1; overflow-x:auto' }, this.miniBoard(i))));
+            el('div', { style: 'display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:6px' },
+                board.adapter ? el('button', {
+                    class: 'btn small' + (picking ? ' primary' : ''),
+                    text: picking ? 'Done picking keys' : (s.positions.length ? 'Change keys' : 'Pick keys'),
+                    onclick: () => this.togglePick(i),
+                }) : this.positionFallback(i),
+                el('button', {
+                    class: 'btn small', text: out ? `Output: ${out}` : 'Choose output…',
+                    onclick: () => this.pickOutputFor(i),
+                })));
+    }
+
+    /** Numeric fallback when no board is bound. */
+    positionFallback(i) {
+        const input = el('input', { type: 'number', min: 0, max: 254, placeholder: 'pos #', style: 'width:80px' });
+        return el('span', { style: 'display:inline-flex; gap:4px' }, input, el('button', {
+            class: 'btn small', text: 'Add key',
+            onclick: () => {
+                const p = Number(input.value);
+                if (!Number.isInteger(p) || p < 0 || p > 254) return;
+                if (this.slots[i].positions.length >= this.maxKeys) { toast(`Sequences take up to ${this.maxKeys} keys`, true); return; }
+                this.slots[i].positions.push(p);
+                this.writeSlot(i);
+            },
+        }));
     }
 
     render() {
@@ -276,7 +253,7 @@ export class ZmkLeaderTab {
         const used = this.slots.filter((s) => !leaderSlotIsEmpty(s)).length;
 
         const controls = card('Runtime leader',
-            'press the Flask Leader key, then a sequence — live-editable (urob\'s compiled sequences keep their own key)',
+            'press the Flask Leader key, then a sequence; live-editable',
             toggleRow({
                 label: 'Leader enabled',
                 hint: 'master switch; sequences stay stored while off',
@@ -307,16 +284,12 @@ export class ZmkLeaderTab {
                     onclick: () => this.addFnPreset(),
                 }),
                 el('span', { class: 'note faint', text: `${used}/${this.slotCount} slots used` }),
-                el('span', { style: 'flex:1' }),
-                el('button', {
-                    class: 'btn small', text: 'Save to keyboard',
-                    onclick: async () => {
-                        try { await flask.save(CH.leader); toast('Leader table saved'); }
-                        catch (e) { toast(`Save failed: ${e.message}`, true); }
-                    },
-                })),
+            ),
+            this.bar,
             el('div', { class: 'note faint',
-                text: 'Bind the "Flask Leader" behavior to a key in the Keymap tab to trigger these. Edits are live; Save persists across power-off.' }));
+                text: 'Bind "Flask Leader" to a key in the Keys picker (Run) to trigger these.' }),
+            el('div', { class: 'note faint', 'data-note': 'compiled-leader',
+                text: 'Your keymap\'s compiled leader (urob &leader) is separate and keeps its own key. Edit it in firmware.' }));
 
         this.root.replaceChildren(controls,
             ...visible.map((i) => this.seqCard(i)));
