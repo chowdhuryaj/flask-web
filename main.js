@@ -144,6 +144,8 @@ function reconnectCandidate(devices) {
 
 async function loadDevice(device) {
     app.family = familyOf(device.vendorId, device.productId);
+    // flaskproto save() refuses 0x28 unless the line is ZMK (corner wedge).
+    if (app.flask instanceof FlaskProto) app.flask.line = isZmkFamily(app.family) ? 'zmk' : 'qmk';
 
     // ZMK line: a different firmware language — no Vial surface at all,
     // Flask protocol only. Everything ZMK-specific lives in zmk.js.

@@ -404,6 +404,14 @@ export class FlaskProto {
     }
 
     async save(channel) {
+        // QMK line: 0x28 is the corner-chord block. Its SETs persist
+        // themselves and a channel SAVE rewrites ~1.9 KB with XIP off, which
+        // hard-wedged the Svalboard (2026-08-14). Only the ZMK line (0x28 =
+        // tapDance) may save it; `line` is set per connect in main.js and an
+        // unset line refuses too (fail-safe).
+        if (channel === CH.corner && this.line !== 'zmk') {
+            throw new Error('refused: never SAVE channel 0x28 on the QMK line');
+        }
         // Saves run flash writes device-side and the echo arrives only when
         // they land — a mass slot delete can legitimately take seconds
         // (bench 5: the 500 ms timeout fired, the RETRY then bounced off
