@@ -1,5 +1,5 @@
 // The one board in the frame (spec §2.4, §3.1, §3.3, §3.4): key drawing,
-// layer bar, selection, assign + auto-advance, click-again popover,
+// layer rail, selection, assign + auto-advance, drag-drop from the palette,
 // undo/redo, position-pick mode.
 //
 // Contract other packages call (stable since WP0, all kept):
@@ -23,8 +23,11 @@
 
 import { el, svgEl, toast as uiToast } from './ui.js?v=61';
 import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=61';
+import { legendOf } from './legend.js?v=61';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
+/** dataTransfer type a palette tile drags: JSON of an adapter binding. */
+export const DRAG_TYPE = 'application/x-flask-binding';
 export const GAP = 5;
 const PAD = 4;
 const hasDom = () => typeof document !== 'undefined';
@@ -153,28 +156,27 @@ export function htPartsOf(value, profile, opts = {}) {
     return adapter ? holdTapParts(value, adapter) : null;
 }
 
-// Dual-role cap: a tinted HOLD band on top ("hold ⇧ · live"), the TAP key
-// below ("tap F"). The tiny words are the markers; the band is the cue that
-// survives a glance and the rotated Totem thumbs (the group rotates as one).
-function drawHoldTap(g, f, ht, { mid, innerW, mainFs, topFs, radius }) {
-    const bandH = f.h * 0.42, r = Math.min(radius, bandH / 2);
-    g.append(svgEl('path', {
-        class: 'cap-holdband',
-        d: `M${f.x},${f.y + bandH} V${f.y + r} Q${f.x},${f.y} ${f.x + r},${f.y} H${f.x + f.w - r} Q${f.x + f.w},${f.y} ${f.x + f.w},${f.y + r} V${f.y + bandH} Z`,
-    }));
-    const markFs = Math.max(6, topFs * 0.78);
-    // 'live' is every Totem hold-tap: noise on a cap (caption and cells keep it).
-    const holdText = ht.tag && ht.tag !== 'live' ? `${ht.hold} · ${ht.tag}` : ht.hold;
-    const holdFit = fitText(holdText, innerW - markFs * 0.58 * 5, topFs * 1.3, { minScale: 0.55, maxLines: 1 });
-    const t = svgEl('text', { class: 'cap-hold', x: mid, y: f.y + bandH * 0.68, 'text-anchor': 'middle', 'data-hold': ht.hold });
-    t.append(svgEl('tspan', { class: 'cap-mark', style: `font-size:${markFs}px`, text: 'hold ' }),
-        svgEl('tspan', { style: `font-size:${holdFit.fs}px`, text: holdFit.lines[0] }));
-    const tapFit = fitText(ht.tap, innerW - markFs * 0.58 * 4, mainFs, { minScale: 0.5, maxLines: 1 });
-    const m = svgEl('text', { class: 'cap-main cap-tap', x: mid, y: f.y + bandH + (f.h - bandH) * 0.62, 'text-anchor': 'middle', 'data-tap': ht.tap });
-    m.append(svgEl('tspan', { class: 'cap-mark', style: `font-size:${markFs}px`, text: 'tap ' }),
-        svgEl('tspan', { style: `font-size:${tapFit.fs}px`, text: tapFit.lines[0] }));
-    g.classList.add('ht');
-    g.append(t, m);
+// Look-shell legend: tap label large and centred, hold / mode as a small mono
+// sub-label under it, colour by kind (legend.js). Sizes follow the key, not a
+// fixed px, so a rotated thumb key reads like its neighbours; the SVG is then
+// scaled to the pane (--board-fit) so sub-labels are 0.27 of a key.
+function drawLegend(g, f, lg, { mid, innerW, k }) {
+    const u = Math.min(f.w, f.h);
+    const mainFs = u * 0.38 * k, subFs = u * 0.27 * k;
+    const main = fitText(lg.main, innerW, mainFs, { minScale: 0.5, maxLines: lg.sub ? 1 : 2 });
+    const sub = lg.sub ? fitText(lg.sub, innerW, subFs, { minScale: 0.6, maxLines: 1 }) : null;
+    g.classList.add('k-' + lg.kind);
+    const mainY = lg.sub ? f.y + f.h * 0.46 : f.y + f.h / 2 + main.fs * 0.34 - (main.lines.length - 1) * main.fs * 0.55;
+    main.lines.forEach((line, i) => g.append(svgEl('text', {
+        class: 'cap-main', x: mid, y: mainY + i * main.fs * 1.1, 'text-anchor': 'middle',
+        style: `font-size:${main.fs}px`, text: line,
+    })));
+    if (sub) {
+        g.append(svgEl('text', {
+            class: 'cap-sub s-' + (lg.subKind || 'dim'), x: mid, y: f.y + f.h * 0.82, 'text-anchor': 'middle',
+            style: `font-size:${sub.fs}px`, text: sub.lines[0], 'data-hold': lg.sub,
+        }));
+    }
 }
 
 const textScale = () => {
@@ -207,11 +209,14 @@ export function renderKeyboardSVG(opts) {
     const L = layoutOf(items, scale);
     const ts = textScale() * Math.min(1, Math.max(scale, 0.7));
     const mainFs = 12 * ts, topFs = 9 * ts;
+    const legendK = Math.min(1.3, Math.max(0.8, textScale() / 1.15));
     const radius = (profile.family && /^(totem|imprint)/.test(profile.family) ? 5 : 6) * Math.min(1, scale + 0.2);
     const svg = svgEl('svg', {
         class: 'kb-svg', width: L.width, height: L.height, viewBox: `0 0 ${L.width} ${L.height}`,
         // zoom is relative to "fits the pane": 1 never overflows, 1.5 may be 50 % wider.
-        style: opts.zoomable ? `width:calc(${L.width}px * var(${BOARD_ZOOM_VAR}, 1)); max-width:calc(100% * var(${BOARD_ZOOM_VAR}, 1)); height:auto` : null,
+        // --board-fit: board.js scales the board to its pane (width AND height);
+        // zoom multiplies that. Without a measured fit it falls back to 100 % wide.
+        style: opts.zoomable ? `width:calc(${L.width}px * var(--board-fit, 1) * var(${BOARD_ZOOM_VAR}, 1)); max-width:none; height:auto` : null,
     });
     const sel = opts.selected;
     const names = opts.names ?? 'sel';
@@ -240,6 +245,12 @@ export function renderKeyboardSVG(opts) {
                     opts.onSelect({ kind: 'key', row: key.row, col: key.col }, e);
                 }
             } : null,
+            ondragover: opts.onDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; g.classList.add('drop'); } : null,
+            ondragleave: opts.onDrop ? () => g.classList.remove('drop') : null,
+            ondrop: opts.onDrop ? (e) => {
+                e.preventDefault(); g.classList.remove('drop');
+                opts.onDrop({ kind: 'key', row: key.row, col: key.col }, e.dataTransfer.getData(DRAG_TYPE));
+            } : null,
             oncontextmenu: opts.onContext ? (e) => {
                 e.preventDefault();
                 opts.onContext({ kind: 'key', row: key.row, col: key.col });
@@ -254,11 +265,10 @@ export function renderKeyboardSVG(opts) {
         g.append(rect);
         const mid = f.x + f.w / 2;
         const innerW = f.w - 6;
-        const ht = htPartsOf(value, profile, opts);
-        if (ht) {
-            drawHoldTap(g, f, ht, { mid, innerW, mainFs, topFs, radius });
+        if (profile.capAdapter && !opts.partsFor && value != null) {
+            drawLegend(g, f, legendOf(value, profile.capAdapter), { mid, innerW, k: legendK });
             if (names === 'all' || (names === 'sel' && isSel)) {
-                g.append(svgEl('text', { class: 'keyname', x: f.x + f.w - 4, y: f.y + f.h - 4, 'text-anchor': 'end', text: keyName(key) }));
+                g.append(svgEl('text', { class: 'keyname', x: f.x + f.w - 4, y: f.y + f.h - 3, 'text-anchor': 'end', text: keyName(key) }));
             }
             svg.append(g);
             continue;
@@ -340,7 +350,6 @@ class Board extends EventTarget {
     #undo = [];
     #redo = [];
     #pick = null;
-    #popover = null;
     #showEmpty = false;
     #renaming = null;
     #barEl = null;
@@ -380,7 +389,6 @@ class Board extends EventTarget {
         this.#pick?.stop(true);
         const key = (p) => JSON.stringify(p);
         const state = { positions: [...initial], max, label, onChange, savedSel: this.#sel };
-        this.#closePopover();
         this.#sel = null;
         const stop = (silent) => {
             if (this.#pick !== state) return;
@@ -468,7 +476,6 @@ class Board extends EventTarget {
         if (i === this.#layer) return;
         this.#layer = i;
         if (!keepSelection) this.#sel = null;
-        this.#closePopover();
         this.refresh();
         this.dispatchEvent(new Event('layer'));
         this.#emitSelect();
@@ -480,6 +487,33 @@ class Board extends EventTarget {
         this.#undo = []; this.#redo = [];
         this.dispatchEvent(new Event('history'));
     }
+
+    /** Show `layer` and select the key at public `pos` (Layers index jump). */
+    jumpTo(layer, pos) {
+        const a = this.#a;
+        const sel = a ? a.selOf(pos) : null;
+        if (!sel || a.readOnly || !a.profile.keys.some((k) => k.row === sel.row && k.col === sel.col)) return false;
+        this.#layer = layer;
+        this.#sel = sel;
+        this.refresh();
+        this.dispatchEvent(new Event('layer'));
+        this.#emitSelect();
+        return true;
+    }
+
+    /** A palette tile dropped on a key: select it and assign, no advance. */
+    async dropOn(sel, text) {
+        let binding;
+        try { binding = JSON.parse(text); } catch { return false; }
+        if (!binding || typeof binding !== 'object' || this.#a?.readOnly || this.#pick) return false;
+        this.#sel = sel;
+        this.#renderBoard();
+        this.#emitSelect();
+        return this.assign(binding, { advance: false });
+    }
+
+    /** Re-measure the pane and rescale the board to it (the Fit button). */
+    fit() { this.#measure(); }
 
     async undo() { return this.#step(this.#undo, this.#redo, 'before'); }
     async redo() { return this.#step(this.#redo, this.#undo, 'after'); }
@@ -497,6 +531,7 @@ class Board extends EventTarget {
         if (regions.layerBar && regions.board) {
             regions.layerBar.replaceChildren(this.#barEl);
             regions.board.replaceChildren(this.#boardEl);
+            this.#observe(regions.board);
         } else if (inline) {
             inline.replaceChildren(this.#barEl, this.#boardEl);
         }
@@ -523,7 +558,6 @@ class Board extends EventTarget {
     unbind(adapter) {
         if (adapter && this.#a !== adapter) return;
         this.#pick?.stop(true);
-        this.#closePopover();
         this.#a = null; this.#sel = null;
         this.#undo = []; this.#redo = [];
         if (this.#barEl) { this.#barEl.replaceChildren(); this.#boardEl.replaceChildren(); }
@@ -545,34 +579,15 @@ class Board extends EventTarget {
         this.#emitSelect();
     }
 
-    #click(sel, evt) {
+    // Clicking the selected key again does nothing (it used to open a second
+    // picker; the inspector beside the board replaces it).
+    #click(sel) {
         const a = this.#a;
         if (!a) return;
         if (this.#pick) { this.#pick.toggle(a.posOf(sel)); return; }
-        if (a.readOnly) return;
-        if (sameSel(sel, this.#sel)) { this.#openPopover(sel, evt?.currentTarget); return; }
-        this.#closePopover();
+        if (a.readOnly || sameSel(sel, this.#sel)) return;
         this.select(sel);
     }
-
-    #openPopover(sel, anchor) {
-        const a = this.#a;
-        this.#closePopover();
-        const surface = a.surface;
-        const value = a.bindingAt(this.#layer, sel);
-        // Loaded on demand: binding-picker imports this file.
-        let closed = false, close = null;
-        this.#popover = () => { closed = true; close?.(); };
-        import('./binding-picker.js?v=61').then(({ openPicker }) => {
-            if (closed) return;
-            close = openPicker({
-                surface, host: 'popover', anchor, app: a.app, value,
-                onPick: (v) => { this.#popover = null; return this.assign(v, { advance: false }); },
-            });
-        });
-    }
-
-    #closePopover() { this.#popover?.(); this.#popover = null; }
 
     #nextKey(sel) {
         const keys = this.#a.profile.keys;
@@ -624,6 +639,33 @@ class Board extends EventTarget {
     }
 
     // ---- rendering ----
+
+    #slot = null;
+    #fit = 1;
+    #ro = null;
+    #observe(slot) {
+        if (this.#slot === slot) return;
+        this.#ro?.disconnect();
+        this.#slot = slot;
+        if (typeof ResizeObserver === 'function') {
+            this.#ro = new ResizeObserver(() => this.#measure());
+            this.#ro.observe(slot);
+        }
+    }
+
+    /** Fit = the largest scale (<= 1.3) at which the whole board shows in its
+     * pane, width and height. Zoom (--board-zoom) multiplies it. */
+    #measure() {
+        const slot = this.#slot, svg = this.#boardEl?.querySelector('.kb-svg');
+        if (!slot || !svg) return;
+        const w = parseFloat(svg.getAttribute('width')), h = parseFloat(svg.getAttribute('height'));
+        const cw = slot.clientWidth - 12, ch = slot.clientHeight - 12;
+        if (!(w > 0 && h > 0 && cw > 0 && ch > 0)) return;
+        const fit = Math.max(0.3, Math.min(1.3, cw / w, ch / h));
+        if (Math.abs(fit - this.#fit) < 0.005) return;
+        this.#fit = fit;
+        this.#boardEl.style.setProperty('--board-fit', String(fit));
+    }
 
     #ensureDom() {
         if (this.#barEl || !hasDom()) return;
@@ -683,28 +725,23 @@ class Board extends EventTarget {
         const ops = a.layerOps?.();
         if (ops && !a.readOnly) {
             const btn = (text, caption, fn, off) => el('button', {
-                class: 'bd-op', type: 'button', text, 'data-caption': caption, 'aria-label': caption,
+                class: 'bd-op', type: 'button', text, 'data-caption': caption, 'aria-label': caption, title: caption,
                 disabled: off, onclick: fn,
             });
             kids.push(
-                btn('◀', 'Move this layer left (lower priority)', () => ops.move(-1), !ops.canMove(-1)),
-                btn('▶', 'Move this layer right (higher priority)', () => ops.move(1), !ops.canMove(1)),
-                btn('−', 'Remove this layer (frees a slot; undo with the restore button)', () => ops.remove(), !ops.canRemove),
+                el('button', {
+                    class: 'bd-chip bd-add', type: 'button', 'aria-label': ops.addReason ?? 'Add a layer',
+                    'data-caption': ops.addReason ?? 'Add a layer', title: ops.addReason ?? 'Add a layer',
+                    disabled: !!ops.addReason, onclick: () => ops.add(),
+                }, el('span', { class: 'bd-chip-i', text: '+' }), el('span', { text: 'Add layer' })),
+                el('div', { class: 'bd-ops' },
+                    btn('↑', 'Move this layer up (lower priority)', () => ops.move(-1), !ops.canMove(-1)),
+                    btn('↓', 'Move this layer down (higher priority)', () => ops.move(1), !ops.canMove(1)),
+                    btn('−', 'Remove this layer (frees a slot; undo with the restore button)', () => ops.remove(), !ops.canRemove)),
                 ops.restoreLabel ? el('button', {
                     class: 'bd-op wide', type: 'button', text: `↩ Restore "${ops.restoreLabel}"`,
                     'data-caption': `Bring back removed layer "${ops.restoreLabel}"`, onclick: () => ops.restore(),
-                }) : null,
-                btn('＋', ops.addReason ?? 'Add a layer', () => ops.add(), !!ops.addReason));
-        }
-        kids.push(el('span', { class: 'bd-spacer' }));
-        const hud = a.app?.hud;
-        if (hud && !a.app.offline) {
-            kids.push(el('button', {
-                class: 'bd-popout' + (hud.open ? ' on' : ''), type: 'button',
-                text: hud.open ? 'Floating' : 'Pop out',
-                'data-caption': hud.open ? 'The live board is floating — click to bring it back' : 'Float the live board over other apps',
-                onclick: async () => { await hud.toggle(); this.#renderBar(); },
-            }));
+                }) : null);
         }
         this.#barEl.replaceChildren(...kids.filter(Boolean));
     }
@@ -725,7 +762,8 @@ class Board extends EventTarget {
             keycodeAt: (row, col) => a.bindingAt(layer, { kind: 'key', row, col }),
             selected: pick || a.readOnly ? null : this.#sel,
             marked,
-            onSelect: (sel, evt) => this.#click(sel, evt),
+            onSelect: (sel) => this.#click(sel),
+            onDrop: a.readOnly ? null : (sel, text) => this.dropOn(sel, text),
         });
         const kids = [];
         if (pick) {
@@ -736,6 +774,8 @@ class Board extends EventTarget {
         }
         kids.push(svg);
         this.#boardEl.replaceChildren(...kids);
+        this.#boardEl.style.setProperty('--board-fit', String(this.#fit));
+        this.#measure();
     }
 }
 

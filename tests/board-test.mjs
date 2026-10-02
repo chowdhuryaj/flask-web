@@ -2,7 +2,7 @@
 // selection, auto-advance, undo/redo, position-pick mode. The drawn SVG and
 // popover are covered by tests/browser/board.py.
 import assert from 'node:assert/strict';
-import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText } from '../board.js?v=61';
+import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText, DRAG_TYPE } from '../board.js?v=61';
 import { setZmkContext, bindingCap, bindingHover } from '../zmk-keycodes.js?v=61';
 import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=61';
 import { TOTEM_GEOM } from '../zmk-totem-layout.js?v=61';
@@ -180,6 +180,38 @@ eq(baseUnit(40), 48, 'unit never below 48');
     eq([map[0][0], map[0][7]], [4, 51], 'one undo restores the whole batch');
     await b.redo();
     eq([map[0][0], map[0][7]], [0x2804, 0x3833], 'redo reapplies it');
+}
+
+// ---- look-shell: jumpTo (Layers index), dropOn (drag a tile onto a key), click-again is harmless ----
+{
+    const keys = [0, 1, 2].map((c) => ({ row: 0, col: c, x: c, y: 0, w: 1, h: 1 }));
+    const map = [[10, 11, 12], [20, 21, 22]];
+    const adapter = {
+        surface: 'zmk.key', app: {}, profile: { family: 'x', keys },
+        layers: () => map.map((_, index) => ({ index, name: `L${index}`, empty: false })),
+        bindingAt: (l, s) => map[l][s.col], async write(l, s, v) { map[l][s.col] = v; }, posOf: (s) => s.col,
+        selOf: (p) => (Number.isInteger(p) ? { kind: 'key', row: 0, col: p } : null),
+    };
+    const b = new Board();
+    b.bind(adapter);
+    const seen = [];
+    b.addEventListener('select', (e) => seen.push(e.detail));
+    ok(b.jumpTo(1, 2), 'jumpTo works');
+    eq(b.layer, 1); eq(b.selectedKey(), { layer: 1, pos: 2 }, 'jump shows the layer and selects the key');
+    eq(seen.at(-1), { layer: 1, pos: 2 }, 'a select event fires');
+    eq(b.jumpTo(0, 99), false, 'unknown position: refused');
+    ok(DRAG_TYPE.startsWith('application/'), 'drag type');
+    eq(await b.dropOn({ kind: 'key', row: 0, col: 1 }, '{"v":77}'), true, 'drop a JSON binding on key 1');
+    eq(map[1][1], { v: 77 }, 'dropped value written on the shown layer');
+    eq(b.selectedKey(), { layer: 1, pos: 1 }, 'drop selects the target and does not advance');
+    ok(b.canUndo, 'a drop is one undo step'); await b.undo(); eq(map[1][1], 21, 'undo reverts the drop');
+    eq(await b.dropOn({ kind: 'key', row: 0, col: 0 }, 'not json'), false, 'bad payload ignored');
+    eq(await b.dropOn({ kind: 'key', row: 0, col: 0 }, 'null'), false, 'null payload ignored');
+    // Click on the selected key again: nothing opens, nothing changes (the popover is gone).
+    b.select({ kind: 'key', row: 0, col: 0 });
+    const n = seen.length;
+    b.fit(); // no DOM: must not throw
+    eq(seen.length, n, 'fit() does not touch the selection');
 }
 
 console.log(`board-test: ${checks} checks OK`);
