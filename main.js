@@ -13,26 +13,9 @@ import { VialClient } from './vialclient.js?v=49';
 import { parseDefinition } from './vialdef.js?v=49';
 import { buildProfile, familyOf, familyLabel } from './profiles.js?v=49';
 import { loadNapeDevice, isNapeFamily } from './nape.js?v=49';
-import { NapeKeymapTab } from './nape-keymap-tab.js?v=49';
-import { NapeSettingsTab } from './nape-settings-tab.js?v=49';
-import { NapeMacrosTab } from './nape-macros-tab.js?v=49';
 import { capabilities } from './caps.js?v=49';
 import { setDeviceCustomKeys, setDeviceMacroCount } from './keycodes.js?v=49';
-import { KeymapTab } from './keymap-tab.js?v=49';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=50';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=49';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=49';
 import { CommandPalette } from './command-palette.js?v=49';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=49';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=49';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=49';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=49';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=49';
-import { ZmkTestTab } from './zmk-test-tab.js?v=49';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=50';
-import { MouseTab } from './mouse-tab.js?v=49';
-import { TypingTab } from './typing-tab.js?v=49';
-import { SettingsTab } from './settings-tab.js?v=49';
 import { HUD } from './hud.js?v=49';
 import { runUnlockFlow, lockKeyboard } from './unlock.js?v=49';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
@@ -40,14 +23,8 @@ import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
          maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=49';
-import { MacrosTab } from './macros-tab.js?v=49';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=49';
-import { GesturesTab, ChordsTab } from './gestures-tab.js?v=49';
-import { CornerTab } from './corner-tab.js?v=49';
-import { RgbTab } from './rgb-tab.js?v=49';
-import { DisplayTab } from './display-tab.js?v=49';
-import { TrainerTab } from './trainer-tab.js?v=49';
 import { exportVil, importVil, downloadText } from './vil.js?v=49';
+import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=1';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -455,101 +432,9 @@ function renderOfflineList() {
 
 function buildTabs() {
     TABS.length = 0;
-    // Standalone trainer: no device, so no device tabs. This has to be an
-    // explicit gate rather than an absent capability — caps.vial is
-    // unconditionally true for every QMK family, the placeholder 'generic'
-    // included, so the Vial tabs below would all appear over a null client.
-    if (app.trainerOnly) {
-        TABS.push({ id: 'trainer', label: 'Typing trainer', ctor: TrainerTab });
-        renderTabStrip();
-        return;
-    }
-    if (app.caps.zmkStudio) TABS.push({ id: 'zmk-keymap', label: 'Keymap', ctor: ZmkKeymapTab });
-    if (app.caps.nape) {
-        TABS.push({ id: 'nape-keymap', label: 'Keymap', ctor: NapeKeymapTab });
-        TABS.push({ id: 'nape-macros', label: 'Macros', ctor: NapeMacrosTab });
-        TABS.push({ id: 'nape-settings', label: 'Settings', ctor: NapeSettingsTab });
-    }
-    if (app.caps.vial) {
-        TABS.push({ id: 'keymap', label: 'Keymap', ctor: KeymapTab });
-        TABS.push({ id: 'macros', label: 'Macros', ctor: MacrosTab });
-        TABS.push({ id: 'tapdance', label: 'Tap Dance', ctor: TapDanceTab });
-        TABS.push({ id: 'combos', label: 'Combos', ctor: ComboTab });
-        TABS.push({ id: 'overrides', label: 'Key Overrides', ctor: KeyOverrideTab });
-    }
-    if (app.caps.gestures) {
-        TABS.push({ id: 'gestures', label: 'Gestures',
-            ctor: isZmkFamily(app.family) ? ZmkGesturesTab : GesturesTab });
-    }
-    if (app.caps.wheelChords) TABS.push({ id: 'chords', label: 'Mouse Chords', ctor: ChordsTab });
-    // Positional chords (0x28, Svalboard v17+). Called "Chords", not "Combos":
-    // 'combos' above is Vial's keycode-matched feature and this one matches
-    // switch POSITIONS. Sharing the word cost real debugging time, twice.
-    if (app.caps.cornerCombos) TABS.push({ id: 'corner', label: 'Chords', ctor: CornerTab });
-    if (app.caps.mouse) TABS.push({ id: 'mouse', label: 'Mouse', ctor: MouseTab });
-    if (app.caps.typing) TABS.push({ id: 'typing', label: 'Typing', ctor: TypingTab });
-    // Adaptive typing trainer. Needs no capability at all — it runs on browser
-    // key events — but a connected board makes it better: the alphabet comes off
-    // the real keymap and the per-key heatmap lands on the real geometry.
-    TABS.push({ id: 'trainer', label: 'Trainer', ctor: TrainerTab });
-    if (app.caps.rgbMap) {
-        TABS.push({ id: 'rgb', label: 'RGB',
-            ctor: isZmkFamily(app.family) ? ZmkRgbTab : RgbTab });
-    }
-    // ZMK-line only: caps.combos/caps.macros come from zmkCapabilities
-    // (v7+/v8+). QMK combos and macros are Vial dynamic entries and ride
-    // caps.vial above.
-    if (app.caps.combos) TABS.push({ id: 'zmk-combos', label: 'Combos', ctor: ZmkCombosTab });
-    if (app.caps.macros) TABS.push({ id: 'zmk-macros', label: 'Macros', ctor: ZmkMacrosTab });
-    // v14 ZMK-line surfaces: runtime tap dances (0x28) + custom shift keys
-    // (0x16 — the QMK customShift channel, ZMK slot frame).
-    if (app.caps.tapDance) TABS.push({ id: 'zmk-tapdance', label: 'Tap Dance', ctor: ZmkTapDanceTab });
-    if (app.caps.customShift && isZmkFamily(app.family)) {
-        TABS.push({ id: 'zmk-shift', label: 'Shift', ctor: ZmkShiftTab });
-    }
-    if (app.caps.leader) TABS.push({ id: 'zmk-leader', label: 'Leader', ctor: ZmkLeaderTab });
-    // ZMK line: browser-event testers + timing calibrators (QMK devices have
-    // the Vial matrix tester + Typing tab instead).
-    // Modes are app-side snapshots of the whole device, so they need no
-    // capability beyond being a ZMK board — a keymap-only mode is still a mode
-    // on a device with no Flask HID.
-    if (isZmkFamily(app.family)) TABS.push({ id: 'zmk-modes', label: 'Modes', ctor: ZmkModesTab });
-    if (isZmkFamily(app.family)) TABS.push({ id: 'zmk-test', label: 'Test', ctor: ZmkTestTab });
-    if (app.caps.display) TABS.push({ id: 'display', label: 'Display', ctor: DisplayTab });
-    if (app.caps.vial) TABS.push({ id: 'settings', label: 'QMK Settings', ctor: SettingsTab });
-
+    TABS.push(...tabsFor(app));
     renderTabStrip();
 }
-
-/**
- * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the
- * two apps group the same way and muscle memory carries between them.
- *
- * The split is by what you are DOING, not by which protocol answers:
- * keys = pasting a keycode; behaviour = what a key or chord DOES;
- * device = tuning or administering the board; trainer = practising.
- */
-const TAB_GROUPS = [
-    { id: 'keys', label: 'Keys' },
-    { id: 'behaviour', label: 'Behaviour' },
-    { id: 'device', label: 'Device' },
-    { id: 'trainer', label: 'Trainer' },
-];
-
-const GROUP_OF = {
-    keymap: 'keys', 'zmk-keymap': 'keys', 'nape-keymap': 'keys',
-    macros: 'behaviour', tapdance: 'behaviour', combos: 'behaviour',
-    overrides: 'behaviour', corner: 'behaviour', chords: 'behaviour',
-    'zmk-combos': 'behaviour', 'zmk-macros': 'behaviour',
-    'zmk-tapdance': 'behaviour', 'zmk-shift': 'behaviour',
-    'zmk-leader': 'behaviour', 'nape-macros': 'behaviour',
-    gestures: 'device', mouse: 'device', typing: 'device', rgb: 'device',
-    display: 'device', settings: 'device', 'zmk-modes': 'device',
-    'zmk-test': 'device', 'nape-settings': 'device',
-    trainer: 'trainer',
-};
-
-const groupOf = (id) => GROUP_OF[id] ?? 'device';
 
 /**
  * The nav only. Deliberately separate from renderTabStrip: that one
@@ -849,7 +734,8 @@ function init() {
     const themeSel = $('theme-sel');
     themeSel.replaceChildren(...Object.entries(THEMES).map(([id, t]) =>
         el('option', { value: id, text: t.label })));
-    const savedTheme = localStorage.getItem('flask-theme') || 'classic';
+    // AJ Q5 (2026-10-01): keybr Dark is the default everywhere, as in native.
+    const savedTheme = localStorage.getItem('flask-theme') || 'keybrDark';
     themeSel.value = savedTheme;
     applyTheme(savedTheme);
     themeSel.addEventListener('change', () => applyTheme(themeSel.value));
