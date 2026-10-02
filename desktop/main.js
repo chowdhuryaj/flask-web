@@ -383,15 +383,26 @@ const RELEASES_URL = 'https://github.com/chowdhuryaj/flask-web/releases/latest';
 
 function fetchLatestVersion() {
     return new Promise((resolve, reject) => {
-        https.get(RELEASES_API, {
+        const req = https.get(RELEASES_API, {
             headers: { 'User-Agent': 'totem-flask-desktop', Accept: 'application/vnd.github+json' },
+            timeout: 10000,
         }, (res) => {
+            if (res.statusCode !== 200) {
+                res.resume();
+                reject(new Error(`GitHub answered HTTP ${res.statusCode}`));
+                return;
+            }
             let body = '';
-            res.on('data', (c) => { body += c; });
+            res.on('data', (c) => {
+                body += c;
+                if (body.length > 1 << 20) req.destroy(new Error('release response too large'));
+            });
             res.on('end', () => {
                 try { resolve((JSON.parse(body).tag_name || '').replace(/^v/, '')); } catch (e) { reject(e); }
             });
-        }).on('error', reject);
+        });
+        req.on('timeout', () => req.destroy(new Error('timed out')));
+        req.on('error', reject);
     });
 }
 
