@@ -491,6 +491,60 @@
   },
   {
    "id": 35,
+   "displayName": "Hold-Tap L (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "displayName": "Hold-Tap R (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 37,
+   "displayName": "Hold-Tap (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 38,
    "displayName": "",
    "metadata": [
     {
@@ -508,21 +562,6 @@
      ]
     }
    ]
-  },
-  {
-   "id": 36,
-   "displayName": "",
-   "metadata": []
-  },
-  {
-   "id": 37,
-   "displayName": "",
-   "metadata": []
-  },
-  {
-   "id": 38,
-   "displayName": "",
-   "metadata": []
   },
   {
    "id": 39,
@@ -581,6 +620,21 @@
   },
   {
    "id": 50,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 51,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 52,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 53,
    "displayName": "Flask Leader",
    "metadata": [
     {
@@ -590,7 +644,7 @@
    ]
   },
   {
-   "id": 51,
+   "id": 54,
    "displayName": "Flask Macro",
    "metadata": [
     {
@@ -607,7 +661,7 @@
    ]
   },
   {
-   "id": 52,
+   "id": 55,
    "displayName": "Tap Dance",
    "metadata": [
     {
@@ -624,7 +678,7 @@
    ]
   },
   {
-   "id": 53,
+   "id": 56,
    "displayName": "Mod-Tap (fast 150)",
    "metadata": [
     {
@@ -642,7 +696,7 @@
    ]
   },
   {
-   "id": 54,
+   "id": 57,
    "displayName": "Mod-Tap (slow 300)",
    "metadata": [
     {
@@ -660,7 +714,7 @@
    ]
   },
   {
-   "id": 55,
+   "id": 58,
    "displayName": "Layer-Tap (fast 150)",
    "metadata": [
     {
@@ -679,7 +733,7 @@
    ]
   },
   {
-   "id": 56,
+   "id": 59,
    "displayName": "Layer-Tap (slow 300)",
    "metadata": [
     {
@@ -698,7 +752,7 @@
    ]
   },
   {
-   "id": 57,
+   "id": 60,
    "displayName": "Sticky Mod (smart)",
    "metadata": [
     {
@@ -712,7 +766,7 @@
    ]
   },
   {
-   "id": 58,
+   "id": 61,
    "displayName": "Smart Mod",
    "metadata": [
     {
@@ -730,7 +784,7 @@
    ]
   },
   {
-   "id": 59,
+   "id": 62,
    "displayName": "Sticky Layer (smart)",
    "metadata": [
     {
@@ -745,7 +799,7 @@
    ]
   },
   {
-   "id": 60,
+   "id": 63,
    "displayName": "Smart Layer",
    "metadata": [
     {
@@ -765,7 +819,7 @@
    ]
   },
   {
-   "id": 61,
+   "id": 64,
    "displayName": "",
    "metadata": [
     {
@@ -780,7 +834,7 @@
    ]
   },
   {
-   "id": 62,
+   "id": 65,
    "displayName": "",
    "metadata": [
     {
@@ -795,7 +849,7 @@
    ]
   },
   {
-   "id": 63,
+   "id": 66,
    "displayName": "",
    "metadata": [
     {
@@ -805,7 +859,7 @@
    ]
   },
   {
-   "id": 64,
+   "id": 67,
    "displayName": "",
    "metadata": [
     {
