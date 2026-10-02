@@ -168,7 +168,8 @@ function wireSecurity(ses) {
         if (d.origin !== ORIGIN) return false;
         const dev = d.device || {};
         if (d.deviceType === 'hid') return HID_ALLOW.has(vp(dev.vendorId, dev.productId));
-        if (d.deviceType === 'serial') return SERIAL_ALLOW.has(vp(dev.vendorId, dev.productId));
+        // Serial grants carry Chromium's port dict (vendor_id), not the chooser's vendorId.
+        if (d.deviceType === 'serial') return SERIAL_ALLOW.has(vp(dev.vendorId ?? dev.vendor_id, dev.productId ?? dev.product_id));
         return false;
     });
 
