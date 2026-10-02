@@ -6,14 +6,27 @@
 // restricted. From v16 they fire through vial_keycode_tap and the whole range
 // works — hence caps.gestureAnyKeycode rather than a blanket restriction.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=49';
-import { kcCell, makePickerHost } from './picker.js?v=49';
+import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=49';
+import { openPicker } from './binding-picker.js?v=1';
+import { bindingCell } from './tiles.js?v=1';
 import {
     CH, CH_BALL_LEFT, V, slot, GESTURE_DIRS, GESTURE_SETS, WC_BUTTONS,
 } from './flaskproto.js?v=49';
 
 const TAPPABLE = (kc) => kc > 0 && kc <= 0x1FFF; // basic + QK_MODS range
-const TAP_NOTE = 'On this firmware gesture slots fire via tap_code16 — basic keys + modifier combos only';
+const TAP_NOTE = 'On this firmware gesture slots fire via tap_code16: basic keys + modifier combos only';
+
+/** Pick a slot's keycode in a sheet. Firmware before v16 fires slots through
+ * tap_code16, so it gets the tappable surface (spec 4.7: no Layers, no Run). */
+function pickSlot(app, anyKeycode, wide, value, title, onPick) {
+    openPicker({
+        surface: anyKeycode ? wide : 'qmk.gestureSlotTappable', value, host: 'sheet', title, app,
+        onPick: (kc) => {
+            if (!anyKeycode && !TAPPABLE(kc) && kc !== 0) { toast(TAP_NOTE, true); return; }
+            onPick(kc);
+        },
+    });
+}
 
 function slotGrid({ title, rows, rowLabel, getKc, onPick }) {
     const table = el('div', { style: 'overflow-x:auto' });
@@ -25,7 +38,7 @@ function slotGrid({ title, rows, rowLabel, getKc, onPick }) {
         const row = el('div', { class: 'row', style: 'gap:2px' },
             el('span', { class: 'faint', style: 'width:52px', text: rowLabel(r) }));
         for (let dir = 0; dir < 8; dir++) {
-            const cell = kcCell(getKc(r, dir), () => onPick(r, dir));
+            const cell = bindingCell(getKc(r, dir), () => onPick(r, dir));
             cell.style.width = '48px';
             row.append(cell);
         }
@@ -47,10 +60,9 @@ export class GesturesTab {
         }
         this.ratchet = await flask.getU16(CH.gestures, V.gesturesRatchetStep);
         this.active = await flask.getU16(CH.gestures, V.gesturesActiveSet);
-        this.picker = makePickerHost({
-            layerCount: this.app.layerCount,
-            restrict: this.app.caps.gestureAnyKeycode ? null : TAPPABLE,
-            note: TAP_NOTE,
+        this.bar = reloadBar(CH.gestures, {
+            reload: () => this.load(), save: () => this.app.flask.save(CH.gestures),
+            label: 'Ball gestures', line: 'qmk',
         });
         this.render();
     }
@@ -59,6 +71,7 @@ export class GesturesTab {
         try {
             await this.app.flask.setU16(CH.gestures, slot.gesture(set, dir), kc);
             this.slots[set][dir] = kc;
+            this.bar.markEdited();
             this.render();
         } catch (e) { toast(`Write failed: ${e.message}`, true); }
     }
@@ -85,11 +98,12 @@ export class GesturesTab {
                 title: '', rows: GESTURE_SETS,
                 rowLabel: (r) => `Set ${r + 1}`,
                 getKc: (r, dir) => this.slots[r][dir],
-                onPick: (r, dir) => this.picker.request((kc) => this.setSlot(r, dir, kc)),
+                onPick: (r, dir) => pickSlot(this.app, this.app.caps.gestureAnyKeycode, 'qmk.gestureSlot',
+                    this.slots[r][dir], `Set ${r + 1} ${GESTURE_DIRS[dir]}`, (kc) => this.setSlot(r, dir, kc)),
             }),
             el('div', { class: 'note faint', text: 'Empty diagonals fall back to the nearest cardinal, so 4-way sets keep their feel.' }),
-            saveBar(() => flask.save(CH.gestures)));
-        this.root.replaceChildren(c, this.picker.card);
+            this.bar);
+        this.root.replaceChildren(c);
     }
 }
 
@@ -136,10 +150,14 @@ export class ChordsTab {
         // physical button cannot defer on one ball and not the other, so both
         // channels back the same firmware flag.
         if (caps.deferredClick) this.defer = await flask.getU16(CH_BALL_LEFT, V.wcDeferClick);
-        this.picker = makePickerHost({
-            layerCount: this.app.layerCount,
-            restrict: caps.gestureAnyKeycode ? null : TAPPABLE,
-            note: TAP_NOTE,
+        // Saves BOTH channels when there are two: the deferred-click flag is
+        // shared, so a one-channel save could leave it unpersisted.
+        this.bar = reloadBar(CH_BALL_LEFT, {
+            reload: () => this.load(), label: 'Mouse chords', line: 'qmk',
+            save: async () => {
+                await flask.save(CH_BALL_LEFT);
+                if (caps.rightBallGestures) await flask.save(CH.ballGesturesRight);
+            },
         });
         this.render();
     }
@@ -148,6 +166,7 @@ export class ChordsTab {
         try {
             await this.app.flask.setU16(this._ch(this.side), slot.wheelChord(b, dir), kc);
             this.sides[this.side].slots[b][dir] = kc;
+            this.bar.markEdited();
             this.render();
         } catch (e) { toast(`Write failed: ${e.message}`, true); }
     }
@@ -210,15 +229,11 @@ export class ChordsTab {
                 title: '', rows: WC_BUTTONS,
                 rowLabel: (r) => `BTN${r + 1}`,
                 getKc: (r, dir) => st.slots[r][dir],
-                onPick: (r, dir) => this.picker.request((kc) => this.setSlot(r, dir, kc)),
+                onPick: (r, dir) => pickSlot(this.app, caps.gestureAnyKeycode, 'qmk.mouseChord',
+                    st.slots[r][dir], `BTN${r + 1} ${GESTURE_DIRS[dir]}`, (kc) => this.setSlot(r, dir, kc)),
             }),
             el('div', { class: 'note faint', text: 'Motion is swallowed only while the held button has at least one bound direction on this ball.' }),
-            // Saves BOTH channels when there are two: the deferred-click flag is
-            // shared, so a one-channel save could leave it unpersisted.
-            saveBar(async () => {
-                await flask.save(CH_BALL_LEFT);
-                if (caps.rightBallGestures) await flask.save(CH.ballGesturesRight);
-            }));
-        this.root.replaceChildren(c, this.picker.card);
+            this.bar);
+        this.root.replaceChildren(c);
     }
 }

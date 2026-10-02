@@ -1,20 +1,20 @@
-// Typing tab: getreuer modules (custom shift keys, select word, sentence
-// case), leader sequences, OS-aware shortcuts, num word — plus the Svalboard
-// v12+ text machinery: Super Leader, the snippet pool, Cyclotab, and
-// alt-repeat behaviour. Port of AdeptCompanion TypingTab.swift over the same
-// Flask channels.
+// Typing tab: getreuer modules (select word, sentence case), OS-aware
+// shortcuts, num word, plus the Svalboard v12+ text machinery: the snippet
+// pool, Cyclotab, and alt-repeat behaviour. Port of AdeptCompanion
+// TypingTab.swift over the same Flask channels.
 //
-// Reads every value ONCE into `this.s` and renders from that. The old
-// re-read-everything-after-each-pick shape cost 3 round trips per slot; Super
-// Leader alone is 16 sequences x 7 slots, which made it unusable.
+// Leader (incl. Super Leader) and custom shift keys moved to Behaviour ›
+// Leader and Behaviour › Shift Keys (qmk-leader-tab.js, qmk-shift-tab.js;
+// AJ-Q3). Typing keeps a link line to each.
+//
+// Reads every value ONCE into `this.s` and renders from that.
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=49';
+import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=49';
 import {
-    CH, V, slot, CSK_SLOTS, LEADER_SEQS, LEADER_KEYS, osName,
-    SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS, OUTPUT_KIND,
-    SNIPPET_COUNT, SNIPPET_LEN, SNIPPET_KEYS, CYCLOTAB_KEYS,
+    CH, V, slot, osName, SNIPPET_COUNT, SNIPPET_LEN, SNIPPET_KEYS, CYCLOTAB_KEYS,
 } from './flaskproto.js?v=49';
-import { kcCell, makePickerHost } from './picker.js?v=49';
+import { openPicker } from './binding-picker.js?v=1';
+import { announceEdit, bindingCell } from './tiles.js?v=1';
 
 /** "3: Regards," — what a snippet reads as in a dropdown. */
 function snippetLabel(index, text) {
@@ -33,15 +33,6 @@ export class TypingTab {
         const g = (ch, id) => flask.getU16(ch, id);
         const s = this.s = {};
 
-        // ---- custom shift keys ----
-        s.cskEnabled = await g(CH.customShift, V.cskEnabled);
-        s.cskKey = [];
-        s.cskShifted = [];
-        for (let i = 0; i < CSK_SLOTS; i++) {
-            s.cskKey.push(await g(CH.customShift, slot.cskKey(i)));
-            s.cskShifted.push(await g(CH.customShift, slot.cskShift(i)));
-        }
-
         s.selectWordMac = await g(CH.selectWord, V.selectWordMac);
         s.sentenceCase = await g(CH.sentenceCase, V.sentenceCaseEnabled);
 
@@ -53,36 +44,6 @@ export class TypingTab {
         if (caps.numWord) {
             s.nwTimeout = await g(CH.numWord, V.nwTimeout);
             s.nwLayer = await g(CH.numWord, V.nwLayer);
-        }
-
-        // ---- leader: two incompatible shapes on channel 0x19 ----
-        // Original: 8 sequences, slot 5 IS the output keycode.
-        // Super Leader (Svalboard v12+): 16 sequences, slot 5 is an output
-        // KIND and slot 6 the keycode or snippet index. Reading the old shape
-        // off a v12+ board hands you a kind where a keycode is expected, which
-        // is why this branches rather than revealing extra controls.
-        const seqCount = caps.superLeader ? SL_SEQS : LEADER_SEQS;
-        s.leaderSeqs = [];
-        for (let seq = 0; seq < seqCount; seq++) {
-            const keys = [];
-            for (let pos = 0; pos < (caps.superLeader ? SL_KEYS : LEADER_KEYS); pos++) {
-                keys.push(await g(CH.leader, slot.leader(seq, pos)));
-            }
-            if (caps.superLeader) {
-                s.leaderSeqs.push({
-                    keys,
-                    kind: await g(CH.leader, slot.superLeader(seq, SL_KIND_POS)),
-                    out: await g(CH.leader, slot.superLeader(seq, SL_OUT_POS)),
-                });
-            } else {
-                s.leaderSeqs.push({ keys, out: await g(CH.leader, slot.leader(seq, LEADER_KEYS)) });
-            }
-        }
-        if (caps.superLeader) {
-            s.slTimeout = await g(CH.leader, V.slTimeout);
-            s.slLiveCount = await g(CH.leader, V.slLiveCount);
-        } else if (caps.leaderTimeout) {
-            s.leaderTimeout = await g(CH.leader, V.leaderTimeout);
         }
 
         // ---- snippet pool (Svalboard v12-v17 only) ----
@@ -115,18 +76,30 @@ export class TypingTab {
             s.arepDefaultOut = await g(CH.altRepeat, V.arepDefaultOut);
         }
 
-        this.picker = makePickerHost({ layerCount: this.app.layerCount });
+        this.bars = {};
         this.render();
     }
 
-    /** Keycode cell that routes the next pick into `write`, then re-renders. */
-    _kc(kc, write) {
-        return kcCell(kc, () => this.picker.request(async (picked) => {
-            try {
-                await write(picked);
-                this.render();
-            } catch (e) { toast(`Write failed: ${e.message}`, true); }
+    /** One persistent reload bar per channel (keeps its dirty/saved state across renders). */
+    _bar(ch, label) {
+        return (this.bars[ch] ??= reloadBar(ch, {
+            reload: () => this.load(), save: () => this.app.flask.save(ch), label, line: 'qmk',
         }));
+    }
+
+    /** Keycode cell: opens the picker, writes the pick, announces the edit, re-renders. */
+    _kc(kc, title, write) {
+        const cell = bindingCell(kc, () => openPicker({
+            surface: 'qmk.key', value: kc, host: 'sheet', title, app: this.app,
+            onPick: async (picked) => {
+                try {
+                    await write(picked);
+                    announceEdit(cell);
+                    this.render();
+                } catch (e) { toast(`Write failed: ${e.message}`, true); }
+            },
+        }));
+        return cell;
     }
 
     render() {
@@ -134,51 +107,28 @@ export class TypingTab {
         const s = this.s;
         const cardsRow = el('div', { class: 'cards-row' });
 
-        // ---- custom shift keys ----
-        const csk = card('Custom shift keys', 'Shift+key types something else',
-            toggleRow({
-                label: 'Enabled', value: s.cskEnabled,
-                onChange: (v) => flask.setU16(CH.customShift, V.cskEnabled, v ? 1 : 0),
-            }));
-        const cskGrid = el('div', { class: 'codes' });
-        for (let i = 0; i < CSK_SLOTS; i++) {
-            const key = s.cskKey[i];
-            if (!key && i > 0) {
-                // First empty slot is the "add" affordance; the rest stay hidden.
-                cskGrid.append(this._kc(0, async (kc) => {
-                    await flask.setU16(CH.customShift, slot.cskKey(i), kc);
-                    s.cskKey[i] = kc;
-                }));
-                break;
-            }
-            cskGrid.append(el('div', { style: 'display:flex; gap:2px; align-items:center' },
-                this._kc(key, async (kc) => {
-                    await flask.setU16(CH.customShift, slot.cskKey(i), kc);
-                    s.cskKey[i] = kc;
-                }),
-                '⇧→',
-                this._kc(s.cskShifted[i], async (kc) => {
-                    await flask.setU16(CH.customShift, slot.cskShift(i), kc);
-                    s.cskShifted[i] = kc;
-                })));
-        }
-        csk.append(cskGrid, saveBar(() => flask.save(CH.customShift)));
-        cardsRow.append(csk);
+        // Leader and shift keys live under Behaviour now; keep the way there.
+        cardsRow.append(card('Leader and shift keys', 'moved to Behaviour',
+            el('div', { class: 'moved-links' },
+                el('button', { class: 'btn small', text: 'Leader sequences →', 'data-goto': 'qmk-leader', onclick: () => this.app.showTab?.('qmk-leader') }),
+                el('button', { class: 'btn small', text: 'Custom shift keys →', 'data-goto': 'qmk-shift', onclick: () => this.app.showTab?.('qmk-shift') }),
+                el('span', { class: 'hint', text: 'Behaviour › Leader and Behaviour › Shift Keys' }))));
 
         // ---- select word / sentence case ----
-        cardsRow.append(card('Select word & sentence case', 'getreuer modules',
+        cardsRow.append(card('Select word', 'getreuer module',
             toggleRow({
                 label: 'Select word: macOS hotkeys', hint: 'off = Windows/Linux style',
                 value: s.selectWordMac,
                 onChange: (v) => flask.setU16(CH.selectWord, V.selectWordMac, v ? 1 : 0),
             }),
-            saveBar(() => flask.save(CH.selectWord), 'Select word save'),
+            this._bar(CH.selectWord, 'Select word')));
+        cardsRow.append(card('Sentence case', 'getreuer module',
             toggleRow({
                 label: 'Sentence case', hint: 'auto-capitalize after ". " "! " "? "',
                 value: s.sentenceCase,
                 onChange: (v) => flask.setU16(CH.sentenceCase, V.sentenceCaseEnabled, v ? 1 : 0),
             }),
-            saveBar(() => flask.save(CH.sentenceCase), 'Sentence case save')));
+            this._bar(CH.sentenceCase, 'Sentence case')));
 
         // ---- OS shortcuts ----
         if (caps.osShortcuts) {
@@ -196,7 +146,7 @@ export class TypingTab {
                     el('span', { class: 'lbl', text: 'Detected host OS' }),
                     el('span', { style: 'flex:1' }),
                     el('span', { class: 'muted', text: osName(s.osDetected) })),
-                saveBar(() => flask.save(CH.os))));
+                this._bar(CH.os, 'OS shortcuts')));
         }
 
         // ---- num word ----
@@ -212,152 +162,19 @@ export class TypingTab {
                     options: this._layerOptions(),
                     onChange: (v) => flask.setU16(CH.numWord, V.nwLayer, Number(v)),
                 }),
-                saveBar(() => flask.save(CH.numWord))));
+                this._bar(CH.numWord, 'Num word')));
         }
 
-        cardsRow.append(caps.superLeader ? this._superLeaderCard() : this._leaderCard());
         if (caps.cyclotab) cardsRow.append(this._cyclotabCard());
         if (caps.altRepeatBehaviour) cardsRow.append(this._altRepeatCard());
         if (caps.snippets) cardsRow.append(this._snippetCard());
 
-        this.root.replaceChildren(cardsRow, this.picker.card);
+        this.root.replaceChildren(cardsRow);
     }
 
     _layerOptions() {
         return Array.from({ length: this.app.layerCount || 16 }, (_, i) =>
             ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` }));
-    }
-
-    // ---- leader, original 8-sequence shape (Adept, NLKB16) ----
-
-    _leaderCard() {
-        const { flask, caps } = this.app;
-        const s = this.s;
-        const c = card('Leader sequences', `${LEADER_SEQS} slots × up to ${LEADER_KEYS} keys → 1 output`);
-        if (caps.leaderTimeout) {
-            c.append(sliderRow({
-                label: 'Timeout (ms)', min: 100, max: 2000, step: 50, value: s.leaderTimeout,
-                onChange: (v) => flask.setU16(CH.leader, V.leaderTimeout, v),
-            }));
-        }
-        s.leaderSeqs.forEach((seq, i) => {
-            const row = el('div', { style: 'display:flex; gap:2px; align-items:center; padding:3px 0' },
-                el('span', { class: 'faint', style: 'width:24px', text: `${i + 1}.` }));
-            seq.keys.forEach((kc, pos) => row.append(this._kc(kc, async (v) => {
-                await flask.setU16(CH.leader, slot.leader(i, pos), v);
-                seq.keys[pos] = v;
-            })));
-            row.append('→', this._kc(seq.out, async (v) => {
-                await flask.setU16(CH.leader, slot.leader(i, LEADER_KEYS), v);
-                seq.out = v;
-            }));
-            if (seq.keys.some(Boolean) || seq.out || i < 3) c.append(row);
-        });
-        c.append(saveBar(() => flask.save(CH.leader)));
-        return c;
-    }
-
-    // ---- Super Leader (Svalboard v12+) ----
-
-    _superLeaderCard() {
-        const { flask, caps } = this.app;
-        const s = this.s;
-        const filled = s.leaderSeqs.filter((q) => q.keys.some(Boolean)).length;
-        const c = card('Leader Key (Super Leader)',
-            `${SL_SEQS} sequences × up to ${SL_KEYS} keys → a key or a whole snippet`,
-            el('div', { class: 'note faint' },
-                'Press the Leader key (QK_LEAD, 0x7C58 — in the picker under Device), '
-                + 'then type up to 5 keys. First match fires.'),
-            sliderRow({
-                label: 'Sequence timeout (ms)', hint: 'after the last key', min: 200, max: 10000, step: 100,
-                value: s.slTimeout,
-                onChange: (v) => flask.setU16(CH.leader, V.slTimeout, v),
-            }));
-
-        // Every configured sequence, plus two blanks to grow into — 16 empty
-        // rows is a wall, and hiding all of them leaves nowhere to start.
-        let blanks = 0;
-        for (let seq = 0; seq < s.leaderSeqs.length; seq++) {
-            const q = s.leaderSeqs[seq];
-            if (!q.keys.some(Boolean) && !q.out) {
-                if (blanks >= 2) continue;
-                blanks++;
-            }
-            const row = el('div', { style: 'display:flex; gap:2px; align-items:center; padding:3px 0; flex-wrap:wrap' },
-                el('span', { class: 'faint', style: 'width:24px', text: `${seq + 1}.` }));
-            q.keys.forEach((kc, pos) => row.append(this._kc(kc, async (v) => {
-                await flask.setU16(CH.leader, slot.superLeader(seq, pos), v);
-                q.keys[pos] = v;
-            })));
-            row.append('→');
-
-            // The Key/Text switch only exists while the board has a snippet
-            // pool to point "Text" at. From v18 a sequence has exactly one kind
-            // of output, so offering the choice would be offering nothing.
-            if (caps.snippets) {
-                const kindSel = el('select', {},
-                    el('option', { value: OUTPUT_KIND.keycode, text: 'Key' }),
-                    el('option', { value: OUTPUT_KIND.snippet, text: 'Text' }));
-                kindSel.value = String(q.kind);
-                kindSel.addEventListener('change', async () => {
-                    try {
-                        q.kind = await flask.setU16(CH.leader,
-                            slot.superLeader(seq, SL_KIND_POS), Number(kindSel.value));
-                        // The output slot means something different now, so the
-                        // stale value would render as a nonsense keycode/index.
-                        q.out = await flask.setU16(CH.leader, slot.superLeader(seq, SL_OUT_POS), 0);
-                        this.render();
-                    } catch (e) { toast(`Write failed: ${e.message}`, true); }
-                });
-                row.append(kindSel);
-            }
-
-            if (q.kind === OUTPUT_KIND.snippet && caps.snippets) {
-                const snipSel = el('select', { style: 'max-width:190px' },
-                    ...Array.from({ length: SNIPPET_COUNT }, (_, i) =>
-                        el('option', { value: i, text: snippetLabel(i, s.snippets?.[i]) })));
-                snipSel.value = String(Math.min(q.out, SNIPPET_COUNT - 1));
-                snipSel.addEventListener('change', async () => {
-                    try {
-                        q.out = await flask.setU16(CH.leader,
-                            slot.superLeader(seq, SL_OUT_POS), Number(snipSel.value));
-                    } catch (e) { toast(`Write failed: ${e.message}`, true); }
-                });
-                row.append(snipSel);
-            } else {
-                row.append(this._kc(q.out, async (v) => {
-                    await flask.setU16(CH.leader, slot.superLeader(seq, SL_OUT_POS), v);
-                    q.out = v;
-                }));
-            }
-
-            row.append(el('button', {
-                class: 'btn small', text: '✕', title: 'clear this sequence',
-                onclick: async () => {
-                    try {
-                        for (let pos = 0; pos < SL_KEYS; pos++) {
-                            await flask.setU16(CH.leader, slot.superLeader(seq, pos), 0);
-                            q.keys[pos] = 0;
-                        }
-                        await flask.setU16(CH.leader, slot.superLeader(seq, SL_OUT_POS), 0);
-                        q.out = 0;
-                        this.render();
-                    } catch (e) { toast(`Clear failed: ${e.message}`, true); }
-                },
-            }));
-            c.append(row);
-        }
-
-        // The device's own count of firable sequences. A row with keys but no
-        // output (or pointing at an empty snippet) is compacted out firmware
-        // side, so a mismatch here is the honest warning that a row is dead.
-        if (s.slLiveCount !== filled) {
-            c.append(el('div', { class: 'note faint' },
-                `Device reports ${s.slLiveCount} firable sequence(s) but ${filled} row(s) have keys — `
-                + 'a row with no output, or pointing at an empty snippet, is ignored.'));
-        }
-        c.append(saveBar(() => flask.save(CH.leader)));
-        return c;
     }
 
     // ---- text snippets (0x24) ----
@@ -382,10 +199,8 @@ export class TypingTab {
                 try {
                     await flask.setSnippet(i, input.value);
                     s.snippets[i] = input.value;
-                    // Emptying a snippet changes which leader sequences can
-                    // fire, so the device's count has to be re-read.
-                    s.slLiveCount = await flask.getU16(CH.leader, V.slLiveCount).catch(() => s.slLiveCount);
-                    toast(`Snippet ${i + 1} saved`);
+                    announceEdit(input);
+                    toast(`Snippet ${i + 1} written`);
                 } catch (e) {
                     toast(`Write failed: ${e.message}`, true);
                     input.value = s.snippets[i];
@@ -413,7 +228,7 @@ export class TypingTab {
             }
             c.append(grid);
         }
-        c.append(saveBar(() => flask.save(CH.snippets)));
+        c.append(this._bar(CH.snippets, 'Text snippets'));
         return c;
     }
 
@@ -439,7 +254,7 @@ export class TypingTab {
             }));
         const grid = el('div', { class: 'codes' });
         for (let i = 0; i < CYCLOTAB_KEYS; i++) {
-            grid.append(this._kc(s.cycKeys[i], async (kc) => {
+            grid.append(this._kc(s.cycKeys[i], `Cyclotab hotkey ${i + 1}`, async (kc) => {
                 await flask.setU16(CH.cyclotab, slot.cyclotabKey(i), kc);
                 s.cycKeys[i] = kc;
             }));
@@ -448,7 +263,7 @@ export class TypingTab {
             el('span', { class: 'lbl' }, 'Hotkeys',
                 el('span', { class: 'hint', text: 'defaults cover Windows and macOS at once' })),
             el('span', { style: 'flex:1' }), grid));
-        c.append(saveBar(() => flask.save(CH.cyclotab)));
+        c.append(this._bar(CH.cyclotab, 'Cyclotab'));
         return c;
     }
 
@@ -475,10 +290,10 @@ export class TypingTab {
                 el('span', { class: 'lbl' }, 'Stale output',
                     el('span', { class: 'hint', text: 'fires instead of a stale last key; empty = do nothing' })),
                 el('span', { style: 'flex:1' }),
-                this._kc(s.arepDefaultOut, async (kc) => {
+                this._kc(s.arepDefaultOut, 'Alt Repeat stale output', async (kc) => {
                     await flask.setU16(CH.altRepeat, V.arepDefaultOut, kc);
                     s.arepDefaultOut = kc;
                 })),
-            saveBar(() => flask.save(CH.altRepeat)));
+            this._bar(CH.altRepeat, 'Alt Repeat'));
     }
 }

@@ -75,9 +75,10 @@ def open_workspace(page, label):
 
 
 def tab_ids(page):
-    # WP1 added Device > Keyboard (spec 1.3); the snapshot predates it.
+    # WP1 added Device > Keyboard and WP4b Behaviour > Leader / Shift Keys
+    # (spec 1.3); the snapshot predates them.
     ids = page.locator('#panels [data-panel]').evaluate_all('xs => xs.map(x => x.dataset.panel)')
-    return [i for i in ids if i != 'keyboard']
+    return [i for i in ids if i not in ('keyboard', 'qmk-leader', 'qmk-shift')]
 
 
 def launch(p):

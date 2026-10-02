@@ -34,6 +34,8 @@ import { ZmkTestTab } from './zmk-test-tab.js?v=49';
 import { ZmkModesTab } from './zmk-modes-tab.js?v=50';
 import { MouseTab } from './mouse-tab.js?v=49';
 import { TypingTab } from './typing-tab.js?v=49';
+import { QmkLeaderTab } from './qmk-leader-tab.js?v=1';
+import { QmkShiftTab } from './qmk-shift-tab.js?v=1';
 import { SettingsTab } from './settings-tab.js?v=49';
 import { MacrosTab } from './macros-tab.js?v=49';
 import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=49';
@@ -82,10 +84,11 @@ export const TAB_TABLE = [
     // 'combos' is Vial's keycode-matched feature and this one matches switch
     // POSITIONS. Sharing the word cost real debugging time, twice.
     { id: 'corner', label: 'Chords', group: 'behaviour', when: (a) => a.caps.cornerCombos, ctor: CornerTab },
+    // AJ-Q3: QMK Super Leader and custom shift keys, out of Typing (WP4b).
+    { id: 'qmk-leader', label: 'Leader', group: 'behaviour', when: (a) => a.caps.typing && !zmk(a), ctor: QmkLeaderTab },
+    { id: 'qmk-shift', label: 'Shift Keys', group: 'behaviour', when: (a) => a.caps.typing && !zmk(a), ctor: QmkShiftTab },
     { id: 'mouse', label: 'Mouse', group: 'device', when: (a) => a.caps.mouse, ctor: MouseTab },
-    // AJ-Q3 (answered yes): QMK Super Leader and custom shift keys move to
-    // Behaviour › Leader / Shift Keys. WP4b adds qmk-leader-tab /
-    // qmk-shift-tab rows here and Typing keeps a link line to each.
+    // AJ-Q3: Super Leader / shift keys left Typing; see qmk-leader / qmk-shift above.
     { id: 'typing', label: 'Typing', group: 'device', when: (a) => a.caps.typing, ctor: TypingTab },
     // Needs no capability: it runs on browser key events.
     { id: 'trainer', label: 'Trainer', group: 'trainer', when: () => true, ctor: TrainerTab },
