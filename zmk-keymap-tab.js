@@ -720,9 +720,11 @@ export class ZmkKeymapTab {
             toast('Not a JSON file', true);
             return;
         }
-        // null = refused (not a keymap export, or another family's file) —
-        // the module state must not land either.
-        if (await this.applyKeymapData(data) === null) return;
+        // null = refused (not a keymap export, or another family's file);
+        // stopped = the keymap import halted partway. Either way the module
+        // state must not land.
+        const r = await this.applyKeymapData(data);
+        if (!r || r.stopped) return;
         // v2 files carry module state (tunables/RGB/slot tables) — apply it
         // through the Flask channels + SAVE. Auto-sync's queued keymaps never
         // carry this section (module edits ride their own journals).
