@@ -1,5 +1,6 @@
-// Regression: offline "Discard queued" left the status bar's "Save N unsaved"
-// counter (saveState) untouched. One discardAll() now clears both.
+// Discard semantics: the top-bar Discard reverts unsaved sources only and never
+// drops the Unplugged queue (WC-05); "Discard queued" drops queue, marks and the
+// values the queue carried. Earlier regression: the status bar counter stayed.
 import assert from 'node:assert/strict';
 
 const mem = new Map();
@@ -12,10 +13,10 @@ const { saveState } = await import('../save-state.js?v=62');
 const { createZmkTemplate, attachZmkOffline, ZmkOfflineFlask, offlineQueued, discardOfflineQueued }
     = await import('../zmk-offline.js?v=62');
 const { CH, V } = await import('../flaskproto.js?v=62');
+const { encodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=62');
 
 let checks = 0;
 const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
-const wait = () => new Promise((r) => setTimeout(r, 0));
 
 function setup() {
     saveState.reset();
@@ -25,34 +26,39 @@ function setup() {
     return { ws, app };
 }
 
-// 1. discardAll clears queue + unsaved marks, reverts discardable sources.
+// 1. Top-bar Discard (discardAll) reverts unsaved sources only. A saved
+// Unplugged edit IS the queue (WC-05): journals and pendingKeymap survive, and
+// marks that cannot be reverted stay visible instead of being dropped.
 {
     const { ws, app } = setup();
     await app.flask.setU16(CH.scrollSnap, V.snapThreshold, 80);          // queued
+    ws.zmk.pendingKeymap = { kind: 'flask-zmk-keymap', layers: [] };      // a saved keymap edit
     let reverted = 0;
     saveState.markDirty('studio-keymap', 'Keymap', async () => {}, { discard: async () => { reverted++; } });
     saveState.markDirty(CH.combos, 'Combos', async () => {});            // no discard fn
-    saveState.markDirty(0x2A, 'Hold-tap timing', async () => {});
-    eq(saveState.summary(), 'Save 3 unsaved');
-    eq(offlineQueued(ws), 1);
+    eq(offlineQueued(ws), 2);
     const r = await saveState.discardAll();
     eq(r.failed, null);
     eq(reverted, 1, 'keymap discard fn ran');
-    eq(saveState.dirty(), [], 'counter cleared');
-    eq(saveState.summary(), '');
-    eq(offlineQueued(ws), 0, 'queue cleared');
+    eq(saveState.dirty().map((d) => d.source), [CH.combos], 'non-revertable mark stays, reported by discardMessage');
+    eq(offlineQueued(ws), 2, 'queue and pendingKeymap untouched');
+    eq(await app.flask.getU16(CH.scrollSnap, V.snapThreshold), 80, 'saved value still shown');
 }
 
-// 2. The old button's function (main.js calls it) now clears the counter too.
+// 2. The explicit "Discard queued" drops the queue, the marks, AND the phantom
+// values (restored to the baseline taken when nothing was queued).
 {
     const { ws, app } = setup();
+    const before = await app.flask.getU16(CH.scrollSnap, V.snapThreshold);
     await app.flask.setU16(CH.scrollSnap, V.snapThreshold, 80);
+    await app.flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(0, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
     saveState.markDirty(CH.combos, 'Combos', async () => {});
     saveState.markDirty(0x2A, 'Hold-tap timing', async () => {});
     eq(discardOfflineQueued(ws) > 0, true, 'something dropped');
-    await wait();
-    eq(saveState.dirty(), [], 'Save N unsaved gone after Discard queued');
+    eq(saveState.dirty(), [], 'Save N unsaved gone');
     eq(offlineQueued(ws), 0);
+    eq(await app.flask.getU16(CH.scrollSnap, V.snapThreshold), before, 'tunable back to baseline');
+    eq(ws.zmk.macros[0][0].action, MACRO_ACTION.empty, 'macro step back to baseline');
     eq(discardOfflineQueued(ws), 0, 'nothing left is reported as 0');
 }
 

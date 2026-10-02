@@ -15,9 +15,11 @@
 //       runs every discard fn (same order); sources without one are left alone.
 //   saveState.canDiscard()                       any dirty source can be discarded
 //   saveState.discardAll() → {discarded, failed, queued}   THE one Discard (also
-//       window.flaskDiscardAll()): discard() plus every registered hook
-//       (offline: drops the queued journal and any unsaved mark that has no
-//       device behind it). Safe to call when nothing is dirty.
+//       window.flaskDiscardAll()): discard() plus every registered hook.
+//       Unplugged registers no hook: a SAVED Unplugged edit is the offline
+//       queue, so Discard reverts only unsaved sources and never drops the
+//       queue (zmk-offline.js "Discard queued" is a separate, confirmed
+//       action). Safe to call when nothing is dirty.
 //   saveState.addDiscardHook(fn) → remove fn     fn() → number of entries dropped
 //   saveState.summary() → 'Save 3 unsaved' | ''  the status bar text
 //   saveState.reset()                            drop everything (disconnect)

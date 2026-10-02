@@ -13,9 +13,8 @@ import { CommandPalette } from './command-palette.js?v=62';
 import { HUD } from './hud.js?v=62';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
          zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
-         seedWorkspaceFromSnapshot } from './zmk-offline.js?v=62';
-import { loadWorkspace, saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline,
-         workspaceKey } from './offline.js?v=62';
+         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=62';
+import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=62';
 import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=62';
 import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=62';
 import { shell } from './app-shell.js?v=62';
@@ -90,6 +89,10 @@ let manualSwitch = false;
 // ---------- connect / load ----------
 
 let connecting = false; // re-entrancy guard: events + the reconnect poll race
+// Bumped by disconnectUI. A load that resumes after an await (the offline
+// dialog, the replay) compares it and walks away instead of repainting
+// "Connected" on a dead transport.
+let connectGen = 0;
 
 async function connectFlow(device) {
     if (connecting) return;
@@ -113,6 +116,8 @@ async function connectFlow(device) {
             await loadDevice(device);
         } catch (e) {
             console.error(e);
+            // The keyboard going away mid-load already announced itself.
+            if (!app.hid.connected) return;
             toast(`Load failed: ${e.message}`, true);
             $('status-text').textContent = 'Load failed';
         }
@@ -148,8 +153,11 @@ async function loadDevice(device) {
  * tab is Flask-protocol or Studio RPC. */
 async function loadZmkDevice(device) {
     app.keymap = null;  // ZMK keymap tab publishes the real one post-Studio-load
+    const gen = connectGen;
+    const stale = () => gen !== connectGen || !app.hid.connected;
 
     app.protocolVersion = await app.flask.handshake();
+    if (stale()) return;
     if (app.protocolVersion == null) {
         throw new Error('ZMK device without the Flask protocol — is raw_hid_adapter + CONFIG_ZMK_FLASK_PROTO in the firmware?');
     }
@@ -157,6 +165,7 @@ async function loadZmkDevice(device) {
     // The stock ZMK VID/PID is shared by every ZMK board — confirm the
     // family from meta 0x03 (pre-family firmware keeps the VID/PID guess).
     const confirmed = await confirmZmkFamily(app.flask, app.family);
+    if (stale()) return;
     app.familyUnresolved = confirmed == null;   // keymap import / Mode apply / Studio writes stay blocked
     if (app.familyUnresolved) toast(ZMK_FAMILY_UNRESOLVED_MSG, true);
     else app.family = confirmed;
@@ -170,21 +179,16 @@ async function loadZmkDevice(device) {
     // Crash forensics: log the boot reset cause; toast on fault bits.
     zmkReportResetCause(app.flask, toast);
 
-    // Offline preview queue → device (tunables + RGB ride the shared
-    // journal; combo slots + macro steps are ZMK-shaped extras).
-    // Unresolved family = guessed board: never replay another board's queue onto it.
-    if (!app.familyUnresolved) await maybeSyncOffline(app, device);
-    const ws = loadWorkspace(workspaceKey(app.family, device));
+    // Offline preview queue → device. ONE decision (apply / later / discard)
+    // covers tunables, RGB, slot edits and the queued keymap. Unresolved
+    // family = guessed board: never replay another board's queue onto it.
     app.zmkQueuedWs = null;   // never let a prior connect's queue leak across
-    if (ws && zmkPendingCount(ws) && !app.familyUnresolved) {
-        const { applied, failures, keymapSkipped } = await zmkSyncExtras(app, ws);
-        if (keymapSkipped) toast('Unplugged template keymap edits were not applied to your keyboard (the template is not your keymap)', true);
-        if (failures.length) {
-            console.warn('zmk offline sync failures:', failures);
-            toast(`Applied ${applied} offline slot edits — ${failures.length} failed, still queued`, true);
-        } else if (applied) {
-            toast(`Applied ${applied} offline combo/macro slot edits`);
-        }
+    if (!app.familyUnresolved) {
+        await maybeSyncOffline(app, device, {
+            count: zmkPendingCount, describe: zmkDescribeChanges,
+            apply: applyZmkExtras, clear: dropJournals,
+        });
+        if (stale()) return;
     }
 
     setMode('device');
@@ -192,8 +196,23 @@ async function loadZmkDevice(device) {
     updateStatus(device);
     await probeHoldtap();
     await probeAdaptive();
+    if (stale()) return;
     buildTabs();
     if (TABS.length) await showTab(TABS[0].id);
+}
+
+/** Replay the ZMK-shaped half of the offline queue (slot edits + queued keymap). */
+async function applyZmkExtras(a, ws) {
+    if (!zmkPendingCount(ws)) return;
+    const { applied, failures, keymapSkipped, keymapReview } = await zmkSyncExtras(a, ws);
+    if (keymapSkipped) toast('Unplugged template keymap edits were not applied to your keyboard (the template is not your keymap)', true);
+    if (keymapReview) toast('Unplugged keymap edits changed the layer list, so they were not applied. They stay queued for review.', true);
+    if (failures.length) {
+        console.warn('zmk offline sync failures:', failures);
+        toast(`Applied ${applied} offline slot edits — ${failures.length} failed, still queued`, true);
+    } else if (applied) {
+        toast(`Applied ${applied} offline combo/macro slot edits`);
+    }
 }
 
 function updateStatus(device) {
@@ -217,6 +236,8 @@ function updateStatus(device) {
 }
 
 function disconnectUI() {
+    connectGen++;
+    app.familyUnresolved = false;   // a stale flag would block every Unplugged edit
     app.hud.close();
     app.protocolVersion = null;
     app.profile = null;
@@ -421,7 +442,7 @@ async function showTab(id) {
 
 async function refreshDeviceList() {
     const list = $('dev-list');
-    const granted = await FlaskHID.grantedDevices();
+    const granted = await FlaskHID.grantedDevices().catch(() => []);   // policy-blocked WebHID rejects
     list.replaceChildren(...granted.map((d) => {
         const family = familyOf(d.vendorId, d.productId);
         const hex = (n) => n.toString(16).padStart(4, '0');
@@ -447,6 +468,12 @@ async function connectClick() {
         // SecurityError/NotAllowedError off a real click. Send those to the
         // preflight instead of swallowing them as a cancel.
         const refused = e.name === 'SecurityError' || e.name === 'NotAllowedError';
+        // Electron has no chooser for 0 devices (and auto-picks 1): an instant
+        // empty result there means "no keyboard", not "blocked".
+        if (IS_DESKTOP && e.kind === 'cancelled' && ms < 400 && !refused) {
+            toast('No keyboard found. Plug it in and try again.', true);
+            return;
+        }
         if (refused || (e.kind === 'cancelled' && ms < 400)) {
             diag.log('connect-refused', `${e.name ?? e.kind} after ${ms}ms — chooser likely never opened`);
             toast('The device chooser never opened — WebHID may be blocked here. '
@@ -583,8 +610,13 @@ function init() {
     $('offline-discard').addEventListener('click', () => {
         const ws = app.offlineWs;
         if (!ws) return;
-        if (!discardOfflineQueued(ws)) { toast('Nothing queued'); return; }
+        const n = offlineQueued(ws);
+        if (!n) { toast('Nothing queued'); return; }
+        if (!confirm(`Discard ${n} queued change${n === 1 ? '' : 's'}? They have not reached the keyboard yet.`)) return;
+        discardOfflineQueued(ws);
         toast('Queued changes discarded');
+        buildTabs();    // tabs re-read the restored workspace
+        showTab('zmk-keymap');
     });
 
     app.hid.addEventListener('disconnect', () => {
@@ -670,9 +702,9 @@ function init() {
         $('save-btn').title = dirty.map((d) => d.label).join(', ');
         // ONE Discard (look-extras' flaskDiscardAll covers keymap edits and the
         // offline queue); shown while there is anything to throw away.
-        const queued = app.offline && app.offlineWs ? offlineQueued(app.offlineWs) : 0;
-        const canDiscard = saveState.canDiscard() || queued > 0;
-        $('discard-btn').style.display = canDiscard ? '' : 'none';
+        // Queued Unplugged edits are SAVED (they replay on connect): the top-bar
+        // Discard never touches them. "Discard queued" is its own confirmed action.
+        $('discard-btn').style.display = saveState.canDiscard() ? '' : 'none';
     };
     saveState.addEventListener('change', renderSave);
     renderSave();

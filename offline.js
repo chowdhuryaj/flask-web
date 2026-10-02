@@ -18,6 +18,9 @@ import { isZmkFamily } from './zmk.js?v=62';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';
+// Baseline for "Discard queued" (written by zmk-offline.js). Not under
+// LS_PREFIX so listWorkspaces never mistakes it for a workspace.
+export const BASE_PREFIX = 'flask-offline-base:';
 
 // Live-state value ids (SET is a transient action, not a setting) — never
 // journal these offline. '<ch>:<id>' decimal.
@@ -55,7 +58,10 @@ export function saveWorkspace(ws) {
     ws._notify?.();
 }
 
-export function deleteWorkspace(key) { localStorage.removeItem(LS_PREFIX + key); }
+export function deleteWorkspace(key) {
+    localStorage.removeItem(LS_PREFIX + key);
+    localStorage.removeItem(BASE_PREFIX + key);
+}
 
 /** Saved workspaces for ZMK boards (anything else in storage is ignored). */
 export function listWorkspaces() {
@@ -150,19 +156,23 @@ export async function syncWorkspace(app, ws) {
     const fail = [];
     // Entries the DEVICE does not serve — dropped rather than retried forever.
     const dropped = [];
-    let applied = 0, clamped = 0;
+    let applied = 0;
+    // SAVE is the commit point: a SET only changes RAM, so an entry leaves
+    // the journal after its channel's SAVE lands, never before.
+    const pending = new Map();      // ch → [journal keys SET but not yet saved]
+    const clampedKeys = new Set();
+    const label = (ch, id) => `${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}`;
 
-    const touched = new Set(ws.dirty.saves);
     for (const [k, t] of Object.entries(ws.dirty.tun)) {
         const [ch, id] = k.split(':').map(Number);
         try {
             const echo = t.op === 'i16'
                 ? await app.flask.setI16(ch, id, t.val)
                 : await app.flask.setU16(ch, id, t.val);
-            if (echo !== t.val) clamped++;
+            if (echo !== t.val) clampedKeys.add(k);
             ws.tunables[k] = { op: t.op, val: echo };
-            touched.add(ch);
-            delete ws.dirty.tun[k]; applied++;
+            if (!pending.has(ch)) pending.set(ch, []);
+            pending.get(ch).push(k);
         } catch (e) {
             // "unhandled" means the DEVICE does not serve this id — the
             // firmware answered id_unhandled. Retrying it on every connect
@@ -172,27 +182,54 @@ export async function syncWorkspace(app, ws) {
             // queued, because that one is transient.
             if (e.message === 'unhandled') {
                 delete ws.dirty.tun[k];
-                dropped.push(`${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}`);
+                dropped.push(label(ch, id));
             } else {
-                fail.push(`${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}: ${e.message}`);
+                fail.push(`${label(ch, id)}: ${e.message}`);
             }
         }
     }
-    for (const ch of touched) {
-        try { await app.flask.save(ch); } catch { /* no-op channels */ }
-    }
-    ws.dirty.saves = [];
 
-    // RGB map paints (payload-addressed).
-    let rgbTouched = false;
+    const keepSaves = [];
+    for (const ch of new Set([...ws.dirty.saves, ...pending.keys()])) {
+        const keys = pending.get(ch) ?? [];
+        try {
+            await app.flask.save(ch);
+        } catch (e) {
+            // A channel with no persistence answers unhandled: nothing to
+            // lose, treat as saved. Anything else (timeout, transport) means
+            // the values are RAM-only: keep them queued and say so.
+            if (e.message !== 'unhandled') {
+                keepSaves.push(ch);
+                for (const k of keys) fail.push(`${CH_NAMES[ch] ?? ch} ${k}: SAVE failed (${e.message})`);
+                if (!keys.length) fail.push(`${CH_NAMES[ch] ?? ch}: SAVE failed (${e.message})`);
+                continue;
+            }
+        }
+        for (const k of keys) {
+            delete ws.dirty.tun[k]; applied++;
+        }
+    }
+    ws.dirty.saves = keepSaves;
+    const clamped = [...clampedKeys].filter((k) => !ws.dirty.tun[k]).length;   // committed ones only
+
+    // RGB map paints (payload-addressed), committed by one rgbMap SAVE.
+    const rgbDone = [];
     for (const [k, hsv] of Object.entries(ws.dirty.rgb)) {
         const [l, led] = k.split(',').map(Number);
         try {
             await app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [l, led, ...hsv]);
-            delete ws.dirty.rgb[k]; applied++; rgbTouched = true;
+            rgbDone.push(k);
         } catch (e) { fail.push(`rgb ${k}: ${e.message}`); }
     }
-    if (rgbTouched) { try { await app.flask.save(CH.rgbMap); } catch { /* no-op */ } }
+    if (rgbDone.length) {
+        try {
+            await app.flask.save(CH.rgbMap);
+            for (const k of rgbDone) { delete ws.dirty.rgb[k]; applied++; }
+        } catch (e) {
+            if (e.message === 'unhandled') for (const k of rgbDone) { delete ws.dirty.rgb[k]; applied++; }
+            else fail.push(`rgb: SAVE failed (${e.message})`);
+        }
+    }
 
     saveWorkspace(ws);
     return { applied, clamped, failures: fail, dropped };
@@ -203,10 +240,21 @@ export async function syncWorkspace(app, ws) {
  * apply them (silently when auto-apply is on, else after a confirm modal).
  * Resolves when the decision is made; loadDevice awaits this before
  * building tabs so they render post-sync state.
+ *
+ * `ext` lets the ZMK layer join the SAME decision (offline.js cannot import
+ * zmk-offline.js): {count(ws), describe(ws) → lines, apply(app, ws) (does its
+ * own toasts), clear(ws) (drops everything queued)}. Apply now runs both
+ * halves, Discard clears both, Later / closing the dialog leaves both queued
+ * and sends nothing.
+ *
+ * Returns 'none' | 'applied' | 'later' | 'discarded' | 'aborted' (the
+ * keyboard went away while the dialog was open: nothing was sent).
  */
-export async function maybeSyncOffline(app, device) {
+export async function maybeSyncOffline(app, device, ext = {}) {
     const ws = loadWorkspace(workspaceKey(app.family, device));
-    if (!ws || !pendingCount(ws)) return;
+    if (!ws) return 'none';
+    const extra = () => ext.count?.(ws) ?? 0;
+    if (!pendingCount(ws) && !extra()) return 'none';
 
     const run = async () => {
         const { applied, clamped, failures, dropped } = await syncWorkspace(app, ws);
@@ -223,15 +271,16 @@ export async function maybeSyncOffline(app, device) {
         if (failures.length) {
             console.warn('offline sync failures:', failures);
             toast(`${msg} — ${failures.length} failed, still queued`, true);
-        } else {
+        } else if (applied || !extra()) {
             toast(msg);
         }
+        await ext.apply?.(app, ws);
     };
 
-    if (localStorage.getItem(AUTO_KEY) === '1') { await run(); return; }
+    if (localStorage.getItem(AUTO_KEY) === '1') { await run(); return 'applied'; }
 
-    const lines = describeChanges(ws);
-    await new Promise((resolve) => {
+    const lines = [...describeChanges(ws), ...(ext.describe?.(ws) ?? [])];
+    return new Promise((resolve) => {
         const autoCb = el('input', { type: 'checkbox' });
         const body = el('div', {},
             el('p', { class: 'muted', text: `Queued while ${ws.label} was disconnected:` }),
@@ -240,21 +289,37 @@ export async function maybeSyncOffline(app, device) {
                 lines.length > 15 ? el('div', { class: 'faint', text: `…and ${lines.length - 15} more` }) : null),
             el('label', { style: 'display:flex; gap:6px; align-items:center; margin-top:10px' },
                 autoCb, 'Apply automatically from now on'));
-        const done = (fn) => async () => {
-            if (autoCb.checked) localStorage.setItem(AUTO_KEY, '1');
+        let settled = false;
+        const finish = (r) => {
+            if (settled) return;
+            settled = true;
+            app.hid?.removeEventListener?.('disconnect', onGone);
             back.remove();
-            await fn?.();
-            resolve();
+            resolve(r);
+        };
+        // Unplugged with the dialog open: close it, send nothing, keep the queue.
+        const onGone = () => finish('aborted');
+        app.hid?.addEventListener?.('disconnect', onGone);
+        let busy = false;
+        const done = (result, fn) => async () => {
+            if (settled || busy) return;
+            busy = true;
+            back.remove();
+            if (autoCb.checked && result === 'applied') localStorage.setItem(AUTO_KEY, '1');
+            try { await fn?.(); } finally { finish(result); }
         };
         const back = modal(`Apply ${lines.length} offline change${lines.length === 1 ? '' : 's'}?`, body, [
-            el('button', { class: 'btn primary', text: 'Apply now', onclick: done(run) }),
-            el('button', { class: 'btn', text: 'Later', onclick: done() }),
+            el('button', { class: 'btn primary', text: 'Apply now', onclick: done('applied', run) }),
+            el('button', { class: 'btn', text: 'Later', onclick: done('later') }),
             el('button', {
                 class: 'btn danger', text: 'Discard',
-                onclick: done(async () => { clearDirty(ws); toast('Offline changes discarded'); }),
+                onclick: done('discarded', async () => {
+                    if (ext.clear) ext.clear(ws); else clearDirty(ws);
+                    toast('Offline changes discarded');
+                }),
             }),
         ]);
         // Backdrop click = "Later" (modal removes itself; don't hang loadDevice).
-        back.addEventListener('click', (e) => { if (e.target === back) resolve(); });
+        back.addEventListener('click', (e) => { if (e.target === back) finish('later'); });
     });
 }

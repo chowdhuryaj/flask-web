@@ -23,7 +23,8 @@ import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWAR
          zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=62';
 import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=62';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=62';
-import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey } from './offline.js?v=62';
+import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
+         describeChanges, BASE_PREFIX } from './offline.js?v=62';
 import { saveState } from './save-state.js?v=62';
 import { LOCK_UNLOCKED } from './zmk-studio.js?v=62';
 import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=62';
@@ -730,34 +731,81 @@ export function offlineQueued(ws) {
     return pendingCount(ws) + zmkPendingCount(ws);
 }
 
-function dropJournals(ws) {
+// Baseline for "Discard queued": the slot tables and tunables as they were the
+// last time nothing was queued (snapshotted on attach). Dropping the journals
+// without restoring them would leave the workspace showing values that will
+// never reach the keyboard. Separate storage key: written once, not per edit.
+const BASE_TABLES = ['combos', 'macros', 'rgb', 'leader', 'gestures', 'ledOrder', 'csk', 'tapdance', 'adaptive'];
+
+export function snapshotBase(ws) {
+    try {
+        const zmk = {};
+        for (const t of BASE_TABLES) if (ws.zmk?.[t] !== undefined) zmk[t] = ws.zmk[t];
+        localStorage.setItem(BASE_PREFIX + ws.key, JSON.stringify({ tunables: ws.tunables, zmk }));
+    } catch { /* quota: discard then just drops the journals */ }
+}
+
+function restoreBase(ws, withKeymap) {
+    let b = null;
+    try { b = JSON.parse(localStorage.getItem(BASE_PREFIX + ws.key)); } catch { /* none */ }
+    if (!b) return;
+    ws.tunables = b.tunables;
+    Object.assign(ws.zmk, b.zmk);
+    // A device-seeded keymap goes back to the seed too when its edits were the queue.
+    const seed = ws.zmk.seedBase;
+    if (seed && withKeymap) {
+        ws.zmk.keymap = structuredClone(seed);
+        ws.zmk.keymapSaved = structuredClone(seed);
+        ws.zmk.removed = [];
+        ws.zmk.unsaved = false;
+        ws.zmk.nextLayerId = Math.max(...seed.layers.map((l) => l.id)) + 1;
+    }
+}
+
+/** Drop everything queued for replay AND the values it carried. Used by the
+ * connect dialog's Discard and the explicit "Discard queued" action; the
+ * top-bar Discard never calls this (saved Unplugged edits ARE the queue). */
+export function dropJournals(ws) {
     const n = offlineQueued(ws);
     if (!n) return 0;
+    const hadKeymap = !!ws.zmk?.pendingKeymap;
     clearDirty(ws);
     zmkClearDirty(ws);
+    restoreBase(ws, hadKeymap);
+    saveWorkspace(ws);
     return n;
 }
 
-/** Offline half of saveState.discardAll(): drop the queued journals AND every
- * unsaved mark still registered. Why both: "Discard queued" used to touch only
- * the journals, while the status bar's "Save N unsaved" counter lives in
- * saveState, so it never moved. saveState.discard() only reverts sources that
- * brought a discard fn (the Studio keymap); combo/tunable marks have no device
- * to revert offline, so they are dropped here. Returns entries dropped. */
+/** Offline half of the explicit "Discard queued": drop the queue (with its
+ * values) and the unsaved marks that pointed at it. Returns entries dropped. */
 export function discardOfflineAll(ws, state = saveState) {
+    const hadKeymap = !!ws.zmk?.pendingKeymap;
     let n = dropJournals(ws);
-    for (const { source } of state.dirty()) { state.clean(source); n++; }
+    // The keymap's own unsaved mark stays unless its queued edits were reverted.
+    for (const { source, canDiscard } of state.dirty()) {
+        if (canDiscard && !hadKeymap) continue;
+        state.clean(source); n++;
+    }
     return n;
 }
 
-/** The status bar's current "Discard queued" button (main.js). Same effect as
- * window.flaskDiscardAll(); kept so the old handler is fixed without edits.
- * Returns how many entries were dropped (0 = nothing queued or unsaved). */
+/** The status bar's "Discard queued" action (main.js confirms first). Returns
+ * how many entries were dropped (0 = nothing queued or unsaved). */
 export function discardOfflineQueued(ws, state = saveState) {
-    const n = dropJournals(ws);
-    const unsaved = state.dirty().length;
-    if (unsaved) state.discardAll();   // async: keymap revert, then leftovers; counter follows via 'change'
-    return n + unsaved;
+    return discardOfflineAll(ws, state);
+}
+
+/** One line per queued ZMK entry for the connect dialog. */
+export function zmkDescribeChanges(ws) {
+    const d = ws.zmkDirty;
+    if (!d) return [];
+    const lines = [];
+    const add = (label, t) => { for (const k of Object.keys(t ?? {})) lines.push(`${label} ${k.replace(',', ' / ')}`); };
+    add('combo slot', d.combo); add('macro step', d.macroStep); add('leader sequence', d.leaderSlot);
+    add('gesture set/dir', d.gestureSlot); add('shift key slot', d.cskSlot);
+    add('tap dance slot/step', d.tdStep); add('adaptive rule', d.akRule);
+    if (ws.zmk?.pendingKeymap) lines.push('keymap edits (applied after ZMK Studio connects and unlocks)');
+    return lines;
 }
 
 // ---------------------------------------------------------------------------
@@ -1329,7 +1377,17 @@ export class OfflineStudioClient extends EventTarget {
         this._persist(false);
     }
 
+    /** A device-seeded workspace replays its keymap by layer INDEX on connect;
+     * add/remove/move would overwrite real layers there (WC-02). Rename and
+     * key edits are fine. Templates never replay, so they stay editable. */
+    _structureGuard() {
+        if (this.ws.source === 'device') {
+            throw new Error('Adding, removing or reordering layers needs the keyboard connected');
+        }
+    }
+
     async moveLayer(startIndex, destIndex) {
+        this._structureGuard();
         const { layers } = this.ws.zmk.keymap;
         if (startIndex < 0 || startIndex >= layers.length
             || destIndex < 0 || destIndex >= layers.length) {
@@ -1343,6 +1401,7 @@ export class OfflineStudioClient extends EventTarget {
     }
 
     async addLayer() {
+        this._structureGuard();
         const km = this.ws.zmk.keymap;
         if ((km.availableLayers ?? 0) <= 0) throw new Error('no free layer slots — remove a layer first');
         const layer = {
@@ -1358,6 +1417,7 @@ export class OfflineStudioClient extends EventTarget {
     }
 
     async removeLayer(index) {
+        this._structureGuard();
         const km = this.ws.zmk.keymap;
         if (index < 0 || index >= km.layers.length) throw new Error('invalid index');
         const [gone] = km.layers.splice(index, 1);
@@ -1367,6 +1427,7 @@ export class OfflineStudioClient extends EventTarget {
     }
 
     async restoreLayer(layerId, atIndex) {
+        this._structureGuard();
         const km = this.ws.zmk.keymap;
         const i = this.ws.zmk.removed.findIndex((l) => l.id === layerId);
         if (i < 0) throw new Error('invalid id');
@@ -1497,9 +1558,12 @@ export function attachZmkOffline(app, ws) {
     app.keymap = null;
     app.unlocked = false;
     app.readKeyState = async () => new Set();
-    // The one Discard (window.flaskDiscardAll) also clears this workspace's queue.
-    app._offlineDiscardHook?.();
-    app._offlineDiscardHook = saveState.addDiscardHook(() => (app.offlineWs === ws ? discardOfflineAll(ws) : 0));
+    // Unplugged has no board to be unresolved about; a stale flag from the
+    // last connect would refuse every keymap write in the sim.
+    app.familyUnresolved = false;
+    // Baseline for "Discard queued". The top-bar Discard (saveState.discardAll)
+    // deliberately does NOT touch the queue: a saved Unplugged edit IS the queue.
+    if (!offlineQueued(ws)) snapshotBase(ws);
 }
 
 /**
@@ -1518,22 +1582,39 @@ async function zmkSyncExtrasInner(app, ws) {
     normalizeZmkWorkspace(ws);
     const fail = [];
     let applied = 0;
-    let touched = false;
-
+    // SAVE is the commit point: entries leave the journal only after their
+    // channel's SAVE lands. A SET alone is RAM, gone at power-off.
+    const commit = async (ch, table, keys, name) => {
+        if (!keys.length) return;
+        try { await app.flask.save(ch); } catch (e) {
+            if (e.message !== 'unhandled') {     // unhandled = channel has nothing to persist
+                fail.push(`${name}: SAVE failed (${e.message}), ${keys.length} still queued`);
+                return;
+            }
+        }
+        for (const k of keys) delete table[k];
+        applied += keys.length;
+    };
+    const d = ws.zmkDirty;
 
     // Slot frame is sized by the DEVICE's keys-per-slot (v9 RO value;
     // pre-v9 firmware is fixed at the codec default of 4).
     let comboKeys = COMBO_MAX_KEYS;
-    if (Object.keys(ws.zmkDirty.combo).length && app.caps?.combosKeys) {
+    if (Object.keys(d.combo).length && app.caps?.combosKeys) {
         try { comboKeys = await app.flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS; }
         catch { /* keep default */ }
     }
 
-    for (const slot of Object.keys(ws.zmkDirty.combo)) {
+    let ok = [];
+    for (const slot of Object.keys(d.combo)) {
         try {
-            // v12 firmware takes the typed frame (behavior outputs survive);
-            // older firmware gets the legacy usage-only view.
-            if (app.caps?.combosTyped) {
+            // Same ladder as zmk-export.js: v14 takes the timed frame (window,
+            // idle, layer survive), v12 the typed frame (behavior outputs
+            // survive), older firmware the legacy usage-only view.
+            if (app.caps?.combosTimed) {
+                await app.flask.setBytes(CH.combos, V.combosSlotV3,
+                    encodeComboSlotV3(Number(slot), ws.zmk.combos[slot], comboKeys), 1);
+            } else if (app.caps?.combosTyped) {
                 await app.flask.setBytes(CH.combos, V.combosSlotV2,
                     encodeComboSlotV2(Number(slot), ws.zmk.combos[slot], comboKeys), 1);
             } else {
@@ -1541,66 +1622,61 @@ async function zmkSyncExtrasInner(app, ws) {
                     encodeComboSlot(Number(slot), comboTypedToLegacy(ws.zmk.combos[slot]),
                         comboKeys), 1);
             }
-            delete ws.zmkDirty.combo[slot];
-            applied++; touched = true;
+            ok.push(slot);
         } catch (e) { fail.push(`combo ${slot}: ${e.message}`); }
     }
-    if (touched) { try { await app.flask.save(CH.combos); } catch { /* keep */ } }
+    await commit(CH.combos, d.combo, ok, 'combos');
 
-    touched = false;
-    for (const key of Object.keys(ws.zmkDirty.macroStep)) {
+    ok = [];
+    for (const key of Object.keys(d.macroStep)) {
         const [m, s] = key.split(',').map(Number);
         try {
             await app.flask.setBytes(CH.macros, V.macrosStep,
                 encodeMacroStep(m, s, ws.zmk.macros[m][s]), 2);
-            delete ws.zmkDirty.macroStep[key];
-            applied++; touched = true;
+            ok.push(key);
         } catch (e) { fail.push(`macro ${key}: ${e.message}`); }
     }
-    if (touched) { try { await app.flask.save(CH.macros); } catch { /* keep */ } }
+    await commit(CH.macros, d.macroStep, ok, 'macros');
 
-    touched = false;
-    for (const seq of Object.keys(ws.zmkDirty.leaderSlot)) {
+    ok = [];
+    for (const seq of Object.keys(d.leaderSlot)) {
         try {
             await app.flask.setBytes(CH.leader, V.leaderSlot,
                 encodeLeaderSlot(Number(seq), ws.zmk.leader[seq], dims(ws.family).leaderKeys), 1);
-            delete ws.zmkDirty.leaderSlot[seq];
-            applied++; touched = true;
+            ok.push(seq);
         } catch (e) { fail.push(`leader ${seq}: ${e.message}`); }
     }
-    if (touched) { try { await app.flask.save(CH.leader); } catch { /* keep */ } }
+    await commit(CH.leader, d.leaderSlot, ok, 'leader');
 
-    touched = false;
-    for (const key of Object.keys(ws.zmkDirty.gestureSlot)) {
+    ok = [];
+    for (const key of Object.keys(d.gestureSlot)) {
         const [set, dir] = key.split(',').map(Number);
         try {
             await app.flask.setBytes(CH.gestures, V.gesturesSlot,
                 encodeGestureSlot(set, dir, ws.zmk.gestures[set][dir]), 2);
-            delete ws.zmkDirty.gestureSlot[key];
-            applied++; touched = true;
+            ok.push(key);
         } catch (e) { fail.push(`gesture ${key}: ${e.message}`); }
     }
-    if (touched) { try { await app.flask.save(CH.gestures); } catch { /* keep */ } }
+    await commit(CH.gestures, d.gestureSlot, ok, 'gestures');
 
     // Custom shift: one slot frame per edited slot (same frame the Shift tab sends).
-    touched = false;
-    for (const slot of Object.keys(ws.zmkDirty.cskSlot ?? {})) {
+    ok = [];
+    for (const slot of Object.keys(d.cskSlot)) {
         try {
             if (!ws.zmk.csk[slot]) throw new Error('unhandled');
             await app.flask.setBytes(CH.customShift, V.cskSlot,
                 encodeCskSlot(Number(slot), ws.zmk.csk[slot]), 1);
-            delete ws.zmkDirty.cskSlot[slot];
-            applied++; touched = true;
+            ok.push(slot);
         } catch (e) {
-            if (e.message === 'unhandled') delete ws.zmkDirty.cskSlot[slot];
+            if (e.message === 'unhandled') delete d.cskSlot[slot];
             else fail.push(`shift ${slot}: ${e.message}`);
         }
     }
-    if (touched) { try { await app.flask.save(CH.customShift); } catch { /* keep */ } }
+    await commit(CH.customShift, d.cskSlot, ok, 'shift');
 
     // Tap dance: keys are "slot,tap" (step frame) or "slot,cfg" (term frame).
-    touched = false;
-    for (const key of Object.keys(ws.zmkDirty.tdStep ?? {})) {
+    ok = [];
+    for (const key of Object.keys(d.tdStep)) {
         const [slot, which] = key.split(',');
         const td = ws.zmk.tapdance[slot];
         try {
@@ -1611,21 +1687,20 @@ async function zmkSyncExtrasInner(app, ws) {
                 await app.flask.setBytes(CH.tapDance, V.tdStep,
                     encodeTdStep(Number(slot), Number(which), td.taps[which]), 2);
             }
-            delete ws.zmkDirty.tdStep[key];
-            applied++; touched = true;
+            ok.push(key);
         } catch (e) {
-            if (e.message === 'unhandled') delete ws.zmkDirty.tdStep[key];
+            if (e.message === 'unhandled') delete d.tdStep[key];
             else fail.push(`tap dance ${key}: ${e.message}`);
         }
     }
-    if (touched) { try { await app.flask.save(CH.tapDance); } catch { /* keep */ } }
+    await commit(CH.tapDance, d.tdStep, ok, 'tap dance');
 
     // flask_adaptive: header, then every step, per edited rule (a deleted
     // rule is just its zeroed header); fallbacks are keyed f<set>. A device
     // without the module answers unhandled: those entries are dropped.
-    touched = false;
+    ok = [];
     const ak = ws.zmk.adaptive;
-    for (const key of Object.keys(ws.zmkDirty.akRule ?? {})) {
+    for (const key of Object.keys(d.akRule)) {
         try {
             if (!ak) throw new Error('unhandled');
             if (key.startsWith('f')) {
@@ -1641,14 +1716,13 @@ async function zmkSyncExtrasInner(app, ws) {
                     }
                 }
             }
-            delete ws.zmkDirty.akRule[key];
-            applied++; touched = true;
+            ok.push(key);
         } catch (e) {
-            if (e.message === 'unhandled') delete ws.zmkDirty.akRule[key];
+            if (e.message === 'unhandled') delete d.akRule[key];
             else fail.push(`adaptive ${key}: ${e.message}`);
         }
     }
-    if (touched) { try { await app.flask.save(CH.adaptive); } catch { /* keep */ } }
+    await commit(CH.adaptive, d.akRule, ok, 'adaptive');
 
     // A queued keymap can't apply here — Studio RPC needs its own serial
     // connect (user gesture) + physical unlock. Stash the workspace; the
@@ -1657,11 +1731,22 @@ async function zmkSyncExtrasInner(app, ws) {
     // not the user's board: replaying it would overwrite the real keymap.
     // Only a device-seeded workspace queues its keymap; a template one is
     // skipped (left in storage) and reported so the caller can say so.
+    // A device-seeded keymap whose layer ids/count drifted from the seed
+    // (layer ops, a stale workspace) is replayed BY INDEX, which would
+    // overwrite real layers: keep it queued for review instead.
     const keymapSkipped = !!ws.zmk?.pendingKeymap && ws.source !== 'device';
-    app.zmkQueuedWs = ws.zmk?.pendingKeymap && !keymapSkipped ? ws : null;
+    const keymapReview = !!ws.zmk?.pendingKeymap && !keymapSkipped && layersDrifted(ws);
+    app.zmkQueuedWs = ws.zmk?.pendingKeymap && !keymapSkipped && !keymapReview ? ws : null;
 
     saveWorkspace(ws);
-    return { applied, failures: fail, keymapSkipped };
+    return { applied, failures: fail, keymapSkipped, keymapReview };
+}
+
+/** True when the saved keymap's layer ids/count no longer match the seed. */
+function layersDrifted(ws) {
+    const ids = (km) => (km?.layers ?? []).map((l) => l.id).join(',');
+    const base = ws.zmk.seedBase;
+    return !base || ids(ws.zmk.keymapSaved) !== ids(base);
 }
 
 /** Consume the queued offline keymap once a real Studio session is ready:
