@@ -3,7 +3,7 @@
 // popover are covered by tests/browser/board.py.
 import assert from 'node:assert/strict';
 import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText } from '../board.js?v=1';
-import { capLabel } from '../keycodes.js?v=49';
+import { capParts, describeBinding, decode } from '../behavior-catalog.js?v=1';
 import { setZmkContext, bindingCap, bindingHover } from '../zmk-keycodes.js?v=49';
 import { TOTEM_DEFAULT } from '../zmk-totem-default.js';
 import { TOTEM_GEOM } from '../zmk-totem-layout.js';
@@ -57,20 +57,31 @@ eq(baseUnit(40), 48, 'unit never below 48');
     eq(splitCap('MT·⌘·A'), { top: 'MT ⌘', main: 'A' });
     eq(splitCap('Esc'), { top: '', main: 'Esc' });
     eq(splitCap('·'), { top: '', main: '·' });
-    // 30 sample keycodes: WP3 capParts words replaced the old label shape, so only the invariants hold.
+    // QMK: board caps follow WP3's capParts (not the legacy capLabel); the top line
+    // holds the hold/mod part and the pair agrees with describeBinding.
     const samples = [0x0004, 0x0005, 0x001d, 0x0029, 0x002c, 0x0104, 0x0204, 0x0404, 0x0804, 0x1104, 0x2104, 0x2204, 0x2504, 0x2a04,
         0x4204, 0x4104, 0x4304, 0x5204, 0x5223, 0x5222, 0x7c00, 0x7700, 0x0001, 0x0000, 0x00cd, 0x00d1, 0x00a5, 0x00ab, 0x00e2, 0x2f01];
     eq(samples.length, 30);
     const qmk = { family: 'svalboard', keys: [], encoderKeys: [] };
     for (const kc of samples) {
-        const label = capLabel(kc);
-        const p = capPartsOf(kc, qmk);
-        ok(!p.top.includes('(x') && !p.main.includes('(x'), `no raw (x in 0x${kc.toString(16)} (${label})`);
-        ok(p.main.length > 0, `main is never empty (0x${kc.toString(16)})`);
+        const hex = `0x${kc.toString(16)}`;
+        const cat = capParts(kc, 'qmk'), p = capPartsOf(kc, qmk);
+        eq(p, { top: cat.top.replace(/^Mod-tap\b/, 'MT'), main: cat.main }, `qmk ${hex} board parts are the catalog parts (Mod-tap shortened to MT)`);
+        ok(p.main.length > 0, `main is never empty (${hex})`);
+        ok(!/[()]/.test(p.top) && !/\(\w/.test(p.main), `no "(" fragment (${hex})`);
+        ok(!p.top.includes('·') || /· (fast|slow)$/.test(p.top), `top is not a '·' split (${hex})`);
+        const d = describeBinding(kc, 'qmk');
+        ok(d.includes(p.main) || ['Nothing', 'Pass through'].includes(d) || /^Mouse|^Bootloader/.test(d), `describeBinding "${d}" carries main "${p.main}"`);
+        const { entryId } = decode(kc, 'qmk');
+        if (['mod-tap', 'layer-tap', 'hold-layer'].includes(entryId)) ok(p.top.length > 0, `hold part on top line (${hex})`);
+        if (entryId === 'mod-tap') ok(/^MT\b/.test(p.top) && cat.top.startsWith('Mod-tap') && d.startsWith('Mod-tap'), `mod-tap top "${p.top}" matches "${d}"`);
     }
     eq(capPartsOf(0x4204, qmk), { top: 'LT L2', main: 'A' });
-    eq(capPartsOf(0x2104, qmk), { top: 'Mod-tap ⌃', main: 'A' });
+    eq(capPartsOf(0x2104, qmk), { top: 'MT ⌃', main: 'A' });
+    eq(capPartsOf(0x2a04, qmk), { top: 'MT ⇧⌘', main: 'A' });
+    eq(capPartsOf(0x5223, qmk), { top: 'Hold', main: 'L3' });
     eq(capPartsOf(0x0004, qmk), { top: '', main: 'A' });
+    eq(capPartsOf(0x0104, qmk), { top: '⌃', main: 'A' });
 }
 
 // ---- TOTEM default bindings: no "(" fragments in either line ----

@@ -560,8 +560,8 @@ function syncHudBtn() {
 
 function syncRail() {
     const has = (f) => typeof board[f] === 'function';
-    $('undo-btn').disabled = !has('undo') || board.canUndo?.() === false;
-    $('redo-btn').disabled = !has('redo') || board.canRedo?.() === false;
+    $('undo-btn').disabled = !has('undo') || board.canUndo === false;
+    $('redo-btn').disabled = !has('redo') || board.canRedo === false;
 }
 
 function init() {
