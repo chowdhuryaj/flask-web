@@ -23,7 +23,13 @@ import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
 import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorkspace,
          saveWorkspace, deleteWorkspace, listWorkspaces, pendingCount, clearDirty,
          maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=49';
-import { exportVil, importVil, downloadText } from './vil.js?v=49';
+import * as vil from './vil.js?v=49';
+import * as zmkOffline from './zmk-offline.js?v=50';
+const { exportVil, importVil, downloadText } = vil;
+// WP6 (not yet on this branch) adds vil.saveLayoutFile / loadLayoutFile, the
+// per-line Save layout / Load dispatch. Namespace access is undefined until
+// then, so each use below falls back to the .vil path.
+const HAS_LAYOUT_DISPATCH = typeof vil.saveLayoutFile === 'function';
 import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=2';
 import { shell } from './app-shell.js?v=2';
 import { installCaptions, setCaptionGroup } from './caption.js?v=1';
@@ -146,6 +152,7 @@ async function loadDevice(device) {
     if (isNapeFamily(app.family)) {
         await loadNapeDevice(app, device);
         setMode('device');
+        $('vil-save').style.display = $('vil-load').style.display = HAS_LAYOUT_DISPATCH ? '' : 'none';
         updateStatus(device);
         buildTabs();
         if (TABS.length) await showTab(TABS[0].id);
@@ -241,9 +248,9 @@ async function loadZmkDevice(device) {
         }
     }
 
-    // Save layout / Load stay hidden on ZMK until WP6 dispatches them to the
-    // keymap JSON export/import (spec §3.10).
+    // Save layout / Load on ZMK need WP6's dispatch (keymap JSON, spec §3.10).
     setMode('device');
+    $('vil-save').style.display = $('vil-load').style.display = HAS_LAYOUT_DISPATCH ? '' : 'none';
     updateStatus(device);
     buildTabs();
     // Pre-autoscroll (v<2) firmware can yield a single empty Mouse tab but
@@ -259,6 +266,7 @@ function updateStatus(device) {
     const proto = app.protocolVersion != null ? ` · Flask v${app.protocolVersion}` : ' · plain Vial';
     $('device-name').textContent = app.profile?.name ?? device.productName ?? 'Keyboard';
     $('status-text').textContent = 'Connected';
+    saveState.setLine?.(isZmkFamily(app.family) ? 'zmk' : app.caps?.nape ? 'nape' : 'qmk');   // WP6
     pill.title = `${fam}${proto} — ${device.vendorId.toString(16)}:${device.productId.toString(16)}`;
 
     const warn = $('proto-warn');
@@ -284,6 +292,7 @@ function disconnectUI() {
     app.protocolVersion = null;
     app.profile = null;
     app.trainerOnly = false;
+    saveState.reset?.();    // WP6: drop dirty sources and the line
     $('status-pill').classList.remove('connected', 'offline');
     $('status-text').textContent = 'Disconnected';
     $('device-name').textContent = 'Flask';
@@ -327,8 +336,8 @@ function startOffline(key, family) {
 
     setMode('offline');   // no HUD: it is live device state
     $('lock-btn').style.display = 'none';
-    $('vil-save').style.display = zmk ? 'none' : '';   // .vil is a Vial format
-    $('vil-load').style.display = zmk ? 'none' : '';
+    $('vil-save').style.display = $('vil-load').style.display = zmk && !HAS_LAYOUT_DISPATCH ? 'none' : '';
+    saveState.setLine?.(zmk ? 'zmk' : 'qmk');
     $('proto-warn').style.display = 'none';
     $('status-pill').classList.remove('connected');
     $('status-pill').classList.add('offline');
@@ -342,7 +351,7 @@ function startOffline(key, family) {
 
 function updateOfflineBanner() {
     if (!app.offline || !app.offlineWs) return;
-    const n = pendingCount(app.offlineWs) + zmkPendingCount(app.offlineWs);
+    const n = zmkOffline.offlineQueued?.(app.offlineWs) ?? pendingCount(app.offlineWs) + zmkPendingCount(app.offlineWs);
     $('offline-msg').textContent = n
         ? `${n} queued for ${app.offlineWs.label}`
         : 'Edits queue until the next connect';
@@ -645,6 +654,11 @@ function init() {
     $('vil-save').addEventListener('click', async () => {
         try {
             toast('Reading layout…');
+            if (HAS_LAYOUT_DISPATCH) {
+                const r = await vil.saveLayoutFile(app);
+                if (r.filename) toast(`Saved ${r.filename}`);
+                return;
+            }
             const text = await exportVil(app);
             const name = (app.profile?.name ?? 'layout').replace(/[^\w-]+/g, '_');
             downloadText(`${name}.vil`, text);
@@ -658,21 +672,31 @@ function init() {
         if (!file) return;
         try {
             toast('Applying layout…');
-            const stats = await importVil(app, await file.text());
-            let msg = `Applied ${stats.applied} items`;
-            if (stats.skipped) msg += `, ${stats.skipped} named keycodes skipped`;
-            if (stats.notes.length) msg += ` — ${stats.notes.join('; ')}`;
-            toast(msg, stats.notes.length > 0);
+            if (HAS_LAYOUT_DISPATCH) {
+                const r = await vil.loadLayoutFile(app, file);
+                if (r.message) toast(r.message, !!r.warn);
+            } else {
+                const stats = await importVil(app, await file.text());
+                let msg = `Applied ${stats.applied} items`;
+                if (stats.skipped) msg += `, ${stats.skipped} named keycodes skipped`;
+                if (stats.notes.length) msg += ` — ${stats.notes.join('; ')}`;
+                toast(msg, stats.notes.length > 0);
+            }
             buildTabs();          // tabs re-read post-import state
-            await showTab('keymap');
+            if (TABS.length) await showTab(TABS[0].id);
         } catch (e) { toast(`Import failed: ${e.message}`, true); }
     });
     $('offline-exit').addEventListener('click', exitOffline);
     $('offline-discard').addEventListener('click', () => {
         const ws = app.offlineWs;
-        if (!ws || !(pendingCount(ws) + zmkPendingCount(ws))) { toast('Nothing queued'); return; }
-        clearDirty(ws);
-        zmkClearDirty(ws);
+        if (!ws) return;
+        if (zmkOffline.discardOfflineQueued) {          // WP6
+            if (!zmkOffline.discardOfflineQueued(ws)) { toast('Nothing queued'); return; }
+        } else {
+            if (!(pendingCount(ws) + zmkPendingCount(ws))) { toast('Nothing queued'); return; }
+            clearDirty(ws);
+            zmkClearDirty(ws);
+        }
         toast('Queued changes discarded');
     });
 
@@ -760,9 +784,10 @@ function init() {
     const renderSave = () => {
         const dirty = saveState.dirty();
         $('save-seg').style.display = dirty.length ? '' : 'none';
-        $('save-btn').textContent = `Save ${dirty.length} unsaved`;
+        $('save-btn').textContent = saveState.summary?.() || `Save ${dirty.length} unsaved`;
         $('save-btn').title = dirty.map((d) => d.label).join(', ');
-        $('discard-btn').style.display = dirty.some((d) => d.source === 'studio-keymap') ? '' : 'none';
+        const canDiscard = saveState.canDiscard?.() ?? dirty.some((d) => d.source === 'studio-keymap');
+        $('discard-btn').style.display = canDiscard ? '' : 'none';
     };
     saveState.addEventListener('change', renderSave);
     renderSave();
@@ -771,10 +796,10 @@ function init() {
         if (r.failed) toast(`Save failed (${r.failed.source}): ${r.failed.error?.message ?? r.failed.error}`, true);
         else toast('Saved');
     });
-    // app.discardKeymap is provided by WP2/WP6 (Studio session discard).
-    $('discard-btn').addEventListener('click', () => {
-        if (app.discardKeymap) app.discardKeymap();
-        else toast('Discard is not wired yet', true);
+    $('discard-btn').addEventListener('click', async () => {
+        if (!saveState.discard) { toast('Discard arrives with WP6', true); return; }
+        const r = await saveState.discard();
+        if (r.failed) toast(`Discard failed (${r.failed.source}): ${r.failed.error?.message ?? r.failed.error}`, true);
     });
 
     // Silent reconnect to the remembered device on page load.
