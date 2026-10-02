@@ -9,6 +9,9 @@
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
 import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=49';
+// Circular with behavior-catalog.js (it imports this file's tables and
+// context). Safe: neither side calls the other at module-evaluation time.
+import { capParts, describeBinding, decode, entryById, withZmkContext } from './behavior-catalog.js?v=1';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;
@@ -161,125 +164,24 @@ export function layerName(layerId) {
     return ctx.layers.find((l) => l.id === layerId)?.name ?? `Layer#${layerId}`;
 }
 
-// Cosmetic short names for well-known ZMK behavior display names — Vial
-// parity on the keycaps. Semantics NEVER key off these (params are always
-// interpreted via metadata descriptors); unknown names get a generic
-// abbreviation, everything still works.
-const BEHAVIOR_ABBREV = new Map([
-    ['Key Press', ''],
-    ['Momentary Layer', 'MO'],
-    ['Toggle Layer', 'TG'],
-    ['To Layer', 'TO'],
-    ['Layer Tap', 'LT'],
-    ['Sticky Layer', 'SL'],
-    ['Sticky Key', 'SK'],
-    // Core ZMK spells these hyphenated (app/dts/behaviors/*.dtsi display-name
-    // strings at pin 484a0547) — keep the space variants too, they cost nothing.
-    ['Mod-Tap', 'MT'],
-    ['Layer-Tap', 'LT'],
-    ['Mouse Key Press', 'MB'],
-    ['Mod Tap', 'MT'],
-    ['Hold Tap', 'HT'],
-    ['Key Toggle', 'KT'],
-    ['Caps Word', 'CapsW'],
-    ['Key Repeat', 'Rep'],
-    ['Mouse Button Press', 'MB'],
-    ['Mouse Move', 'Ms'],
-    ['Mouse Scroll', 'Sc'],
-    ['Transparent', '▽'],
-    ['None', ''],
-    ['Reset', 'Reset'],
-    ['Bootloader', 'Boot'],
-    ['Studio Unlock', 'Unlock'],
-    ['Bluetooth', 'BT'],
-    ['Output Selection', 'Out'],
-    ['External Power', 'Pwr'],
-    ['Soft Off', 'Off'],
-    ['RGB Underglow', 'RGB'],
-    ['Backlight', 'BL'],
-    // Imprint smart one-shot/hold round (2026-07-10). Explicit entries:
-    // the initials fallback would give Smart Layer 'SL' — colliding with
-    // Sticky Layer — and 'Sticky Mod (smart)' the unreadable 'SM('.
-    ['Smart Mod', 'SM'],
-    ['Smart Layer', 'SmL'],
-    ['Sticky Mod (smart)', 'SkM'],
-    ['Sticky Layer (smart)', 'SkL'],
-    // Ball swap round (2026-07-11): the initials fallback would give the
-    // unfortunate 'BS'.
-    ['Ball Swap', 'BSw'],
-]);
-
-function abbrevName(displayName) {
-    const known = BEHAVIOR_ABBREV.get(displayName);
-    if (known !== undefined) return known;
-    const words = displayName.split(/\s+/).filter(Boolean);
-    if (words.length >= 2) return words.map((w) => w[0].toUpperCase()).join('');
-    return displayName.slice(0, 5);
-}
-
-/** First metadata set's descriptors for one param (usually the only set). */
-function paramDescs(details, which) {
-    return details?.metadata?.[0]?.[which] ?? [];
-}
-
-function paramUsed(descs) {
-    return descs.length > 0 && descs.some((d) => d.kind !== 'nil');
-}
-
-/** Short text for one param value given its descriptors. */
-function paramCap(descs, value) {
-    const constant = descs.find((d) => d.kind === 'constant' && d.constant === (value >>> 0));
-    if (constant) return constant.name || String(value);
-    if (descs.some((d) => d.kind === 'hid_usage')) return usageCap(value);
-    if (descs.some((d) => d.kind === 'layer_id')) return layerName(value);
-    return String(value | 0);
-}
-
-function paramLabel(descs, value) {
-    const constant = descs.find((d) => d.kind === 'constant' && d.constant === (value >>> 0));
-    if (constant) return constant.name || String(value);
-    if (descs.some((d) => d.kind === 'hid_usage')) return usageLabel(value);
-    if (descs.some((d) => d.kind === 'layer_id')) return layerName(value);
-    return String(value | 0);
-}
-
-/** Short keycap text for a binding. Metadata-driven; never throws. */
+/** Short keycap text for a binding: the catalog's capParts on one line
+ * ("Mod-tap ⌃ · live T"). Boards that draw two lines call capParts. */
 export function bindingCap(binding) {
     if (!binding) return ' ';
-    const details = ctx.behaviors.get(binding.behaviorId);
-    if (!details) return `#${binding.behaviorId}`;
-    const abbrev = abbrevName(details.displayName);
-    const p1 = paramDescs(details, 'param1');
-    const p2 = paramDescs(details, 'param2');
-    const parts = [];
-    if (abbrev) parts.push(abbrev);
-    // Layer-in-BOTH-params shape (smart_layer): the same layer twice is one
-    // fact — cap it once.
-    const bothLayers = p1.some((d) => d.kind === 'layer_id')
-        && p2.some((d) => d.kind === 'layer_id')
-        && binding.param1 === binding.param2;
-    if (paramUsed(p1)) parts.push(paramCap(p1, binding.param1));
-    if (paramUsed(p2) && !bothLayers) parts.push(paramCap(p2, binding.param2));
-    if (!parts.length) return abbrev || details.displayName.slice(0, 5) || ' ';
-    return parts.join('·');
+    const { top, main } = withZmkContext(ctx, () => capParts(binding, 'zmk-studio'));
+    return (top ? `${top} ${main}` : main) || ' ';
 }
 
-/** Multi-line tooltip for a binding. */
+/** Hover / caption text for a binding: what it does, in words. */
 export function bindingHover(binding) {
     if (!binding) return '';
-    const details = ctx.behaviors.get(binding.behaviorId);
-    const raw = `behavior #${binding.behaviorId} · p1 ${hexU(binding.param1, 8)} · p2 ${hexU(binding.param2, 8)}`;
-    if (!details) return `Unknown behavior\n${raw}`;
-    const p1 = paramDescs(details, 'param1');
-    const p2 = paramDescs(details, 'param2');
-    const args = [];
-    if (paramUsed(p1)) args.push(paramLabel(p1, binding.param1));
-    if (paramUsed(p2)) args.push(paramLabel(p2, binding.param2));
-    const head = args.length ? `${details.displayName}(${args.join(', ')})` : details.displayName;
-    return `${head}\n${raw}`;
+    return withZmkContext(ctx, () => {
+        const e = entryById(decode(binding, 'zmk-studio').entryId);
+        return `${describeBinding(binding, 'zmk-studio')}\n${e?.desc ?? ''}`.trim();
+    });
 }
 
 /** One-line description (toasts). */
 export function bindingDescribe(binding) {
-    return bindingHover(binding).split('\n')[0];
+    return binding ? withZmkContext(ctx, () => describeBinding(binding, 'zmk-studio')) : '';
 }

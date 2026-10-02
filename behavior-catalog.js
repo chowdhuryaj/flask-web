@@ -222,8 +222,8 @@ export const CATALOG = [
     E('none', 'keys', 'Nothing', 'Does nothing. ∅', [], ['None'], { tag: '∅' }),
 
     E('mod-tap', 'modifiers', 'Mod-tap', 'Hold for a modifier, tap for a key.',
-        [{ key: 'hold', kind: 'mods', default: 0x02 }, { key: 'tap', kind: 'key' }, { ...TIMING_PARAM }, MODE_PARAM, LIVE_PARAM],
-        ['Mod-Tap', { name: 'Smart Mod', set: { mode: 'smart' } }], { tag: 'Mod-tap' }),
+        [{ key: 'hold', kind: 'mods', default: 0x02 }, { key: 'tap', kind: 'key' }, LIVE_PARAM, { ...TIMING_PARAM }, MODE_PARAM],
+        ['Mod-Tap', 'Mod Tap', { name: 'Smart Mod', set: { mode: 'smart' } }], { tag: 'Mod-tap' }),
     E('one-shot-mod', 'modifiers', 'One-shot modifier', 'Next key gets the modifier.',
         [{ key: 'mods', kind: 'mods', default: 0x02 }, MODE_PARAM],
         ['Sticky Key', { name: 'Sticky Mod (smart)', set: { mode: 'smart' } }], { tag: 'One-shot' }),
@@ -237,7 +237,7 @@ export const CATALOG = [
 
     E('hold-layer', 'layers', 'Hold layer', 'Layer is on while held.', [{ key: 'layer', kind: 'layer' }], ['Momentary Layer'], { tag: 'Hold' }),
     E('layer-tap', 'layers', 'Layer-tap', 'Hold for a layer, tap for a key.',
-        [{ key: 'layer', kind: 'layer', default: 1 }, { key: 'tap', kind: 'key' }, { ...TIMING_PARAM }], ['Layer-Tap'], { tag: 'Layer-tap' }),
+        [{ key: 'layer', kind: 'layer', default: 1 }, { key: 'tap', kind: 'key' }, { ...TIMING_PARAM }], ['Layer-Tap', 'Layer Tap'], { tag: 'Layer-tap' }),
     E('to-layer', 'layers', 'Switch to layer', 'Turns this layer on, others off.', [{ key: 'layer', kind: 'layer' }], ['To Layer'], { tag: 'Switch' }),
     E('toggle-layer', 'layers', 'Toggle layer', 'Layer on/off with each press.', [{ key: 'layer', kind: 'layer' }], ['Toggle Layer'], { tag: 'Toggle' }),
     E('tap-toggle', 'layers', 'Tap-toggle layer', 'Hold = on while held; tap ×5 = toggle.', [{ key: 'layer', kind: 'layer' }], [], { tag: 'Tap-toggle' }),
@@ -452,7 +452,7 @@ function napeCatalog(app) {
 }
 
 function zmkCatalog(app) {
-    const behaviors = asMap(app?.behaviors ?? zmkBehaviors());
+    const behaviors = asMap(app?.behaviors ?? behaviorsNow());
     const { byEntry, advanced, hidden } = zmkIndex(behaviors);
     const keyPress = byEntry.get('key');
     const out = [];
@@ -478,7 +478,7 @@ function zmkCatalog(app) {
                 const sides = device.filter((v) => v.set.live).map((v) => v.set.live);
                 return { ...p, options: ['off', ...p.options.filter((o) => sides.includes(o))] };
             }
-            if (p.kind === 'layer') return { ...p, options: zmkLayers().map((l) => l.id), labels: Object.fromEntries(zmkLayers().map((l) => [l.id, l.name || `Layer ${l.id}`])) };
+            if (p.kind === 'layer') return { ...p, options: layersNow().map((l) => l.id), labels: Object.fromEntries(layersNow().map((l) => [l.id, l.name || `Layer ${l.id}`])) };
             if (p.kind === 'slot') {
                 const r = rangeOf(d0);
                 return { ...p, min: r?.min ?? 0, max: r ? Math.min(r.max, 63) : 31, default: r?.min ?? 0 };
@@ -627,7 +627,20 @@ function encodeNape(id, params) {
 
 // ---- ZMK Studio ----
 
-function behaviorsNow() { return zmkBehaviors(); }
+// The ZMK context (behaviors + layers) comes from zmk-keycodes.js. A caller
+// holding another instance of that module (a different ?v= stamp) passes
+// its own context through withZmkContext.
+let ctxOverride = null;
+function behaviorsNow() { return ctxOverride?.behaviors ?? zmkBehaviors(); }
+function layersNow() { return ctxOverride?.layers ?? zmkLayers(); }
+const layerNameNow = (id) => (ctxOverride
+    ? ctxOverride.layers.find((l) => l.id === id)?.name ?? `Layer#${id}` : layerName(id));
+/** Run fn with an explicit ZMK context ({behaviors: Map, layers}). Sync only. */
+export function withZmkContext(ctx, fn) {
+    const old = ctxOverride;
+    ctxOverride = ctx;
+    try { return fn(); } finally { ctxOverride = old; }
+}
 
 function decodeStudio(b) {
     if (!b) return adv(b, 'zmk-studio');
@@ -759,7 +772,7 @@ function encodeTyped(id, params) {
 // ---------------------------------------------------------------------------
 // Labels
 
-const layerText = (adapter, l) => (adapter === 'zmk-studio' || adapter === 'zmk-typed' ? layerName(l) : `L${l}`);
+const layerText = (adapter, l) => (adapter === 'zmk-studio' || adapter === 'zmk-typed' ? layerNameNow(l) : `L${l}`);
 const qmkKeyCap = (k) => (k ? capLabel(k & 0xFF) : '·');
 function keyCap(adapter, key, mods = 0) {
     if (adapter === 'qmk' || adapter === 'nape') {
