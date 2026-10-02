@@ -81,6 +81,27 @@ def launch(p):
     return p.chromium.launch(channel='chrome', headless=True)
 
 
+CONTRACT_SMOKE = """async (surface) => {
+  const bp = await import('./binding-picker.js?v=1');
+  await import('./behavior-catalog.js?v=1');
+  const problems = [];
+  for (const host of ['sheet', 'popover']) {
+    const close = bp.openPicker({ surface, host, anchor: document.querySelector('.keycap'),
+                                  title: 'WP0 smoke', onPick() {} });
+    if (!document.querySelector(':is(.modal-back, .picker-popover) :is(.picker, .kp) button')) problems.push(host + ': no picker rendered');
+    close(); close();
+    if (document.querySelector('.modal-back, .picker-popover')) problems.push(host + ': close() left it open');
+  }
+  return problems;
+}"""
+
+
+def contract_smoke(page, name):
+    """openPicker stub opens and closes as sheet and popover on this line."""
+    surface = 'zmk.key' if name in ('totem', 'imprint') else 'qmk.key'
+    return page.evaluate(CONTRACT_SMOKE, surface)
+
+
 def main():
     out = ROOT / 'tests' / 'artifacts' / 'harness'
     out.mkdir(parents=True, exist_ok=True)
@@ -96,6 +117,7 @@ def main():
                 want = [t[0] for t in before[snap]]
                 if ids != want:
                     failures.append(f'{name}: tabs {ids} != {want}')
+                failures += [f'{name}: {m}' for m in contract_smoke(page, name)]
                 page.screenshot(path=str(out / f'{name}.png'), full_page=True)
             except Exception as e:  # noqa: BLE001 - report and continue
                 failures.append(f'{name}: {e}')

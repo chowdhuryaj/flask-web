@@ -1,0 +1,691 @@
+{
+ "family": "imprint",
+ "source": "zmk-offline.js OfflineStudioClient (template)",
+ "behaviors": [
+  {
+   "id": 1,
+   "displayName": "Key Press",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Key",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "displayName": "Transparent",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "displayName": "None",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "displayName": "Momentary Layer",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "displayName": "To Layer",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "displayName": "Toggle Layer",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "displayName": "Sticky Layer",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "displayName": "Layer-Tap",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Tap",
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "displayName": "Mod-Tap",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Hold",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Tap",
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "displayName": "Sticky Key",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Key",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "displayName": "Key Toggle",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Key",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "displayName": "Caps Word",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "displayName": "Key Repeat",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "displayName": "Mouse Key Press",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "MB1",
+       "kind": "constant",
+       "constant": 1
+      },
+      {
+       "name": "MB2",
+       "kind": "constant",
+       "constant": 2
+      },
+      {
+       "name": "MB3",
+       "kind": "constant",
+       "constant": 4
+      },
+      {
+       "name": "MB4",
+       "kind": "constant",
+       "constant": 8
+      },
+      {
+       "name": "MB5",
+       "kind": "constant",
+       "constant": 16
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "displayName": "Reset",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "displayName": "Bootloader",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "displayName": "Output Selection",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Toggle",
+       "kind": "constant",
+       "constant": 0
+      },
+      {
+       "name": "USB",
+       "kind": "constant",
+       "constant": 1
+      },
+      {
+       "name": "BLE",
+       "kind": "constant",
+       "constant": 2
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "displayName": "Bluetooth",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Clear",
+       "kind": "constant",
+       "constant": 0
+      },
+      {
+       "name": "Next",
+       "kind": "constant",
+       "constant": 1
+      },
+      {
+       "name": "Previous",
+       "kind": "constant",
+       "constant": 2
+      },
+      {
+       "name": "Select",
+       "kind": "constant",
+       "constant": 3
+      }
+     ],
+     "param2": [
+      {
+       "name": "Profile",
+       "kind": "range",
+       "min": 0,
+       "max": 4
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "displayName": "Studio Unlock",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "displayName": "Flask Autoscroll",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Up",
+       "kind": "constant",
+       "constant": 0
+      },
+      {
+       "name": "Down",
+       "kind": "constant",
+       "constant": 1
+      },
+      {
+       "name": "Stop",
+       "kind": "constant",
+       "constant": 2
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "displayName": "Flask RGB",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Toggle",
+       "kind": "constant",
+       "constant": 0
+      },
+      {
+       "name": "On",
+       "kind": "constant",
+       "constant": 1
+      },
+      {
+       "name": "Off",
+       "kind": "constant",
+       "constant": 2
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "displayName": "Flask Macro",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Macro slot",
+       "kind": "range",
+       "min": 0,
+       "max": 31
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "displayName": "Flask Leader",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 24,
+   "displayName": "Flask Gesture",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Gesture set (255 = active)",
+       "kind": "range",
+       "min": 0,
+       "max": 255
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "displayName": "Swapper",
+   "metadata": [
+    {
+     "param1": [],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 26,
+   "displayName": "Num Word",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 27,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 28,
+   "displayName": "Smart Mod",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Hold (mod)",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Tap",
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 29,
+   "displayName": "Smart Layer",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 30,
+   "displayName": "Sticky Mod (smart)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Key",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 31,
+   "displayName": "Sticky Layer (smart)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 32,
+   "displayName": "Ball Swap",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Toggle (saved)",
+       "kind": "constant",
+       "constant": 0
+      },
+      {
+       "name": "While held",
+       "kind": "constant",
+       "constant": 1
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 33,
+   "displayName": "External Power",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Off",
+       "kind": "constant",
+       "constant": 0
+      },
+      {
+       "name": "On",
+       "kind": "constant",
+       "constant": 1
+      },
+      {
+       "name": "Toggle",
+       "kind": "constant",
+       "constant": 2
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 34,
+   "displayName": "Tap Dance",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Tap dance slot",
+       "kind": "range",
+       "min": 0,
+       "max": 15
+      }
+     ],
+     "param2": []
+    }
+   ]
+  },
+  {
+   "id": 35,
+   "displayName": "Mod-Tap (fast 150)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Hold",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Tap",
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "displayName": "Mod-Tap (slow 300)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Hold",
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Tap",
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 37,
+   "displayName": "Layer-Tap (fast 150)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Tap",
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 38,
+   "displayName": "Layer-Tap (slow 300)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": [
+      {
+       "name": "Tap",
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 39,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 40,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 41,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 42,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 43,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 44,
+   "displayName": "",
+   "metadata": []
+  }
+ ]
+}

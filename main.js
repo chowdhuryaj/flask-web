@@ -25,6 +25,9 @@ import { OfflineFlask, OfflineVial, TEMPLATE_FAMILIES, createTemplate, loadWorks
          maybeSyncOffline, captureSnapshot, workspaceKey } from './offline.js?v=49';
 import { exportVil, importVil, downloadText } from './vil.js?v=49';
 import { TAB_GROUPS, tabsFor, groupOf } from './tab-registry.js?v=1';
+import { shell } from './app-shell.js?v=1';
+import { installCaptions } from './caption.js?v=1';
+import { saveState } from './save-state.js?v=1';
 
 // ---------- themes (AlooMapper pattern; classic = stylesheet auto light/dark) ----------
 
@@ -107,6 +110,9 @@ const app = {
 app.flask = new FlaskProto(app.hid);
 app.vial = new VialClient(app.hid);
 app.hud = new HUD(app);
+// Redesign contracts (WP0): reachable from every tab via `app`.
+app.shell = shell;
+app.saveState = saveState;
 // ⌘K. Installed at module scope, not per-device: navigating is exactly what
 // you want when nothing is connected yet.
 app.palette = new CommandPalette(app, {
@@ -561,6 +567,7 @@ async function connectClick() {
 }
 
 function init() {
+    installCaptions();
     // The preflight panel: the only thing that separates "no WebHID" from
     // "WebHID blocked by policy" from "device not found". Reachable always,
     // because a policy block leaves navigator.hid in place and Connect just
