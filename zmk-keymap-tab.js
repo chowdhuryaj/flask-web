@@ -10,7 +10,7 @@
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
-import { el, toast, card, SAVE_STATE } from './ui.js?v=60';
+import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=60';
 import { board } from './board.js?v=60';
 import { openPicker } from './binding-picker.js?v=60';
 import { shell } from './app-shell.js?v=60';
@@ -18,7 +18,7 @@ import { saveState } from './save-state.js?v=60';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=60';
 import { zmkApplyPendingKeymap } from './zmk-offline.js?v=60';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=60';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers } from './zmk-keymap-sync.js?v=60';
+import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=60';
 import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=60';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
@@ -232,7 +232,7 @@ export class ZmkKeymapTab {
         }
     }
 
-    // ---- keymap auto-restore (consistent across flashes / settings resets) ----
+    // ---- keymap snapshot: connect check against the last saved copy ----
 
     _snapKey() {
         return `zmk-keymap-snapshot:${this.deviceSerial || this.deviceName || 'zmk'}`;
@@ -257,16 +257,15 @@ export class ZmkKeymapTab {
         } catch { /* quota/private mode — the snapshot is best-effort */ }
     }
 
-    /** Auto-restore: keep the device keymap consistent with Flask's last
-     * SAVED copy across reflashes and settings resets. The snapshot
-     * refreshes on every successful device save; a device that reads back
-     * different at connect (settings_reset wiped the Studio overlay, fresh
-     * board) gets the snapshot re-applied and saved. Runs only unlocked —
-     * Studio writes are physical-unlock-gated — so the post-reset flow is:
-     * plug in, press &studio_unlock, done. The offline-preview queue
-     * applies first and wins: its save refreshes the snapshot, so this
-     * check then sees zero diff. Skipped in the sim (the offline workspace
-     * has its own persistence). */
+    /** Connect check against Flask's last SAVED copy (the snapshot
+     * refreshes on every successful device save). A keyboard that reads
+     * back different (remapped elsewhere, settings_reset, fresh board) gets
+     * a dialog, never a silent restore: Keep keyboard (default) adopts the
+     * board as the new snapshot; Restore saved copy writes it LIVE (the
+     * status bar Save persists it, ⟲ undoes); Show differences lists them.
+     * Nothing is auto-saved (WP7: the old silent restore + save overwrote
+     * AJ's remaps). Closing the dialog decides nothing; it asks again next
+     * connect. Skipped in the sim (the workspace has its own persistence). */
     async _keymapSyncCheck() {
         if (this.app?.zmkStudioSim || !this.keymap) return;
         const snap = this._readSnapshot();
@@ -277,29 +276,71 @@ export class ZmkKeymapTab {
         const live = keymapLayersData(this.keymap, zmkBehaviors());
         const d = diffKeymapLayers(snap.layers, live);
         if (!keymapDiffers(d)) return;
-        // Stash the device's copy so the restore is one click to undo.
+        await this._askRestore(snap, live, d);
+    }
+
+    /** The restore dialog. Resolves 'keep' | 'restore' | null (dismissed). */
+    _askRestore(snap, live, d = diffKeymapLayers(snap.layers, live)) {
+        return new Promise((resolve) => {
+            const when = snap.savedAt ? new Date(snap.savedAt).toLocaleString() : 'an unknown time';
+            const list = el('div', { class: 'restore-diff', 'data-restore-diff': '', hidden: true,
+                style: 'max-height:240px; overflow:auto; margin-top:8px; font-size:12px' });
+            const label = (b) => (b ? `${b.behavior ?? `#${b.behaviorId}`}${b.param1 ? ` ${(b.param1 >>> 0).toString(16)}` : ''}` : '—');
+            for (const c of d.changed) {
+                const rows = c.positions.map((p) => el('div', { class: 'mono' },
+                    `key ${p}: keyboard ${label(live[c.layer]?.bindings?.[p])} · saved ${label(snap.layers[c.layer]?.bindings?.[p])}`));
+                list.append(el('div', { style: 'margin-top:6px' },
+                    el('b', { text: `${c.name}${c.renamed ? ` (saved name: ${snap.layers[c.layer]?.name || '—'})` : ''}` }), ...rows));
+            }
+            let back = null;
+            const done = (choice) => {
+                if (back?.isConnected) back.remove();
+                obs.disconnect();
+                resolve(choice);
+            };
+            // A backdrop click removes the dialog without a choice.
+            const obs = new MutationObserver(() => { if (back && !back.isConnected) done(null); });
+            const keep = el('button', { class: 'btn primary', 'data-act': 'keep', text: 'Keep keyboard',
+                onclick: () => { this._writeSnapshot(); toast('Kept the keyboard\'s keymap; it is now the saved copy'); done('keep'); } });
+            const restore = el('button', { class: 'btn', 'data-act': 'restore', text: 'Restore saved copy',
+                onclick: async () => { done('restore'); await this._restoreSnapshot(snap, live); } });
+            const show = el('button', { class: 'btn', 'data-act': 'diff', text: 'Show differences',
+                onclick: () => { list.hidden = !list.hidden; show.textContent = list.hidden ? 'Show differences' : 'Hide differences'; } });
+            back = modal('Keymap differs', el('div', { 'data-restore-dialog': '' },
+                el('p', { 'data-restore-summary': '', text: keymapDiffSummary(d) + '.' }),
+                el('p', { class: 'faint', text: `Saved copy from ${when}. Keep keyboard makes the keyboard's keymap the saved copy. Restore writes the saved copy live; Save in the status bar keeps it.` }),
+                list), [keep, restore, show]);
+            back.addEventListener('keydown', (e) => { if (e.key === 'Escape') done(null); });
+            obs.observe(document.body, { childList: true });
+            keep.focus();
+        });
+    }
+
+    /** The snapshot is per keyboard, so it is always this board's family
+     * (an unlabelled file counts as Imprint in zmkFamilyMismatch). */
+    _family() { return this.app?.profile?.family ?? this.app?.family; }
+
+    /** Restore saved copy: write it live, never save; ⟲ undoes. */
+    async _restoreSnapshot(snap, live) {
         this._preRestore = { layers: live };
         const res = await this.applyKeymapData(
-            { kind: 'flask-zmk-keymap', version: 2, layers: snap.layers }, { quiet: true });
+            { kind: 'flask-zmk-keymap', version: 2, family: this._family(), layers: snap.layers }, { quiet: true });
         if (!res || res.stopped) { this._preRestore = null; return; }   // applier already toasted
-        if (res.wrote || res.renamed) await this.saveChanges();
-        const when = snap.savedAt ? new Date(snap.savedAt).toLocaleString() : 'unknown time';
         const skipNote = res.skipped ? `, ${res.skipped} unresolvable skipped` : '';
-        toast(`Keymap auto-restored from Flask's saved copy (${res.wrote} keys, ${res.renamed} names${skipNote}; saved ${when}) — ⟲ in the toolbar undoes`);
+        toast(`Saved copy restored live (${res.wrote} keys, ${res.renamed} names${skipNote}). Save in the status bar keeps it; ⟲ in the toolbar undoes.`);
         this.render();
     }
 
-    /** Put back the keymap the device had before auto-restore ran, and
-     * adopt it as the new snapshot (the save hook does that). */
+    /** Put back the keymap the keyboard had before Restore saved copy.
+     * Live only, like the restore; nothing is saved. */
     async _undoKeymapRestore() {
         const pre = this._preRestore;
         if (!pre) return;
         const res = await this.applyKeymapData(
-            { kind: 'flask-zmk-keymap', version: 2, layers: pre.layers }, { quiet: true });
+            { kind: 'flask-zmk-keymap', version: 2, family: this._family(), layers: pre.layers }, { quiet: true });
         if (!res || res.stopped) return;
         this._preRestore = null;
-        if (res.wrote || res.renamed) await this.saveChanges();
-        toast('Auto-restore undone — the device copy is back and is the new snapshot');
+        toast('Restore undone: the keyboard\'s own keymap is back (live)');
         this.render();
     }
 
@@ -852,7 +893,7 @@ export class ZmkKeymapTab {
             note, el('span', { style: 'flex:1' }), capture,
             ...(this._preRestore ? [el('button', {
                 class: 'btn small', text: '⟲ Undo restore',
-                'data-caption': 'Put back the keymap the device had before auto-restore (and keep it as the new snapshot)',
+                'data-caption': 'Put back the keymap the keyboard had before Restore saved copy',
                 onclick: () => this._undoKeymapRestore(),
             })] : []));
         this._updateSaveBar = () => {

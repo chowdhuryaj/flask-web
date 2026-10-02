@@ -128,6 +128,13 @@ def totem(browser):
     check(page.evaluate('window.__picks') == [4], 'totem: clicking a picked key unpicks it')
     page.evaluate('window.__stop()')
     check(page.locator('.bd-banner').count() == 0, 'totem: stop() leaves pick mode')
+    # WP7 allowRepeat (leader): a picked key appends again
+    page.evaluate("""async () => { const { board } = await import('/board.js?v=60');
+        window.__picks = []; window.__stop = board.pickPositions({ max: 4, allowRepeat: true, onChange: (p) => { window.__picks = p; } }); }""")
+    key(page, 3).click()
+    key(page, 3).click()
+    check(page.evaluate('window.__picks') == [3, 3], f'totem: allowRepeat keeps a repeated key, got {page.evaluate("window.__picks")}')
+    page.evaluate('window.__stop()')
 
     # Geometry: hit test on a rotated thumb (key 36 is rotated).
     box = key(page, 33).locator('rect').bounding_box()
@@ -225,11 +232,56 @@ def adept_sval(browser):
     ctx.close()
 
 
+RESTORE_ASK = """async () => {
+  const t = (await import('/zmk-keymap-tab.js?v=60')).zmkLiveKeymapTab();
+  const { keymapLayersData } = await import('/zmk-keymap-sync.js?v=60');
+  const { zmkBehaviors } = await import('/zmk-keycodes.js?v=60');
+  const live = keymapLayersData(t.keymap, zmkBehaviors());
+  const snap = JSON.parse(JSON.stringify(live));
+  snap[0].bindings[0].param1 = 0x70005;   // B
+  snap[0].bindings[1].param1 = 0x70006;   // C
+  snap[1].bindings[2].param1 = 0x70007;   // D
+  window.__choice = undefined;
+  t._askRestore({ savedAt: '2026-09-30T12:00:00Z', layers: snap }, live).then((c) => { window.__choice = c; });
+}"""
+DIRTY = "async () => (await import('/save-state.js?v=60')).saveState.dirty().map(d => d.source)"
+
+
+def restore_dialog(browser):
+    """WP7 item 6: a keyboard that differs from the saved snapshot asks
+    (Keep keyboard default / Restore saved copy / Show differences) and never
+    saves. The sim skips the connect check, so the dialog is driven directly."""
+    ctx, page, errors = new_context(browser)
+    open_workspace(page, 'TOTEM (ZMK)')
+    before = cap(page, 0)
+    page.evaluate(RESTORE_ASK)
+    dlg = page.locator('[data-restore-dialog]')
+    dlg.wait_for(timeout=3000)
+    summary = dlg.locator('[data-restore-summary]').inner_text()
+    check("Keyboard differs from Totem-Flask's saved copy: 3 keys on 2 layers" in summary, f'restore: summary {summary!r}')
+    check(page.evaluate("document.activeElement?.dataset.act") == 'keep', 'restore: Keep keyboard is the default')
+    page.locator('.modal [data-act="diff"]').click()
+    check(dlg.locator('[data-restore-diff]').is_visible() and 'key 0' in dlg.inner_text(), 'restore: Show differences lists keys')
+    shot(page, 'restore-dialog')
+    page.locator('.modal [data-act="keep"]').click()
+    page.wait_for_timeout(200)
+    check(page.evaluate('window.__choice') == 'keep' and dlg.count() == 0, 'restore: Keep keyboard closes with keep')
+    check(cap(page, 0) == before and page.evaluate(DIRTY) == [], 'restore: Keep keyboard writes nothing')
+    page.evaluate(RESTORE_ASK)
+    page.locator('.modal [data-act="restore"]').click()
+    page.wait_for_timeout(500)
+    check(cap(page, 0) == 'B', f'restore: saved copy written live, key 0 = {cap(page, 0)}')
+    check(page.evaluate(DIRTY) == ['studio-keymap'], f'restore: left unsaved for the status bar Save, dirty {page.evaluate(DIRTY)}')
+    check(page.evaluate("async () => (await import('/zmk-keymap-tab.js?v=60')).zmkLiveKeymapTab().unsaved") is True, 'restore: never auto-saved')
+    check(not errors, f'restore: page errors {errors}')
+    ctx.close()
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = launch(p)
-        for fn in (totem, imprint, nlkb16, adept_sval):
+        for fn in (totem, restore_dialog, imprint, nlkb16, adept_sval):
             try:
                 fn(browser)
             except Exception as e:  # noqa: BLE001 - report and continue

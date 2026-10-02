@@ -41,20 +41,34 @@ export function diffKeymapLayers(a, b) {
     };
     let keys = 0;
     let names = 0;
+    const changed = [];     // per layer: {layer, name, positions, renamed}
     const layers = Math.min(a.length, b.length);
     for (let li = 0; li < layers; li++) {
         const av = a[li].bindings ?? [];
         const bv = b[li].bindings ?? [];
         const n = Math.min(av.length, bv.length);
+        const positions = [];
         for (let p = 0; p < n; p++) {
-            if (!sameBinding(av[p], bv[p])) keys++;
+            if (!sameBinding(av[p], bv[p])) positions.push(p);
         }
-        if ((a[li].name || '') !== (b[li].name || '')) names++;
+        keys += positions.length;
+        const renamed = (a[li].name || '') !== (b[li].name || '');
+        if (renamed) names++;
+        if (positions.length || renamed) changed.push({ layer: li, name: b[li].name || a[li].name || `Layer ${li}`, positions, renamed });
     }
-    return { keys, names, layersA: a.length, layersB: b.length };
+    return { keys, names, layersA: a.length, layersB: b.length, changed,
+        layersChanged: changed.filter((c) => c.positions.length).length };
 }
 
-/** True when the diff means the device needs a restore. */
+/** "Keyboard differs from Totem-Flask's saved copy: N keys on M layers". */
+export function keymapDiffSummary(d) {
+    const parts = [`${d.keys} key${d.keys === 1 ? '' : 's'} on ${d.layersChanged} layer${d.layersChanged === 1 ? '' : 's'}`];
+    if (d.names) parts.push(`${d.names} layer name${d.names === 1 ? '' : 's'}`);
+    if (d.layersA !== d.layersB) parts.push(`saved copy has ${d.layersA} layers, keyboard ${d.layersB}`);
+    return `Keyboard differs from Totem-Flask's saved copy: ${parts.join(', ')}`;
+}
+
+/** True when the diff means the device differs from the snapshot. */
 export function keymapDiffers(d) {
     return d.keys > 0 || d.names > 0 || d.layersA !== d.layersB;
 }

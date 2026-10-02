@@ -1087,7 +1087,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
 // ---- keymap auto-restore snapshot/diff (zmk-keymap-sync.js, pure) ----
 {
-    const { keymapLayersData, diffKeymapLayers, keymapDiffers } =
+    const { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } =
         await import('./zmk-keymap-sync.js?v=60');
 
     const behaviors = new Map([
@@ -1108,13 +1108,19 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
     // identical → no diff
     const live = JSON.parse(JSON.stringify(snap));
-    eq(diffKeymapLayers(snap, live), { keys: 0, names: 0, layersA: 2, layersB: 2 },
+    eq(diffKeymapLayers(snap, live), { keys: 0, names: 0, layersA: 2, layersB: 2, changed: [], layersChanged: 0 },
         'identical layers diff clean');
     eq(keymapDiffers(diffKeymapLayers(snap, live)), false, 'identical = no restore');
 
     // param drift on one key
     live[0].bindings[1].param1 = 3;
     eq(diffKeymapLayers(snap, live).keys, 1, 'param change counts one key');
+    // WP7: the restore dialog's summary and per-layer list
+    live[1].bindings[0].param1 = 0x70051;
+    const d2 = diffKeymapLayers(snap, live);
+    eq([d2.layersChanged, d2.changed.map((c) => [c.layer, c.positions])], [2, [[0, [1]], [1, [0]]]], 'changed positions per layer');
+    eq(keymapDiffSummary(d2), "Keyboard differs from Totem-Flask's saved copy: 2 keys on 2 layers", 'dialog summary');
+    live[1].bindings[0].param1 = 0x70050;
 
     // cross-build: ids shifted but names match → clean
     const rebuilt = JSON.parse(JSON.stringify(snap));
