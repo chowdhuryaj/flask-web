@@ -234,7 +234,7 @@ export function parseKeymap(src) {
         const wrapped = cells(n.props.bindings).join(' ').split('&').slice(1).map((t) => `&${t.trim().split(/\s+/)[0]}`);
         let md;
         switch (compat) {
-            case 'zmk,behavior-hold-tap':
+            case 'zmk,behavior-hold-tap': case 'zmk,behavior-flask-hold-tap':
                 md = meta(typeOf(wrapped[0])(), typeOf(wrapped[1])()); break;
             case 'zmk,behavior-sticky-key': md = meta(typeOf(wrapped[0])()); break;
             case 'zmk,behavior-auto-layer': md = meta(layer()); break;
