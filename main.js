@@ -170,7 +170,8 @@ async function loadZmkDevice(device) {
 
     // Offline preview queue → device (tunables + RGB ride the shared
     // journal; combo slots + macro steps are ZMK-shaped extras).
-    await maybeSyncOffline(app, device);
+    // Unresolved family = guessed board: never replay another board's queue onto it.
+    if (!app.familyUnresolved) await maybeSyncOffline(app, device);
     const ws = loadWorkspace(workspaceKey(app.family, device));
     app.zmkQueuedWs = null;   // never let a prior connect's queue leak across
     if (ws && zmkPendingCount(ws) && !app.familyUnresolved) {

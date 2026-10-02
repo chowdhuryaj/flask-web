@@ -21,7 +21,6 @@ import {
     zmkBehaviors, zmkLayers, layerName, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
 } from './zmk-keycodes.js?v=61';
-import { isZmkFamily } from './zmk.js?v=61';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [
