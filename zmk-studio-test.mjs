@@ -1260,9 +1260,8 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
     // Generator on a tiny inline fixture: modifier functions, defines, custom
     // nodes (named / blank), combos with a layer filter, unsupported tracking.
-    const { generate, generateLayout, parseKeymap, parseLayout, FIRMWARE_ROOT } = await import('./gen-totem-default.mjs');
-    const { existsSync, readFileSync } = await import('node:fs');
-    const { join } = await import('node:path');
+    const { parseKeymap, FIRMWARE_ROOT } = await import('./gen-totem-default.mjs');
+    const { readFileSync } = await import('node:fs');
     const fx = parseKeymap(`
 #define L_B 0
 #define L_N 1
@@ -1297,18 +1296,26 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(TOTEM_DEFAULT.layers.every((l) => l.bindings.every((b) => ids.has(b[0]))), true, 'every binding names a catalog behavior');
     eq(ws.zmk.combos.filter((c) => c.positions.length).length, TOTEM_DEFAULT.combos.length, 'offline combo slots seeded from the keymap defaults');
 
-    // Generated files must match the firmware (skipped, loudly, if the repo is absent).
-    const km = join(FIRMWARE_ROOT, 'config/totem.keymap');
-    const ly = join(FIRMWARE_ROOT, 'boards/shields/totem/totem.dtsi');
-    if (existsSync(km) && existsSync(ly)) {
-        const rd = (f) => readFileSync(f, 'utf8');
+    // Generated files are pinned to the Totem-ZMK commit they record
+    // (firmwareSha): regenerate from THAT commit and compare, so a moving
+    // firmware working tree never fails this suite. Skipped, loudly, without
+    // the repo or the commit.
+    const { generateAt, firmwareSha } = await import('./gen-totem-default.mjs');
+    const { TOTEM_LAYOUT } = await import('./zmk-totem-layout.js?v=60');
+    const pin = TOTEM_DEFAULT.firmwareSha;
+    eq(/^[0-9a-f]{40}$/.test(pin ?? ''), true, 'zmk-totem-default.js records its Totem-ZMK commit (firmwareSha)');
+    eq(TOTEM_LAYOUT.firmwareSha, pin, 'layout and keymap data come from one commit');
+    if (firmwareSha(FIRMWARE_ROOT, pin)) {
+        const REGEN = `differs from the generator output for Totem-ZMK ${pin.slice(0, 7)} — regenerate: node gen-totem-default.mjs ${FIRMWARE_ROOT} ${pin.slice(0, 7)}`;
+        const { layout, keymap } = generateAt(FIRMWARE_ROOT, pin);
         const here = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
-        const STALE = 'is stale vs the firmware — run: node gen-totem-default.mjs';
-        eq(here('./zmk-totem-default.js?v=60') === generate(rd(km), 'config/totem.keymap'), true, `zmk-totem-default.js ${STALE}`);
-        eq(here('./zmk-totem-layout.js?v=60') === generateLayout(rd(ly), 'boards/shields/totem/totem.dtsi'), true, `zmk-totem-layout.js ${STALE}`);
-        eq(parseLayout(rd(ly)).keys.length, 38, 'firmware physical layout has 38 keys');
+        eq(here('./zmk-totem-default.js?v=60') === keymap, true, `zmk-totem-default.js ${REGEN}`);
+        eq(here('./zmk-totem-layout.js?v=60') === layout, true, `zmk-totem-layout.js ${REGEN}`);
+        eq(TOTEM_LAYOUT.keys.length, 38, 'firmware physical layout has 38 keys');
+        const head = firmwareSha(FIRMWARE_ROOT, 'HEAD');
+        if (head && head !== pin) console.log(`zmk-studio-test: NOTE Totem-ZMK HEAD ${head.slice(0, 7)} is newer than the pinned ${pin.slice(0, 7)} — regenerate: node gen-totem-default.mjs`);
     } else {
-        console.log('zmk-studio-test: NOTE firmware repo missing — staleness checks skipped');
+        console.log(`zmk-studio-test: NOTE Totem-ZMK ${pin?.slice(0, 7)} not found at ${FIRMWARE_ROOT} — staleness checks skipped`);
     }
 }
 
