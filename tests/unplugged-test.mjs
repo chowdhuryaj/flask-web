@@ -38,6 +38,13 @@ const weirdId = km.layers[1].bindings[5].behaviorId;
 const weird = await c.getBehaviorDetails(weirdId);
 assert.equal(weird.displayName, 'Weird Thing'); assert.ok((await c.listAllBehaviors()).includes(weirdId)); checks += 2;
 
+// Real firmware refuses behaviors with no get_parameter_metadata (-ENODEV); the sim mirrors it.
+{
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=63');
+    const sw = TOTEM_DEFAULT.behaviors.find((b) => b.node === 'sw_layout');
+    await assert.rejects(c.setLayerBinding(0, 3, { behaviorId: sw.id, param1: 0, param2: 0 }), /INVALID_PARAMETERS/); checks++;
+}
+
 // Edit + save: only the changed key is queued, by display name.
 await c.setLayerBinding(0, 3, { behaviorId: keyId, param1: 458757, param2: 0 });
 await c.saveChanges();

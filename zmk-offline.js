@@ -23,6 +23,7 @@ import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWAR
          zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=63';
 import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=63';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=63';
+import { isUnassignable } from './behavior-catalog.js?v=63';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
          describeChanges, BASE_PREFIX } from './offline.js?v=63';
 import { saveState } from './save-state.js?v=63';
@@ -1305,6 +1306,7 @@ export class OfflineStudioClient extends EventTarget {
         // the metadata-less urob leader looked assignable for two benches.
         const p1 = (binding.param1 ?? 0) >>> 0;
         const p2 = (binding.param2 ?? 0) >>> 0;
+        if (isUnassignable(d)) throw new Error('INVALID_PARAMETERS');   // -ENODEV: no get_parameter_metadata
         if (!d.metadata.length) {
             if (!d.displayName || p1 !== 0 || p2 !== 0) throw new Error('INVALID_PARAMETERS');
         } else {

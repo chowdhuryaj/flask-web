@@ -53,4 +53,26 @@ eq(surfaceEntries('zmk.comboOutput').find((e) => e.id === 'mod-tap').params.some
     setZmkContext({ behaviors: new Map(fx.behaviors.map((d) => [d.id, d])), layers: [{ id: 0, name: 'base' }, { id: 1, name: 'nav' }] });
 }
 
+// Behaviors without get_parameter_metadata (switch-layout: swapper, sw_layout, slk_*) are
+// refused by Studio (-ENODEV) yet look identical on the wire to assignable sets_len 0
+// behaviors (Super Delete tap-dance, key repeat): zero metadata sets. Hidden from the
+// picker, still shown as existing bindings.
+{
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=63');
+    const { describeBinding } = await import('../behavior-catalog.js?v=63');
+    // decodeBehaviorDetails yields metadata: [] for sets_len 0 AND for -ENODEV, flagged or not.
+    const dev = TOTEM_DEFAULT.behaviors.map((d) => ({ id: d.id, displayName: d.displayName,
+        metadata: d.metadata.every((m) => !m.param1.length && !m.param2.length) ? [] : d.metadata }));
+    setZmkContext({ behaviors: new Map(dev.map((d) => [d.id, d])), layers: [{ id: 0, name: 'base' }] });
+    const bad = TOTEM_DEFAULT.behaviors.filter((d) => d.unassignable && d.displayName);
+    eq(bad.length >= 14, true, 'generator flags the named switch-layout behaviors');
+    const offered = JSON.stringify(surfaceEntries('zmk.key', {}));
+    for (const d of bad) eq(offered.includes(JSON.stringify(d.displayName)), false, `${d.displayName} is not offered`);
+    for (const n of ['Super Delete', 'Key Repeat', 'Caps Word']) {
+        eq(offered.includes(JSON.stringify(n)) || surfaceEntries('zmk.key', {}).some((e) => e.name === n || e.label === n), true, `${n} (empty metadata, assignable) stays`);
+    }
+    for (const d of bad) eq(describeBinding({ behaviorId: d.id, param1: 0, param2: 0 }, 'zmk-studio'), d.displayName, `${d.displayName} still displays on a key`);
+    setZmkContext({ behaviors: new Map(fx.behaviors.map((d) => [d.id, d])), layers: [{ id: 0, name: 'base' }, { id: 1, name: 'nav' }] });
+}
+
 console.log(`picker-test: ${checks} checks OK`);

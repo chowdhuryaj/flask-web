@@ -21,6 +21,7 @@ import {
     zmkBehaviors, zmkLayers, layerName, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
 } from './zmk-keycodes.js?v=63';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=63';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [
@@ -334,6 +335,14 @@ const shape = (d) => `${md(d, 'param1').map((x) => x.kind)[0] ?? ''}/${md(d, 'pa
 const ZMK_EXACT = new Map();
 for (const e of CATALOG) for (const m of e.zmk.match) ZMK_EXACT.set(m.name, { entryId: e.id, set: m.set });
 
+// Behaviors with no get_parameter_metadata: Studio's zmk_behavior_validate_binding
+// returns -ENODEV, so they cannot be assigned. get_behavior_details sends zero
+// metadata sets for them AND for core behaviors with sets_len 0 (tap-dance, mod-morph,
+// key repeat...), which ARE assignable, so the wire cannot tell them apart. The
+// generator flags them per node compat; match a live device by display name.
+const UNASSIGNABLE = new Set(TOTEM_DEFAULT.behaviors.filter((b) => b.unassignable && b.displayName).map((b) => b.displayName));
+export const isUnassignable = (d) => !!d && (d.unassignable === true || UNASSIGNABLE.has(d.displayName));
+
 /** Device behavior → {entryId, set} | null (Advanced) | 'hidden' (nameless). */
 export function classifyZmk(d) {
     const name = d?.displayName ?? '';
@@ -373,6 +382,7 @@ function zmkIndex(behaviors) {
     for (const d of behaviors.values()) {
         const c = classifyZmk(d);
         if (c === 'hidden') { hidden++; continue; }
+        if (isUnassignable(d)) continue;     // still decodes (classifyZmk) on existing keys
         if (!c) { advanced.push(d); continue; }
         if (!byEntry.has(c.entryId)) byEntry.set(c.entryId, []);
         byEntry.get(c.entryId).push({ behaviorId: d.id, name: d.displayName, set: c.set, d });
@@ -732,7 +742,7 @@ function zmkConstName(binding, adapter) {
 function advancedCap(raw, adapter) {
     if (adapter === 'zmk-typed' && raw?.action === 1) return usageCap(raw.param1);
     const d = behaviorsNow().get(raw?.behaviorId);
-    return d?.displayName ? d.displayName.slice(0, 10) : `#${raw?.behaviorId ?? '?'}`;
+    return d?.displayName ? d.displayName.replace(/\s*\(.*\)$/, '').slice(0, 10) : `#${raw?.behaviorId ?? '?'}`;
 }
 
 /** One-line text for a binding: row titles ("J + K → Esc"), toasts, the

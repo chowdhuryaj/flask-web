@@ -14,6 +14,7 @@
 // Behavior naming follows the device: a node's Studio display name is its
 // `display-name` property; nodes without one list BLANK (urob leader, slk_*
 // and friends already behave this way on hardware — `label` is not used).
+// A node with no metadata (`unassignable: true`) cannot be assigned from Studio.
 // Metadata: ZMK-core compatibles and the flask-* ones carry parameter
 // metadata; third-party ones (adaptive-key, tri-state, switch-layout-*,
 // leader-key) ship none. ASSUMPTION, not bench-verified for the hold-tap /
@@ -217,9 +218,9 @@ export function parseKeymap(src) {
     // --- catalog: stock first (fixed order), then every custom node.
     const behaviors = [];
     const byLabel = {};
-    const add = (label, displayName, metadata) => {
+    const add = (label, displayName, metadata, unassignable = false) => {
         const id = behaviors.length + 1;
-        behaviors.push({ id, displayName, metadata, node: label });
+        behaviors.push({ id, displayName, metadata, node: label, ...(unassignable ? { unassignable: true } : {}) });
         byLabel[label] = id;
     };
     for (const [label, [name, md]] of Object.entries(STOCK)) add(label, name, md);
@@ -251,7 +252,11 @@ export function parseKeymap(src) {
             case 'zmk,behavior-macro': case 'zmk,behavior-mod-morph': case 'zmk,behavior-tap-dance': md = meta(); break;
             default: md = []; // third-party (adaptive-key, tri-state, switch-layout-*, leader-key): no metadata
         }
-        add(n.label ?? n.name, str(n.props['display-name']) ?? '', md);
+        // No get_parameter_metadata: zmk_behavior_validate_binding returns -ENODEV, so
+        // Studio refuses to assign it. On the wire it is indistinguishable from a core
+        // behavior with sets_len 0 (get_behavior_details sends zero sets for both), so
+        // the app hides these by this flag/name instead.
+        add(n.label ?? n.name, str(n.props['display-name']) ?? '', md, md.length === 0);
     }
 
     // --- argument resolution
