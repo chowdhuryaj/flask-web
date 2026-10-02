@@ -12,7 +12,8 @@ import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, Z
 import { CommandPalette } from './command-palette.js?v=62';
 import { HUD } from './hud.js?v=62';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
-         zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued } from './zmk-offline.js?v=62';
+         zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
+         seedWorkspaceFromSnapshot } from './zmk-offline.js?v=62';
 import { loadWorkspace, saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline,
          workspaceKey } from './offline.js?v=62';
 import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=62';
@@ -176,7 +177,8 @@ async function loadZmkDevice(device) {
     const ws = loadWorkspace(workspaceKey(app.family, device));
     app.zmkQueuedWs = null;   // never let a prior connect's queue leak across
     if (ws && zmkPendingCount(ws) && !app.familyUnresolved) {
-        const { applied, failures } = await zmkSyncExtras(app, ws);
+        const { applied, failures, keymapSkipped } = await zmkSyncExtras(app, ws);
+        if (keymapSkipped) toast('Unplugged template keymap edits were not applied to your keyboard (the template is not your keymap)', true);
         if (failures.length) {
             console.warn('zmk offline sync failures:', failures);
             toast(`Applied ${applied} offline slot edits — ${failures.length} failed, still queued`, true);
@@ -238,7 +240,11 @@ function disconnectUI() {
 
 async function startOffline(key, family) {
     app.trainerOnly = false;    // same trap as connectFlow's
-    const ws = loadWorkspace(key) ?? createZmkTemplate(family);
+    // No real keymap captured yet? Seed from a stored keymap snapshot of a
+    // keyboard of this family (a template stays the fallback).
+    let ws = null;
+    try { ws = seedWorkspaceFromSnapshot(family); } catch (e) { console.warn('snapshot seed failed:', e); }
+    ws ??= loadWorkspace(key) ?? createZmkTemplate(family);
     ws._notify = updateOfflineBanner; // dropped by JSON.stringify on persist
     saveWorkspace(ws);
     app.offline = true;
@@ -250,7 +256,7 @@ async function startOffline(key, family) {
     $('proto-warn').style.display = 'none';
     $('status-pill').classList.remove('connected');
     $('status-pill').classList.add('offline');
-    $('status-text').textContent = 'Offline preview';
+    $('status-text').textContent = 'Unplugged';
     $('device-name').textContent = ws.label;
     $('offline-seg').style.display = '';
     updateOfflineBanner();
@@ -263,7 +269,7 @@ function updateOfflineBanner() {
     if (!app.offline || !app.offlineWs) return;
     const n = offlineQueued(app.offlineWs);
     $('offline-msg').textContent = n ? `${n} queued` : '';
-    $('offline-seg').title = n ? `${n} changes queued for ${app.offlineWs.label}` : 'Edits queue until the keyboard connects';
+    $('offline-seg').title = n ? `${n} changes queued for ${app.offlineWs.label}` : 'Edits queue until the keyboard connects (unplugged)';
 }
 
 function exitOffline() {
@@ -288,21 +294,22 @@ function renderOfflineList() {
         entries.push({
             key: ws.key, family: ws.family, label: ws.label,
             pending: offlineQueued(ws), saved: true,
-            fromDevice: ws.source === 'device',
+            fromDevice: ws.source === 'device', savedAt: ws.savedAt,
         });
     }
     list.replaceChildren(...entries.map((e) => el('button', {
         class: 'dev-item', onclick: () => startOffline(e.key, e.family),
-        title: e.fromDevice ? 'Workspace from the last real connect' : 'Blank template — geometry only',
+        title: e.fromDevice ? 'Your keymap, as last read from the keyboard' : 'Firmware template, not your keymap',
     },
         `✈️ ${e.label}`,
         e.pending ? el('span', { class: 'badge', text: `${e.pending} queued` }) : null,
-        el('span', { class: 'badge faint', text: e.fromDevice ? 'snapshot' : 'template' }),
+        el('span', { class: 'badge faint', text: e.fromDevice
+            ? `your keymap · ${new Date(e.savedAt).toLocaleDateString()}` : 'template' }),
         e.saved ? el('span', {
-            class: 'badge', text: '✕', title: 'Delete this offline workspace',
+            class: 'badge', text: '✕', title: 'Delete this unplugged workspace',
             onclick: (ev) => {
                 ev.stopPropagation();
-                if (confirm(`Delete the offline workspace for ${e.label}? Queued changes are lost.`)) {
+                if (confirm(`Delete the unplugged workspace for ${e.label}? Queued changes are lost.`)) {
                     deleteWorkspace(e.key);
                     renderOfflineList();
                 }

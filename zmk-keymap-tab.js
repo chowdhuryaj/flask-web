@@ -19,7 +19,7 @@ import { encode } from './behavior-catalog.js?v=62';
 import { shell } from './app-shell.js?v=62';
 import { saveState } from './save-state.js?v=62';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=62';
-import { zmkApplyPendingKeymap } from './zmk-offline.js?v=62';
+import { zmkApplyPendingKeymap, seedWorkspaceFromDevice } from './zmk-offline.js?v=62';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=62';
 import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=62';
 import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=62';
@@ -202,6 +202,7 @@ export class ZmkKeymapTab {
             this.render();
             await this._applyQueuedOfflineKeymap();
             await this._keymapSyncCheck();
+            this._seedUnplugged();
         } catch (e) {
             this._handleRpcError(e, 'Keymap load failed');
         }
@@ -225,9 +226,9 @@ export class ZmkKeymapTab {
                 return r;
             });
             if (!res || res.stopped) return;    // locked/partial: stays queued, applier toasted
-            toast(`Offline keymap applied: ${res.wrote} keys, ${res.renamed} renamed — saved to keyboard`);
+            toast(`Unplugged keymap applied: ${res.wrote} keys, ${res.renamed} renamed — saved to keyboard`);
         } catch (e) {
-            toast(`Offline keymap sync failed: ${e.message} — still queued`, true);
+            toast(`Unplugged keymap sync failed: ${e.message} — still queued`, true);
         }
     }
 
@@ -254,6 +255,22 @@ export class ZmkKeymapTab {
                 layers: keymapLayersData(this.keymap, zmkBehaviors()),
             }));
         } catch { /* quota/private mode — the snapshot is best-effort */ }
+    }
+
+    /** Real device only: refresh the Unplugged workspace from this board's
+     * keymap so editing with the keyboard away starts from the real one.
+     * Skipped for a guessed family and (inside the seeder) whenever the
+     * workspace holds keymap edits that haven't synced yet. */
+    _seedUnplugged() {
+        if (this.app?.zmkStudioSim || this.app?.familyUnresolved || !this.keymap) return;
+        try {
+            seedWorkspaceFromDevice(this._family(), {
+                layers: this.keymap.layers, behaviors: zmkBehaviors(),
+                availableLayers: this.keymap.availableLayers,
+                maxLayerNameLength: this.keymap.maxLayerNameLength,
+                deviceName: this.deviceName,
+            });
+        } catch (e) { console.warn('unplugged workspace seed failed:', e); }
     }
 
     /** Connect check against Flask's last SAVED copy (the snapshot
@@ -553,6 +570,7 @@ export class ZmkKeymapTab {
             // What's saved on the device is Flask's copy of record — the
             // auto-restore snapshot follows every successful save.
             this._writeSnapshot();
+            this._seedUnplugged();
             toast(this.app?.offline ? 'Queued for the next connect' : 'Saved to keyboard');
             return true;
         } catch (e) {
@@ -920,7 +938,7 @@ export class ZmkKeymapTab {
         const offline = !!this.app?.offline;
         const live = offline || this.unsaved;
         host.dataset.state = live ? 'live' : 'saved';
-        const text = offline ? 'Offline: edits queue until the keyboard connects'
+        const text = offline ? 'Unplugged: edits queue until the keyboard connects'
             : this.unsaved ? 'Live — reverts on power-off · Save is in the top bar' : SAVE_STATE.saved;
         host.replaceChildren(el('span', { class: 'dot', 'aria-hidden': 'true' }), el('span', { text }),
             ...(this._preRestore ? [el('button', {

@@ -23,7 +23,7 @@ import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWAR
          zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=62';
 import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=62';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=62';
-import { OfflineFlask, saveWorkspace, pendingCount, clearDirty } from './offline.js?v=62';
+import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey } from './offline.js?v=62';
 import { saveState } from './save-state.js?v=62';
 import { LOCK_UNLOCKED } from './zmk-studio.js?v=62';
 import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=62';
@@ -385,8 +385,15 @@ function buildDefaultLayers() {
 // combos) comes from gen-totem-default.mjs → zmk-totem-default.js; nothing
 // here is hand-written. Bindings are [behaviorId, param1, param2].
 const TOTEM_CATALOG = new Map(TOTEM_DEFAULT.behaviors.map((d) => [d.id, d]));
-const catalogFor = (family) => (family === 'totem' ? TOTEM_CATALOG : BEHAVIORS);
-const transparentFor = (family) => (family === 'totem'
+// Family catalog plus the workspace's own extras (device behaviors the
+// catalog lacks, ws.zmk.extraBehaviors, see seedWorkspaceFromDevice).
+const baseCatalog = (family) => (family === 'totem' ? TOTEM_CATALOG : BEHAVIORS);
+const catalogFor = (ws) => {
+    const extra = ws.zmk?.extraBehaviors;
+    const base = baseCatalog(ws.family);
+    return extra ? new Map([...base, ...Object.values(extra).map((d) => [d.id, d])]) : base;
+};
+const transparentFor = (ws) => (ws.family === 'totem'
     ? [...TOTEM_CATALOG.values()].find((d) => d.displayName === 'Transparent').id
     : B.Transparent);
 
@@ -527,7 +534,7 @@ export function createZmkTemplate(family) {
 
     return {
         v: 1, key: family, family,
-        label: `${ZMK_FAMILY_LABELS[family]} preview`,
+        label: `${ZMK_FAMILY_LABELS[family]} (template)`,
         source: 'template', savedAt: Date.now(),
         protocolVersion: version,
         layerCount: layers.length,
@@ -1100,9 +1107,9 @@ export class OfflineStudioClient extends EventTarget {
 
     async getKeymap() { return structuredClone(this.ws.zmk.keymap); }
 
-    async listAllBehaviors() { return [...catalogFor(this.ws.family).keys()]; }
+    async listAllBehaviors() { return [...catalogFor(this.ws).keys()]; }
     async getBehaviorDetails(id) {
-        const d = catalogFor(this.ws.family).get(id);
+        const d = catalogFor(this.ws).get(id);
         if (!d) throw new Error(`unknown behavior ${id}`);
         return structuredClone(d);
     }
@@ -1112,7 +1119,7 @@ export class OfflineStudioClient extends EventTarget {
         if (!layer || keyPosition < 0 || keyPosition >= layer.bindings.length) {
             throw new Error('invalid location');
         }
-        const d = catalogFor(this.ws.family).get(binding.behaviorId);
+        const d = catalogFor(this.ws).get(binding.behaviorId);
         if (!d) throw new Error('INVALID_BEHAVIOR');
         // Firmware-faithful validation (zmk_behavior_validate_binding):
         // a behavior with no metadata at all is rejected outright
@@ -1156,17 +1163,33 @@ export class OfflineStudioClient extends EventTarget {
             kind: 'flask-zmk-keymap',
             version: 1,
             family: this.ws.family,
-            device: `${ZMK_FAMILY_LABELS[this.ws.family]} preview`,
+            device: this.ws.deviceName ?? `${ZMK_FAMILY_LABELS[this.ws.family]} (unplugged)`,
             exported: new Date().toISOString(),
-            layers: this.ws.zmk.keymapSaved.layers.map((l) => ({
-                name: l.name,
-                bindings: l.bindings.map((b) => ({
-                    behavior: catalogFor(this.ws.family).get(b.behaviorId)?.displayName ?? null,
-                    behaviorId: b.behaviorId,
-                    param1: b.param1,
-                    param2: b.param2,
-                })),
-            })),
+            layers: this.ws.zmk.keymapSaved.layers.map((l, i) => {
+                // Device-seeded: queue ONLY what changed since the seed.
+                // Untouched keys go out as unresolvable placeholders (the
+                // applier counts them skipped, never writes them), so a
+                // replay can't revert anything done to the board meanwhile.
+                const base = this.ws.zmk.seedBase?.layers[i];
+                const same = base && base.id === l.id && base.bindings.length === l.bindings.length;
+                return {
+                    name: same && base.name === l.name ? '' : l.name,
+                    bindings: l.bindings.map((b, p) => {
+                        const o = same && base.bindings[p];
+                        if (o && o.behaviorId === b.behaviorId && o.param1 === b.param1 && o.param2 === b.param2) {
+                            return { behavior: null, behaviorId: -1, param1: 0, param2: 0 };
+                        }
+                        const d = catalogFor(this.ws).get(b.behaviorId);
+                        return {
+                            behavior: d?.displayName ?? null,
+                            // extras: the board's own id is the exact-device fallback
+                            behaviorId: d?.deviceId ?? b.behaviorId,
+                            param1: b.param1,
+                            param2: b.param2,
+                        };
+                    }),
+                };
+            }),
         };
         this._persist(false);
     }
@@ -1197,7 +1220,7 @@ export class OfflineStudioClient extends EventTarget {
             id: this.ws.zmk.nextLayerId++,
             name: '',
             bindings: Array.from({ length: dims(this.ws.family).positions },
-                () => bind(transparentFor(this.ws.family))),
+                () => bind(transparentFor(this.ws))),
         };
         km.layers.push(layer);
         km.availableLayers -= 1;
@@ -1225,6 +1248,108 @@ export class OfflineStudioClient extends EventTarget {
         this._persist(true);
         return structuredClone(layer);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Unplugged: seed the workspace from the user's real keymap
+
+const SEED_LABELS = { totem: 'Totem', imprint: 'Imprint' };
+const isSame = (a, b) => a.behaviorId === b.behaviorId && a.param1 === b.param1 && a.param2 === b.param2;
+
+/**
+ * Make `family`'s workspace start from the REAL keymap read off a device
+ * (or a stored snapshot of one): keymap + keymapSaved replaced, source
+ * 'device', tunables/combos/etc kept. Behaviors map by display name to the
+ * family catalog; names the catalog lacks become ws.zmk.extraBehaviors
+ * (ids above the catalog max, deviceId = the board's own id) so they still
+ * render and replay by name. layers: [{id, name, bindings:[{behaviorId,
+ * param1, param2}]}]; behaviors: Map id → {displayName, metadata}.
+ * Returns the workspace, or null when skipped: a workspace holding unsynced
+ * keymap edits is never overwritten (unless it is a template, whose edits
+ * can't replay anyway; those are kept in zmk.droppedTemplateKeymap).
+ */
+export function seedWorkspaceFromDevice(family, { layers, behaviors, availableLayers = 0,
+    maxLayerNameLength = 20, deviceName } = {}) {
+    if (!ZMK_TEMPLATE_FAMILIES.includes(family) || !layers?.length) return null;
+    if (layers.some((l) => l.bindings.length !== dims(family).positions)) return null;
+    const key = workspaceKey(family);
+    const ws = loadWorkspace(key) ?? createZmkTemplate(family);
+    normalizeZmkWorkspace(ws);
+    const edited = !!(ws.zmk.pendingKeymap || ws.zmk.unsaved);
+    if (edited && ws.source === 'device') return null;
+    if (edited) ws.zmk.droppedTemplateKeymap = ws.zmk.pendingKeymap ?? ws.zmk.keymap;
+
+    const base = baseCatalog(family);
+    const byName = new Map();
+    for (const d of base.values()) if (d.displayName && !byName.has(d.displayName)) byName.set(d.displayName, d.id);
+    const prev = Object.values(ws.zmk.extraBehaviors ?? {});
+    const extra = {};
+    let nextId = Math.max(...base.keys(), ...prev.map((d) => d.id)) + 1;
+    const used = new Set(layers.flatMap((l) => l.bindings.map((b) => b.behaviorId)));
+    const toId = new Map();     // device id → workspace id
+    const resolve = (devId) => {
+        if (toId.has(devId)) return toId.get(devId);
+        const d = behaviors.get(devId);
+        const name = d?.displayName || `Behavior #${devId}`;
+        let id = d?.displayName ? byName.get(name) : undefined;
+        if (id == null) {
+            id = prev.find((x) => x.displayName === name)?.id ?? nextId++;
+            extra[id] = { id, displayName: name, metadata: structuredClone(d?.metadata ?? []), deviceId: devId };
+        }
+        toId.set(devId, id);
+        return id;
+    };
+    for (const [devId, d] of behaviors) if (d.displayName && (!byName.has(d.displayName) || used.has(devId))) resolve(devId);
+    const out = layers.map((l) => ({
+        id: l.id, name: l.name,
+        bindings: l.bindings.map((b) => bind(resolve(b.behaviorId), b.param1 >>> 0, b.param2 >>> 0)),
+    }));
+
+    const keymap = { layers: out, availableLayers, maxLayerNameLength };
+    ws.source = 'device';
+    ws.label = `${SEED_LABELS[family]} (unplugged)`;
+    ws.deviceName = deviceName ?? ws.deviceName;
+    ws.savedAt = Date.now();
+    ws.layerCount = out.length;
+    ws.profile.layerNames = out.map((l) => l.name);
+    Object.assign(ws.zmk, {
+        keymap, keymapSaved: structuredClone(keymap), seedBase: structuredClone(keymap),
+        extraBehaviors: Object.keys(extra).length ? extra : undefined,
+        pendingKeymap: null, removed: [], unsaved: false,
+        nextLayerId: Math.max(...out.map((l) => l.id)) + 1,
+    });
+    saveWorkspace(ws);
+    return ws;
+}
+
+/**
+ * Bootstrap for a board that is not here: seed `family` from the newest
+ * stored zmk-keymap-snapshot:<serial> (written by zmk-keymap-tab on connect
+ * and save) whose layers have this family's position count. No-op when the
+ * workspace is already device-seeded. Snapshots carry names + ids but no
+ * metadata; layer ids are assumed to equal layer index.
+ */
+export function seedWorkspaceFromSnapshot(family) {
+    if (!ZMK_TEMPLATE_FAMILIES.includes(family) || loadWorkspace(workspaceKey(family))?.source === 'device') return null;
+    let best = null;
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k?.startsWith('zmk-keymap-snapshot:')) continue;
+        try {
+            const snap = JSON.parse(localStorage.getItem(k));
+            const fits = snap?.layers?.length && snap.layers.every((l) => l.bindings?.length === dims(family).positions);
+            if (fits && (!best || String(snap.savedAt) > String(best.savedAt))) best = snap;
+        } catch { /* skip a corrupt entry */ }
+    }
+    if (!best) return null;
+    const behaviors = new Map();
+    for (const l of best.layers) for (const b of l.bindings) {
+        if (!behaviors.has(b.behaviorId)) behaviors.set(b.behaviorId, { displayName: b.behavior ?? '', metadata: [] });
+    }
+    return seedWorkspaceFromDevice(family, {
+        layers: best.layers.map((l, id) => ({ id, name: l.name, bindings: l.bindings })),
+        behaviors, deviceName: best.device,
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -1331,10 +1456,15 @@ async function zmkSyncExtrasInner(app, ws) {
     // A queued keymap can't apply here — Studio RPC needs its own serial
     // connect (user gesture) + physical unlock. Stash the workspace; the
     // keymap tab applies it when it reaches 'ready' on a real device.
-    app.zmkQueuedWs = ws.zmk?.pendingKeymap ? ws : null;
+    // A TEMPLATE workspace's keymap is the firmware template plus edits,
+    // not the user's board: replaying it would overwrite the real keymap.
+    // Only a device-seeded workspace queues its keymap; a template one is
+    // skipped (left in storage) and reported so the caller can say so.
+    const keymapSkipped = !!ws.zmk?.pendingKeymap && ws.source !== 'device';
+    app.zmkQueuedWs = ws.zmk?.pendingKeymap && !keymapSkipped ? ws : null;
 
     saveWorkspace(ws);
-    return { applied, failures: fail };
+    return { applied, failures: fail, keymapSkipped };
 }
 
 /** Consume the queued offline keymap once a real Studio session is ready:

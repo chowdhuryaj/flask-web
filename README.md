@@ -72,8 +72,9 @@ RPC or Flask-channel editors.
   every channel round-trip.
 - **Save layout / Load** — the keymap JSON is a full-device backup (v2
   payload: layers + every module section).
-- **Offline preview** — a device-less Totem or Imprint workspace so the whole
-  surface can be driven with no hardware. Tunables, RGB paints, combo slots
+- **Unplugged** — a device-less Totem or Imprint workspace, seeded from your
+  keyboard's real keymap (last connect or save), so the whole surface can be
+  driven with no hardware. Keymap edits replay as a diff on the next connect. Tunables, RGB paints, combo slots
   and macro steps journal to localStorage and replay on the next connect
   (`offline.js` is the shared journal, `zmk-offline.js` the ZMK sim).
 - **HUD** — floating always-on-top overlay (Document Picture-in-Picture)
