@@ -545,6 +545,116 @@
   },
   {
    "id": 38,
+   "displayName": "Layer-Tap Control combo (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 39,
+   "displayName": "Layer-Tap Fn combo (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "name": "Layer",
+       "kind": "layer_id"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 40,
+   "displayName": "Mod-Tap copy/cut combo (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41,
+   "displayName": "Mod-Tap undo/redo combo (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42,
+   "displayName": "Mod-Tap Fn arrows (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 43,
+   "displayName": "Autoshift (live)",
+   "metadata": [
+    {
+     "param1": [
+      {
+       "kind": "hid_usage"
+      }
+     ],
+     "param2": [
+      {
+       "kind": "hid_usage"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 44,
    "displayName": "",
    "metadata": [
     {
@@ -562,36 +672,6 @@
      ]
     }
    ]
-  },
-  {
-   "id": 39,
-   "displayName": "",
-   "metadata": []
-  },
-  {
-   "id": 40,
-   "displayName": "",
-   "metadata": []
-  },
-  {
-   "id": 41,
-   "displayName": "",
-   "metadata": []
-  },
-  {
-   "id": 42,
-   "displayName": "",
-   "metadata": []
-  },
-  {
-   "id": 43,
-   "displayName": "",
-   "metadata": []
-  },
-  {
-   "id": 44,
-   "displayName": "",
-   "metadata": []
   },
   {
    "id": 45,
@@ -635,6 +715,36 @@
   },
   {
    "id": 53,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 54,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 55,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 56,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 57,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 58,
+   "displayName": "",
+   "metadata": []
+  },
+  {
+   "id": 59,
    "displayName": "Flask Leader",
    "metadata": [
     {
@@ -644,7 +754,7 @@
    ]
   },
   {
-   "id": 54,
+   "id": 60,
    "displayName": "Flask Macro",
    "metadata": [
     {
@@ -661,7 +771,7 @@
    ]
   },
   {
-   "id": 55,
+   "id": 61,
    "displayName": "Tap Dance",
    "metadata": [
     {
@@ -678,7 +788,7 @@
    ]
   },
   {
-   "id": 56,
+   "id": 62,
    "displayName": "Mod-Tap (fast 150)",
    "metadata": [
     {
@@ -696,7 +806,7 @@
    ]
   },
   {
-   "id": 57,
+   "id": 63,
    "displayName": "Mod-Tap (slow 300)",
    "metadata": [
     {
@@ -714,7 +824,7 @@
    ]
   },
   {
-   "id": 58,
+   "id": 64,
    "displayName": "Layer-Tap (fast 150)",
    "metadata": [
     {
@@ -733,7 +843,7 @@
    ]
   },
   {
-   "id": 59,
+   "id": 65,
    "displayName": "Layer-Tap (slow 300)",
    "metadata": [
     {
@@ -752,7 +862,7 @@
    ]
   },
   {
-   "id": 60,
+   "id": 66,
    "displayName": "Sticky Mod (smart)",
    "metadata": [
     {
@@ -766,7 +876,7 @@
    ]
   },
   {
-   "id": 61,
+   "id": 67,
    "displayName": "Smart Mod",
    "metadata": [
     {
@@ -784,7 +894,7 @@
    ]
   },
   {
-   "id": 62,
+   "id": 68,
    "displayName": "Sticky Layer (smart)",
    "metadata": [
     {
@@ -799,7 +909,7 @@
    ]
   },
   {
-   "id": 63,
+   "id": 69,
    "displayName": "Smart Layer",
    "metadata": [
     {
@@ -819,7 +929,7 @@
    ]
   },
   {
-   "id": 64,
+   "id": 70,
    "displayName": "",
    "metadata": [
     {
@@ -834,7 +944,7 @@
    ]
   },
   {
-   "id": 65,
+   "id": 71,
    "displayName": "",
    "metadata": [
     {
@@ -849,7 +959,7 @@
    ]
   },
   {
-   "id": 66,
+   "id": 72,
    "displayName": "",
    "metadata": [
     {
@@ -859,7 +969,7 @@
    ]
   },
   {
-   "id": 67,
+   "id": 73,
    "displayName": "",
    "metadata": [
     {

@@ -1,151 +1,17 @@
-// Keycode picker: category chips + search + click-to-assign, plus the
-// LT()/MT()/layer-op composer. Pattern from AlooMapper's renderPicker;
-// data from keycodes.js.
+// QMK picker helpers for the slot-grid tabs (kcCell, makePickerHost) and
+// the legacy buildPicker entry point. The picker itself is binding-picker.js.
 
 import { el, toast } from './ui.js?v=49';
-import { PICKER_CATEGORIES, compose, MODS, hoverText, describe, capLabel } from './keycodes.js?v=49';
+import { describe, capLabel } from './keycodes.js?v=49';
+import { buildPickerBody } from './binding-picker.js?v=1';
 
 /**
- * Build a picker panel. onPick(keycode) is called when the user chooses.
- * layerCount drives the layer-op composer. Returns the root element.
+ * Legacy entry point (keymap-tab, makePickerHost): the catalog picker for
+ * surface 'qmk.key', docked. onPick(keycode) is called when the user
+ * chooses. New code calls binding-picker.js openPicker instead.
  */
-export function buildPicker({ layerCount, onPick }) {
-    let category = 'basic';
-    let query = '';
-
-    const root = el('div', { class: 'picker' });
-    const cats = el('div', { class: 'cats' });
-    const search = el('input', { type: 'search', placeholder: 'Search keycodes…' });
-    const codes = el('div', { class: 'codes' });
-
-    search.addEventListener('input', () => { query = search.value.toLowerCase(); renderCodes(); });
-
-    function renderCats() {
-        cats.replaceChildren(
-            ...PICKER_CATEGORIES
-                .filter((c) => c.id !== 'custom' || c.keys().length)
-                .map((c) => el('button', {
-                    class: c.id === category ? 'active' : '',
-                    text: c.label,
-                    onclick: () => { category = c.id; renderCats(); renderCodes(); },
-                })),
-            el('button', {
-                class: category === 'layers' ? 'active' : '',
-                text: 'Layers',
-                onclick: () => { category = 'layers'; renderCats(); renderCodes(); },
-            }),
-        );
-    }
-
-    function keyButton(key) {
-        return el('button', {
-            class: 'code', title: hoverText(key.code),
-            onclick: () => onPick(key.code),
-        }, key.cap || '·', el('span', { class: 'full', text: key.label }));
-    }
-
-    function renderCodes() {
-        codes.replaceChildren();
-        if (category === 'layers') { renderLayerComposer(); return; }
-        let list;
-        if (query) {
-            // Search across every category.
-            list = PICKER_CATEGORIES.flatMap((c) => c.keys())
-                .filter((key) => key.label.toLowerCase().includes(query)
-                    || key.cap.toLowerCase().includes(query));
-        } else {
-            list = PICKER_CATEGORIES.find((c) => c.id === category)?.keys() ?? [];
-        }
-        codes.append(...list.map(keyButton));
-        if (category === 'basic' && !query) codes.after(buildComposer());
-        else root.querySelector('.composer')?.remove();
-    }
-
-    function renderLayerComposer() {
-        const layerSel = el('select', {},
-            ...Array.from({ length: layerCount }, (_, i) => el('option', { value: i, text: `Layer ${i}` })));
-        const ops = [
-            ['MO', 'Momentary (while held)', compose.momentary],
-            ['TO', 'Switch to', compose.to],
-            ['TG', 'Toggle', compose.toggleLayer],
-            ['TT', 'Tap-toggle', compose.layerTapToggle],
-            ['OSL', 'One-shot', compose.oneShotLayer],
-            ['DF', 'Set default', compose.defLayer],
-        ];
-        codes.append(el('div', { class: 'composer' },
-            el('label', { text: 'Layer:' }), layerSel,
-            ...ops.map(([name, hint, fn]) => el('button', {
-                class: 'code', title: hint,
-                onclick: () => onPick(fn(Number(layerSel.value))),
-            }, name)),
-        ));
-    }
-
-    /** LT()/MT() composer under the Basic grid. */
-    function buildComposer() {
-        root.querySelector('.composer')?.remove();
-        const kcInput = el('input', { type: 'text', placeholder: 'e.g. A', size: 4 });
-        let baseKc = 0;
-        kcInput.addEventListener('input', () => {
-            const q = kcInput.value.trim().toLowerCase();
-            const match = PICKER_CATEGORIES.flatMap((c) => c.keys())
-                .find((key) => key.code <= 0xFF
-                    && (key.label.toLowerCase() === q || key.cap.toLowerCase() === q));
-            baseKc = match?.code ?? 0;
-            kcInput.style.borderColor = baseKc || !q ? '' : 'var(--danger)';
-        });
-        const layerSel = el('select', {},
-            ...Array.from({ length: Math.min(layerCount, 16) }, (_, i) => el('option', { value: i, text: `L${i}` })));
-        // Toggle chips, not checkboxes — same visual as the ZMK combos tab's
-        // modifier buttons (GUI controls pass).
-        let modState = 0;
-        const modChecks = MODS.map((m) => {
-            const node = el('button', {
-                class: 'btn small', text: m.label, title: `hold ${m.label} with the tap key`,
-                onclick: () => {
-                    modState ^= m.bit;
-                    node.classList.toggle('primary', !!(modState & m.bit));
-                },
-            });
-            return { m, node };
-        });
-        const modBits = () => modState;
-        // Guard with feedback — the old silent `baseKc && …` short-circuits
-        // made a missing tap key / unchecked mods look like a dead button.
-        const need = (wantKc, wantMods) => {
-            if (wantKc && !baseKc) { toast('Type the tap key first (e.g. A)', true); return false; }
-            if (wantMods && !modBits()) { toast('Toggle at least one modifier first', true); return false; }
-            return true;
-        };
-        return el('div', { class: 'composer' },
-            el('label', { text: 'Compose: tap' }), kcInput,
-            el('button', {
-                class: 'code', title: 'Layer-tap: tap for the key, hold for the layer',
-                onclick: () => need(true, false) && onPick(compose.layerTap(Number(layerSel.value), baseKc)),
-            }, 'LT'), layerSel,
-            ...modChecks.map((c) => c.node),
-            el('button', {
-                class: 'code', title: 'Mod-tap: tap for the key, hold for the modifiers',
-                onclick: () => need(true, true) && onPick(compose.modTap(modBits(), baseKc)),
-            }, 'MT'),
-            el('button', {
-                class: 'code', title: 'Key with the checked modifiers held',
-                onclick: () => need(true, true) && onPick(compose.modsWrap(modBits(), baseKc)),
-            }, 'Mods+key'),
-            el('button', {
-                class: 'code', title: 'One-shot modifier',
-                onclick: () => need(false, true) && onPick(compose.oneShotMod(modBits() >> 8)),
-            }, 'OSM'),
-        );
-    }
-
-    // Attach children BEFORE the first renderCodes() — buildComposer is
-    // inserted via codes.after(), which is a silent no-op while codes has
-    // no parent (this hid the LT/MT composer on every fresh picker).
-    root.append(cats, search, codes);
-    renderCats();
-    renderCodes();
-    return root;
+export function buildPicker({ layerCount, onPick, surface = 'qmk.key', value = null }) {
+    return buildPickerBody({ surface, value, app: { layerCount }, host: 'docked', onPick }).root;
 }
 
 export { describe };

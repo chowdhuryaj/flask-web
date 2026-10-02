@@ -299,17 +299,18 @@ eq(zigzag(1), 2, 'zigzag(1)');
     setZmkContext({ behaviors, layers: [{ id: 0, name: 'Base' }, { id: 3, name: 'Fn' }] });
 
     eq(bindingCap({ behaviorId: 1, param1: kpParam(0x05), param2: 0 }), 'B', 'kp cap = bare usage');
-    eq(bindingCap({ behaviorId: 2, param1: 3, param2: 0 }), 'MO·Fn', 'mo cap uses layer NAME by stable id');
-    eq(bindingCap({ behaviorId: 3, param1: 0, param2: kpParam(0x2C) }), 'LT·Base·Spc', 'lt cap layer+key');
+    // WP3: caps come from behavior-catalog capParts (top + main on one line).
+    eq(bindingCap({ behaviorId: 2, param1: 3, param2: 0 }), 'Hold Fn', 'mo cap uses layer NAME by stable id');
+    eq(bindingCap({ behaviorId: 3, param1: 0, param2: kpParam(0x2C) }), 'LT Base Spc', 'lt cap layer+key');
     eq(bindingCap({ behaviorId: 4, param1: 0, param2: 0 }), '▽', 'transparent glyph');
     eq(bindingCap({ behaviorId: 99, param1: 0, param2: 0 }), '#99', 'unknown behavior renders id');
     // Smart one-shot/hold abbrevs: explicit entries keep Smart Layer off
     // Sticky Layer's 'SL'. Since the 2026-07-11 rework the layer rides in
     // BOTH params (hold = sticky, tap = toggle) — the cap collapses the
     // duplicate to one layer name.
-    eq(bindingCap({ behaviorId: 5, param1: 3, param2: 3 }), 'SmL·Fn', 'smart layer cap collapses layer+layer');
-    eq(bindingCap({ behaviorId: 6, param1: 3, param2: 0 }), 'SL·Fn', 'sticky layer keeps SL');
-    eq(bindingHover({ behaviorId: 2, param1: 3, param2: 0 }).split('\n')[0], 'Momentary Layer(Fn)', 'hover head');
+    eq(bindingCap({ behaviorId: 5, param1: 3, param2: 3 }), 'Smart Fn', 'smart layer cap collapses layer+layer');
+    eq(bindingCap({ behaviorId: 6, param1: 3, param2: 0 }), 'One-shot Fn', 'sticky layer reads as one-shot');
+    eq(bindingHover({ behaviorId: 2, param1: 3, param2: 0 }).split('\n')[0], 'Hold Fn', 'hover head');
 }
 
 // ---- flask_combos slot codec (channel 0x24 payload frames) ----
