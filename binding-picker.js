@@ -682,7 +682,9 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         const canPreset = isKeymap && host !== 'popover' && htIds().includes('mod-tap') && board.adapter;
         wrap.append(el('div', { class: 'bp-th-actions' },
             el('button', { class: 'btn small primary', text: 'Apply', 'data-act': 'th-apply', disabled: !r.ok,
-                onclick: () => { if (!r.ok) return; th = null; assign(r.entryId, r.params); } }),
+                // Recompose on click: the timing slider updates th.timing without
+                // a re-render, so `r` still carries the term from the last render.
+                onclick: () => { const now = composeTapHold(thSpec(), adapter); if (!now.ok) return; th = null; assign(now.entryId, now.params); } }),
             el('button', { class: 'btn small', text: 'Back', 'data-act': 'th-back', onclick: () => { th = null; render(); } }),
             el('span', { class: 'bd-spacer', style: 'flex:1' }),
             canPreset ? el('button', { class: 'btn small', text: 'Home-row mods…', 'data-act': 'hrm',

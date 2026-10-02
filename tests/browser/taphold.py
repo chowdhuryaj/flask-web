@@ -102,7 +102,22 @@ def totem(browser):
     check(pop.locator('.bp-th-slot[data-slot="hold"] .bp-th-value').text_content() == '⇧', 'totem: HOLD pre-filled ⇧')
     check(pop.locator('.bp-th-slot[data-slot="tap"] .bp-th-value').text_content() == 'F', 'totem: TAP pre-filled F')
     shot(page, 'totem-prefilled')
-    page.keyboard.press('Escape')
+    # WP7 item 10: the offline sim serves 0x2A, so the composer's live
+    # tapping-term slider shows (no mock) and Apply writes the key's slot.
+    slider = pop.locator('.bp-timing input[type=range]')
+    check(slider.count() == 1, 'totem: composer shows the live timing slider offline')
+    if slider.count():
+        slider.evaluate('(s) => { s.value = 330; s.dispatchEvent(new Event("input")); }')
+        pop.locator('[data-act="th-apply"]').click()
+        page.wait_for_timeout(400)
+        term = page.evaluate(f"JSON.parse(localStorage.getItem('flask-offline-totem')).zmk.holdtap[{pos}].term")
+        check(term == 330, f'totem: composer slider wrote slot {pos} term {term}')
+        dirty = page.evaluate("async () => (await import('/save-state.js?v=60')).saveState.dirty().map(d => d.label)")
+        check('Hold-tap timing' in dirty, f'totem: timing edit is in the one Save: {dirty}')
+        page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
+        page.wait_for_timeout(200)
+    else:
+        page.keyboard.press('Escape')
     page.evaluate("async () => (await import('/board.js?v=60')).board.undo()")
     page.wait_for_timeout(200)
     g = keys(page).nth(i)
