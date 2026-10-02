@@ -91,7 +91,34 @@ export function buildProfile(family, definition, layerCount) {
         profile.encoderPushKeys = { 0: { row: 0, col: 4 }, 1: { row: 1, col: 4 } };
     }
 
+    profile.defaultLayerNames = [...profile.layerNames];
+    applyStoredLayerNames(profile);
     return profile;
+}
+
+// QMK has no device-side layer names, so a rename lives in the app (spec
+// §3.3), per family. ZMK names go to the device through Studio instead.
+const namesKey = (family) => `flask-layernames-${family}`;
+
+function storedLayerNames(family) {
+    try { return JSON.parse(globalThis.localStorage?.getItem(namesKey(family)) || '{}') || {}; } catch { return {}; }
+}
+
+/** Overlay the saved renames onto profile.layerNames. */
+export function applyStoredLayerNames(profile) {
+    const saved = storedLayerNames(profile.family);
+    for (const [i, name] of Object.entries(saved)) {
+        if (profile.layerNames[i] != null && typeof name === 'string' && name) profile.layerNames[i] = name;
+    }
+}
+
+/** Rename layer `i` ('' restores the default). Persists and updates the profile. */
+export function setLayerName(profile, i, name) {
+    const saved = storedLayerNames(profile.family);
+    const clean = String(name ?? '').trim().slice(0, 20);
+    if (clean) saved[i] = clean; else delete saved[i];
+    try { globalThis.localStorage?.setItem(namesKey(profile.family), JSON.stringify(saved)); } catch { /* private mode */ }
+    profile.layerNames[i] = clean || profile.defaultLayerNames?.[i] || `Layer ${i}`;
 }
 
 export function keyName(profile, row, col) {

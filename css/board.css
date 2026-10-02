@@ -1,1 +1,92 @@
-/* board: spec §7.1 per-package sheet; empty until its package fills it. */
+/* board: key caps (spec §2.4), layer bar (§3.3), pick mode (§3.4).
+   styles.css keeps the tokens; the old .kb-svg rules there are overridden
+   below (this sheet loads after it, and the HUD clones it). */
+
+.kb-svg .key { cursor: pointer; outline: none; }
+.kb-svg .keycap {
+  fill: var(--keycap);
+  stroke: var(--keycap-border);
+  stroke-width: 1;
+  transition: stroke var(--dur-fast, .12s) ease, fill var(--dur-fast, .12s) ease;
+}
+.kb-svg .key:hover .keycap, .kb-svg .keycap:hover { stroke: var(--accent); }
+.kb-svg .key:focus-visible .keycap { stroke: var(--accent); stroke-width: 2; }
+.kb-svg .keycap.sel { stroke: var(--accent); stroke-width: 2; fill: var(--accent-bg); }
+.kb-svg .keycap.picked { stroke: var(--accent); stroke-width: 3; fill: var(--accent-bg); }
+/* Pressed: accent at 75 % with a white label (native Keycap.lit). */
+.kb-svg .keycap.pressed {
+  fill: color-mix(in srgb, var(--accent) 75%, transparent);
+  stroke: var(--accent);
+}
+.kb-svg .key.pressed text { fill: #fff; }
+.kb-svg text {
+  fill: var(--text);
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+.kb-svg .cap-top { fill: var(--muted); font-weight: 600; }
+.kb-svg .key.sel .cap-top { fill: var(--accent-text); }
+.kb-svg .keyname { fill: var(--faint); font-size: 8px; font-weight: 400; }
+.kb-svg .enc { cursor: pointer; outline: none; }
+.kb-svg .enc:focus-visible .enc-cap { stroke: var(--accent); stroke-width: 2; }
+
+/* Chord boxes: solid = owned on this layer, dashed = inherited. */
+.kb-svg .chord-box { cursor: pointer; outline: none; }
+.kb-svg .chord-box rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.kb-svg .chord-box.inherited rect { stroke-dasharray: 3 2; stroke: var(--muted); }
+.kb-svg .chord-box:hover rect, .kb-svg .chord-box:focus-visible rect { fill: var(--accent-bg); }
+.kb-svg .chord-box text { fill: var(--accent-text); font-size: 10px; }
+
+/* The board in the frame: scrolls sideways only when zoomed past the pane. */
+.bd-board { overflow-x: auto; padding: 4px 0; }
+
+/* ---- layer bar ---- */
+.bd-layerbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-bottom: 8px;
+}
+.bd-spacer { flex: 1; }
+.bd-chip {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--keycap-border); background: var(--surface);
+  color: var(--muted); font: inherit; font-size: 0.71875rem; font-weight: 500;
+  cursor: pointer;
+}
+.bd-chip:hover { color: var(--text); }
+.bd-chip:focus-visible, .bd-op:focus-visible, .bd-popout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bd-chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent-text); }
+.bd-chip.live { box-shadow: 0 0 0 1px var(--accent); }
+.bd-chip-i { font-variant-numeric: tabular-nums; opacity: .7; }
+.bd-more { border-style: dashed; }
+.bd-rename {
+  font: inherit; font-size: 0.71875rem; padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--accent); background: var(--surface); color: var(--text);
+}
+.bd-op, .bd-popout {
+  min-width: 28px; padding: 3px 8px; border-radius: 7px;
+  border: 1px solid var(--keycap-border); background: var(--surface);
+  color: var(--text); font: inherit; font-size: 0.71875rem; cursor: pointer;
+}
+.bd-op.wide { padding: 3px 10px; }
+.bd-op:hover:not(:disabled), .bd-popout:hover { border-color: var(--accent); color: var(--accent-text); }
+.bd-op:disabled { opacity: .45; cursor: default; }
+.bd-popout.on { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
+
+/* ---- pick-positions banner ---- */
+.bd-banner {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  padding: 6px 10px; border-radius: 8px;
+  background: var(--accent-bg); color: var(--accent-text); font-size: var(--fs-sm, .875rem);
+}
+.bd-banner-n { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* ---- keymap tab body (state line, hints) ---- */
+.bd-tabbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.bd-tabbar .state { color: var(--muted); font-size: var(--fs-sm, .875rem); }
+.bd-tabbar[data-state="live"] .state { color: var(--warn); }
+
+@media (prefers-reduced-motion: reduce) {
+  .kb-svg .keycap { transition: none; }
+}

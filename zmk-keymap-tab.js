@@ -4,11 +4,17 @@
 // (get_physical_layouts), layers/bindings (get_keymap), and the behavior
 // catalog (behaviors subsystem) all arrive over the wire on connect.
 //
-// Reuses the shared renderKeyboardSVG via profile-carried label functions
-// (bindings are {behaviorId,param1,param2} objects, not QMK ints).
+// The board, layer bar, selection, undo and click-again popover live in
+// board.js (spec §3.1, §3.3); this file is the Studio controller behind them:
+// it reads/writes the device, owns the layer structure ops, and hands
+// Save/Discard to save-state (spec §3.2). Bindings are
+// {behaviorId,param1,param2} objects, not QMK ints.
 
 import { el, toast, card, SAVE_STATE } from './ui.js?v=49';
-import { renderKeyboardSVG } from './keymap-tab.js?v=49';
+import { board } from './board.js?v=1';
+import { openPicker } from './binding-picker.js?v=1';
+import { shell } from './app-shell.js?v=1';
+import { saveState } from './save-state.js?v=1';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=49';
 import { zmkApplyPendingKeymap } from './zmk-offline.js?v=50';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=49';
@@ -56,14 +62,12 @@ export class ZmkKeymapTab {
         this.deviceName = null;
         this.keymap = null;     // { layers:[{id,name,bindings}], ... }
         this.geomKeys = null;   // [{row:0, col:i, pos:i, label, x,y,w,h}]
-        this.layer = 0;         // ARRAY index into keymap.layers
-        this.selected = null;   // key position (col) or null
         this.unsaved = false;
         this.keyPressId = null;
-        this.renaming = false;
         this.removedLayers = [];    // session undo stack for remove-layer
 
         liveTab = this;         // newest instance wins (see zmkLiveKeymapTab)
+        this.adapter = this._makeAdapter();
 
         // Rebind client events to THIS instance (abort the previous one's).
         activeTabAbort?.abort();
@@ -72,8 +76,6 @@ export class ZmkKeymapTab {
         this.client.addEventListener('lockstate', (e) => this._onLockState(e.detail), { signal });
         this.client.addEventListener('unsaved', (e) => this._setUnsaved(e.detail), { signal });
         this.client.addEventListener('disconnect', () => this._onSerialDisconnect(), { signal });
-
-        this._beforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
     }
 
     async load() {
@@ -168,15 +170,16 @@ export class ZmkKeymapTab {
             // Synthetic (row,col) identity: row 0, col = key position index —
             // exactly the key_position that set_layer_binding wants, and the
             // index into every layer's bindings[].
+            // r/rx/ry carry the rotation (TOTEM thumbs, Imprint inner thumbs):
+            // the board draws and hit-tests rotated keys.
             this.geomKeys = layout.keys.map((k, i) => ({
                 row: 0, col: i, pos: i, label: `Key ${i}`,
-                x: k.x, y: k.y, w: k.w, h: k.h,
+                x: k.x, y: k.y, w: k.w, h: k.h, r: k.r || 0, rx: k.rx || 0, ry: k.ry || 0,
             }));
 
             this.statusMsg = 'Reading keymap…';
             this.render();
             this.keymap = await this.client.getKeymap();
-            if (this.layer >= this.keymap.layers.length) this.layer = 0;
 
             const ids = await this.client.listAllBehaviors();
             const behaviors = new Map();
@@ -193,9 +196,10 @@ export class ZmkKeymapTab {
             this._setContext(behaviors);
 
             this.unsaved = await this.client.checkUnsavedChanges();
-            this._applyUnloadGuard();
+            this._setUnsaved(this.unsaved);     // re-register a pending device-side edit
             this._publishToApp();
             this.state = 'ready';
+            board.bind(this.adapter);
             this.render();
             await this._applyQueuedOfflineKeymap();
             await this._keymapSyncCheck();
@@ -357,6 +361,7 @@ export class ZmkKeymapTab {
     _onSerialDisconnect() {
         this._releaseTabLock?.();
         this._setUnsaved(false);
+        board.unbind(this.adapter);
         this.state = 'idle';
         this.render();
         toast('ZMK Studio serial disconnected', true);
@@ -380,20 +385,42 @@ export class ZmkKeymapTab {
         this.render();
     }
 
+    /** Unsaved state lives in save-state (spec §3.2): the status bar shows
+     * "Save N unsaved" plus Discard, and save-state owns the unload guard. */
     _setUnsaved(v) {
         this.unsaved = v;
-        this._applyUnloadGuard();
+        if (v) {
+            saveState.markDirty('studio-keymap', 'Keymap', this._saveFn(), { discard: this._discardFn(), line: 'zmk' });
+        } else {
+            saveState.clean('studio-keymap');
+        }
         this._updateSaveBar?.();
     }
 
-    _applyUnloadGuard() {
-        window.removeEventListener('beforeunload', this._beforeUnload);
-        if (this.unsaved) window.addEventListener('beforeunload', this._beforeUnload);
+    // saveAll() treats a throw as a failed save and a return as success, so
+    // both fns throw when the tab reports failure (it has already toasted).
+    _saveFn() {
+        return (this._saveFnCached ??= async () => {
+            if (!(await this.saveChanges())) throw new Error('Keymap not saved');
+            return true;
+        });
+    }
+
+    _discardFn() {
+        return (this._discardFnCached ??= async () => {
+            await this.discardChanges();
+            if (this.unsaved) throw new Error('Discard failed');
+            return true;
+        });
     }
 
     // ---- editing ----
 
+    // The current layer is the board's (ARRAY index into keymap.layers).
+    get layer() { return board.layer; }
+    set layer(i) { board.setLayer(i); }
     get currentLayer() { return this.keymap.layers[this.layer]; }
+    get selected() { const k = board.selectedKey(); return k ? k.pos : null; }
 
     /** True (with a toast) while the board family is unresolved. */
     _familyBlocked() {
@@ -402,25 +429,70 @@ export class ZmkKeymapTab {
         return true;
     }
 
-    async assign(binding) {
-        if (this._familyBlocked()) return;
-        if (this.selected == null) { toast('Click a key first'); return; }
-        const pos = this.selected;
-        const layer = this.currentLayer;
+    /** Assign to the board's selected key (type-to-assign, picker). */
+    assign(binding) { return board.assign(binding); }
+
+    /** The device write behind board.assign / undo / redo. false = refused
+     * (already toasted); a throw is a failed write (the board toasts it). */
+    async _writeBinding(layerIdx, pos, binding) {
+        if (this._familyBlocked()) return false;
+        const layer = this.keymap.layers[layerIdx];
         try {
             await this.client.setLayerBinding(layer.id, pos, binding);
-            layer.bindings[pos] = binding;
-            this._setUnsaved(true);     // optimistic; the notification confirms
-            // Vial-style auto-advance to the next key position.
-            this.selected = pos + 1 < this.geomKeys.length ? pos + 1 : null;
-            this.renderBoard();
-            // app.keymap shares this layer's bindings array — repaint the HUD.
-            this.app.hud?.open && this.app.hud.render();
-            toast(`Key ${pos} → ${bindingDescribe(binding)}`);
         } catch (e) {
-            if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
-            toast(`Write failed: ${e.message}`, true);
+            if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return false; }
+            throw e;
         }
+        layer.bindings[pos] = binding;
+        this._setUnsaved(true);     // optimistic; the notification confirms
+        // app.keymap shares this layer's bindings array: repaint the HUD.
+        this.app.hud?.open && this.app.hud.render();
+        toast(`Key ${pos} → ${bindingDescribe(binding)}`);
+        return true;
+    }
+
+    _makeAdapter() {
+        const tab = this;
+        const ops = {
+            canMove: (d) => { const to = tab.layer + d; return to >= 0 && to < tab.keymap.layers.length; },
+            get canRemove() { return tab.keymap.layers.length > 1; },
+            get addReason() {
+                const n = tab.keymap.availableLayers ?? 0;
+                return n > 0 ? null : 'No free slots — remove a layer first (total capacity is compiled into the firmware)';
+            },
+            get restoreLabel() { return tab.removedLayers.at(-1)?.name ?? null; },
+            move: (d) => tab.moveLayerOp(d),
+            remove: () => tab.removeLayerOp(),
+            add: () => tab.addLayerOp(),
+            restore: () => tab.restoreLayerOp(),
+        };
+        const emptyBinding = (b) => {
+            const name = zmkBehaviors().get(b?.behaviorId)?.displayName;
+            return !b || name === 'None' || name === 'Transparent';
+        };
+        return {
+            surface: 'zmk.key',
+            get app() { return tab.app; },
+            get readOnly() { return tab.state !== 'ready'; },
+            get profile() {
+                return {
+                    family: tab.app?.profile?.family ?? tab.app?.family,
+                    keys: tab.geomKeys, encoderKeys: [], displayTile: null,
+                    labelFor: bindingCap, hoverFor: bindingHover, capAdapter: 'zmk-studio',
+                    keyName: (k) => String(k.pos),
+                    decorations: tab.app?.profile?.decorations ?? [],
+                };
+            },
+            layers: () => tab.keymap.layers.map((l, index) => ({
+                index, name: l.name || `Layer ${index}`, empty: l.bindings.every(emptyBinding),
+            })),
+            bindingAt: (layer, sel) => tab.keymap.layers[layer]?.bindings[sel.col] ?? null,
+            write: (layer, sel, binding) => tab._writeBinding(layer, sel.col, binding),
+            posOf: (sel) => sel.col,
+            selOf: (pos) => (Number.isInteger(pos) ? { kind: 'key', row: 0, col: pos } : null),
+            renameLayer: (layer, name) => tab.renameLayer(name, layer),
+            layerOps: () => ops,
+        };
     }
 
     /** Returns true only when the save landed. */
@@ -447,6 +519,7 @@ export class ZmkKeymapTab {
             this.keymap = await this.client.getKeymap();
             if (this.layer >= this.keymap.layers.length) this.layer = 0;
             this.removedLayers = [];    // structure reverted device-side
+            board.resetHistory();
             this._setContextFromCurrent();
             this._publishToApp();   // discard re-fetched: new arrays, republish
             this._setUnsaved(false);
@@ -466,7 +539,8 @@ export class ZmkKeymapTab {
     }
 
     _afterLayerStructureChange() {
-        this.selected = null;
+        board.select(null);
+        board.resetHistory();       // history addresses layers by index
         this._setUnsaved(true);     // optimistic; the notification confirms
         this._setContextFromCurrent();
         this._publishToApp();
@@ -687,25 +761,24 @@ export class ZmkKeymapTab {
         return { wrote, renamed, skipped, stopped };
     }
 
-    async renameLayer(newName) {
+    /** Rename a layer on the device (Studio SetLayerProps). Throws on a
+     * failed write so the board can say so; locked/blocked just return. */
+    async renameLayer(newName, layerIdx = this.layer) {
         if (this._familyBlocked()) return;
-        const layer = this.currentLayer;
+        const layer = this.keymap.layers[layerIdx];
         const name = newName.trim().slice(0, this.keymap.maxLayerNameLength || 20);
-        if (!name || name === layer.name) { this.renaming = false; this.render(); return; }
+        if (!name || name === layer.name) return;
         try {
             await this.client.setLayerProps(layer.id, name);
-            layer.name = name;
-            this._setContextFromCurrent();      // picker layer dropdowns update
-            this._publishToApp();               // HUD layer strip names
-            this._setUnsaved(true);
-            this.renaming = false;
-            this.render();
         } catch (e) {
-            this.renaming = false;
             if (e.kind === 'unlockRequired') { this.state = 'locked'; this.render(); return; }
-            toast(`Rename failed: ${e.message}`, true);
-            this.render();
+            throw e;
         }
+        layer.name = name;
+        this._setContextFromCurrent();      // picker layer dropdowns update
+        this._publishToApp();               // HUD layer strip names
+        this._setUnsaved(true);
+        this.render();
     }
 
     _setContextFromCurrent() {
@@ -738,61 +811,34 @@ export class ZmkKeymapTab {
                 el('p', { class: 'muted', text: this.statusMsg }),
                 el('button', { class: 'btn small', text: 'Retry', onclick: () => this._handshake() })));
             return;
-        case 'locked':
+        case 'locked': {
+            const boardHost = el('div');
             this.root.replaceChildren(card(this.deviceName ?? 'Keymap', 'ZMK Studio — locked',
                 el('p', { class: 'muted', html: '' },
                     'Keymap is locked. Press the ',
                     el('b', { text: 'Studio Unlock' }),
                     ' key on the board (Control layer, right-inner thumb) — editing resumes automatically.'),
-                this.keymap ? this._buildBoardCardBody(true) : null));
+                this.keymap ? boardHost : null));
+            if (this.keymap) { board.bind(this.adapter); board.place(boardHost, shell.regions); }
             return;
-        case 'ready':
+        }
+        case 'ready': {
+            const boardHost = el('div');
+            const rest = el('div', {});
             this.root.replaceChildren(card(this.deviceName ?? 'Keymap',
-                `${this.keymap.layers.length} layers · ZMK Studio`,
-                this._buildBoardCardBody(false)));
+                `${this.keymap.layers.length} layers · ZMK Studio`, boardHost, rest));
+            board.bind(this.adapter);
+            board.place(boardHost, shell.regions);
+            this._buildKeysBody(rest);
             return;
         }
-    }
-
-    _buildBoardCardBody(readOnly) {
-        this.strip = el('div', { class: 'layer-strip' });
-        this.boardWrap = el('div', { class: 'kb-wrap' });
-        const bits = el('div', {});
-        if (!readOnly) bits.append(this._buildToolbar());
-        bits.append(this.strip, this.boardWrap);
-        this.renderStrip(readOnly);
-        this.renderBoard(readOnly);
-        if (!readOnly) {
-            bits.append(
-                el('div', { class: 'faint', style: 'margin-top:6px; font-size:12px' },
-                    'Click a key, then pick a binding. Writes apply immediately; Save makes them survive power-off.'),
-                buildZmkPicker({
-                    keyPressId: this.keyPressId,
-                    onPick: (binding) => this.assign(binding),
-                }),
-            );
         }
-        return bits;
     }
 
-    /** Top toolbar, always visible next to the board: Save/Discard (disabled
-     * until there's something unsaved) + keymap file export/import. */
-    _buildToolbar() {
-        const save = el('button', {
-            class: 'btn small primary', text: 'Save to keyboard',
-            onclick: () => this.saveChanges(),
-        });
-        const discard = el('button', {
-            class: 'btn small', text: 'Discard',
-            onclick: () => this.discardChanges(),
-        });
-        const note = el('span', { class: 'state' });
-        const file = el('input', { type: 'file', accept: '.json,application/json', style: 'display:none' });
-        file.addEventListener('change', () => {
-            const f = file.files?.[0];
-            file.value = '';
-            if (f) this.importKeymap(f);
-        });
+    /** Keys-group content under the board: state line, type-to-assign, undo
+     * restore, hint, docked picker. Save/Discard/Export/Import are the status
+     * bar's (save-state, WP6); exportKeymap/importKeymap stay as methods. */
+    _buildKeysBody(host) {
         // Type-to-assign: while armed, physical keypresses assign to the
         // selected key (and auto-advance) instead of reaching the browser —
         // preventDefault at window capture phase keeps ⌘S/⌘W/Tab etc from
@@ -801,36 +847,32 @@ export class ZmkKeymapTab {
         const capture = el('button', { class: 'btn small', text: '⌨ Type-to-assign' });
         capture.addEventListener('click', () => this._setCapture(!this._captureOn, capture));
         this._captureBtn = capture;
-
-        const bar = el('div', { class: 'savebar toolbar' },
-            save, discard, note,
-            el('span', { style: 'flex:1' }),
-            capture,
-            el('button', {
-                class: 'btn small', text: 'Export…',
-                title: 'Download the current keymap (incl. unsaved edits) as a JSON file',
-                onclick: () => this.exportKeymap(),
-            }),
-            el('button', {
-                class: 'btn small', text: 'Import…',
-                title: 'Apply a keymap JSON file live — then Save to persist',
-                onclick: () => file.click(),
-            }),
-            file,
+        const note = el('span', { class: 'state' });
+        const bar = el('div', { class: 'bd-tabbar' },
+            note, el('span', { style: 'flex:1' }), capture,
             ...(this._preRestore ? [el('button', {
                 class: 'btn small', text: '⟲ Undo restore',
-                title: 'Put back the keymap the device had before auto-restore (and keep it as the new snapshot)',
+                'data-caption': 'Put back the keymap the device had before auto-restore (and keep it as the new snapshot)',
                 onclick: () => this._undoKeymapRestore(),
             })] : []));
         this._updateSaveBar = () => {
-            save.disabled = discard.disabled = !this.unsaved;
-            // Canonical live/saved vocabulary (ui.js SAVE_STATE) — this tab is
-            // one of the few that genuinely tracks dirtiness, so it may assert.
+            // Canonical live/saved vocabulary (spec §3.2, ui.js SAVE_STATE).
             bar.dataset.state = this.unsaved ? 'live' : 'saved';
-            note.textContent = this.unsaved ? SAVE_STATE.live : SAVE_STATE.saved;
+            note.textContent = this.unsaved
+                ? 'Live — reverts on power-off · Save is in the status bar'
+                : SAVE_STATE.saved;
         };
         this._updateSaveBar();
-        return bar;
+        const pickerHost = el('div');
+        host.replaceChildren(bar,
+            el('div', { class: 'faint', style: 'margin-top:6px; font-size:12px' },
+                'Click a key, then pick a binding; click it again for a popover. Writes apply immediately.'),
+            pickerHost);
+        this.closePicker?.();
+        this.closePicker = openPicker({
+            surface: 'zmk.key', host: 'docked', anchor: pickerHost, app: this.app,
+            onPick: (binding) => board.assign(binding),
+        });
     }
 
     _setCapture(on, btn = this._captureBtn) {
@@ -887,108 +929,5 @@ export class ZmkKeymapTab {
         window.addEventListener('keydown', this._captureHandler, true);
         window.addEventListener('keyup', this._captureUpHandler, true);
         toast('Type-to-assign armed — press keys to fill the selected position; Esc stops');
-    }
-
-    renderStrip(readOnly = false) {
-        const buttons = this.keymap.layers.map((l, i) => el('button', {
-            class: i === this.layer ? 'shown' : '',
-            text: l.name || `Layer ${i}`,
-            onclick: () => {
-                if (i === this.layer && !readOnly) { this.renaming = true; this.render(); return; }
-                this.layer = i;
-                this.selected = null;
-                this.renaming = false;
-                this.renderStrip(readOnly);
-                this.renderBoard(readOnly);
-            },
-            title: i === this.layer && !readOnly ? 'Click again to rename' : null,
-        }));
-        this.strip.replaceChildren(...buttons);
-        if (!readOnly) this.strip.append(...this._stripOps());
-        if (this.renaming && !readOnly) this._appendRenameInput();
-    }
-
-    /** Layer structure controls, appended to the strip: move ◀▶, remove −,
-     * add ＋ (needs a freed slot), restore ↩ (session undo of remove). */
-    _stripOps() {
-        const avail = this.keymap.availableLayers ?? 0;
-        const ops = [
-            el('button', {
-                text: '◀', title: 'Move this layer left (lower priority)',
-                disabled: this.layer === 0,
-                onclick: () => this.moveLayerOp(-1),
-            }),
-            el('button', {
-                text: '▶', title: 'Move this layer right (higher priority)',
-                disabled: this.layer >= this.keymap.layers.length - 1,
-                onclick: () => this.moveLayerOp(1),
-            }),
-            el('button', {
-                text: '−', title: 'Remove this layer (frees a slot; undo with ↩)',
-                disabled: this.keymap.layers.length <= 1,
-                onclick: () => this.removeLayerOp(),
-            }),
-        ];
-        if (this.removedLayers.length) {
-            const last = this.removedLayers[this.removedLayers.length - 1];
-            ops.push(el('button', {
-                // Labelled, not just a glyph, and placed right after the −
-                // that created it — "still don't see a Restore button"
-                // (bench 2026-07-11, again 2026-07-12).
-                text: `↩ Restore "${last.name}"`,
-                title: `Bring back removed layer "${last.name}"`,
-                onclick: () => this.restoreLayerOp(),
-            }));
-        }
-        ops.push(el('button', {
-            text: '＋',
-            title: avail > 0
-                ? `Add a layer (${avail} free slot${avail === 1 ? '' : 's'})`
-                : 'No free slots — remove a layer first (total capacity is compiled into the firmware)',
-            disabled: avail === 0,
-            onclick: () => this.addLayerOp(),
-        }));
-        return ops;
-    }
-
-    _appendRenameInput() {
-        const input = el('input', {
-            type: 'text', value: this.currentLayer.name,
-            maxlength: this.keymap.maxLayerNameLength || 20, size: 10,
-        });
-        // Commit exactly once: Enter's render() detaches the input, which
-        // fires ITS blur mid-render — the second renameLayer re-entered
-        // render and blew up replaceChildren ("node is no longer a child",
-        // bench 2026-07-12). Escape marks committed so its blur is a no-op.
-        let committed = false;
-        const commit = () => {
-            if (committed) return;
-            committed = true;
-            this.renameLayer(input.value);
-        };
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') commit();
-            if (e.key === 'Escape') { committed = true; this.renaming = false; this.render(); }
-        });
-        input.addEventListener('blur', commit);
-        this.strip.append(input);
-        queueMicrotask(() => { input.focus(); input.select(); });
-    }
-
-    renderBoard(readOnly = false) {
-        const profile = {
-            keys: this.geomKeys,
-            encoderKeys: [],
-            displayTile: null,
-            labelFor: bindingCap,
-            hoverFor: bindingHover,
-            keyName: (k) => String(k.pos),
-        };
-        this.boardWrap.replaceChildren(renderKeyboardSVG({
-            profile,
-            keycodeAt: (row, col) => this.currentLayer.bindings[col] ?? null,
-            selected: this.selected != null ? { kind: 'key', row: 0, col: this.selected } : null,
-            onSelect: readOnly ? null : (sel) => { this.selected = sel.col; this.renderBoard(); },
-        }));
     }
 }

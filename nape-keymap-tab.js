@@ -11,17 +11,53 @@
 // produced a wrong map.
 
 import { el, toast } from './ui.js?v=49';
-import { renderKeyboardSVG } from './keymap-tab.js?v=49';
+import { board } from './board.js?v=1';
+import { openPicker } from './binding-picker.js?v=1';
+import { shell } from './app-shell.js?v=1';
 import { KC, napeKeyLabel, setScrollMode } from './nape-proto.js?v=49';
-import { buildKeycodePicker } from './nape-keypicker.js?v=49';
 import { napeProfile, saveKeyName, napeColLabel } from './nape.js?v=49';
+
+let activeAbort = null;   // board listeners of the superseded instance
 
 export class NapeKeymapTab {
     constructor(app) {
         this.app = app;
         this.root = el('div');
-        this.sel = null;      // { layer, col }
-        this.viewLayer = null; // layer being edited; defaults to the live one
+        this.adapter = this._makeAdapter();
+        activeAbort?.abort();
+        activeAbort = new AbortController();
+        const { signal } = activeAbort;
+        board.addEventListener('select', () => this._renderNameRow(), { signal });
+        board.addEventListener('layer', () => this._renderLayerNote(), { signal });
+    }
+
+    // Edited layer = the board's (defaults to the live one).
+    get viewLayer() { return board.layer; }
+    get sel() { const k = board.selectedKey(); return k ? { layer: k.layer, col: k.pos } : null; }
+
+    _makeAdapter() {
+        const tab = this;
+        return {
+            surface: 'nape.key',
+            get app() { return tab.app; },
+            get profile() { return { ...tab.app.profile, capAdapter: 'nape' }; },
+            layers: () => tab.app.napeKeymap.map((_, index) => ({
+                index, name: tab.app.profile.layerNames?.[index] ?? `Layer ${index}`,
+                empty: false, live: index === tab.layer,
+            })),
+            bindingAt: (layer, sel) => tab.app.napeKeymap[layer]?.[sel.col] ?? 0,
+            async write(layer, sel, keycode) {
+                const { app } = tab;
+                await app.nape.setKeycode(layer, sel.col, keycode);
+                const back = await app.nape.getKeycode(layer, sel.col);   // echo is truth
+                app.napeKeymap[layer][sel.col] = back;
+                app.keymap[layer][0][sel.col] = back;
+                app.hud?.open && app.hud.render();
+                if (back !== keycode) toast(`Device stored ${napeKeyLabel(back)} instead`, true);
+            },
+            posOf: (sel) => sel.col,
+            selOf: (pos) => (Number.isInteger(pos) ? { kind: 'key', row: 0, col: pos } : null),
+        };
     }
 
     async load() {
@@ -41,7 +77,8 @@ export class NapeKeymapTab {
         } finally {
             app.hid.resume();
         }
-        if (this.viewLayer == null) this.viewLayer = this.layer;
+        board.bind(this.adapter);
+        if (!this._shownOnce) { board.setLayer(this.layer); this._shownOnce = true; }
         this.render();
     }
 
@@ -56,21 +93,6 @@ export class NapeKeymapTab {
     }
 
     // ---------- actions ----------
-
-    async _assign(layer, col, keycode) {
-        const app = this.app;
-        try {
-            await app.nape.setKeycode(layer, col, keycode);
-            const back = await app.nape.getKeycode(layer, col);   // echo is truth
-            app.napeKeymap[layer][col] = back;
-            app.keymap[layer][0][col] = back;
-            if (back !== keycode) toast(`Device stored ${napeKeyLabel(back)} instead`, true);
-        } catch (e) {
-            toast(`Assign failed: ${e.message}`, true);
-        }
-        this.sel = null;
-        this.render();
-    }
 
     async _scrollMode(mode, all) {
         const app = this.app;
@@ -130,19 +152,15 @@ export class NapeKeymapTab {
                     el('span', { text: 'Always scroll (ball is a permanent scroll wheel)' }))));
     }
 
-    _picker() {
-        if (!this.sel) return el('div');
-        const { layer, col } = this.sel;
-        const picker = buildKeycodePicker({
-            value: this.app.napeKeymap[layer][col],
-            layers: this.app.layerCount,
-            macros: 16,
-            onPick: (kc) => this._assign(layer, col, kc),
-        });
+    /** Name the selected button (M1, 03…). Names are labels only. */
+    _renderNameRow() {
+        if (!this._nameHost) return;
+        const k = this.sel;
+        if (!k) { this._nameHost.replaceChildren(); return; }
+        const { layer, col } = k;
         const nameInput = el('input', {
             type: 'text', placeholder: 'name this button (M1, 03…)',
-            value: napeColLabel(col).startsWith('col ')
-                ? '' : napeColLabel(col),
+            value: napeColLabel(col).startsWith('col ') ? '' : napeColLabel(col),
         });
         let committed = false;   // Enter + blur both fire; commit exactly once
         const commit = () => {
@@ -150,71 +168,52 @@ export class NapeKeymapTab {
             committed = true;
             saveKeyName(col, nameInput.value.trim());
             this.app.profile = napeProfile();
-            this.render();
+            board.refresh();
+            this._renderNameRow();
         };
         nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); });
         nameInput.addEventListener('blur', commit);
-        return el('div', { class: 'nape-picker' },
-            el('div', { class: 'row' },
-                el('h3', { text: `Layer ${layer}, ${napeColLabel(col)}` }),
-                nameInput,
-                el('button', {
-                    class: 'btn', text: 'Cancel',
-                    onclick: () => { committed = true; this.sel = null; this.render(); },
-                })),
-            picker);
+        this._nameHost.replaceChildren(el('div', { class: 'row' },
+            el('h3', { text: `Layer ${layer}, ${napeColLabel(col)}` }), nameInput));
     }
 
-    _layerBar() {
-        return el('div', { class: 'layer-bar', role: 'tablist' },
-            ...this.app.napeKeymap.map((_, l) => {
-                const live = l === this.layer;
-                const on = l === this.viewLayer;
-                return el('button', {
-                    class: 'layer-chip' + (on ? ' on' : '') + (live ? ' live' : ''),
-                    role: 'tab',
-                    'aria-selected': on ? 'true' : 'false',
-                    title: live ? 'The device is on this layer now' : `Edit layer ${l}`,
-                    onclick: () => { this.viewLayer = l; this.sel = null; this.render(); },
-                }, el('span', { text: `L${l}` }),
-                   el('span', { class: 'layer-chip-angle', text: `${this.layerAngles[l]}°` }));
+    /** Layer-bar note: angle snap of the edited layer, and a switch button
+     * when the device is on another layer. */
+    _renderLayerNote() {
+        const layer = board.layer;
+        const kids = [el('span', { class: 'tag', text: `angle snap ${this.layerAngles?.[layer] ?? '—'}°` })];
+        if (layer === this.layer) kids.push(el('span', { class: 'tag live', text: 'active on the device' }));
+        else {
+            kids.push(el('button', {
+                class: 'btn small subtle', text: 'Switch device to this layer',
+                onclick: () => this._refresh(() => this.app.nape.switchLayer(layer)),
             }));
-    }
-
-    _board() {
-        const app = this.app;
-        const layer = this.viewLayer;
-        const svg = renderKeyboardSVG({
-            profile: app.profile,
-            scale: 1.15,
-            keycodeAt: (_r, col) => app.napeKeymap[layer][col],
-            selected: this.sel ? { kind: 'key', row: 0, col: this.sel.col } : null,
-            onSelect: ({ col }) => { this.sel = { layer, col }; this.render(); },
-        });
-        return el('div', { class: 'board' },
-            el('div', { class: 'board-head' },
-                el('strong', { text: `Layer ${layer}` }),
-                layer === this.layer
-                    ? el('span', { class: 'tag live', text: 'active on the device' })
-                    : el('button', {
-                        class: 'btn small subtle', text: 'Switch device to this layer',
-                        onclick: () => this._refresh(() => app.nape.switchLayer(layer)),
-                    }),
-                el('span', { class: 'tag', text: `angle snap ${this.layerAngles[layer]}°` })),
-            svg,
-            el('p', { class: 'board-hint',
-                text: 'Click a key to reassign it. Double-click its name to rename the button.' }));
+        }
+        board.setLayerBarNote(el('span', { class: 'row' }, ...kids));
     }
 
     render() {
+        const boardHost = el('div');
+        const pickerHost = el('div');
+        this._nameHost = el('div');
         this.root.replaceChildren(
             this._header(),
-            this._picker(),
-            this._scrollSection(),
             el('div', { class: 'nape-section' },
                 el('h3', { text: 'Layers' }),
-                this._layerBar(),
-                this._board()),
+                boardHost,
+                el('p', { class: 'board-hint',
+                    text: 'Click a key, then pick a keycode; click it again for a popover.' }),
+                this._nameHost),
+            pickerHost,
+            this._scrollSection(),
         );
+        board.place(boardHost, shell.regions);
+        this._renderLayerNote();
+        this._renderNameRow();
+        this.closePicker?.();
+        this.closePicker = openPicker({
+            surface: 'nape.key', host: 'docked', anchor: pickerHost, app: this.app,
+            onPick: (kc) => board.assign(kc),
+        });
     }
 }
