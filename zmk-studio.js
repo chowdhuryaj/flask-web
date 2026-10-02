@@ -1,5 +1,7 @@
 // ZMK Studio RPC client — WebSerial transport + framing + a minimal
-// hand-rolled proto3 codec.
+// hand-rolled proto3 codec. ZMK-line module (see zmk.js header: ALL ZMK
+// code lives in zmk-scoped files; nothing here may be imported by a QMK
+// module).
 //
 // Protocol sources (both MIT): zmkfirmware/zmk-studio-messages (schema),
 // zmkfirmware/zmk-studio-ts-client (framing + transport reference). Field
