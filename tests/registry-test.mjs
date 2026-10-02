@@ -36,7 +36,7 @@ const SPEC_1_3 = {
     'zmk-combos': 'behaviour', 'zmk-macros': 'behaviour', 'zmk-tapdance': 'behaviour',
     'zmk-shift': 'behaviour', 'zmk-leader': 'behaviour', 'zmk-modes': 'device', 'zmk-test': 'device',
     keyboard: 'device',
-    'zmk-holdtiming': 'behaviour',
+    'zmk-holdtiming': 'behaviour', 'zmk-adaptive': 'behaviour',
 };
 const groupIds = new Set(TAB_GROUPS.map((g) => g.id));
 for (const [id, group] of Object.entries(SPEC_1_3)) {
@@ -68,6 +68,19 @@ for (const ws of Object.keys(before)) {
     assert.ok(!beh('imprint', undefined).includes('zmk-holdtiming')); checks++;
     assert.ok(!beh('generic', true).includes('zmk-holdtiming'), 'never without a ZMK family'); checks++;
     assert.equal(TAB_TABLE.find((t) => t.id === 'zmk-holdtiming').label, 'Hold timing'); checks++;
+}
+// flask_adaptive: Behaviour › Adaptive only with caps.adaptive (main.js probes GET 2B 02), ZMK only,
+// next to Shift Keys.
+{
+    const beh = (fam, ak) => tabsFor({ family: fam, caps: { ...zmkCapabilities(fam, 18), adaptive: ak } })
+        .filter((t) => t.group === 'behaviour').map((t) => t.id);
+    assert.ok(beh('totem', true).includes('zmk-adaptive')); checks++;
+    assert.equal(beh('totem', true)[beh('totem', true).indexOf('zmk-shift') + 1], 'zmk-adaptive', 'right after Shift Keys'); checks++;
+    assert.ok(!beh('totem', false).includes('zmk-adaptive')); checks++;
+    assert.ok(!beh('imprint', undefined).includes('zmk-adaptive')); checks++;
+    assert.ok(!beh('generic', true).includes('zmk-adaptive'), 'never without a ZMK family'); checks++;
+    const t = TAB_TABLE.find((u) => u.id === 'zmk-adaptive');
+    assert.equal(t.label, 'Adaptive'); assert.equal(t.screen, 'behaviours'); checks += 2;
 }
 assert.deepEqual(tabsFor({ trainerOnly: true }).map((t) => t.id), ['trainer']); checks++;
 // Rows sharing an id must agree on label and group.

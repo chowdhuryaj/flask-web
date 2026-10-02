@@ -42,7 +42,7 @@ const ENTRY_CATEGORY = {
     'mouse-key': 'Mouse', autoscroll: 'Mouse', 'ball-swap': 'Mouse', gesture: 'Mouse',
     lighting: 'Lighting', underglow: 'Lighting',
     power: 'System', 'soft-off': 'System', reset: 'System', bootloader: 'System', 'studio-unlock': 'System',
-    macro: 'Macros & run', 'tap-dance': 'Macros & run', leader: 'Macros & run',
+    macro: 'Macros & run', 'tap-dance': 'Macros & run', adaptive: 'Macros & run', leader: 'Macros & run',
     advanced: 'Other',
 };
 const BEHAVIOUR_ORDER = ['Layers', 'Key behaviours', 'Bluetooth & output', 'Mouse', 'Lighting', 'System', 'Macros & run', 'Other'];

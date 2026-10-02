@@ -111,6 +111,8 @@ const STOCK = {
 // Slot capacities the sim seeds for the flask-* range metadata (Kconfig on
 // hardware); keep equal to zmk-offline.js IMPRINT.macroSlots/tdSlots.
 const FLASK_MACRO_SLOTS = 32, FLASK_TD_SLOTS = 16;
+// flask_adaptive Kconfig defaults (zmk-flask-modules): sets, rule pool, steps per rule.
+const FLASK_AK_SETS = 4, FLASK_AK_RULES = 64, FLASK_AK_STEPS = 6;
 
 // ------------------------------------------------------------ DT parser ---
 function clean(src) {
@@ -244,6 +246,7 @@ export function parseKeymap(src) {
             case 'zmk,behavior-flask-macros': md = meta(range('Macro slot', 0, FLASK_MACRO_SLOTS - 1)); break;
             case 'zmk,behavior-flask-tapdance': md = meta(range('Tap dance slot', 0, FLASK_TD_SLOTS - 1)); break;
             case 'zmk,behavior-flask-leader': md = meta(); break;
+            case 'zmk,behavior-flask-adaptive': md = meta(range('Adaptive set', 0, FLASK_AK_SETS - 1)); break;
             case 'zmk,behavior-macro-one-param': md = meta(usage('Param')); break;
             case 'zmk,behavior-macro': case 'zmk,behavior-mod-morph': case 'zmk,behavior-tap-dance': md = meta(); break;
             default: md = []; // third-party (adaptive-key, tri-state, switch-layout-*, leader-key): no metadata
@@ -312,14 +315,58 @@ export function parseKeymap(src) {
         };
     });
 
-    return { behaviors, layers, combos, unsupported: [...unsupported].sort() };
+    // --- adaptive keys (flask,adaptive-defaults): expand the referenced
+    // zmk,behavior-adaptive-key nodes into the runtime rule pool exactly as
+    // the firmware does (set order, child order, trigger order). Absent when
+    // the keymap has no such node, so older firmware commits regenerate
+    // byte-identically.
+    let adaptive;
+    const ad = find(root, (n) => str(n.props.compatible) === 'flask,adaptive-defaults');
+    if (ad) {
+        const asStep = ([id, p1, p2]) => (id === byLabel.kp   // &kp X -> USAGE step, anything else BEHAVIOR
+            ? { action: 1, behaviorId: 0, param1: p1, param2: 0 }
+            : { action: 3, behaviorId: id, param1: p1, param2: p2 });
+        const none = { action: 0, behaviorId: 0, param1: 0, param2: 0 };
+        const num = (n, p, dflt) => (n.props[p] ? Number(cells(n.props[p])[0]) : dflt);
+        const refs = cells(ad.props.sets).join(' ').split(/\s+/).filter(Boolean).map((t) => t.replace(/^&/, ''));
+        if (refs.length > FLASK_AK_SETS) unsupported.add(`flask,adaptive-defaults lists ${refs.length} sets (max ${FLASK_AK_SETS})`);
+        const fallback = [], rules = [];
+        refs.forEach((label, set) => {
+            const node = customs.find((n) => (n.label ?? n.name) === label);
+            if (!node) { unsupported.add(`flask,adaptive-defaults: &${label} is not a behavior node`); fallback.push(none); return; }
+            fallback.push(node.props.bindings ? asStep(binding(cells(node.props.bindings)[0].trim().replace(/^&/, ''), `adaptive ${label} fallback`)) : none);
+            for (const c of node.children) {
+                const where = `adaptive ${label}/${c.name}`;
+                if (num(c, 'min-prior-idle-ms', -1) !== -1) unsupported.add(`${where}: min-prior-idle-ms`);
+                if (c.props['dead-keys'] && cells(c.props['dead-keys'])[0]?.trim()) unsupported.add(`${where}: dead-keys`);
+                if (c.props['delete-prior']) unsupported.add(`${where}: delete-prior`);
+                const steps = bindingList(c.props.bindings, where).map(asStep);
+                if (steps.length > FLASK_AK_STEPS) unsupported.add(`${where}: ${steps.length} bindings (max ${FLASK_AK_STEPS})`);
+                const trigs = cells(c.props['trigger-keys']).join(' ').split(/\s+/).filter(Boolean);
+                if (trigs.length > 8) unsupported.add(`${where}: ${trigs.length} trigger keys (max 8)`);
+                const idle = num(c, 'max-prior-idle-ms', -1);
+                for (const t of trigs) {
+                    try {
+                        rules.push({ set, trigger: arg(t), maxIdleMs: idle < 0 ? 0 : idle,
+                            strict: !!c.props['strict-modifiers'], steps: steps.slice(0, FLASK_AK_STEPS) });
+                    } catch (e) { unsupported.add(`${where}: ${e.message}`); }
+                }
+            }
+        });
+        if (rules.length > FLASK_AK_RULES) unsupported.add(`flask,adaptive-defaults expands to ${rules.length} rules (pool is ${FLASK_AK_RULES})`);
+        adaptive = { fallback, rules: rules.slice(0, FLASK_AK_RULES) };
+    }
+
+    return { behaviors, layers, combos, ...(adaptive ? { adaptive } : {}), unsupported: [...unsupported].sort() };
 }
 
 export function generate(src, source, firmwareSha = null) {
-    const { behaviors, layers, combos, unsupported } = parseKeymap(src);
-    const data = { source, firmwareSha, sha256: sha(src), placeholder: false, behaviors, layers, combos, unsupported };
+    const { behaviors, layers, combos, adaptive, unsupported } = parseKeymap(src);
+    const data = { source, firmwareSha, sha256: sha(src), placeholder: false, behaviors, layers, combos,
+        ...(adaptive ? { adaptive } : {}), unsupported };
     return `// GENERATED by gen-totem-default.mjs from ${source} — do not edit.\n`
         + '// layers[].bindings: [behaviorId, param1, param2]; ids index `behaviors`.\n'
+        + (adaptive ? '// adaptive: { fallback: [step], rules: [{ set, trigger, maxIdleMs, strict, steps: [step] }] }, step = { action, behaviorId, param1, param2 }.\n' : '')
         + `export const TOTEM_DEFAULT = ${JSON.stringify(data)};\n`;
 }
 

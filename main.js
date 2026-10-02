@@ -6,7 +6,7 @@ import { el, toast, modal } from './ui.js?v=62';
 import { diag } from './diag.js?v=62';
 import { FlaskHID } from './webhid.js?v=62';
 import { renderPreflight } from './preflight.js?v=62';
-import { FlaskProto } from './flaskproto.js?v=62';
+import { FlaskProto, CH, V } from './flaskproto.js?v=62';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
          zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=62';
 import { CommandPalette } from './command-palette.js?v=62';
@@ -191,6 +191,7 @@ async function loadZmkDevice(device) {
     $('layout-save').style.display = $('layout-load').style.display = '';
     updateStatus(device);
     await probeHoldtap();
+    await probeAdaptive();
     buildTabs();
     if (TABS.length) await showTab(TABS[0].id);
 }
@@ -261,6 +262,7 @@ async function startOffline(key, family) {
     $('offline-seg').style.display = '';
     updateOfflineBanner();
     await probeHoldtap();
+    await probeAdaptive();
     buildTabs();
     showTab('zmk-keymap');
 }
@@ -332,6 +334,17 @@ async function probeHoldtap() {
     if (!app.caps || !isZmkFamily(app.family)) return;
     try { app.caps.holdtap = !!(await attachHoldtap(app)); }
     catch { app.caps.holdtap = false; }
+}
+
+/** caps.adaptive for Behaviour › Adaptive: proto >= 18 and channel 0x2B
+ * answers GET SET_COUNT (0xFF echo = module not compiled in: Imprint, older
+ * Totem images). */
+async function probeAdaptive() {
+    if (!app.caps || !isZmkFamily(app.family)) return;
+    app.caps.adaptive = false;
+    if ((app.protocolVersion ?? 0) < 18) return;
+    try { app.caps.adaptive = !!(await app.flask.getU16(CH.adaptive, V.akSetCount)); }
+    catch { app.caps.adaptive = false; }
 }
 
 function buildTabs() {

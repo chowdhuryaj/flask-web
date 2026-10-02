@@ -25,6 +25,7 @@ export const CH = {
     ballSwap: 0x27, // v11+: flask_ballswap trackball role swap
     tapDance: 0x28, // v14+: flask_tapdance runtime tap dances
     scrollScale: 0x29, // v15+: flask_scrollscale live scroll speed
+    adaptive: 0x2B, // v18+ (Totem): flask_adaptive runtime adaptive keys (&fak)
 };
 
 export const V = {
@@ -114,6 +115,13 @@ export const V = {
     // BE, p1 u32 BE, p2 u32 BE], cfg [slot, term u16 BE (0 = default 200)].
     tdEnabled: 0x01, tdSlotCount: 0x02, tdTaps: 0x03,
     tdStep: 0x50, tdCfg: 0x51,
+    // adaptive keys (0x2B, v18) — enabled/counts u16 (counts RO); payload-
+    // addressed byte frames: rule [rule, set, trigger u32 BE (id 0-15, page
+    // 16-23, mods 24-31; 0 = delete), max idle ms u16 BE, flags (bit0 exact
+    // mods)], step [rule, step, action, behavior u16, p1 u32, p2 u32] (the
+    // tap-dance step frame), fallback [set, action, behavior u16, p1, p2].
+    akEnabled: 0x01, akSetCount: 0x02, akRuleCount: 0x03, akStepCount: 0x04,
+    akRule: 0x50, akStep: 0x51, akFallback: 0x52,
 };
 
 // ---------- typed operations over a FlaskHID ----------

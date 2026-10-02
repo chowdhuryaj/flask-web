@@ -22,6 +22,8 @@ import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlo
 import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=62';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
     from './zmk-tapdance-codec.js?v=62';
+import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
+    from './zmk-adaptive-codec.js?v=62';
 
 /** Read everything the device's capabilities advertise. Returns the
  * `flask` section for the export file. */
@@ -140,6 +142,30 @@ async function exportFlaskStateInner(app) {
             enabled: await g(CH.tapDance, V.tdEnabled),
             slots,
         };
+    }
+    if (caps.adaptive) {
+        // Live rules only (trigger and an output); pool index kept, it is the priority order.
+        const sets = await g(CH.adaptive, V.akSetCount);
+        const ruleCap = await g(CH.adaptive, V.akRuleCount);
+        const stepCap = await g(CH.adaptive, V.akStepCount) || 6;
+        const out1 = (d) => ({ action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 });
+        const fallback = [];
+        for (let st = 0; st < sets; st++) {
+            fallback.push(out1(decodeAkFallback(await flask.getBytes(CH.adaptive, V.akFallback, [st], 1))));
+        }
+        const rules = [];
+        for (let i = 0; i < ruleCap; i++) {
+            const h = decodeAkRule(await flask.getBytes(CH.adaptive, V.akRule, [i], 1));
+            if (!h.trigger) continue;
+            const steps = [];
+            for (let s = 0; s < stepCap; s++) {
+                const d = decodeAkStep(await flask.getBytes(CH.adaptive, V.akStep, [i, s], 2));
+                if (!d.action) break;
+                steps.push(out1(d));
+            }
+            if (steps.length) rules.push({ index: i, set: h.set, trigger: h.trigger, maxIdleMs: h.maxIdleMs, strict: h.strict, steps });
+        }
+        out.adaptive = { enabled: await g(CH.adaptive, V.akEnabled), fallback, rules };
     }
     if (caps.combos) {
         const count = await g(CH.combos, V.combosSlotCount);
@@ -403,6 +429,35 @@ async function applyFlaskStateInner(app, data, save = true) {
         }
         if (s.enabled != null) await setU(CH.tapDance, V.tdEnabled, s.enabled);
     }, CH.tapDance);
+
+    await section('adaptive', caps.adaptive, async (s) => {
+        const sets = await flask.getU16(CH.adaptive, V.akSetCount);
+        const ruleCap = await flask.getU16(CH.adaptive, V.akRuleCount);
+        const stepCap = await flask.getU16(CH.adaptive, V.akStepCount) || 6;
+        for (let st = 0; st < Math.min(sets, s.fallback?.length ?? 0); st++) {
+            await flask.setBytes(CH.adaptive, V.akFallback, encodeAkFallback(st, s.fallback[st]), 1);
+            applied++;
+        }
+        // Device rules the file does not list are deleted, so the file is the whole table
+        // (this is how a default the backup had deleted stays deleted).
+        const listed = new Set((s.rules ?? []).map((r) => r.index));
+        for (let i = 0; i < ruleCap; i++) {
+            if (listed.has(i)) continue;
+            const h = decodeAkRule(await flask.getBytes(CH.adaptive, V.akRule, [i], 1));
+            if (!h.trigger) continue;
+            await flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(i, {}), 1);
+            applied++;
+        }
+        for (const r of s.rules ?? []) {
+            if (r.index >= ruleCap || r.set >= sets) continue;
+            await flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(r.index, r), 1);
+            for (let st = 0; st < stepCap; st++) {
+                await flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(r.index, st, r.steps?.[st] ?? {}), 2);
+            }
+            applied++;
+        }
+        if (s.enabled != null) await setU(CH.adaptive, V.akEnabled, s.enabled);
+    }, CH.adaptive);
 
     await section('macros', caps.macros, async (s) => {
         const count = await flask.getU16(CH.macros, V.macrosSlotCount);

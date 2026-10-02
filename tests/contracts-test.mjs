@@ -77,13 +77,13 @@ const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
 
 // ---- picker surfaces (§4.7) ----
 {
-    const groups = new Set([...CATALOG_GROUPS.map((g) => g.id), 'leader', 'tap-dance', 'mods-row']);
+    const groups = new Set([...CATALOG_GROUPS.map((g) => g.id), 'leader', 'tap-dance', 'adaptive', 'mods-row']);
     for (const [id, s] of Object.entries(SURFACES)) {
         ok(['zmk-studio', 'zmk-typed'].includes(s.adapter), `${id} adapter`);
         ok(s.hide.every((h) => groups.has(h)), `${id} hide ids`);
     }
     for (const id of ['zmk.key', 'zmk.comboOutput', 'zmk.tapDanceStep', 'zmk.typedOutput', 'zmk.macroKey',
-        'zmk.cskBase', 'zmk.cskShifted']) ok(id in SURFACES, `§4.7 surface ${id}`);
+        'zmk.cskBase', 'zmk.cskShifted', 'zmk.adaptiveTrigger', 'zmk.adaptiveStep']) ok(id in SURFACES, `§4.7 surface ${id}`);
     ok(!Object.keys(SURFACES).some((id) => !id.startsWith('zmk.')), 'only ZMK surfaces');
     assert.throws(() => openPicker({ surface: 'nope', onPick() {} })); checks++;
 }

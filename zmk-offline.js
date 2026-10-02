@@ -35,6 +35,8 @@ import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=62';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
     from './zmk-tapdance-codec.js?v=62';
 import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=62';
+import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
+         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=62';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
          encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=62';
 
@@ -57,6 +59,10 @@ const IMPRINT = {
     cskSlots: 16,
     tdSlots: 16,
     tdTaps: 4,
+    // v18 (Totem only; imprint has no flask_adaptive): Kconfig defaults.
+    adaptiveSets: 4,
+    adaptiveRules: 64,
+    adaptiveSteps: 6,
 };
 
 // Per-family sizes. TOTEM: 38 positions, no LED strip (rgb 0); the runtime
@@ -441,6 +447,37 @@ export function holdtapDefaults() {
 }
 const clampMs = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+// flask_adaptive (channel 0x2B, proto 18, Totem only). The compiled default
+// table comes from gen-totem-default.mjs (TOTEM_DEFAULT.adaptive, parsed from
+// the keymap's flask,adaptive-defaults); a keymap without it boots empty.
+const akNone = () => ({ action: AK_ACTION.none, behaviorId: 0, param1: 0, param2: 0 });
+const akEmptyRule = () => ({ set: 0, trigger: 0, maxIdleMs: 0, strict: false,
+    steps: Array.from({ length: IMPRINT.adaptiveSteps }, akNone) });
+/** `def` = TOTEM_DEFAULT.adaptive shape: { fallback: [out], rules: [{set,
+ * trigger, maxIdleMs, strict, steps: [out]}] }. */
+export function adaptiveTable(def) {
+    const rules = Array.from({ length: IMPRINT.adaptiveRules }, akEmptyRule);
+    (def?.rules ?? []).slice(0, rules.length).forEach((r, i) => {
+        rules[i] = { set: r.set, trigger: r.trigger >>> 0, maxIdleMs: r.maxIdleMs ?? 0, strict: !!r.strict,
+            steps: Array.from({ length: IMPRINT.adaptiveSteps }, (_, k) => ({ ...akNone(), ...(r.steps[k] ?? {}) })) };
+    });
+    const fallback = Array.from({ length: IMPRINT.adaptiveSets }, (_, i) => ({ ...akNone(), ...(def?.fallback?.[i] ?? {}) }));
+    return { enabled: 1, fallback, rules };
+}
+/** Firmware normalization for a step / fallback output
+ * (flask_tapdance_output_set + &fak's own id -> NONE, no recursion). */
+function akNormalizeOut({ action, behaviorId, param1, param2 }, selfId) {
+    if (action > AK_ACTION.behavior) action = AK_ACTION.none;
+    if (action === AK_ACTION.usage && param1 === 0) action = AK_ACTION.none;
+    if (action === AK_ACTION.behavior && selfId != null && behaviorId === selfId) action = AK_ACTION.none;
+    if (action === AK_ACTION.none) { behaviorId = 0; param1 = 0; param2 = 0; }
+    if (action !== AK_ACTION.behavior) {
+        behaviorId = 0;
+        if (action !== AK_ACTION.none) param2 = 0;
+    }
+    return { action, behaviorId, param1, param2 };
+}
+
 // ---------------------------------------------------------------------------
 // Template workspace
 
@@ -575,9 +612,11 @@ export function createZmkTemplate(family) {
                 taps: Array.from({ length: dims(family).tdTaps }, () =>
                     ({ action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 })),
             })),
+            // v18: adaptive keys. Totem only (no key = the imprint probe answers unhandled).
+            ...(family === 'totem' ? { adaptive: adaptiveTable(TOTEM_DEFAULT.adaptive) } : {}),
         },
         zmkDirty: { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {},
-            cskSlot: {}, tdStep: {} },
+            cskSlot: {}, tdStep: {}, akRule: {} },
     };
 }
 
@@ -590,9 +629,11 @@ export function normalizeZmkWorkspace(ws) {
     ws.zmkDirty.gestureSlot ??= {};
     ws.zmkDirty.cskSlot ??= {};
     ws.zmkDirty.tdStep ??= {};
+    ws.zmkDirty.akRule ??= {};
     if (ws.zmk) {
         ws.zmk.pendingKeymap ??= null;
         if (ws.family === 'totem') ws.zmk.holdtap ??= holdtapDefaults();
+        if (ws.family === 'totem') ws.zmk.adaptive ??= adaptiveTable(TOTEM_DEFAULT.adaptive);
         // v13: stored older workspaces gain the trackball decorations.
         if (ws.profile) ws.profile.decorations ??= ZMK_TRACKBALLS[ws.family] ?? [];
         // v13→v14: the trackball nudge (left ball off the inner column) —
@@ -671,13 +712,14 @@ export function zmkPendingCount(ws) {
         + Object.keys(d.gestureSlot ?? {}).length
         + Object.keys(d.cskSlot ?? {}).length
         + Object.keys(d.tdStep ?? {}).length
+        + Object.keys(d.akRule ?? {}).length
         + (ws.zmk?.pendingKeymap ? 1 : 0);
 }
 
 /** Drop everything ZMK-shaped queued for replay (the banner's Discard). */
 export function zmkClearDirty(ws) {
     ws.zmkDirty = { combo: {}, macroStep: {}, leaderSlot: {}, gestureSlot: {},
-        cskSlot: {}, tdStep: {} };
+        cskSlot: {}, tdStep: {}, akRule: {} };
     if (ws.zmk) ws.zmk.pendingKeymap = null;
     saveWorkspace(ws);
 }
@@ -735,6 +777,15 @@ export class ZmkOfflineFlask extends OfflineFlask {
             return 0;
         }
         if (ch === 0x2A && id === 0x01) return this.ws.zmk.holdtap?.length ?? 0;
+        if (ch === CH.adaptive) {
+            const ak = this.ws.zmk.adaptive;
+            if (!ak) throw new Error('unhandled');   // 0xFF echo: module not compiled in
+            if (id === V.akEnabled) return ak.enabled;
+            if (id === V.akSetCount) return ak.fallback.length;
+            if (id === V.akRuleCount) return ak.rules.length;
+            if (id === V.akStepCount) return ak.rules[0].steps.length;
+            throw new Error('unhandled');
+        }
         if (ch === CH.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
         if (ch === CH.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
         if (ch === CH.rgbMap && id === V.rgbmapSplitLink) return 1; // sim halves always linked
@@ -758,6 +809,16 @@ export class ZmkOfflineFlask extends OfflineFlask {
     }
 
     async setU16(ch, id, value) {
+        if (ch === CH.adaptive) {
+            const ak = this.ws.zmk.adaptive;
+            if (!ak || id !== V.akEnabled) throw new Error('unhandled');   // counts are RO
+            const v = value ? 1 : 0;
+            ak.enabled = v;
+            this.ws.tunables[`${ch}:${id}`] = { op: 'u16', val: v };
+            this.ws.dirty.tun[`${ch}:${id}`] = { op: 'u16', val: v };
+            saveWorkspace(this.ws);
+            return v;
+        }
         // Live-state ids — never journal.
         if (ch === CH.meta || (ch === CH.macros && id === V.macrosState)) {
             return Math.max(0, Math.min(0xFFFF, Math.round(value))) & 0xFFFF;
@@ -831,6 +892,72 @@ export class ZmkOfflineFlask extends OfflineFlask {
         return this._holdtapGet(0x50, slot);
     }
 
+    _adaptiveGet(id, payload) {
+        const ak = this.ws.zmk.adaptive;
+        if (!ak) throw new Error('unhandled');
+        if (id === V.akRule) {
+            const r = ak.rules[payload[0]];
+            if (!r) throw new Error('unhandled');
+            return encodeAkRule(payload[0], r);
+        }
+        if (id === V.akStep) {
+            const o = ak.rules[payload[0]]?.steps[payload[1]];
+            if (!o) throw new Error('unhandled');
+            return encodeAkStep(payload[0], payload[1], o);
+        }
+        if (id === V.akFallback) {
+            const o = ak.fallback[payload[0]];
+            if (!o) throw new Error('unhandled');
+            return encodeAkFallback(payload[0], o);
+        }
+        throw new Error('unhandled');
+    }
+
+    /** Behavior id of &fak itself in this workspace's catalog (null when the
+     * keymap does not define it). */
+    _adaptiveSelfId() {
+        for (const d of catalogFor(this.ws).values()) {
+            if (d.node === 'fak' || d.displayName === 'Adaptive Key') return d.id;
+        }
+        return null;
+    }
+
+    _adaptiveSet(id, payload) {
+        const ak = this.ws.zmk.adaptive;
+        if (!ak) throw new Error('unhandled');
+        const dirty = (key) => { this.ws.zmkDirty.akRule[key] = true; saveWorkspace(this.ws); };
+        if (id === V.akRule) {
+            const d = decodeAkRule(payload);
+            const r = ak.rules[d.rule];
+            if (!r) throw new Error('unhandled');
+            if (d.trigger === 0) {      // delete: every field and every step zeroed
+                ak.rules[d.rule] = akEmptyRule();
+            } else {
+                if (d.set >= ak.fallback.length) throw new Error('unhandled');
+                // Page 0 means the keyboard page.
+                const trigger = ((d.trigger >>> 16) & 0xFF) ? d.trigger : (d.trigger | (7 << 16)) >>> 0;
+                Object.assign(r, { set: d.set, trigger, maxIdleMs: Math.min(d.maxIdleMs, 10000), strict: d.strict });
+            }
+            dirty(d.rule);
+            return encodeAkRule(d.rule, ak.rules[d.rule]);
+        }
+        if (id === V.akStep) {
+            const d = decodeAkStep(payload);
+            if (!ak.rules[d.rule]?.steps[d.step]) throw new Error('unhandled');
+            ak.rules[d.rule].steps[d.step] = akNormalizeOut(d, this._adaptiveSelfId());
+            dirty(d.rule);
+            return encodeAkStep(d.rule, d.step, ak.rules[d.rule].steps[d.step]);
+        }
+        if (id === V.akFallback) {
+            const d = decodeAkFallback(payload);
+            if (!ak.fallback[d.set]) throw new Error('unhandled');
+            ak.fallback[d.set] = akNormalizeOut(d, this._adaptiveSelfId());
+            dirty(`f${d.set}`);
+            return encodeAkFallback(d.set, ak.fallback[d.set]);
+        }
+        throw new Error('unhandled');
+    }
+
     async getBytes(ch, id, payload = []) {
         const { zmk } = this.ws;
         if (ch === 0x2A && zmk.holdtap) return this._holdtapGet(id, payload[0] ?? 0);
@@ -872,6 +999,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             const slot = payload[0] ?? 0;
             return encodeTdCfg(slot, zmk.tapdance[slot]?.termMs ?? 0);
         }
+        if (ch === CH.adaptive) return this._adaptiveGet(id, payload);
         if (ch === CH.rgbMap && id === V.rgbmapLedOrder) {
             const [start, count] = payload;
             if (start >= zmk.ledOrder.length || start + count > zmk.ledOrder.length) {
@@ -900,6 +1028,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
     async setBytes(ch, id, payload) {
         const { zmk } = this.ws;
         if (ch === 0x2A && zmk.holdtap && id === 0x50) return this._holdtapSet(payload);
+        if (ch === CH.adaptive) return this._adaptiveSet(id, payload);
         if (ch === CH.rgbMap && id === V.rgbmapLed) {
             const [layer, led, h, s, v] = payload;
             if (zmk.rgb[layer]?.[led]) {
@@ -1452,6 +1581,36 @@ async function zmkSyncExtrasInner(app, ws) {
         } catch (e) { fail.push(`gesture ${key}: ${e.message}`); }
     }
     if (touched) { try { await app.flask.save(CH.gestures); } catch { /* keep */ } }
+
+    // flask_adaptive: header, then every step, per edited rule (a deleted
+    // rule is just its zeroed header); fallbacks are keyed f<set>. A device
+    // without the module answers unhandled: those entries are dropped.
+    touched = false;
+    const ak = ws.zmk.adaptive;
+    for (const key of Object.keys(ws.zmkDirty.akRule ?? {})) {
+        try {
+            if (!ak) throw new Error('unhandled');
+            if (key.startsWith('f')) {
+                const set = Number(key.slice(1));
+                await app.flask.setBytes(CH.adaptive, V.akFallback,
+                    encodeAkFallback(set, ak.fallback[set]), 1);
+            } else {
+                const i = Number(key), r = ak.rules[i];
+                await app.flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(i, r), 1);
+                if (r.trigger) {
+                    for (let st = 0; st < r.steps.length; st++) {
+                        await app.flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(i, st, r.steps[st]), 2);
+                    }
+                }
+            }
+            delete ws.zmkDirty.akRule[key];
+            applied++; touched = true;
+        } catch (e) {
+            if (e.message === 'unhandled') delete ws.zmkDirty.akRule[key];
+            else fail.push(`adaptive ${key}: ${e.message}`);
+        }
+    }
+    if (touched) { try { await app.flask.save(CH.adaptive); } catch { /* keep */ } }
 
     // A queued keymap can't apply here — Studio RPC needs its own serial
     // connect (user gesture) + physical unlock. Stash the workspace; the

@@ -33,4 +33,23 @@ eq(surfaceEntries('zmk.typedOutput').reason.length > 0, true, 'slot explains mis
 eq(surfaceEntries('zmk.comboOutput').find((e) => e.id === 'mod-tap').params.some((p) => p.key === 'live'), false,
     'live timing is per key position: keymap only');
 
+// flask_adaptive: &fak is a catalog entry only when the device lists "Adaptive Key"; the
+// step surface (a rule's output) hides it, the trigger surface stores usage + mods only.
+{
+    const akFx = [...fx.behaviors, { id: 900, displayName: 'Adaptive Key',
+        metadata: [{ param1: [{ name: 'Adaptive set', kind: 'range', min: 0, max: 3 }], param2: [] }] }];
+    setZmkContext({ behaviors: new Map(akFx.map((d) => [d.id, d])), layers: [{ id: 0, name: 'base' }, { id: 1, name: 'nav' }] });
+    eq(ids('zmk.key').includes('adaptive'), true, 'keymap picker offers Adaptive key');
+    eq(ids('zmk.comboOutput').includes('adaptive'), true, 'combo output may fire an adaptive set');
+    eq(ids('zmk.adaptiveStep').includes('adaptive'), false, 'adaptive step: no recursion');
+    eq(ids('zmk.adaptiveStep').filter((i) => ['leader', 'tap-dance'].includes(i)), [], 'adaptive step: no leader / tap dance');
+    eq(ids('zmk.adaptiveStep').includes('macro'), true, 'adaptive step: macro slot allowed');
+    eq(SURFACES['zmk.adaptiveTrigger'].stores, 'usage + mods', 'trigger stores usage + mods');
+    eq(ids('zmk.adaptiveTrigger'), ['key', 'none', 'media-key'].filter((i) => ids('zmk.cskShifted').includes(i)), 'trigger: keys only, like the shifted side');
+    eq(groups('zmk.adaptiveTrigger'), groups('zmk.cskShifted'));
+    const slot = surfaceEntries('zmk.key', {}).find((e) => e.id === 'adaptive').params[0];
+    eq([slot.kind, slot.min, slot.max], ['slot', 0, 3], 'set picker range comes from the firmware metadata');
+    setZmkContext({ behaviors: new Map(fx.behaviors.map((d) => [d.id, d])), layers: [{ id: 0, name: 'base' }, { id: 1, name: 'nav' }] });
+}
+
 console.log(`picker-test: ${checks} checks OK`);

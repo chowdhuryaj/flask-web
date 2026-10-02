@@ -98,6 +98,7 @@ const FIRMWARE = {
     'Sticky Mod (smart)': ['skm', 'u'], 'Smart Mod': ['smart_mod', 'u', 'u'],
     'Sticky Layer (smart)': ['skl', 'l'], 'Smart Layer': ['smart_layer', 'l', 'l'],
     'Num Word': ['num_word', 'l'], 'Flask Leader': ['fled'],
+    'Adaptive Key': ['fak', 'n'],   // &fak <set>: the rules are runtime (see not-exported below)
 };
 // bt.h: BT_SEL and BT_DISC take a profile index (second cell); the rest take none.
 const BT = { 0: 'BT_CLR', 1: 'BT_NXT', 2: 'BT_PRV', 3: 'BT_SEL', 4: 'BT_CLR_ALL', 5: 'BT_DISC' };
@@ -319,6 +320,8 @@ export function exportKeymapText(data, opts = {}) {
     if (leaderLive) notExported.push(`leader: ${leaderLive} flask_leader sequence(s) (position-based runtime slots; urob's leader-key nodes are key-code based). Re-create them in the firmware's leader node or keep the app's JSON export.`);
     const cskLive = (flask.customShift?.slots ?? []).filter((s) => s.base || s.shifted).length;
     if (cskLive) notExported.push(`shift keys: ${cskLive} custom-shift pair(s) (flask_csk is a global runtime table; model them as mod-morph nodes by hand).`);
+    const akLive = (flask.adaptive?.rules ?? []).length;
+    if (akLive) notExported.push(`adaptive keys: ${akLive} flask_adaptive rule(s) (a runtime table; the keymap's ak nodes are only the compiled defaults). Keep the app's JSON export.`);
     const gestLive = (flask.gestures?.sets ?? []).flat().filter((g) => g.action).length;
     if (gestLive) notExported.push(`gestures: ${gestLive} gesture binding(s) (Imprint trackball runtime table).`);
     const settings = ['autoscroll', 'accel', 'scrollSnap', 'scrollSpeed', 'ballSwap', 'autoMouse', 'rgb']

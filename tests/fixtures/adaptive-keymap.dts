@@ -1,0 +1,189 @@
+/* Fixture for gen-totem-default.mjs: the Totem-ZMK adaptive-key nodes verbatim
+ * (config/totem.keymap, commit 4582d15: ak_rti and ak_alt) plus the new
+ * &fak behavior and its flask,adaptive-defaults node. Expected parse: 35 rules
+ * (set 0 = rules 0-23, set 1 = rules 24-34), fallback &key_repeat on sets 0, 1. */
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+
+/ {
+    behaviors {
+        slk_wbspc: slk_wbspc { compatible = "zmk,behavior-switch-layout-key"; #binding-cells = <0>; };
+        slk_wdel: slk_wdel { compatible = "zmk,behavior-switch-layout-key"; #binding-cells = <0>; };
+
+        ak_rti: ak_rti {
+            compatible = "zmk,behavior-adaptive-key";
+            label = "AK_RTI";
+            #binding-cells = <0>;
+            bindings = <&key_repeat>;
+
+            rti_a {
+                trigger-keys = <A>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp O>;
+            };
+
+            rti_b {
+                trigger-keys = <B>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp E &kp C &kp A &kp U &kp S &kp E>;
+            };
+
+            rti_e {
+                trigger-keys = <E>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp U>;
+            };
+
+            rti_g {
+                trigger-keys = <G>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp I &kp N &kp G>;
+            };
+
+            rti_h {
+                trigger-keys = <H>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp I &kp C &kp H>;
+            };
+
+            rti_i {
+                trigger-keys = <I>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp N &kp G>;
+            };
+
+            rti_j {
+                trigger-keys = <J>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp U &kp S &kp T>;
+            };
+
+            rti_k {
+                trigger-keys = <K>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp I &kp N &kp G>;
+            };
+
+            rti_l {
+                trigger-keys = <L>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp O &kp N &kp G>;
+            };
+
+            rti_m {
+                trigger-keys = <M>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp E &kp N &kp T>;
+            };
+
+            rti_n {
+                trigger-keys = <N>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp I &kp O &kp N>;
+            };
+
+            rti_o {
+                trigger-keys = <O>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp U &kp L &kp D>;
+            };
+
+            rti_p {
+                trigger-keys = <P>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp E &kp O &kp P &kp L &kp E>;
+            };
+
+            rti_q {
+                trigger-keys = <Q>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp U>;
+            };
+
+            rti_t {
+                trigger-keys = <T>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp I &kp O &kp N>;
+            };
+
+            rti_u {
+                trigger-keys = <U>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp I>;
+            };
+
+            rti_v {
+                trigger-keys = <V>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp S>;
+            };
+
+            rti_y {
+                trigger-keys = <Y>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp O &kp U>;
+            };
+
+            rti_space {
+                trigger-keys = <SPACE>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp T &kp H &kp E>;
+            };
+
+            rti_sentence {
+                trigger-keys = <DOT QMARK EXCL>;
+                max-prior-idle-ms = <500>;
+                bindings = <&kp SPACE &sk LSHFT>;
+            };
+
+            rti_bspc {
+                trigger-keys = <BSPC>;
+                max-prior-idle-ms = <500>;
+                bindings = <&slk_wbspc>;
+            };
+
+            rti_del {
+                trigger-keys = <DEL>;
+                max-prior-idle-ms = <500>;
+                bindings = <&slk_wdel>;
+            };
+        };
+
+        ak_alt: ak_alt {
+            compatible = "zmk,behavior-adaptive-key";
+            label = "AK_ALT";
+            #binding-cells = <0>;
+            bindings = <&key_repeat>;
+
+            alt_left    { trigger-keys = <LEFT>;  bindings = <&kp RIGHT>; };
+            alt_right   { trigger-keys = <RIGHT>; bindings = <&kp LEFT>; };
+            alt_up      { trigger-keys = <UP>;    bindings = <&kp DOWN>; };
+            alt_down    { trigger-keys = <DOWN>;  bindings = <&kp UP>; };
+            alt_pgup    { trigger-keys = <PG_UP>; bindings = <&kp PG_DN>; };
+            alt_pgdn    { trigger-keys = <PG_DN>; bindings = <&kp PG_UP>; };
+            alt_home    { trigger-keys = <HOME>;  bindings = <&kp END>; };
+            alt_end     { trigger-keys = <END>;   bindings = <&kp HOME>; };
+            alt_tab     { trigger-keys = <TAB>;   bindings = <&kp LS(TAB)>; };
+            alt_lbkt    { trigger-keys = <LBKT>;  bindings = <&kp RBKT>; };
+            alt_rbkt    { trigger-keys = <RBKT>;  bindings = <&kp LBKT>; };
+        };
+
+        fak: fak {
+            compatible = "zmk,behavior-flask-adaptive";
+            #binding-cells = <1>;
+            display-name = "Adaptive Key";
+        };
+    };
+
+    fak_defaults {
+        compatible = "flask,adaptive-defaults";
+        sets = <&ak_rti &ak_alt>;
+    };
+
+    keymap {
+        compatible = "zmk,keymap";
+        base {
+            bindings = <&kp A &kp B &fak 0 &fak 1>;
+        };
+    };
+};

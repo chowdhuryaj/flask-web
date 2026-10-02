@@ -24,6 +24,7 @@ import { ZmkLeaderTab } from './zmk-leader-tab.js?v=62';
 import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=62';
 import { ZmkShiftTab } from './zmk-shift-tab.js?v=62';
 import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=62';
+import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=62';
 import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=62';
 import { ZmkTestTab } from './zmk-test-tab.js?v=62';
 import { ZmkModesTab } from './zmk-modes-tab.js?v=62';
@@ -61,6 +62,9 @@ export const TAB_TABLE = [
     { id: 'zmk-tapdance', label: 'Tap Dance', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.tapDance, ctor: ZmkTapDanceTab },
     // §1.3: renamed "Shift" → "Shift Keys" (native label).
     { id: 'zmk-shift', label: 'Shift Keys', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.customShift, ctor: ZmkShiftTab },
+    // flask_adaptive (0x2B, v18): caps.adaptive is main.js's async probe (GET 2B 02
+    // answers); Imprint and older Totem images answer 0xFF, so the tab hides.
+    { id: 'zmk-adaptive', label: 'Adaptive', group: 'behaviour', screen: 'behaviours', when: (a) => zmk(a) && !!a.caps.adaptive, ctor: ZmkAdaptiveTab },
     { id: 'zmk-leader', label: 'Leader', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.leader, ctor: ZmkLeaderTab },
     // AJ-Q4 / WP7: per-key and virtual-slot hold-tap timing (flask_holdtap,
     // 0x2A). caps.holdtap is set by main.js's async probe: proto >= 17 AND

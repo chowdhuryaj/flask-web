@@ -268,6 +268,7 @@ export const CATALOG = [
 
     E('macro', 'run', 'Macro', 'Plays a macro you built (Behaviour › Macros).', [{ key: 'slot', kind: 'slot' }], ['Flask Macro'], { tag: 'Macro' }),
     E('tap-dance', 'run', 'Tap dance', 'Different output per tap count (Behaviour › Tap Dance).', [{ key: 'slot', kind: 'slot' }], ['Tap Dance'], { tag: 'Tap dance' }),
+    E('adaptive', 'run', 'Adaptive key', 'Output depends on the key typed before it (Behaviour › Adaptive).', [{ key: 'slot', kind: 'slot' }], ['Adaptive Key'], { tag: 'Adaptive' }),
     E('leader', 'run', 'Leader', 'Starts a leader sequence (Behaviour › Leader).', [], ['Flask Leader'], { tag: 'Leader' }),
 
     E('advanced', 'advanced', 'Other behavior', 'Any other firmware behavior, raw params.', [{ key: 'raw', kind: 'raw' }], [], { tag: '' }),
@@ -541,7 +542,7 @@ function decodeStudio(b) {
         case 'one-shot-layer': return { entryId, params: { layer: p1, mode: set.mode ?? 'plain' } };
         case 'smart-layer':
             return p1 === p2 ? { entryId, params: { layer: p1 } } : { entryId, params: { layer: p1, layer2: p2 } };
-        case 'macro': case 'tap-dance': case 'gesture': return { entryId, params: { slot: p1 } };
+        case 'macro': case 'tap-dance': case 'gesture': case 'adaptive': return { entryId, params: { slot: p1 } };
         case 'bluetooth': return { entryId, params: { code: p1, profile: p2 } };
         case 'mouse-key': case 'autoscroll': case 'ball-swap': case 'lighting': case 'underglow': case 'output': case 'power':
             return { entryId, params: p2 ? { code: p1, p2 } : { code: p1 } };
@@ -598,7 +599,7 @@ function encodeStudio(id, params) {
         case 'layer-tap': return B(p.layer, keyToUsage(p.tap ?? 0, p.tapMods));
         case 'hold-layer': case 'to-layer': case 'toggle-layer': case 'num-word': case 'one-shot-layer': return B(p.layer);
         case 'smart-layer': return B(p.layer, p.layer2 ?? p.layer);
-        case 'macro': case 'tap-dance': case 'gesture': return B(p.slot);
+        case 'macro': case 'tap-dance': case 'gesture': case 'adaptive': return B(p.slot);
         case 'bluetooth': return B(p.code, p.profile);
         case 'mouse-key': case 'autoscroll': case 'ball-swap': case 'lighting': case 'underglow': case 'output': case 'power':
             return B(p.code, p.p2 ?? 0);
@@ -672,6 +673,7 @@ export function capParts(binding, adapter = adapterOf(binding)) {
         case 'one-shot-layer': return { top: `One-shot${timingTag(p)}`, main: layerText(adapter, p.layer) };
         case 'macro': return { top: '', main: `M${p.slot}` };
         case 'tap-dance': return { top: '', main: `TD${p.slot}` };
+        case 'adaptive': return { top: '', main: `AK${p.slot}` };
         case 'gesture': return { top: 'Gesture', main: String(p.slot) };
         case 'media-key':
             return { top: '', main: usageCap(((HID_PAGE_CONSUMER << 16) | p.code) >>> 0) };

@@ -88,8 +88,11 @@ export function familyLabel(family) {
 // strip only renders it on the next keypress).
 // totem: same version line as imprint (16) — the pointing/RGB channels it
 // lacks answer "unhandled", they are not a lower version. v17 (totem only)
-// added flask_holdtap 0x2A: per-key-position runtime hold-tap timing.
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 16, totem: 17 };
+// added flask_holdtap 0x2A: per-key-position runtime hold-tap timing. v18
+// (totem only) added flask_adaptive 0x2B: runtime adaptive keys (&fak <set>:
+// rules keyed on the previous key, typed multi-step outputs). Probed, not
+// table-gated: caps.adaptive comes from main.js probeAdaptive().
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 16, totem: 18 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =

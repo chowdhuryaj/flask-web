@@ -16,7 +16,7 @@ const LAYER_CODE = {
     'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl',
     'smart-layer': 'smart', 'num-word': 'num',
 };
-const MACRO_LIKE = new Set(['macro', 'tap-dance', 'leader', 'gesture']);
+const MACRO_LIKE = new Set(['macro', 'tap-dance', 'leader', 'gesture', 'adaptive']);
 
 /** The ZMK-ish short code a layer binding is known by ('mo', 'lt', 'tog' …). */
 export const layerCodeOf = (entryId) => (entryId === 'layer-tap' ? 'lt' : LAYER_CODE[entryId] ?? null);
@@ -38,7 +38,7 @@ export function legendOf(value, adapter = 'zmk-studio') {
     if (LAYER_CODE[id]) return { main: cp.main, sub: LAYER_CODE[id], kind: 'layer', subKind: 'dim' };
     if (id === 'one-shot-mod') return { main: cp.main, sub: 'osm', kind: 'hold', subKind: 'dim' };
     if (id === 'key-toggle') return { main: cp.main, sub: 'tog', kind: 'hold', subKind: 'dim' };
-    if (MACRO_LIKE.has(id)) return { main: cp.main, sub: id === 'tap-dance' ? 'tap dance' : id === 'macro' ? 'macro' : '', kind: 'macro', subKind: 'dim' };
+    if (MACRO_LIKE.has(id)) return { main: cp.main, sub: id === 'tap-dance' ? 'tap dance' : id === 'macro' ? 'macro' : id === 'adaptive' ? 'adaptive' : '', kind: 'macro', subKind: 'dim' };
     let main = cp.main;
     // Unnamed firmware behaviours read "#28"; the catalog's `node` (e.g. fht_l) is the better name when it exists.
     if (id === 'advanced' && /^#\d+$/.test(main)) {

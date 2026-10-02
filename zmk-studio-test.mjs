@@ -1166,7 +1166,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(ZMK_FAMILY_CODES[4], 'imprint', 'meta family code 4 stays imprint');
     eq(ZMK_FAMILIES.includes('totem'), true, 'totem is a ZMK family');
     eq(ZMK_FAMILY_LABELS.totem, 'TOTEM (ZMK)', 'totem label');
-    eq(ZMK_EXPECTED_PROTOCOL.totem, 17, 'totem is v17 (flask_holdtap 0x2A)');
+    eq(ZMK_EXPECTED_PROTOCOL.totem, 18, 'totem is v18 (flask_adaptive 0x2B)');
     eq(ZMK_EXPECTED_PROTOCOL.imprint, 16, 'imprint stays v16');
     // Shared VID/PID stays a candidate (imprint); meta 0x03 decides 4 vs 5.
     eq(zmkFamilyCandidate(0x1D50, 0x615E), 'imprint', 'VID/PID is only a candidate');

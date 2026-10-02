@@ -31,6 +31,8 @@ export const SURFACES = {
     'zmk.key': { adapter: 'zmk-studio', stores: 'Studio binding', hide: [] },
     'zmk.comboOutput': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'advanced'] },
     'zmk.tapDanceStep': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'tap-dance', 'advanced'] },
+    'zmk.adaptiveTrigger': { adapter: 'zmk-typed', stores: 'usage + mods', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced'] },
+    'zmk.adaptiveStep': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'tap-dance', 'adaptive', 'advanced'] },
     'zmk.typedOutput': { adapter: 'zmk-typed', stores: 'usage / macro', hide: ['modifiers', 'layers', 'mouse', 'leader', 'tap-dance', 'advanced'] },
     'zmk.macroKey': { adapter: 'zmk-typed', stores: 'usage', hide: ['modifiers', 'layers', 'mouse', 'run', 'advanced'] },
     'zmk.cskBase': { adapter: 'zmk-typed', stores: 'usage', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced', 'mods-row'] },
@@ -436,7 +438,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         }
         if (param.kind === 'slot') {
             const out = [];
-            const pre = e.id === 'macro' ? 'M' : e.id === 'tap-dance' ? 'TD' : '';
+            const pre = e.id === 'macro' ? 'M' : e.id === 'tap-dance' ? 'TD' : e.id === 'adaptive' ? 'AK' : '';
             for (let i = param.min ?? 0; i <= (param.max ?? 15); i++) {
                 const summary = app?.slotSummary?.(e.id, i) ?? '';
                 out.push({ value: i, label: `${e.name} ${i}`, cap: `${pre}${i}`, top: summary ? summary.slice(0, 14) : '', summary });
