@@ -77,7 +77,7 @@ const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
 
 // ---- picker surfaces (§4.7) ----
 {
-    const groups = new Set([...CATALOG_GROUPS.map((g) => g.id), 'leader', 'tap-dance', 'adaptive', 'mods-row']);
+    const groups = new Set([...CATALOG_GROUPS.map((g) => g.id), 'leader', 'tap-dance', 'adaptive', 'mods-row', 'mod-keys']);
     for (const [id, s] of Object.entries(SURFACES)) {
         ok(['zmk-studio', 'zmk-typed'].includes(s.adapter), `${id} adapter`);
         ok(s.hide.every((h) => groups.has(h)), `${id} hide ids`);

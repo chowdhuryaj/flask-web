@@ -24,7 +24,7 @@ import {
     comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
 } from './zmk-combos-codec.js?v=62';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=62';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=62';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=62';
 
 /** A key position's legend on the BASE layer ("Q", "Esc", a tap-hold's tap),
  * or the raw index when the board has no keymap bound yet. */
@@ -41,6 +41,8 @@ export function legendOf(pos) {
     } catch { return String(pos); }
 }
 
+let activeTabAbort = null;
+
 const posText = (ps) => ps.map(legendOf).join(' + ');
 
 export class ZmkCombosTab {
@@ -52,9 +54,13 @@ export class ZmkCombosTab {
         installSlotSummary(app);
         // Legends follow base-layer edits. Not mid-pick: render() there would
         // fight the board's pick banner.
+        // A rebuilt tab drops its predecessor's listener (it grew by one per rebuild).
+        activeTabAbort?.abort();
+        activeTabAbort = new AbortController();
         board.addEventListener('change', () => {
             if (this.root.isConnected && this.slots && this.editing == null) this.render();
-        });
+        }, { signal: activeTabAbort.signal });
+        onSlotsChanged(CH.combos, this, () => { if (this.slots && this.editing == null) this.load().catch(() => {}); });
     }
 
     async load() {
@@ -65,12 +71,12 @@ export class ZmkCombosTab {
         hid?.pause?.();
         try {
             this.enabled = await flask.getU16(CH.combos, V.combosEnabled);
-            this.slotCount = await flask.getU16(CH.combos, V.combosSlotCount);
+            this.slotCount = await dim(this.app, CH.combos, V.combosSlotCount);
             this.timeout = await flask.getU16(CH.combos, V.combosTimeout);
             // Keys per slot sizes the wire frame — RO value on v9+; v7/v8
             // firmware answers unhandled (0) and is fixed at 4.
             this.maxKeys = (this.app.caps?.combosKeys
-                && await flask.getU16(CH.combos, V.combosKeys)) || COMBO_MAX_KEYS;
+                && await dim(this.app, CH.combos, V.combosKeys)) || COMBO_MAX_KEYS;
             // v12 firmware speaks typed slots (usage-hold / macro /
             // behavior); older firmware keeps the usage-only frame, bridged
             // into the same typed shape so the tab has ONE internal model.
@@ -153,7 +159,14 @@ export class ZmkCombosTab {
         // its local draft, so an abandoned draft never leaves a 1-key slot.
         const local = this.slots[i];
         const wire = local.positions.length < 2 ? this.emptySlot(i) : local;
-        const adopt = (echo) => { if (wire === local) this.slots[i] = echo; };
+        // The firmware zeroes window / idle / layer of a slot with no output; keep
+        // what the user set for the write that first gives it one (WB-07).
+        const adopt = (echo) => {
+            if (wire !== local) return;
+            const keep = local.action === COMBO_ACTION.none && this.timed
+                ? { timeoutMs: local.timeoutMs, priorIdleMs: local.priorIdleMs, layer: local.layer } : {};
+            this.slots[i] = { ...echo, ...keep };
+        };
         try {
             if (this.timed) {
                 const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV3,
@@ -212,10 +225,12 @@ export class ZmkCombosTab {
 
     async clearSlot(i) {
         if (this.editing === i) this.stopPick();
+        const before = { ...this.slots[i], positions: [...this.slots[i].positions] };
         this.slots[i] = this.emptySlot(i);
         this.drafts.delete(i);
         this.warn.delete(i);
-        await this.writeSlot(i);
+        zmkSetSlotName(this.app.profile?.family ?? 'imprint', 'combos', i, '');   // the name must not outlive the slot (WB-12)
+        await this.writeSlot(i, before);
     }
 
     // ---- position picking: on the main board ----

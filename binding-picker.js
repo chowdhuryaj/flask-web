@@ -30,8 +30,9 @@ import {
 export const SURFACES = {
     'zmk.key': { adapter: 'zmk-studio', stores: 'Studio binding', hide: [] },
     'zmk.comboOutput': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'advanced'] },
-    'zmk.tapDanceStep': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'tap-dance', 'advanced'] },
-    'zmk.adaptiveTrigger': { adapter: 'zmk-typed', stores: 'usage + mods', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced'] },
+    // A tap-dance step or adaptive step/fallback that runs Tap Dance or Adaptive Key recurses in the firmware (F01).
+    'zmk.tapDanceStep': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'tap-dance', 'adaptive', 'advanced'] },
+    'zmk.adaptiveTrigger': { adapter: 'zmk-typed', stores: 'usage + mods', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced', 'mod-keys'] },
     'zmk.adaptiveStep': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'tap-dance', 'adaptive', 'advanced'] },
     'zmk.typedOutput': { adapter: 'zmk-typed', stores: 'usage / macro', hide: ['modifiers', 'layers', 'mouse', 'leader', 'tap-dance', 'advanced'] },
     'zmk.macroKey': { adapter: 'zmk-typed', stores: 'usage', hide: ['modifiers', 'layers', 'mouse', 'run', 'advanced'] },
@@ -313,12 +314,13 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         const curKey = current?.entryId === 'key' ? current.params.key : null;
         for (const s of keySections()) {
             if (s.id === 'shifted' && !modsAllowed) continue;
+            if (s.id === 'modifiers' && spec.hide.includes('mod-keys')) continue;   // a modifier alone is never "the key typed before"
             host.append(el('div', { class: 'bp-section' },
                 el('h4', { text: s.label }),
                 el('div', { class: 'bp-grid' }, ...s.keys.map((k) => keyBtn(k.cap, k.label,
                     k.mods ? `${k.label} (Shift + key)` : k.label,
-                    withSpecials && curKey === k.key && (current.params.mods ?? 0) === ((k.mods || heldMods) & 0xFF),
-                    () => onKey(k.key, k.mods || (withSpecials ? heldMods : 0)), s.id === 'editing' || s.id === 'modifiers')))));
+                    withSpecials && curKey === k.key && (current.params.mods ?? 0) === ((k.mods | heldMods) & 0xFF),
+                    () => onKey(k.key, k.mods | (withSpecials ? heldMods : 0)), s.id === 'editing' || s.id === 'modifiers')))));
         }
     }
 
@@ -345,13 +347,13 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     function renderSearch() {
         const q = query;
         if (keyEntry) {
-            const hits = keySections().filter((s) => s.id !== 'shifted' || modsAllowed)
+            const hits = keySections().filter((s) => (s.id !== 'shifted' || modsAllowed) && !(s.id === 'modifiers' && spec.hide.includes('mod-keys')))
                 .flatMap((s) => s.keys.filter((k) => k.label.toLowerCase().includes(q) || k.cap.toLowerCase() === q)
                     .map((k) => ({ ...k, section: s.label })));
             if (hits.length) {
                 bodyEl.append(el('div', { class: 'bp-section' }, el('h4', { text: 'Keys' }),
                     el('div', { class: 'bp-grid' }, ...hits.map((k) => keyBtn(k.cap, k.label, `${k.label} · ${k.section}`, false,
-                        () => assign('key', { key: k.key, mods: k.mods || heldMods }))))));
+                        () => assign('key', { key: k.key, mods: k.mods | heldMods }))))));
             }
         }
         const rows = entries.filter((e) => e.id !== 'key' && (e.name.toLowerCase().includes(q) || e.desc.toLowerCase().includes(q)
@@ -406,9 +408,14 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
             const c = control(e, x, p);
             if (c) controls.append(c);
         }
-        const go = el('button', { class: 'btn small primary bp-assign', text: 'Assign', onclick: () => {
+        // One-shot / Mod-tap default to Shift; with every chip off the param is 0 (&sk 0, &mt 0 x).
+        const noMods = (e.id === 'mod-tap' || e.id === 'one-shot-mod')
+            && visible.some((x) => x.kind === 'mods' && !(p[x.key] & 0xFF)) && p.holdKey == null && p.key == null;
+        const go = el('button', { class: 'btn small primary bp-assign', text: 'Assign', disabled: noMods,
+            title: noMods ? 'Pick at least one modifier.' : null, onclick: () => {
             const missing = visible.find((x) => x.kind === 'key' && !p[x.key]);
             if (missing) { setCap(`Pick the ${missing.key === 'tap' ? 'tap key' : 'key'} first.`); return; }
+            if (noMods) { setCap('Pick at least one modifier.'); return; }
             assign(e.id, p);
         } });
         row.append(controls, go);
@@ -438,12 +445,13 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         }
         if (param.kind === 'slot') {
             const out = [];
+            const active = param.active != null ? [{ value: param.active, label: `${e.name}: Active set`, cap: 'Active', top: e.tag, summary: 'follows the Active set' }] : [];
             const pre = e.id === 'macro' ? 'M' : e.id === 'tap-dance' ? 'TD' : e.id === 'adaptive' ? 'AK' : '';
             for (let i = param.min ?? 0; i <= (param.max ?? 15); i++) {
                 const summary = app?.slotSummary?.(e.id, i) ?? '';
                 out.push({ value: i, label: `${e.name} ${i}`, cap: `${pre}${i}`, top: summary ? summary.slice(0, 14) : '', summary });
             }
-            return out;
+            return out.concat(active);
         }
         return param.options.map((v) => ({ value: v, label: param.labels?.[v] ?? String(v),
             cap: shortCap(e, v, param), top: '' }));

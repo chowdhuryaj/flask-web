@@ -15,7 +15,11 @@ import { el, card, toggleRow, modal, toast, renameLabel, reloadBar } from './ui.
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=62';
 import { CH, V } from './flaskproto.js?v=62';
 import { saveState } from './save-state.js?v=62';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=62';
+import {
+    blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary,
+    onSlotsChanged, announceSlots, draftSlots, dim, isRecursiveOutput, macroInUse,
+} from './zmk-behaviour-common.js?v=62';
+import { isModifierUsage } from './zmk-capture.js?v=62';
 import { MACRO_ACTION, encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=62';
 import {
     AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
@@ -26,6 +30,13 @@ const STEP_SURFACE = 'zmk.adaptiveStep';
 const TRIG_SURFACE = 'zmk.adaptiveTrigger';
 const noStep = () => ({ action: AK_ACTION.none, behaviorId: 0, param1: 0, param2: 0 });
 const usageStep = (u) => ({ action: AK_ACTION.usage, behaviorId: 0, param1: u >>> 0, param2: 0 });
+/** An output read off the device, as the tab holds it. A stored Tap Dance /
+ * Adaptive Key step would recurse in the firmware: show it as empty, flagged
+ * `unknown` so the next write replaces it rather than trusting the cache. */
+const readOut = (d) => {
+    const o = { action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 };
+    return isRecursiveOutput(o) ? { ...noStep(), unknown: true } : o;
+};
 const emptyRule = (index, nSteps) => ({ index, set: 0, trigger: 0, maxIdleMs: 0, strict: false,
     steps: Array.from({ length: nSteps }, noStep) });
 
@@ -56,6 +67,8 @@ export class ZmkAdaptiveTab {
         this.fallback = [];
         installSlotSummary(app);
         registerSummary('adaptive', (set) => this.setSummary(set));
+        // A Mode was applied: the rule pool changed behind our cache.
+        onSlotsChanged(CH.adaptive, this, () => { if (this.rules.length) this.load().catch(() => {}); });
     }
 
     get fam() { return this.app.profile?.family ?? 'totem'; }
@@ -65,25 +78,29 @@ export class ZmkAdaptiveTab {
         hid?.pause?.();
         try {
             this.enabled = await flask.getU16(CH.adaptive, V.akEnabled);
-            this.setCount = await flask.getU16(CH.adaptive, V.akSetCount);
-            this.ruleCount = await flask.getU16(CH.adaptive, V.akRuleCount);
-            this.stepCount = await flask.getU16(CH.adaptive, V.akStepCount) || 6;
+            this.setCount = await dim(this.app, CH.adaptive, V.akSetCount);
+            this.ruleCount = await dim(this.app, CH.adaptive, V.akRuleCount);
+            this.stepCount = await dim(this.app, CH.adaptive, V.akStepCount) || 6;
             this.rules = [];
             for (let i = 0; i < this.ruleCount; i++) {
                 const rule = { ...decodeAkRule(await flask.getBytes(CH.adaptive, V.akRule, [i], 1)), index: i };
                 rule.steps = [];
-                // An empty rule has nothing to read; a live one is read to its first NONE.
+                // An empty rule has nothing to read; a live one is read to its first NONE
+                // (the firmware stops there too, flask_adaptive.c: steps behind it never run).
+                // Steps behind it are not read: `unknown`, so a write never trusts them.
+                let ended = rule.trigger === 0;
                 for (let s = 0; s < this.stepCount; s++) {
-                    if (rule.trigger === 0) { rule.steps.push(noStep()); continue; }
-                    const d = decodeAkStep(await flask.getBytes(CH.adaptive, V.akStep, [i, s], 2));
-                    rule.steps.push({ action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 });
+                    if (ended) { rule.steps.push(rule.trigger === 0 ? noStep() : { ...noStep(), unknown: true }); continue; }
+                    const o = readOut(decodeAkStep(await flask.getBytes(CH.adaptive, V.akStep, [i, s], 2)));
+                    rule.steps.push(o);
+                    if (!o.action) ended = true;
                 }
                 this.rules.push(rule);
             }
             this.fallback = [];
             for (let st = 0; st < this.setCount; st++) {
                 const d = decodeAkFallback(await flask.getBytes(CH.adaptive, V.akFallback, [st], 1));
-                this.fallback.push({ action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 });
+                this.fallback.push(readOut(d));
             }
         } finally {
             hid?.resume?.();
@@ -98,17 +115,19 @@ export class ZmkAdaptiveTab {
 
     // ---- device writes (each adopts the echo, then marks the bar edited) ----
 
-    async writeHeader(i) {
+    /** Write rule i's header with `patch` applied; the cache only changes
+     * from the echo, so a refused write leaves it showing what the device holds. */
+    async writeHeader(i, patch = {}) {
         const r = this.rules[i];
-        const echo = decodeAkRule(await this.app.flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(i, r), 1));
+        const echo = decodeAkRule(await this.app.flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(i, { ...r, ...patch }), 1));
         Object.assign(r, { set: echo.set, trigger: echo.trigger, maxIdleMs: echo.maxIdleMs, strict: echo.strict });
         if (echo.trigger === 0) r.steps = Array.from({ length: this.stepCount }, noStep);
         this.bar?.markEdited();
     }
 
-    async writeStep(i, s) {
+    async writeStep(i, s, step) {
         const d = decodeAkStep(await this.app.flask.setBytes(CH.adaptive, V.akStep,
-            encodeAkStep(i, s, this.rules[i].steps[s]), 2));
+            encodeAkStep(i, s, step), 2));
         this.rules[i].steps[s] = { action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 };
         this.bar?.markEdited();
     }
@@ -119,16 +138,14 @@ export class ZmkAdaptiveTab {
         for (let s = 0; s < this.stepCount; s++) {
             const cur = this.rules[i].steps[s];
             const w = want[s];
-            if (cur.action === w.action && cur.behaviorId === w.behaviorId
+            if (!cur.unknown && cur.action === w.action && cur.behaviorId === w.behaviorId
                 && cur.param1 === w.param1 && cur.param2 === w.param2) continue;
-            this.rules[i].steps[s] = w;
-            await this.writeStep(i, s);
+            await this.writeStep(i, s, w);   // the cache adopts the echo, never the wish
         }
     }
 
     async writeFallback(set, o) {
         try {
-            this.fallback[set] = o;
             const d = decodeAkFallback(await this.app.flask.setBytes(CH.adaptive, V.akFallback,
                 encodeAkFallback(set, o), 1));
             this.fallback[set] = { action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 };
@@ -147,49 +164,95 @@ export class ZmkAdaptiveTab {
 
     // ---- text -> output ----
 
-    /** Lowest empty flask_macros slot, or null. */
+    /** Lowest flask_macros slot that is empty on the device and not an open
+     * draft in the Macros tab, or null. */
     async freeMacroSlot(count) {
         for (let m = 0; m < count; m++) {
+            if (draftSlots.macro.has(m)) continue;
             const d = decodeMacroStep(await this.app.flask.getBytes(CH.macros, V.macrosStep, [m, 0], 2));
             if (d.action === MACRO_ACTION.empty) return m;
         }
         return null;
     }
 
-    /** Text -> steps. Short text is inline key steps; longer text becomes a
-     * new flask_macros slot (one MACRO step). Throws an Error with a message
-     * fit for the user; nothing is written when it throws. */
+    /** Text -> {steps, created}. Short text is inline key steps; longer text
+     * becomes a new flask_macros slot (one MACRO step; `created` = its slot).
+     * Throws an Error with a message fit for the user; a half-written macro
+     * is cleared again. */
     async stepsForText(text) {
         const usages = textToUsages(text);
         if (usages == null) {
             const bad = [...text].find((c) => textToUsages(c) == null);
             throw new Error(`Can't type "${bad}": only printable ASCII on a US layout can be typed from text.`);
         }
-        if (usages.length <= this.stepCount) return usages.map(usageStep);
+        if (usages.length <= this.stepCount) return { steps: usages.map(usageStep), created: null };
         const { flask, caps } = this.app;
         if (!caps.macros) {
             throw new Error(`Text over ${this.stepCount} characters needs a macro, and this keyboard has none.`);
         }
-        const slots = await flask.getU16(CH.macros, V.macrosSlotCount);
-        const cap = await flask.getU16(CH.macros, V.macrosStepCount);
+        const slots = await dim(this.app, CH.macros, V.macrosSlotCount);
+        const cap = await dim(this.app, CH.macros, V.macrosStepCount);
         if (usages.length > cap) {
             throw new Error(`A macro holds at most ${cap} characters; this text has ${usages.length}.`);
         }
         const slot = await this.freeMacroSlot(slots);
         if (slot == null) throw new Error(`All ${slots} macro slots are in use; free one in Behaviour › Macros.`);
-        for (let s = 0; s < usages.length; s++) {
-            await flask.setBytes(CH.macros, V.macrosStep,
-                encodeMacroStep(slot, s, { action: MACRO_ACTION.tap, param: usages[s] }), 2);
+        const put = (s, step) => flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(slot, s, step), 2);
+        try {
+            for (let s = 0; s < usages.length; s++) await put(s, { action: MACRO_ACTION.tap, param: usages[s] });
+            // A cleared slot can keep a dead tail behind step 0: end the text explicitly.
+            if (usages.length < cap) await put(usages.length, { action: MACRO_ACTION.empty, param: 0 });
+        } catch (e) {
+            await this.wipeMacro(slot).catch(() => {});
+            throw e;
         }
         zmkSetSlotName(this.fam, 'macros', slot, `AK: ${text}`.slice(0, 40));
         this.macroText[slot] = text.length > 14 ? `${text.slice(0, 14)}…` : text;
         saveState.markDirty(CH.macros, 'Macros', () => this.app.flask.save(CH.macros));
-        return [{ action: AK_ACTION.macro, behaviorId: 0, param1: slot, param2: 0 }];
+        announceSlots(CH.macros, { slot });
+        return { steps: [{ action: AK_ACTION.macro, behaviorId: 0, param1: slot, param2: 0 }], created: slot };
     }
 
-    /** Resolve an editor/draft result ({text} or {steps}) to steps. */
+    /** Empty every live step of a macro slot (step 0 first, so it is dead at once). */
+    async wipeMacro(slot) {
+        const { flask } = this.app;
+        const cap = await dim(this.app, CH.macros, V.macrosStepCount);
+        let live = 0;
+        while (live < cap && decodeMacroStep(await flask.getBytes(CH.macros, V.macrosStep, [slot, live], 2)).action !== MACRO_ACTION.empty) live++;
+        for (let s = 0; s < live; s++) {
+            await flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(slot, s, { action: MACRO_ACTION.empty, param: 0 }), 2);
+        }
+    }
+
+    /** The macro slot a rule's output is, when this tab made it ("AK: ..."). */
+    ownedMacro(steps) {
+        if (steps.length !== 1 || steps[0].action !== AK_ACTION.macro) return null;
+        const slot = steps[0].param1;
+        return this.macroText[slot] != null || zmkSlotName(this.fam, 'macros', slot).startsWith('AK: ') ? slot : null;
+    }
+
+    /** Free a text macro this tab created once nothing refers to it. Anything
+     * unconfirmed (keymap not loaded, a read failed) leaves it in place. */
+    async releaseMacro(slot, skipRule = -1) {
+        let used;
+        try {
+            used = await macroInUse(this.app, slot, { rules: this.rules, fallback: this.fallback, skipRule, keymap: this.refsKeymap });
+        } catch { used = null; }
+        if (used !== false) {
+            if (used === null) toast(`Macro ${slot} left in place: could not confirm nothing else uses it`);
+            return false;
+        }
+        await this.wipeMacro(slot);
+        zmkSetSlotName(this.fam, 'macros', slot, '');
+        delete this.macroText[slot];
+        saveState.markDirty(CH.macros, 'Macros', () => this.app.flask.save(CH.macros));
+        announceSlots(CH.macros, { slot });
+        return true;
+    }
+
+    /** Resolve an editor/draft result ({text} or {steps}) to {steps, created}. */
     async resolveOutput(res) {
-        return res.text ? this.stepsForText(res.text) : res.steps;
+        return res.text ? this.stepsForText(res.text) : { steps: res.steps, created: null };
     }
 
     // ---- actions ----
@@ -214,9 +277,23 @@ export class ZmkAdaptiveTab {
     }
 
     async setOutput(i, res) {
-        const steps = await this.resolveOutput(res);
-        await this.writeSteps(i, steps);
+        const old = this.ownedMacro(liveSteps(this.rules[i]));
+        const { steps, created } = await this.resolveOutput(res);
+        try {
+            await this.writeSteps(i, steps);
+        } catch (e) {
+            if (created != null) await this.releaseMacro(created, i).catch(() => {});
+            throw e;
+        }
+        // The old text macro is dead weight now, unless the new output still is it.
+        if (old != null && this.ownedMacro(steps) !== old) await this.releaseMacro(old, i);
         this.render();
+    }
+
+    async deleteRule(i) {
+        const old = this.ownedMacro(liveSteps(this.rules[i]));
+        await this.writeHeader(i, { trigger: 0 });
+        if (old != null) await this.releaseMacro(old, i);
     }
 
     async swap(a, b) {
@@ -224,9 +301,7 @@ export class ZmkAdaptiveTab {
         const B = structuredClone(this.rules[b]);
         await this.guard('Reorder', async () => {
             for (const [to, from] of [[a, B], [b, A]]) {
-                const cur = this.rules[to];
-                Object.assign(cur, { set: from.set, trigger: from.trigger, maxIdleMs: from.maxIdleMs, strict: from.strict });
-                await this.writeHeader(to);
+                await this.writeHeader(to, { set: from.set, trigger: from.trigger, maxIdleMs: from.maxIdleMs, strict: from.strict });
                 await this.writeSteps(to, from.steps);
             }
         });
@@ -238,6 +313,8 @@ export class ZmkAdaptiveTab {
             value: value ? { action: 1, param1: value } : null,
             onPick: (v) => {
                 const usage = (v.action === 1 ? v.param1 : 0) >>> 0;
+                // Modifier usages never reach the tracker, so a rule on one never matches.
+                if (isModifierUsage(usage)) { toast('Modifier keys can\'t be a trigger; pick the key typed before.', true); return; }
                 if (usage) onPick(usage);
             },
         });
@@ -331,15 +408,20 @@ export class ZmkAdaptiveTab {
     async commitDraft(set) {
         const d = this.drafts.get(set);
         d.err = '';
+        let created = null;
         try {
             if (!d.trigger) throw new Error('Pick the key that comes before.');
             if (!d.text && !d.steps?.length) throw new Error('Type the output text or choose a key.');
-            const steps = await this.resolveOutput(d.text ? { text: d.text } : { steps: d.steps });
-            await this.createRule(set, { trigger: d.trigger, steps, maxIdleMs: Math.min(10000, Number(d.idle) || 0) });
+            const out = await this.resolveOutput(d.text ? { text: d.text } : { steps: d.steps });
+            created = out.created;
+            await this.createRule(set, { trigger: d.trigger, steps: out.steps,
+                maxIdleMs: Math.max(0, Math.min(10000, Math.round(Number(d.idle)) || 0)) });
             this.drafts.delete(set);
             toast(`Rule added to set ${set}`);
         } catch (e) {
             d.err = e.message;
+            // The text macro made for this attempt is unused unless a step of it landed.
+            if (created != null) await this.releaseMacro(created).catch(() => {});
         }
         this.render();
     }
@@ -401,19 +483,22 @@ export class ZmkAdaptiveTab {
     ruleRow(r, group, pos) {
         const i = r.index;
         const live = liveSteps(r).length > 0;
-        const earlier = group.slice(0, pos).some((o) => o.trigger === r.trigger);
+        // Shadowed only when an earlier rule fires whenever this one would: same
+        // trigger, has an output, its idle limit is no tighter, and it is not stricter on mods.
+        const earlier = group.slice(0, pos).some((o) => o.trigger === r.trigger && liveSteps(o).length
+            && (o.maxIdleMs === 0 || (r.maxIdleMs !== 0 && o.maxIdleMs >= r.maxIdleMs))
+            && (!o.strict || r.strict));
         const text = this.ruleText(r);
         const idle = el('input', {
             type: 'number', min: 0, max: 10000, value: r.maxIdleMs || '', placeholder: 'any', style: 'width:72px',
             title: 'max idle ms between the two keys (blank = any time)',
             onchange: (e) => this.guard('Idle write', async () => {
-                r.maxIdleMs = Math.max(0, Math.min(10000, Number(e.target.value) || 0));
-                await this.writeHeader(i);
+                await this.writeHeader(i, { maxIdleMs: Math.max(0, Math.min(10000, Math.round(Number(e.target.value)) || 0)) });
             }),
         });
         const exact = el('input', {
             type: 'checkbox', checked: r.strict,
-            onchange: (e) => this.guard('Exact-mods write', async () => { r.strict = e.target.checked; await this.writeHeader(i); }),
+            onchange: (e) => this.guard('Exact-mods write', () => this.writeHeader(i, { strict: e.target.checked })),
         });
         return el('div', { class: 'row', 'data-rule': i, style: 'flex-wrap:wrap; gap:8px' },
             el('span', { style: 'display:inline-flex; gap:2px' },
@@ -423,10 +508,7 @@ export class ZmkAdaptiveTab {
                     onclick: () => this.swap(i, group[pos + 1].index) })),
             el('button', {
                 class: 'btn small', 'data-act': 'trigger', title: 'change the key that has to come right before',
-                onclick: () => this.pickTrigger(r.trigger, `Rule ${i}: after which key?`, (u) => this.guard('Trigger write', async () => {
-                    r.trigger = u;
-                    await this.writeHeader(i);
-                })),
+                onclick: () => this.pickTrigger(r.trigger, `Rule ${i}: after which key?`, (u) => this.guard('Trigger write', () => this.writeHeader(i, { trigger: u }))),
             }, outCell({ action: 1, param1: r.trigger }, TRIG_SURFACE) ?? '?'),
             el('span', { class: 'faint', text: '→' }),
             el('button', {
@@ -443,7 +525,7 @@ export class ZmkAdaptiveTab {
             earlier ? el('span', { class: 'note', title: 'an earlier rule in this set has the same trigger and wins first',
                 text: '⚠ shadowed' }) : null,
             el('button', { class: 'btn small', text: '✕', title: 'delete this rule', 'data-act': 'delete',
-                onclick: () => this.guard('Delete', async () => { r.trigger = 0; await this.writeHeader(i); }) }));
+                onclick: () => this.guard('Delete', () => this.deleteRule(i)) }));
     }
 
     setCard(set) {

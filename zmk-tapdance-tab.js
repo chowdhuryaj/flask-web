@@ -12,7 +12,7 @@
 import { el, card, toggleRow, modal, toast, reloadBar } from './ui.js?v=62';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=62';
 import { CH, V } from './flaskproto.js?v=62';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary } from './zmk-behaviour-common.js?v=62';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary, onSlotsChanged, dim, isRecursiveOutput } from './zmk-behaviour-common.js?v=62';
 import {
     TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg,
     tdDanceLength, tdSlotIsEmpty,
@@ -34,6 +34,7 @@ export class ZmkTapDanceTab {
         this.drafts = new Set();
         installSlotSummary(app);
         registerSummary('tap-dance', (i) => danceSummary(this.slots?.[i]));
+        onSlotsChanged(CH.tapDance, this, () => { if (this.slots) this.load().catch(() => {}); });
     }
 
     async load() {
@@ -41,17 +42,23 @@ export class ZmkTapDanceTab {
         hid?.pause?.();
         try {
             this.enabled = await flask.getU16(CH.tapDance, V.tdEnabled);
-            this.slotCount = await flask.getU16(CH.tapDance, V.tdSlotCount);
-            this.maxTaps = await flask.getU16(CH.tapDance, V.tdTaps) || 4;
-            this.macroSlots = this.app.caps.macros
-                ? await flask.getU16(CH.macros, V.macrosSlotCount) : 0;
+            this.slotCount = await dim(this.app, CH.tapDance, V.tdSlotCount);
+            this.maxTaps = await dim(this.app, CH.tapDance, V.tdTaps) || 4;
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
                 const cfg = decodeTdCfg(await flask.getBytes(CH.tapDance, V.tdCfg, [i], 1));
                 const taps = [];
+                // A dance is its contiguous prefix (flask_tapdance.c slot_len): stop at
+                // the first NONE. Taps behind it stay unread (`unknown`) and are cleared
+                // before a write could make them live.
+                let ended = false;
                 for (let t = 0; t < this.maxTaps; t++) {
-                    taps.push(decodeTdStep(
-                        await flask.getBytes(CH.tapDance, V.tdStep, [i, t], 2)));
+                    if (ended) { taps.push({ ...this.noTap(i, t), unknown: true }); continue; }
+                    const d = decodeTdStep(await flask.getBytes(CH.tapDance, V.tdStep, [i, t], 2));
+                    // Tap Dance / Adaptive Key as a step recurses in the firmware: show it as empty.
+                    const o = isRecursiveOutput(d) ? { ...this.noTap(i, t), unknown: true } : d;
+                    taps.push(o);
+                    if (!o.action) ended = true;
                 }
                 this.slots.push({ slot: i, termMs: cfg.termMs, taps });
             }
@@ -66,10 +73,16 @@ export class ZmkTapDanceTab {
         this.render();
     }
 
-    async writeStep(i, t) {
+    noTap(i, t) {
+        return { slot: i, tap: t, action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 };
+    }
+
+    /** Write tap t. The cache only changes from the echo, so a refused write
+     * leaves the card showing what the device holds. */
+    async writeStep(i, t, step) {
         try {
-            const r = await this.app.flask.setBytes(CH.tapDance, V.tdStep,
-                encodeTdStep(i, t, this.slots[i].taps[t]), 2);
+            if (step.action) await this.clearUnreadAfter(i, t);
+            const r = await this.app.flask.setBytes(CH.tapDance, V.tdStep, encodeTdStep(i, t, step), 2);
             this.slots[i].taps[t] = decodeTdStep(r); // adopt the echo
             this.bar?.markEdited();
         } catch (e) {
@@ -90,20 +103,20 @@ export class ZmkTapDanceTab {
         this.render();
     }
 
-    emptySlot(i) {
-        return { slot: i, termMs: 0,
-            taps: Array.from({ length: this.maxTaps }, (_, t) => ({
-                slot: i, tap: t, action: TD_ACTION.none,
-                behaviorId: 0, param1: 0, param2: 0,
-            })) };
+    /** Taps behind the first NONE were never read; one of them going live by
+     * accident (a gap being filled) is worse than clearing it. */
+    async clearUnreadAfter(i, t) {
+        for (let k = t + 1; k < this.maxTaps; k++) {
+            if (this.slots[i].taps[k].unknown) await this.writeStepQuiet(i, k, this.noTap(i, k));
+        }
     }
 
     async clearSlot(i) {
-        this.slots[i] = this.emptySlot(i);
         this.drafts.delete(i);
+        zmkSetSlotName(this.app.profile?.family ?? 'imprint', 'tapdance', i, '');   // the name must not outlive the slot (WB-12)
         try {
-            for (let t = 0; t < this.maxTaps; t++) await this.writeStepQuiet(i, t);
-            await this.app.flask.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(i, 0), 1);
+            for (let t = 0; t < this.maxTaps; t++) await this.writeStepQuiet(i, t, this.noTap(i, t));
+            this.slots[i].termMs = decodeTdCfg(await this.app.flask.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(i, 0), 1)).termMs;
             this.bar?.markEdited();
         } catch (e) {
             toast(`Clear failed: ${e.message}`, true);
@@ -111,9 +124,8 @@ export class ZmkTapDanceTab {
         this.render();
     }
 
-    async writeStepQuiet(i, t) {
-        const r = await this.app.flask.setBytes(CH.tapDance, V.tdStep,
-            encodeTdStep(i, t, this.slots[i].taps[t]), 2);
+    async writeStepQuiet(i, t, step) {
+        const r = await this.app.flask.setBytes(CH.tapDance, V.tdStep, encodeTdStep(i, t, step), 2);
         this.slots[i].taps[t] = decodeTdStep(r);
     }
 
@@ -121,12 +133,7 @@ export class ZmkTapDanceTab {
         const o = this.slots[i].taps[t];
         pickOutput({
             app: this.app, surface: 'zmk.tapDanceStep', title: `Dance ${i}: ${TAP_WORDS[t]}`, value: o,
-            onPick: (v) => {
-                Object.assign(this.slots[i].taps[t], {
-                    action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0,
-                }, v.action ? v : {});
-                this.writeStep(i, t);
-            },
+            onPick: (v) => this.writeStep(i, t, v.action ? { ...this.noTap(i, t), ...v } : this.noTap(i, t)),
         });
     }
 
@@ -136,7 +143,6 @@ export class ZmkTapDanceTab {
         const i = this.slots.findIndex((s, idx) =>
             tdSlotIsEmpty(s) && !this.drafts.has(idx));
         if (i < 0) { toast(`All ${this.slotCount} tap-dance slots are in use`, true); return; }
-        this.slots[i] = this.emptySlot(i);
         this.drafts.add(i);
         this.render();
 

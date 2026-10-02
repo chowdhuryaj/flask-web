@@ -165,8 +165,11 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     const again = await exportFlaskState(app);
     eq(Object.keys(again).sort(), Object.keys(old.flask).sort(), 'same sections');
     eq(old.flask.accel.takeoff, 321, 'fixture carries a non-default value');
-    eq(again, old.flask, 'export after import equals the old file byte for byte (as JSON)');
-    eq(JSON.stringify(again), JSON.stringify(old.flask), 'serialises identically');
+    // Tap dances now export only their live prefix (apply pads the rest with NONE).
+    const trimmed = structuredClone(old.flask);
+    for (const sl of trimmed.tapDance?.slots ?? []) { const n = sl.taps.findIndex((t) => !t.action); sl.taps = n < 0 ? sl.taps : sl.taps.slice(0, n); }
+    eq(again, trimmed, 'export after import equals the old file byte for byte (as JSON), tap dances trimmed to their live prefix');
+    eq(JSON.stringify(again), JSON.stringify(trimmed), 'serialises identically');
 
     // F2: save:false applies live with zero saves and reports the channels.
     const saved = [];

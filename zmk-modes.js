@@ -122,9 +122,10 @@ export function modeSummary(mode) {
     } else {
         const named = {
             rgb: 'RGB', combos: 'combos', macros: 'macros', leader: 'leader',
-            gestures: 'gestures', tapDance: 'tap dance', csk: 'shift',
+            gestures: 'gestures', tapDance: 'tap dance',
             autoMouse: 'auto-mouse', accel: 'accel', scrollSnap: 'snap',
-            autoscroll: 'autoscroll', ballswap: 'ball swap',
+            autoscroll: 'autoscroll', ballSwap: 'ball swap', customShift: 'shift keys',
+            adaptive: 'adaptive keys',
         };
         const has = Object.keys(named).filter((k) => f[k] != null).map((k) => named[k]);
         parts.push(has.length ? has.join(', ') : 'module state');

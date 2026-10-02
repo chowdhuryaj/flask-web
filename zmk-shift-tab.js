@@ -15,7 +15,7 @@
 import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=62';
 import { CH, V } from './flaskproto.js?v=62';
 import { usageFromName } from './zmk-keycodes.js?v=62';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary } from './zmk-behaviour-common.js?v=62';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=62';
 import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty } from './zmk-csk-codec.js?v=62';
 
 // One-click starters (AJ's examples). Encodings ride usageFromName so the
@@ -32,6 +32,7 @@ export class ZmkShiftTab {
         this.app = app;
         this.root = blurClicks(el('div'));
         this.drafts = new Set();
+        onSlotsChanged(CH.customShift, this, () => { if (this.slots) this.load().catch(() => {}); });
         installSlotSummary(app);
     }
 
@@ -40,7 +41,7 @@ export class ZmkShiftTab {
         hid?.pause?.();
         try {
             this.enabled = await flask.getU16(CH.customShift, V.cskEnabled);
-            this.slotCount = await flask.getU16(CH.customShift, V.cskSlotCount);
+            this.slotCount = await dim(this.app, CH.customShift, V.cskSlotCount);
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
                 const r = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
