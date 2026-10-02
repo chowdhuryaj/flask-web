@@ -1,1 +1,47 @@
-/* hud: spec §7.1 per-package sheet; empty until its package fills it. */
+/* hud + desktop chrome (WP5). Spec 2.5 / 5.3.
+ * Tokens come from styles.css; the HUD window clones every linked sheet. */
+
+/* ---- HUD look (native HUDWindow parity) ---- */
+.hud {
+  background: color-mix(in srgb, var(--surface) 92%, transparent); /* browser overlay / PiP */
+  border-radius: 12px;
+  padding: 10px;
+}
+.hud .hud-top { gap: 6px; margin-bottom: 6px; }
+.hud .layer-strip { gap: 3px; margin-bottom: 6px; flex-wrap: wrap; }
+.hud .layer-strip button {
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+  border-color: transparent;
+}
+/* open tab = accent fill; the live layer keeps a 1px ring while another is peeked */
+.hud .layer-strip button.shown { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hud .layer-strip button.live:not(.shown) { background: transparent; border-color: var(--accent); color: var(--accent); }
+.hud .kb-wrap { overflow: hidden; }
+.hud .kb-svg { width: 100%; height: auto; }
+.hud .kb-svg .keycap { rx: 3; stroke: color-mix(in srgb, var(--text) 25%, transparent); fill: color-mix(in srgb, var(--text) 8%, transparent); }
+.hud .kb-svg .keycap.pressed { fill: var(--accent); stroke: var(--accent); }
+
+/* Under 150 px tall the panel goes compact (native: padding 6, no hint). */
+@media (max-height: 150px) {
+  body.hud-pip .hud { padding: 6px; }
+  body.hud-pip .hud .hint,
+  body.hud-pip .hud .mono { display: none; }
+  body.hud-pip .hud .layer-strip button { font-size: 9px; padding: 2px 5px; }
+}
+
+/* Electron panel: the window is transparent + vibrancy 'hud', so the page
+ * paints no background and the OS material shows through. */
+body.hud-electron { background: transparent; }
+body.hud-electron .hud { background: transparent; box-shadow: none; border: 0; }
+
+/* ---- Totem-Flask window chrome (titleBarStyle hiddenInset) ----
+ * desktop/preload.js adds .totem-desktop to <html>. The traffic lights sit
+ * at x=14; the first header row keeps clear of them and drags the window. */
+html.totem-desktop header { padding-left: 84px; -webkit-app-region: drag; }
+html.totem-desktop header button,
+html.totem-desktop header select,
+html.totem-desktop header input,
+html.totem-desktop header a,
+html.totem-desktop header .pill { -webkit-app-region: no-drag; }
