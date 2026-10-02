@@ -20,6 +20,7 @@
 // live/baseline split needs nothing new there.
 
 import { el, card, toast, modal } from './ui.js?v=49';
+import { saveState } from './save-state.js?v=1';
 import { applyFlaskState } from './zmk-export.js?v=49';
 import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=50';
 import {
@@ -139,10 +140,14 @@ export class ZmkModesTab {
                         const ok = await writeBaseline(kt, mode.data, async () => {
                             if (mode.data.flask && this.app?.flask && this.app?.caps?.flask) {
                                 const f = await applyFlaskState(this.app, mode.data.flask);   // saves
-                                if (f.failures.length) toast(`${f.failures.length} section(s) skipped`, true);
+                                if (f.failures.length) {
+                                    toast(`${f.failures.length} section(s) failed (${f.failures[0]}); baseline not written`, true);
+                                    return false;
+                                }
                             }
                         });
                         if (!ok) return;   // import stopped or save failed: the error toast stays, no baseline
+                        saveState.clean('studio-keymap');   // the baseline save just persisted the keymap
                         this._save(setBaseline(this.store, id));
                         toast(`"${mode.name}" is now the device baseline`);
                     });

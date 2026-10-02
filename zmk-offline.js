@@ -24,7 +24,7 @@ import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWAR
          zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=51';
 import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=50';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=50';
-import { OfflineFlask, saveWorkspace } from './offline.js?v=49';
+import { OfflineFlask, saveWorkspace, pendingCount, clearDirty } from './offline.js?v=49';
 import { LOCK_UNLOCKED } from './zmk-studio.js?v=49';
 import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=49';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
@@ -655,6 +655,22 @@ export function zmkClearDirty(ws) {
         cskSlot: {}, tdStep: {} };
     if (ws.zmk) ws.zmk.pendingKeymap = null;
     saveWorkspace(ws);
+}
+
+/** Everything queued for replay on either line: the number the status bar's
+ * "Offline — N queued" segment shows. */
+export function offlineQueued(ws) {
+    return pendingCount(ws) + zmkPendingCount(ws);
+}
+
+/** The status bar's "Discard queued": drop both lines' journals. Returns how
+ * many entries were dropped (0 = nothing was queued, nothing touched). */
+export function discardOfflineQueued(ws) {
+    const n = offlineQueued(ws);
+    if (!n) return 0;
+    clearDirty(ws);
+    zmkClearDirty(ws);
+    return n;
 }
 
 // ---------------------------------------------------------------------------
