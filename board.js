@@ -105,7 +105,9 @@ export function splitCap(label) {
 // Parentheses in a top label are a device display name chopped by an
 // abbreviation ("Hold-Tap L (live)" → "HL("). Drop them; the top line is a
 // hint, the full binding is in the caption.
-const cleanTop = (p) => ({ ...p, top: p.top.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim() });
+// "Mod-tap R⇧ · live" does not fit a 1u cap at a readable size, so the board
+// (only) writes it "MT R⇧ · live"; pickers and captions keep the full words.
+const cleanTop = (p) => ({ ...p, top: p.top.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^Mod-tap\b/, 'MT') });
 
 /** The stacked pair for one binding value: catalog split when WP3 provides
  * one, else the label split at its last '·'. */
@@ -115,8 +117,8 @@ export function capPartsOf(value, profile, opts = {}) {
     let label;
     if (adapter) {
         const p = catalogCapParts(value, adapter);
-        if (p?.top) return cleanTop(p);       // WP3's real split wins once it lands
-        label = p?.main ?? '';
+        if (p) return cleanTop(p);            // WP3's capParts is authoritative; never re-split on '·'
+        label = '';
     } else {
         label = profile.labelFor(value);
     }

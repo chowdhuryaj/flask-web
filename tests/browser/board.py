@@ -58,6 +58,8 @@ def totem(browser):
     open_workspace(page, 'TOTEM (ZMK)')
     check(page.locator('.kb-svg g.key').count() == 38, 'totem: 38 keys')
     check(cap(page, 0) == 'Q', f'totem: key 0 starts as Q, got {cap(page, 0)}')
+    texts = page.evaluate("[...document.querySelectorAll('.kb-svg g.key text')].map(t => t.textContent)")
+    check(not [t for t in texts if '(' in t or '…' in t], f'totem: no truncated or "(" cap text: {[t for t in texts if "(" in t or "…" in t]}')
 
     key(page, 0).click()
     check(selected(page) == {'layer': 0, 'pos': 0}, f'totem: select key 0 -> {selected(page)}')
@@ -174,9 +176,11 @@ def nlkb16(browser):
     s = selected(page)
     check(s and isinstance(s['pos'], dict) and 'encoder' in s['pos'], f'nlkb16: encoder cap selects, got {s}')
     # Picking a keycode on an encoder cap keeps the selection there.
-    page.locator('#panels .panel.active button.code').first.click()
+    was = encs.first.locator('.cap-main').text_content()
+    page.locator('#panels .panel.active .bp-grid .bp-key').nth(3).click()   # a letter key, not the current binding
     page.wait_for_timeout(200)
-    check(len(encs.first.locator('.cap-main').text_content()) > 1, 'nlkb16: encoder cap shows the new keycode')
+    now = encs.first.locator('.cap-main').text_content()
+    check(now and now != was, f'nlkb16: encoder cap shows the new keycode ({was!r} -> {now!r})')
     after = selected(page)
     check(after == s, f'nlkb16: encoder pick does not advance (was {s}, now {after}, key was {before})')
     shot(page, 'nlkb16-encoder')
