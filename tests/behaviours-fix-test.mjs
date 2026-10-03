@@ -30,25 +30,25 @@ Object.assign(doc, {
 });
 globalThis.document = doc;
 
-const { CH, V } = await import('../flaskproto.js?v=70');
-const { zmkCapabilities } = await import('../zmk.js?v=70');
-const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=70');
-const { saveState } = await import('../save-state.js?v=70');
-const { setZmkContext } = await import('../zmk-keycodes.js?v=70');
-const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=70');
-const { encodeMacroStep, decodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=70');
-const { decodeAkStep, encodeAkStep, encodeAkRule, AK_ACTION } = await import('../zmk-adaptive-codec.js?v=70');
-const { decodeTdStep, encodeTdStep } = await import('../zmk-tapdance-codec.js?v=70');
-const common = await import('../zmk-behaviour-common.js?v=70');
-const { ZmkMacrosTab } = await import('../zmk-macros-tab.js?v=70');
-const { ZmkAdaptiveTab } = await import('../zmk-adaptive-tab.js?v=70');
-const { ZmkTapDanceTab } = await import('../zmk-tapdance-tab.js?v=70');
-const { ZmkCombosTab } = await import('../zmk-combos-tab.js?v=70');
-const { ZmkLeaderTab } = await import('../zmk-leader-tab.js?v=70');
-const { exportFlaskState, applyFlaskState, namedOut, resolveOut } = await import('../zmk-export.js?v=70');
-const catalog = await import('../behavior-catalog.js?v=70');
-const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=70');
-const { modeSummary } = await import('../zmk-modes.js?v=70');
+const { CH, V } = await import('../flaskproto.js?v=71');
+const { zmkCapabilities } = await import('../zmk.js?v=71');
+const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=71');
+const { saveState } = await import('../save-state.js?v=71');
+const { setZmkContext } = await import('../zmk-keycodes.js?v=71');
+const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=71');
+const { encodeMacroStep, decodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=71');
+const { decodeAkStep, encodeAkStep, encodeAkRule, AK_ACTION } = await import('../zmk-adaptive-codec.js?v=71');
+const { decodeTdStep, encodeTdStep } = await import('../zmk-tapdance-codec.js?v=71');
+const common = await import('../zmk-behaviour-common.js?v=71');
+const { ZmkMacrosTab } = await import('../zmk-macros-tab.js?v=71');
+const { ZmkAdaptiveTab } = await import('../zmk-adaptive-tab.js?v=71');
+const { ZmkTapDanceTab } = await import('../zmk-tapdance-tab.js?v=71');
+const { ZmkCombosTab } = await import('../zmk-combos-tab.js?v=71');
+const { ZmkLeaderTab } = await import('../zmk-leader-tab.js?v=71');
+const { exportFlaskState, applyFlaskState, namedOut, resolveOut } = await import('../zmk-export.js?v=71');
+const catalog = await import('../behavior-catalog.js?v=71');
+const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=71');
+const { modeSummary } = await import('../zmk-modes.js?v=71');
 
 const behaviors = new Map(TOTEM_DEFAULT.behaviors.map((d) => [d.id, d]));
 setZmkContext({ behaviors, layers: [{ id: 0, name: 'base' }] });
@@ -210,7 +210,7 @@ const stub = (tab) => { tab.render = () => {}; return tab; };
     eq(td.slots[3].taps[1].action, 0, 'failed write: cache still shows what the device holds');
     app.flask.setBytes = real;
     // WB-12: delete drops the custom name
-    const { zmkSetSlotName, zmkSlotName } = await import('../zmk.js?v=70');
+    const { zmkSetSlotName, zmkSlotName } = await import('../zmk.js?v=71');
     zmkSetSlotName('totem', 'tapdance', 3, 'mine');
     await td.clearSlot(3);
     eq(zmkSlotName('totem', 'tapdance', 3), '', 'tap dance delete drops its name');
@@ -271,7 +271,7 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
     common.announceSlots(CH.macros);
     await flush(); await flush();
     eq(macros.steps[4][0].action, MACRO_ACTION.tap, 'a whole-table announcement reloads the Macros tab');
-    const { ZmkModesTab } = await import('../zmk-modes-tab.js?v=70');
+    const { ZmkModesTab } = await import('../zmk-modes-tab.js?v=71');
     const modes = stub(new ZmkModesTab(app));
     modes._keymapTab = () => ({ applyKeymapData: async () => ({}) });
     modes.store = { modes: [{ id: 'm1', name: 'Mode', data: { kind: 'flask-zmk-keymap', layers: [],

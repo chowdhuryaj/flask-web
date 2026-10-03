@@ -2,27 +2,27 @@
 // runs the post-connect load sequence (handshake, family confirm, offline
 // replay, tabs), drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=70';
-import { diag } from './diag.js?v=70';
-import { FlaskHID } from './webhid.js?v=70';
-import { renderPreflight } from './preflight.js?v=70';
-import { FlaskProto, CH, V } from './flaskproto.js?v=70';
+import { el, toast, modal } from './ui.js?v=71';
+import { diag } from './diag.js?v=71';
+import { FlaskHID } from './webhid.js?v=71';
+import { renderPreflight } from './preflight.js?v=71';
+import { FlaskProto, CH, V } from './flaskproto.js?v=71';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=70';
-import { CommandPalette } from './command-palette.js?v=70';
-import { HUD } from './hud.js?v=70';
+         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=71';
+import { CommandPalette } from './command-palette.js?v=71';
+import { HUD } from './hud.js?v=71';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
          zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
-         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=70';
-import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=70';
-import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=70';
-import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=70';
-import { shell } from './app-shell.js?v=70';
-import { installCaptions, setCaptionGroup } from './caption.js?v=70';
-import { saveState, discardMessage } from './save-state.js?v=70';
-import { board } from './board.js?v=70';
-import { attachHoldtap } from './behavior-catalog.js?v=70';
-import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=70';
+         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=71';
+import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=71';
+import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=71';
+import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=71';
+import { shell } from './app-shell.js?v=71';
+import { installCaptions, setCaptionGroup } from './caption.js?v=71';
+import { saveState, discardMessage } from './save-state.js?v=71';
+import { board } from './board.js?v=71';
+import { attachHoldtap } from './behavior-catalog.js?v=71';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=71';
 
 function downloadText(filename, text) {
     const a = document.createElement('a');
@@ -202,7 +202,7 @@ async function loadZmkDevice(device) {
     buildTabs();
     if (TABS.length) await showTab(TABS[0].id);
     // Desktop: bring the HUD back if it was showing last time.
-    if (!stale() && await window.totemFlask?.hudShown?.()) { await app.hud.setOpen(true); syncHudBtn(); }
+    if (!stale() && (await window.totemFlask?.hudSettings?.())?.shown) { await app.hud.setOpen(true); syncHudBtn(); }
 }
 
 /** Replay the ZMK-shaped half of the offline queue (slot edits + queued keymap). */
@@ -491,10 +491,28 @@ async function connectClick() {
 
 function syncHudBtn() {
     const b = $('hud-btn');
-    const live = $('app-frame').dataset.mode === 'device';
+    const mode = $('app-frame').dataset.mode;
+    const live = mode === 'device';
     b.style.display = live ? '' : 'none';
     b.textContent = app.hud.open ? 'Floating' : 'Pop out';
     b.classList.toggle('on', !!app.hud.open);
+    // Header toggle: the live HUD while connected; on the desktop app while
+    // unplugged it shows (and flips) whether the HUD comes up on connect.
+    const t = $('hud-toggle');
+    t.hidden = !(live || (IS_DESKTOP && mode === 'offline'));
+    const on = live ? !!app.hud.open : !!app.hud.desk?.shown;
+    t.setAttribute('aria-pressed', String(on));
+}
+
+async function hudToggleClick() {
+    if ($('app-frame').dataset.mode === 'device') {
+        await app.hud.toggle();
+    } else if (window.totemFlask?.setHudShown) {
+        const v = !app.hud.desk?.shown;
+        window.totemFlask.setHudShown(v);
+        if (v) toast('The HUD shows once the keyboard is connected.');
+    }
+    syncHudBtn();
 }
 
 function syncRail() {
@@ -546,6 +564,8 @@ function init() {
 
     $('landing-connect').addEventListener('click', connectClick);
     $('hud-btn').addEventListener('click', async () => { await app.hud.toggle(); syncHudBtn(); });
+    $('hud-toggle').addEventListener('click', hudToggleClick);
+    app.hud.onChange = syncHudBtn;
     setInterval(syncHudBtn, 1000);   // the HUD can close itself (its own ✕, pagehide)
     // Desktop menu / global shortcut (Show HUD). The HUD is live device
     // state, so with no keyboard it waits for the next connect.

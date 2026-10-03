@@ -11,21 +11,21 @@
 //
 // Also hosts the "Hold timing" card (flask_holdtap, proto 17).
 
-import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=70';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=70';
-import { CH, V } from './flaskproto.js?v=70';
-import { board, capPartsOf, htPartsOf } from './board.js?v=70';
-import { saveState } from './save-state.js?v=70';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=71';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=71';
+import { CH, V } from './flaskproto.js?v=71';
+import { board, capPartsOf, htPartsOf } from './board.js?v=71';
+import { saveState } from './save-state.js?v=71';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
     comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
-} from './zmk-combos-codec.js?v=70';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=70';
-import { zmkLayers, layerLabel } from './zmk-keycodes.js?v=70';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=70';
+} from './zmk-combos-codec.js?v=71';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=71';
+import { zmkLayers, layerLabel } from './zmk-keycodes.js?v=71';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=71';
 
 /** A key position's legend on the BASE layer ("Q", "Esc", a tap-hold's tap),
  * or the raw index when the board has no keymap bound yet. */

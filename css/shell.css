@@ -70,6 +70,10 @@ body.in-app { overflow: hidden; }
 .icon-btn:hover:not(:disabled) { background: var(--surface3); color: var(--text); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 #more-btn { border: 1px solid var(--border2); background: var(--surface); width: 38px; height: 38px; }
+/* HUD toggle: icon + label pill, accent while the HUD is on. */
+.icon-btn.hud-toggle { display: inline-flex; gap: 5px; height: 38px; padding: 0 12px; border: 1px solid var(--border2); background: var(--surface); font-size: var(--fs-sm); }
+.icon-btn.hud-toggle[hidden] { display: none; }
+.icon-btn.hud-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
 
 .theme-switch { display: inline-flex; padding: 3px; border: 1px solid var(--border2); border-radius: var(--r-full); background: var(--surface); }
 .theme-switch button {

@@ -191,7 +191,9 @@ app.on('web-contents-created', (_e, contents) => {
 // The renderer opens the HUD as a same-origin popup (hud.js:
 // window.open('about:blank', 'flask-hud')) and paints the live keymap into it
 // from its own single device connection; this process owns the window: flags,
-// corner placement on the cursor's display, menu, global shortcut, settings.
+// placement on the cursor's display, move/resize, menu, global shortcut,
+// settings. The window is click-through except the HUD's toolbar and resize
+// grip, which the renderer switches on while the pointer is over them.
 
 const hudPrefs = require('./hud-prefs');
 const HUD_SHORTCUT = 'Control+Alt+Command+K';
@@ -201,24 +203,30 @@ let hudSettings = null;   // loaded in start()
 let hudWin = null;
 let hudPlacedOn = '';     // display id + workArea the HUD was last placed on
 let hudFollow = null;
+let hudDrag = null;       // { kind: 'move'|'resize', start: bounds } while dragging
+let hudMain = null;       // main window: receives hud-set / hud-settings
+let hudUnlocked = false;  // menu fallback: whole HUD takes the mouse (not persisted)
+const hudAlive = () => hudWin && !hudWin.isDestroyed();
 
-/** Move the HUD to its corner of the display under the cursor. Re-places only
- * when that display (or its workArea: dock, resolution, add/remove) changed,
- * unless forced. */
+/** Put the HUD at its anchor (corner + offset) on the display under the
+ * cursor. Re-places only when that display (or its workArea: dock,
+ * resolution, add/remove) changed, unless forced. Never mid-drag. */
 function placeHud(force) {
-    if (!hudWin || hudWin.isDestroyed()) return;
+    if (!hudAlive() || hudDrag) return;
     const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const key = `${d.id}:${JSON.stringify(d.workArea)}`;
     if (!force && key === hudPlacedOn) return;
     hudPlacedOn = key;
     const [, height] = hudWin.getSize();
-    hudWin.setBounds(hudPrefs.cornerBounds(d.workArea, { width: hudSettings.width, height }, hudSettings.corner));
+    const s = hudSettings;
+    hudWin.setBounds(hudPrefs.cornerBounds(d.workArea, { width: s.width, height }, s.corner, { x: s.offsetX, y: s.offsetY }));
 }
 
 function hudWindowOptions() {
     const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    const b = hudPrefs.cornerBounds(d.workArea, { width: hudSettings.width, height: Math.round(hudSettings.width * 0.55) },
-        hudSettings.corner);
+    const s = hudSettings;
+    const b = hudPrefs.cornerBounds(d.workArea, { width: s.width, height: Math.round(s.width * 0.55) },
+        s.corner, { x: s.offsetX, y: s.offsetY });
     return {
         ...b,
         show: false,              // shown inactive in wireHud: never steals focus
@@ -226,16 +234,19 @@ function hudWindowOptions() {
         transparent: true,
         backgroundColor: '#00000000',
         hasShadow: false,
-        resizable: false,
+        resizable: false,         // user move/resize goes through hud-drag IPC
         movable: false,
         minimizable: false,
         maximizable: false,
         fullscreenable: false,
         focusable: false,
+        acceptFirstMouse: true,   // never key, so the first click must land
         skipTaskbar: true,
         hiddenInMissionControl: true,
         title: 'Totem-Flask HUD',
-        // Non-activating NSPanel: the level that can sit over full-screen apps.
+        // Electron 33 docs (base-window-options.md): `panel` "enables the
+        // window to float on top of full-screened apps" and puts it on all
+        // Spaces, with no process-type change.
         ...(usePanel ? { type: 'panel' } : {}),
         alwaysOnTop: true,
         webPreferences: { backgroundThrottling: false },
@@ -245,53 +256,109 @@ function hudWindowOptions() {
 function wireHud(win) {
     hudWin = win;
     hudPlacedOn = '';
+    hudDrag = null;
     win.setAlwaysOnTop(true, 'screen-saver');
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // skipTransformProcessType: without it, visibleOnFullScreen calls
+    // Browser::DockHide() (native_window_mac.mm SetVisibleOnAllWorkspaces):
+    // the Dock icon goes and the main window hides. The panel type already
+    // floats over full-screen apps.
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    hudUnlocked = false;
     win.setIgnoreMouseEvents(true, { forward: true });   // click-through
     win.setOpacity(hudSettings.opacity);
     placeHud(true);
     win.showInactive();
     // ponytail: 200 ms cursor poll; Electron has no cursor-moved-display event.
     hudFollow = setInterval(() => placeHud(false), 200);
-    win.on('closed', () => { clearInterval(hudFollow); hudFollow = null; hudWin = null; });
+    win.on('closed', () => {
+        clearInterval(hudFollow); hudFollow = null; hudWin = null; hudDrag = null;
+        hudUnlocked = false; syncHudMenu();
+    });
+}
+
+/** Tick the menu items that match the settings (presets are checkboxes:
+ * a dragged width or slider opacity may match none). */
+function syncHudMenu() {
+    const menu = Menu.getApplicationMenu();
+    const tick = (id, on) => { const it = menu?.getMenuItemById(id); if (it) it.checked = on; };
+    const s = hudSettings;
+    tick('hud-show', s.shown);
+    tick('hud-show-app', s.shown);
+    tick('hud-unlock', hudUnlocked);
+    for (const c of hudPrefs.CORNERS) tick(`hud-corner-${c}`, s.corner === c);
+    for (const w of Object.values(hudPrefs.SIZES)) tick(`hud-size-${w}`, s.width === w);
+    for (const o of hudPrefs.OPACITIES) tick(`hud-opacity-${o}`, s.opacity === o);
 }
 
 function saveHudSettings(patch) {
-    Object.assign(hudSettings, patch);
+    hudSettings = hudPrefs.sanitize({ ...hudSettings, ...patch });
     hudPrefs.save(hudPrefsFile(), hudSettings);
-    if (hudWin && !hudWin.isDestroyed()) {
+    syncHudMenu();
+    if (hudMain && !hudMain.isDestroyed()) hudMain.webContents.send('hud-settings', hudSettings);
+    if (hudAlive()) {
         hudWin.setOpacity(hudSettings.opacity);
         placeHud(true);
     }
 }
 
 /** Show HUD on/off. From the menu or shortcut the renderer is told to open
- * or close it; from the renderer (its Pop out button) only the setting moves. */
-function setHudShown(shown, mainWin, fromRenderer) {
+ * or close it; from the renderer (its buttons) only the setting moves. */
+function setHudShown(shown, fromRenderer) {
     saveHudSettings({ shown });
-    for (const id of ['hud-show', 'hud-show-app']) {
-        const item = Menu.getApplicationMenu()?.getMenuItemById(id);
-        if (item) item.checked = shown;
-    }
-    if (!fromRenderer && mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('hud-set', shown);
+    if (!fromRenderer && hudMain && !hudMain.isDestroyed()) hudMain.webContents.send('hud-set', shown);
 }
 
-function hudMenu(getWin) {
-    const radio = (label, key, value) => ({
-        label, type: 'radio', checked: hudSettings[key] === value,
-        click: () => saveHudSettings({ [key]: value }),
-    });
+/** Toolbar drag (move) and corner grip (resize), in screen px since the
+ * pointer went down. Resize keeps the top-left fixed and the board's aspect
+ * (the content height then refines it through hud-fit); the drop re-anchors
+ * the HUD to the corner nearest where it landed. */
+function dragHud(kind, phase, dx, dy) {
+    if (!hudAlive() || !['move', 'resize'].includes(kind)) return;
+    if (phase === 'start') { hudDrag = { kind, start: hudWin.getBounds() }; return; }
+    if (!hudDrag || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    const st = hudDrag.start;
+    if (hudDrag.kind === 'move') {
+        hudWin.setPosition(Math.round(st.x + dx), Math.round(st.y + dy));
+    } else {
+        const width = hudPrefs.clampWidth(st.width + dx);
+        hudWin.setBounds({ x: st.x, y: st.y, width, height: Math.round(st.height * width / st.width) });
+    }
+    if (phase !== 'end') return;
+    const b = hudWin.getBounds();
+    hudDrag = null;
+    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    hudPlacedOn = '';
+    saveHudSettings({ ...hudPrefs.anchorOf(d.workArea, b), width: b.width });   // re-places, clamped
+}
+
+function hudMenu() {
+    const item = (id, label, patch) => ({ id, label, type: 'checkbox', click: () => saveHudSettings(patch) });
     const title = (c) => c.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+    const m = hudPrefs.MARGIN;
     return {
         label: 'HUD',
         submenu: [
-            { id: 'hud-show', label: 'Show HUD', type: 'checkbox', checked: hudSettings.shown,
+            { id: 'hud-show', label: 'Show HUD', type: 'checkbox',
                 accelerator: HUD_SHORTCUT, registerAccelerator: false,   // the global shortcut owns it
-                click: (item) => setHudShown(item.checked, getWin(), false) },
+                click: (it) => setHudShown(it.checked, false) },
+            // Fallback if hover never reaches the toolbar: the whole HUD
+            // takes the mouse and shows its toolbar until unticked.
+            { id: 'hud-unlock', label: 'Unlock HUD to Move/Resize', type: 'checkbox', click: (it) => {
+                hudUnlocked = it.checked;
+                if (hudAlive()) {
+                    hudWin.setIgnoreMouseEvents(!hudUnlocked, { forward: true });
+                    hudWin.webContents.executeJavaScript(
+                        `document.body.classList.toggle('hud-unlocked', ${hudUnlocked})`).catch(() => {});
+                }
+            } },
             { type: 'separator' },
-            { label: 'Corner', submenu: hudPrefs.CORNERS.map((c) => radio(title(c), 'corner', c)) },
-            { label: 'Size', submenu: Object.entries(hudPrefs.SIZES).map(([n, w]) => radio(`${n} (${w} px)`, 'width', w)) },
-            { label: 'Opacity', submenu: hudPrefs.OPACITIES.map((o) => radio(`${Math.round(o * 100)}%`, 'opacity', o)) },
+            // A corner preset drops any dragged offset.
+            { label: 'Corner', submenu: hudPrefs.CORNERS.map((c) =>
+                item(`hud-corner-${c}`, title(c), { corner: c, offsetX: m, offsetY: m })) },
+            { label: 'Size', submenu: Object.entries(hudPrefs.SIZES).map(([n, w]) =>
+                item(`hud-size-${w}`, `${n} (${w} px)`, { width: w })) },
+            { label: 'Opacity', submenu: hudPrefs.OPACITIES.map((o) =>
+                item(`hud-opacity-${o}`, `${Math.round(o * 100)}%`, { opacity: o })) },
         ],
     };
 }
@@ -489,9 +556,9 @@ function buildMenu(getWin) {
             submenu: [
                 { role: 'about' }, updates, ...imp,
                 { type: 'separator' },
-                { id: 'hud-show-app', label: 'Show HUD', type: 'checkbox', checked: hudSettings.shown,
+                { id: 'hud-show-app', label: 'Show HUD', type: 'checkbox',
                     accelerator: HUD_SHORTCUT, registerAccelerator: false,
-                    click: (item) => setHudShown(item.checked, getWin(), false) },
+                    click: (item) => setHudShown(item.checked, false) },
                 { type: 'separator' },
                 { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
                 { type: 'separator' },
@@ -503,11 +570,12 @@ function buildMenu(getWin) {
         },
         { role: 'editMenu' },
         { role: 'viewMenu' },
-        hudMenu(getWin),
+        hudMenu(),
         { role: 'windowMenu' },
         ...(isMac ? [] : [{ role: 'help', submenu: [{ role: 'about' }] }]),
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+    syncHudMenu();
 }
 
 // ---- start ------------------------------------------------------------------
@@ -525,19 +593,28 @@ async function start() {
     registerAppProtocol();
     wireSecurity(session.defaultSession);
     ipcMain.handle('native-flask-running', (e) => (isAppUrl(e.senderFrame.url) ? nativeFlaskRunning() : false));
-    ipcMain.handle('hud-shown', (e) => isAppUrl(e.senderFrame.url) && hudSettings.shown);
-    ipcMain.on('hud-set-shown', (e, v) => { if (isAppUrl(e.senderFrame.url)) setHudShown(!!v, win, true); });
+    const fromApp = (e) => isAppUrl(e.senderFrame.url);
+    ipcMain.handle('hud-settings', (e) => (fromApp(e) ? hudSettings : null));
+    ipcMain.on('hud-set-shown', (e, v) => { if (fromApp(e)) setHudShown(!!v, true); });
+    ipcMain.on('hud-opacity', (e, v) => { if (fromApp(e) && Number.isFinite(v)) saveHudSettings({ opacity: v }); });
+    ipcMain.on('hud-drag', (e, kind, phase, dx, dy) => { if (fromApp(e)) dragHud(kind, phase, dx, dy); });
+    // Toolbar / grip hovered: take clicks there, pass them through elsewhere.
+    ipcMain.on('hud-interactive', (e, on) => {
+        if (fromApp(e) && hudAlive()) hudWin.setIgnoreMouseEvents(!(on || hudUnlocked), { forward: true });
+    });
     // The popup reports its content height at the current width; fit to it.
     ipcMain.on('hud-fit', (e, h) => {
-        if (!isAppUrl(e.senderFrame.url) || !hudWin || hudWin.isDestroyed() || !Number.isFinite(h)) return;
-        hudWin.setSize(hudSettings.width, Math.max(60, Math.ceil(h)));
+        if (!fromApp(e) || !hudAlive() || !Number.isFinite(h)) return;
+        const height = Math.max(60, Math.ceil(h));
+        if (hudDrag) { hudWin.setBounds({ ...hudWin.getBounds(), height }); return; }
+        hudWin.setSize(hudSettings.width, height);
         placeHud(true);   // cornerBounds clamps a too-tall HUD to the display
     });
     for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
         screen.on(ev, () => placeHud(true));
     }
     if (!SMOKE) {
-        const ok = globalShortcut.register(HUD_SHORTCUT, () => setHudShown(!hudSettings.shown, win, false));
+        const ok = globalShortcut.register(HUD_SHORTCUT, () => setHudShown(!hudSettings.shown, false));
         if (!ok) console.warn(`HUD shortcut ${HUD_SHORTCUT} is taken by another app`);
         app.on('will-quit', () => globalShortcut.unregisterAll());
     }
@@ -564,6 +641,7 @@ async function start() {
             backgroundThrottling: false,
         },
     });
+    hudMain = win;
     // Electron shows no beforeunload dialog: without this a page that cancels
     // unload (save-state.js, unsaved edits) silently ignores close/quit/reload.
     win.webContents.on('will-prevent-unload', (e) => {
@@ -648,13 +726,39 @@ function smoke(win) {
             '!!window.open("about:blank", "flask-hud", "popup,width=460,height=300")');
         setTimeout(async () => {
             const hud = BrowserWindow.getAllWindows().find((w) => w !== win);
-            // Corner placement on the cursor's display (12 px in).
-            let corner = null;
+            const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+            const js = (code) => win.webContents.executeJavaScript(code);
+            let corner = null, ui = null, move = null, resize = null, opacity = null;
             if (hud) {
+                // Corner placement on the cursor's display (12 px in).
                 const wa = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
                 const nb = hud.getBounds();
                 const want = hudPrefs.cornerBounds(wa, nb, hudSettings.corner);
                 corner = { at: hudSettings.corner, ok: nb.x === want.x && nb.y === want.y, width: nb.width };
+                // The HUD showing must not hide the Dock icon or the main window.
+                ui = { mainVisible: win.isVisible(), mainFocused: win.isFocused(), dock: app.dock ? app.dock.isVisible() : null };
+                // Move and resize through the same IPC the toolbar and grip use.
+                const b0 = hud.getBounds();
+                await js('totemFlask.hudDrag("move","start",0,0); totemFlask.hudDrag("move","move",-100,-60);'
+                    + ' totemFlask.hudDrag("move","end",-100,-60)');
+                await pause(400);
+                const b1 = hud.getBounds();
+                move = { dx: b1.x - b0.x, dy: b1.y - b0.y, anchor: `${hudSettings.corner}+${hudSettings.offsetX},${hudSettings.offsetY}` };
+                await js('totemFlask.hudDrag("resize","start",0,0); totemFlask.hudDrag("resize","move",120,0);'
+                    + ' totemFlask.hudDrag("resize","end",120,0)');
+                await pause(400);
+                const b2 = hud.getBounds();
+                resize = { from: b1.width, to: b2.width, saved: hudSettings.width,
+                    heightScaled: Math.abs(b2.height - Math.round(b1.height * b2.width / b1.width)) <= 1 };
+                await js('totemFlask.hudOpacity(0.5)');
+                await pause(300);
+                const stored = hudPrefs.load(hudPrefsFile());
+                const ticked = () => hudPrefs.OPACITIES.filter((o) => Menu.getApplicationMenu()?.getMenuItemById(`hud-opacity-${o}`)?.checked);
+                opacity = { window: Math.round(hud.getOpacity() * 100) / 100, saved: stored.opacity, menuTicked: ticked() };
+                await js('totemFlask.hudOpacity(0.7)');
+                await pause(300);
+                opacity.after70 = { window: Math.round(hud.getOpacity() * 100) / 100, menuTicked: ticked() };
+                ui.afterAll = { mainVisible: win.isVisible(), dock: app.dock ? app.dock.isVisible() : null };
             }
             const hudProbe = JSON.stringify({
                 opened: hudOpened,
@@ -664,7 +768,7 @@ function smoke(win) {
                 focusable: hud ? hud.isFocusable() : null,
                 hudFocused: hud ? hud.isFocused() : null,
                 title: hud ? hud.getTitle() : null,
-                corner,
+                corner, ui, move, resize, opacity,
             });
             console.log(`FLASK_DESKTOP_SMOKE ${ORIGIN}/ ${probe}`);
             console.log(`FLASK_DESKTOP_SMOKE devices ${devices}`);

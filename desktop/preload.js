@@ -8,10 +8,14 @@ contextBridge.exposeInMainWorld('totemFlask', Object.freeze({
     /** Resolves true while the native Flask.app (com.aj.flask) is running. */
     nativeFlaskRunning: () => ipcRenderer.invoke('native-flask-running'),
     // HUD overlay (desktop/main.js owns the window, hud.js paints it).
-    hudShown: () => ipcRenderer.invoke('hud-shown'),
+    hudSettings: () => ipcRenderer.invoke('hud-settings'),
     setHudShown: (v) => ipcRenderer.send('hud-set-shown', !!v),
     hudFit: (h) => ipcRenderer.send('hud-fit', Number(h)),
+    hudOpacity: (v) => ipcRenderer.send('hud-opacity', Number(v)),
+    hudInteractive: (on) => ipcRenderer.send('hud-interactive', !!on),
+    hudDrag: (kind, phase, dx, dy) => ipcRenderer.send('hud-drag', String(kind), String(phase), Number(dx), Number(dy)),
     onHudSet: (cb) => { ipcRenderer.on('hud-set', (_e, v) => cb(!!v)); },
+    onHudSettings: (cb) => { ipcRenderer.on('hud-settings', (_e, s) => cb(s)); },
 }));
 
 window.addEventListener('DOMContentLoaded', () => {

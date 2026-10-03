@@ -6,10 +6,10 @@
 // state, status chips every 4th tick. All data comes over the page's own
 // device connection; the popup never opens one.
 
-import { el } from './ui.js?v=70';
-import { CH, V } from './flaskproto.js?v=70';
-import { renderKeyboardSVG } from './board.js?v=70';
-import { appearance } from './themes.js?v=70';
+import { el } from './ui.js?v=71';
+import { CH, V } from './flaskproto.js?v=71';
+import { renderKeyboardSVG } from './board.js?v=71';
+import { appearance } from './themes.js?v=71';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;
@@ -18,6 +18,20 @@ export class HUD {
     constructor(app) {
         this.app = app;      // { hid, flask, profile, caps, keymap, layerCount, readKeyState }
         appearance.addEventListener('appearance', () => this._syncTheme());
+        // Desktop app: HUD settings (shown, opacity, …) live in the main
+        // process; mirror them for the toolbar slider and the header button.
+        this.desk = null;
+        this.onChange = null;   // main.js: repaint the header toggle
+        const tf = window.totemFlask;
+        if (tf?.hudSettings) {
+            const take = (st) => {
+                this.desk = st;
+                if (this.opacityEl && st) this.opacityEl.value = String(Math.round(st.opacity * 100));
+                this.onChange?.();
+            };
+            tf.hudSettings().then(take, () => {});
+            tf.onHudSettings?.(take);
+        }
         this.open = false;
         this.win = null;     // PiP Window or null (fallback overlay)
         this.overlay = null;
@@ -34,6 +48,7 @@ export class HUD {
     async toggle() {
         await this.setOpen(!this.open);
         window.totemFlask?.setHudShown?.(this.open);
+        this.onChange?.();
     }
 
     async setOpen(v) {
@@ -61,6 +76,7 @@ export class HUD {
                     // Click-through overlay: compact look (css/hud.css), and
                     // the window height follows the content at its width.
                     w.document.body.classList.add('hud-electron');
+                    this._buildBar(w);
                     this._fit = new w.ResizeObserver(() =>
                         window.totemFlask?.hudFit?.(this.rootEl.getBoundingClientRect().height));
                     this._fit.observe(this.rootEl);
@@ -110,6 +126,60 @@ export class HUD {
         win.addEventListener('pagehide', () => { if (this.open) this.close(); });
     }
 
+    /** Desktop overlay chrome. The window ignores the mouse except over the
+     * toolbar (drag to move, opacity slider, hide) and the corner grip
+     * (resize); both appear only while the pointer is over the HUD, which
+     * the forwarded mouse moves tell us. Move/resize run in the main process
+     * (hud-drag), fed screen deltas from here. */
+    _buildBar(w) {
+        const tf = window.totemFlask;
+        const body = w.document.body;
+        let dragging = false;
+        const hot = (node) => {
+            node.addEventListener('mouseenter', () => tf.hudInteractive(true));
+            node.addEventListener('mouseleave', () => { if (!dragging) tf.hudInteractive(false); });
+            return node;
+        };
+        const draggable = (node, kind) => node.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0 || e.target.closest('input, button')) return;
+            e.preventDefault();
+            dragging = true;
+            const x0 = e.screenX, y0 = e.screenY;
+            node.setPointerCapture(e.pointerId);
+            tf.hudDrag(kind, 'start', 0, 0);
+            const move = (ev) => tf.hudDrag(kind, 'move', ev.screenX - x0, ev.screenY - y0);
+            const up = (ev) => {
+                node.removeEventListener('pointermove', move);
+                node.removeEventListener('pointerup', up);
+                node.removeEventListener('pointercancel', up);
+                dragging = false;
+                tf.hudDrag(kind, 'end', ev.screenX - x0, ev.screenY - y0);
+                if (!node.matches(':hover')) tf.hudInteractive(false);   // main keeps an unlocked HUD live
+            };
+            node.addEventListener('pointermove', move);
+            node.addEventListener('pointerup', up);
+            node.addEventListener('pointercancel', up);
+        });
+        this.opacityEl = el('input', {
+            type: 'range', min: 30, max: 100, step: 5, 'aria-label': 'HUD opacity', title: 'Opacity',
+            value: String(Math.round((this.desk?.opacity ?? 0.85) * 100)),
+            oninput: (e) => tf.hudOpacity(Number(e.target.value) / 100),
+        });
+        const bar = hot(el('div', { class: 'hud-bar', title: 'Drag to move' },
+            el('span', { class: 'hud-grip', text: '⠿' }),
+            el('span', { style: 'flex:1' }),
+            this.opacityEl,
+            el('button', { class: 'hud-x', text: '✕', title: 'Hide HUD (Ctrl+Opt+Cmd+K)', onclick: () => this.toggle() })));
+        const grip = hot(el('div', { class: 'hud-resize', title: 'Drag to resize' }));
+        draggable(bar, 'move');
+        draggable(grip, 'resize');
+        this.rootEl.prepend(bar);
+        this.rootEl.append(grip);
+        const root = w.document.documentElement;
+        root.addEventListener('mouseenter', () => body.classList.add('hud-hover'));
+        root.addEventListener('mouseleave', () => { if (!dragging) body.classList.remove('hud-hover'); });
+    }
+
     /** Mirror the theme vars + mode pinned on the main document root. */
     _syncTheme() {
         const root = this.win?.document?.documentElement;
@@ -120,6 +190,7 @@ export class HUD {
 
     close() {
         this.open = false;
+        this.opacityEl = null;
         this._fit?.disconnect();
         this._fit = null;
         clearInterval(this._timer);
