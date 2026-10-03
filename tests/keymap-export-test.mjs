@@ -8,8 +8,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 globalThis.localStorage ??= { getItem: () => null, setItem() {}, removeItem() {}, key: () => null, length: 0 };
-const { TOTEM_DEFAULT: T } = await import('../zmk-totem-default.js?v=64');
-const { exportKeymapText, usageToDt } = await import('../zmk-dt-export.js?v=64');
+const { TOTEM_DEFAULT: T } = await import('../zmk-totem-default.js?v=65');
+const { exportKeymapText, usageToDt } = await import('../zmk-dt-export.js?v=65');
 
 let checks = 0;
 const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
@@ -95,7 +95,7 @@ ok(usageToDt((0x07 << 16) | 0x91).startsWith('ZMK_HID_USAGE('), 'unknown usage i
     ok(m.text.includes('display-name = "say \\"hi\\" \\\\";'), 'macro name escaped');
 }
 {
-    const { readHoldtap } = await import('../zmk-extras.js?v=64');
+    const { readHoldtap } = await import('../zmk-extras.js?v=65');
     const bytes = (slot, custom) => [slot, 0, 200, 0, 0, 0, 0, 1, custom ? 1 : 0];
     const fake = { getU16: async () => 3, getBytes: async (ch, id, [slot]) => {
         if (slot === 2) throw new Error('timeout');

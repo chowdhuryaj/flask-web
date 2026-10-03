@@ -16,12 +16,12 @@
 //   code   a code from the entry's option list (media, mouse, lighting).
 //   timing ms (TIMING_PARAM).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=64';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=65';
 import {
-    zmkBehaviors, zmkLayers, layerName, usageCap, usageLabel, usageParts, consumerUsages,
+    zmkBehaviors, zmkLayers, layerNameIn, layerLabel, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
-} from './zmk-keycodes.js?v=64';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=64';
+} from './zmk-keycodes.js?v=65';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=65';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [
@@ -446,7 +446,7 @@ function zmkCatalog(app) {
                 const sides = device.filter((v) => v.set.live).map((v) => v.set.live);
                 return { ...p, options: ['off', ...p.options.filter((o) => sides.includes(o))] };
             }
-            if (p.kind === 'layer') return { ...p, options: layersNow().map((l) => l.id), labels: Object.fromEntries(layersNow().map((l) => [l.id, l.name || `Layer ${l.id}`])) };
+            if (p.kind === 'layer') return { ...p, options: layersNow().map((l) => l.id), labels: Object.fromEntries(layersNow().map((l, i) => [l.id, layerLabel(l.name, i)])) };
             if (p.kind === 'slot') {
                 const r = rangeOf(d0);
                 // Flask Gesture: 8 sets, plus 255 = follow the Active set (not 56 phantom sets).
@@ -534,8 +534,7 @@ const P = (id, params) => {   // params with entry defaults filled in
 let ctxOverride = null;
 function behaviorsNow() { return ctxOverride?.behaviors ?? zmkBehaviors(); }
 function layersNow() { return ctxOverride?.layers ?? zmkLayers(); }
-const layerNameNow = (id) => (ctxOverride
-    ? ctxOverride.layers.find((l) => l.id === id)?.name ?? `Layer#${id}` : layerName(id));
+const layerNameNow = (id) => layerNameIn(layersNow(), id);
 /** Run fn with an explicit ZMK context ({behaviors: Map, layers}). Sync only. */
 export function withZmkContext(ctx, fn) {
     const old = ctxOverride;

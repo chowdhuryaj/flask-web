@@ -121,14 +121,14 @@ def check_assign_command(browser, failures):
     if labels():
         failures.append('palette offers Assign with no key selected')
     page.evaluate("""async () => {
-      const { board } = await import('./board.js?v=64');
+      const { board } = await import('./board.js?v=65');
       board.selectedKey = () => ({ layer: 0, pos: 1 });
     }""")
     if 'Assign to selected key…' not in labels():
         failures.append('palette lacks "Assign to selected key…" with a key selected')
     # Status bar Save segment follows saveState.
     page.evaluate("""async () => {
-      const { saveState } = await import('./save-state.js?v=64');
+      const { saveState } = await import('./save-state.js?v=65');
       saveState.markDirty('studio-keymap', 'keymap', async () => {});
     }""")
     txt = page.locator('#save-btn').inner_text()
