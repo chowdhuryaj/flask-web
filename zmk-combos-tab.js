@@ -13,7 +13,7 @@
 
 import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=76';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { board, capPartsOf, htPartsOf } from './board.js?v=76';
 import { saveState } from './save-state.js?v=76';
 import {
@@ -61,7 +61,7 @@ export class ZmkCombosTab {
         board.addEventListener('change', () => {
             if (this.root.isConnected && this.slots && this.editing == null) this.render();
         }, { signal: activeTabAbort.signal });
-        onSlotsChanged(CH.combos, this, () => { if (this.slots && this.editing == null) this.load().catch(() => {}); });
+        onSlotsChanged(CH_ZMK.combos, this, () => { if (this.slots && this.editing == null) this.load().catch(() => {}); });
     }
 
     async load() {
@@ -71,13 +71,13 @@ export class ZmkCombosTab {
         // exposure (bench 2026-07-11 congestion round).
         hid?.pause?.();
         try {
-            this.enabled = await flask.getU16(CH.combos, V.combosEnabled);
-            this.slotCount = await dim(this.app, CH.combos, V.combosSlotCount);
-            this.timeout = await flask.getU16(CH.combos, V.combosTimeout);
+            this.enabled = await flask.getU16(CH_ZMK.combos, V.combosEnabled);
+            this.slotCount = await dim(this.app, CH_ZMK.combos, V.combosSlotCount);
+            this.timeout = await flask.getU16(CH_ZMK.combos, V.combosTimeout);
             // Keys per slot sizes the wire frame — RO value on v9+; v7/v8
             // firmware answers unhandled (0) and is fixed at 4.
             this.maxKeys = (this.app.caps?.combosKeys
-                && await dim(this.app, CH.combos, V.combosKeys)) || COMBO_MAX_KEYS;
+                && await dim(this.app, CH_ZMK.combos, V.combosKeys)) || COMBO_MAX_KEYS;
             // v12 firmware speaks typed slots (usage-hold / macro /
             // behavior); older firmware keeps the usage-only frame, bridged
             // into the same typed shape so the tab has ONE internal model.
@@ -88,22 +88,22 @@ export class ZmkCombosTab {
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
                 if (this.timed) {
-                    const r = await flask.getBytes(CH.combos, V.combosSlotV3, [i], 1);
+                    const r = await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [i], 1);
                     this.slots.push(decodeComboSlotV3(r, this.maxKeys));
                 } else if (this.typed) {
-                    const r = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
+                    const r = await flask.getBytes(CH_ZMK.combos, V.combosSlotV2, [i], 1);
                     this.slots.push(decodeComboSlotV2(r, this.maxKeys));
                 } else {
-                    const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
+                    const r = await flask.getBytes(CH_ZMK.combos, V.combosSlot, [i], 1);
                     this.slots.push(comboSlotToTyped(decodeComboSlot(r, this.maxKeys)));
                 }
             }
         } finally {
             hid?.resume?.();
         }
-        this.bar ??= reloadBar(CH.combos, {
+        this.bar ??= reloadBar(CH_ZMK.combos, {
             label: 'Combos',
-            save: () => this.app.flask.save(CH.combos),
+            save: () => this.app.flask.save(CH_ZMK.combos),
             reload: () => this.load(),
         });
         this.render();
@@ -142,7 +142,7 @@ export class ZmkCombosTab {
 
     markUnsaved() {
         if (this.bar) this.bar.markEdited();
-        else saveState.markDirty(CH.combos, 'Combos', () => this.app.flask.save(CH.combos));
+        else saveState.markDirty(CH_ZMK.combos, 'Combos', () => this.app.flask.save(CH_ZMK.combos));
     }
 
     async writeSlot(i, before = null) {
@@ -170,15 +170,15 @@ export class ZmkCombosTab {
         };
         try {
             if (this.timed) {
-                const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV3,
+                const r = await this.app.flask.setBytes(CH_ZMK.combos, V.combosSlotV3,
                     encodeComboSlotV3(i, wire, this.maxKeys), 1);
                 adopt(decodeComboSlotV3(r, this.maxKeys)); // adopt the echo
             } else if (this.typed) {
-                const r = await this.app.flask.setBytes(CH.combos, V.combosSlotV2,
+                const r = await this.app.flask.setBytes(CH_ZMK.combos, V.combosSlotV2,
                     encodeComboSlotV2(i, wire, this.maxKeys), 1);
                 adopt(decodeComboSlotV2(r, this.maxKeys)); // adopt the echo
             } else {
-                const r = await this.app.flask.setBytes(CH.combos, V.combosSlot,
+                const r = await this.app.flask.setBytes(CH_ZMK.combos, V.combosSlot,
                     encodeComboSlot(i, comboTypedToLegacy(wire), this.maxKeys), 1);
                 adopt(comboSlotToTyped(decodeComboSlot(r, this.maxKeys)));
             }
@@ -446,7 +446,7 @@ export class ZmkCombosTab {
                     + 'firmware\'s compiled devicetree combos have no off switch',
                 value: this.enabled,
                 onChange: async (val) => {
-                    this.enabled = await flask.setU16(CH.combos, V.combosEnabled, val ? 1 : 0);
+                    this.enabled = await flask.setU16(CH_ZMK.combos, V.combosEnabled, val ? 1 : 0);
                     return this.enabled;
                 },
             }),
@@ -458,7 +458,7 @@ export class ZmkCombosTab {
                 min: 10, max: 2000, step: 5, value: this.timeout,
                 format: (v) => `${v} ms`,
                 onChange: async (val) => {
-                    this.timeout = await flask.setU16(CH.combos, V.combosTimeout, val);
+                    this.timeout = await flask.setU16(CH_ZMK.combos, V.combosTimeout, val);
                     return this.timeout;
                 },
             }),

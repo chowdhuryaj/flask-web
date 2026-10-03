@@ -3,7 +3,7 @@
 // (clamp-echo). Float params ride the wire ×100 (accel).
 
 import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { renderKeyboardSVG } from './board.js?v=76';
 
 const pct = (v) => (v / 100).toFixed(2);
@@ -72,7 +72,7 @@ export class MouseTab {
             this.renderBallsPreview = async () => {
                 let swapped = 0;
                 if (caps.ballSwap) {
-                    try { swapped = await g(CH.ballSwap, V.bswapEffective); }
+                    try { swapped = await g(CH_ZMK.ballSwap, V.bswapEffective); }
                     catch { /* pre-v11 firmware */ }
                 }
                 const role = (side) => (side === 'left') === !swapped ? 'scroll' : 'cursor';
@@ -90,10 +90,10 @@ export class MouseTab {
         // ---- acceleration ----
         if (caps.accel) {
         const curveInit = {
-            takeoff: await g(CH.accel, V.accelTakeoff),
-            growth: await g(CH.accel, V.accelGrowth),
-            offset: await flask.getI16(CH.accel, V.accelOffset),
-            limit: await g(CH.accel, V.accelLimit),
+            takeoff: await g(CH_ZMK.accel, V.accelTakeoff),
+            growth: await g(CH_ZMK.accel, V.accelGrowth),
+            offset: await flask.getI16(CH_ZMK.accel, V.accelOffset),
+            limit: await g(CH_ZMK.accel, V.accelLimit),
         };
         const curve = accelCurve(curveInit);
         // Slider writes repaint the curve with the firmware's clamp echo.
@@ -103,22 +103,22 @@ export class MouseTab {
             return echoed;
         };
         const accel = card('Acceleration', 'sigmoid curve (drashna pd_accel)',
-            toggleRow({ label: 'Enabled', value: await g(CH.accel, V.accelEnabled),
-                onChange: (v) => flask.setU16(CH.accel, V.accelEnabled, v ? 1 : 0) }),
+            toggleRow({ label: 'Enabled', value: await g(CH_ZMK.accel, V.accelEnabled),
+                onChange: (v) => flask.setU16(CH_ZMK.accel, V.accelEnabled, v ? 1 : 0) }),
             curve,
             sliderRow({ label: 'Takeoff', hint: 'curve steepness', min: 50, max: 1000, step: 5,
                 value: curveInit.takeoff, format: pct,
-                onChange: wr('takeoff', (v) => flask.setU16(CH.accel, V.accelTakeoff, v)) }),
+                onChange: wr('takeoff', (v) => flask.setU16(CH_ZMK.accel, V.accelTakeoff, v)) }),
             sliderRow({ label: 'Growth rate', min: 0, max: 200, step: 1,
                 value: curveInit.growth, format: pct,
-                onChange: wr('growth', (v) => flask.setU16(CH.accel, V.accelGrowth, v)) }),
+                onChange: wr('growth', (v) => flask.setU16(CH_ZMK.accel, V.accelGrowth, v)) }),
             sliderRow({ label: 'Offset', hint: 'signed midpoint shift', min: -1000, max: 1000, step: 10,
                 value: curveInit.offset, format: pct,
-                onChange: wr('offset', (v) => flask.setI16(CH.accel, V.accelOffset, v)) }),
+                onChange: wr('offset', (v) => flask.setI16(CH_ZMK.accel, V.accelOffset, v)) }),
             sliderRow({ label: 'Limit', hint: 'max multiplier', min: 0, max: 100, step: 1,
                 value: curveInit.limit, format: pct,
-                onChange: wr('limit', (v) => flask.setU16(CH.accel, V.accelLimit, v)) }),
-            saveBar(() => flask.save(CH.accel)));
+                onChange: wr('limit', (v) => flask.setU16(CH_ZMK.accel, V.accelLimit, v)) }),
+            saveBar(() => flask.save(CH_ZMK.accel)));
         cardsRow.append(accel);
         }
 
@@ -132,9 +132,9 @@ export class MouseTab {
         cardsRow.append(card('Scroll speed', 'how far the scroll ball travels per notch',
             sliderRow({ label: 'Speed', hint: '100% = the firmware default; higher scrolls faster per roll',
                 min: 25, max: 400, step: 5, format: (v) => `${v}%`,
-                value: await g(CH.scrollScale, V.scrollSpeedPct),
-                onChange: (v) => flask.setU16(CH.scrollScale, V.scrollSpeedPct, v) }),
-            saveBar(() => flask.save(CH.scrollScale))));
+                value: await g(CH_ZMK.scrollScale, V.scrollSpeedPct),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollScale, V.scrollSpeedPct, v) }),
+            saveBar(() => flask.save(CH_ZMK.scrollScale))));
         }
 
         // ---- scroll axis snap/lock ----
@@ -143,27 +143,27 @@ export class MouseTab {
         // that axis. Caps-driven like every card here.
         if (caps.scrollSnap) {
         cardsRow.append(card('Scroll snap', 'axis snap + lock on the scroll ball',
-            toggleRow({ label: 'Enabled', value: await g(CH.scrollSnap, V.snapEnabled),
-                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapEnabled, v ? 1 : 0) }),
+            toggleRow({ label: 'Enabled', value: await g(CH_ZMK.scrollSnap, V.snapEnabled),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollSnap, V.snapEnabled, v ? 1 : 0) }),
             sliderRow({ label: 'Snap strength', hint: '% of motion an axis needs to win — lower snaps sooner',
-                min: 50, max: 99, step: 1, value: await g(CH.scrollSnap, V.snapThreshold),
-                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapThreshold, v) }),
+                min: 50, max: 99, step: 1, value: await g(CH_ZMK.scrollSnap, V.snapThreshold),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollSnap, V.snapThreshold, v) }),
             sliderRow({ label: 'Decision window', hint: 'wheel events sampled before deciding',
-                min: 1, max: 32, step: 1, value: await g(CH.scrollSnap, V.snapSamples),
-                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapSamples, v) }),
+                min: 1, max: 32, step: 1, value: await g(CH_ZMK.scrollSnap, V.snapSamples),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollSnap, V.snapSamples, v) }),
             sliderRow({ label: 'Instant-snap motion', hint: '0 = always wait for the window',
-                min: 0, max: 200, step: 5, value: await g(CH.scrollSnap, V.snapImmediate),
-                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapImmediate, v) }),
+                min: 0, max: 200, step: 5, value: await g(CH_ZMK.scrollSnap, V.snapImmediate),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollSnap, V.snapImmediate, v) }),
             sliderRow({ label: 'Axis lock (ms)', hint: 'hold the winning axis this long; 0 = off',
-                min: 0, max: 2000, step: 50, value: await g(CH.scrollSnap, V.snapLockMs),
-                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapLockMs, v) }),
+                min: 0, max: 2000, step: 50, value: await g(CH_ZMK.scrollSnap, V.snapLockMs),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollSnap, V.snapLockMs, v) }),
             sliderRow({ label: 'Axis lock (events)', hint: 'or for this many events; 0 = off',
-                min: 0, max: 100, step: 1, value: await g(CH.scrollSnap, V.snapLockEvents),
-                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapLockEvents, v) }),
+                min: 0, max: 100, step: 1, value: await g(CH_ZMK.scrollSnap, V.snapLockEvents),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollSnap, V.snapLockEvents, v) }),
             sliderRow({ label: 'Idle reset (ms)', hint: 'pause that clears window + lock; 0 = off',
-                min: 0, max: 2000, step: 50, value: await g(CH.scrollSnap, V.snapIdleReset),
-                onChange: (v) => flask.setU16(CH.scrollSnap, V.snapIdleReset, v) }),
-            saveBar(() => flask.save(CH.scrollSnap))));
+                min: 0, max: 2000, step: 50, value: await g(CH_ZMK.scrollSnap, V.snapIdleReset),
+                onChange: (v) => flask.setU16(CH_ZMK.scrollSnap, V.snapIdleReset, v) }),
+            saveBar(() => flask.save(CH_ZMK.scrollSnap))));
         }
 
         // ---- trackball role swap ----
@@ -176,17 +176,17 @@ export class MouseTab {
         if (caps.ballSwap) {
         const bswapNow = el('div', { class: 'hint' });
         const refreshBswapNow = async () => {
-            const eff = await g(CH.ballSwap, V.bswapEffective);
+            const eff = await g(CH_ZMK.ballSwap, V.bswapEffective);
             bswapNow.textContent = eff
                 ? 'Right now: SWAPPED (right = scroll, left = cursor)'
                 : 'Right now: normal (right = cursor, left = scroll)';
         };
         await refreshBswapNow();
         cardsRow.append(card('Ball swap', 'trackball role swap (cursor ↔ scroll)',
-            toggleRow({ label: 'Swap ball roles', value: await g(CH.ballSwap, V.bswapSwapped),
+            toggleRow({ label: 'Swap ball roles', value: await g(CH_ZMK.ballSwap, V.bswapSwapped),
                 onChange: async (v) => {
-                    await flask.setU16(CH.ballSwap, V.bswapSwapped, v ? 1 : 0);
-                    await flask.save(CH.ballSwap); // key parity: toggles persist
+                    await flask.setU16(CH_ZMK.ballSwap, V.bswapSwapped, v ? 1 : 0);
+                    await flask.save(CH_ZMK.ballSwap); // key parity: toggles persist
                     refreshBswapNow();
                     this.renderBallsPreview?.(); // trackball card follows the roles
                 } }),
@@ -198,8 +198,8 @@ export class MouseTab {
         // ---- auto-mouse ----
         if (caps.autoMouse) {
             const am = card('Auto-mouse layer', 'ball motion activates a layer',
-                toggleRow({ label: 'Enabled', value: await g(CH.autoMouse, V.amEnabled),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amEnabled, v ? 1 : 0) }));
+                toggleRow({ label: 'Enabled', value: await g(CH_ZMK.autoMouse, V.amEnabled),
+                    onChange: (v) => flask.setU16(CH_ZMK.autoMouse, V.amEnabled, v ? 1 : 0) }));
             // flask_automouse: 0 = LATCH — the layer stays until a key that is
             // transparent on it is pressed; that key is swallowed (it only
             // ends auto-mouse, it never types).
@@ -207,53 +207,53 @@ export class MouseTab {
                 label: 'Timeout',
                 hint: '0 = stay until a non-mouse key is pressed (that key is swallowed)',
                 min: 0, max: 5000, step: 50,
-                value: await g(CH.autoMouse, V.amTimeout),
+                value: await g(CH_ZMK.autoMouse, V.amTimeout),
                 format: (v) => v === 0 ? 'latch' : `${v} ms`,
-                onChange: (v) => flask.setU16(CH.autoMouse, V.amTimeout, v) }));
+                onChange: (v) => flask.setU16(CH_ZMK.autoMouse, V.amTimeout, v) }));
             am.append(sliderRow({ label: 'Threshold (counts)',
                 hint: 'ball travel before the layer triggers; 0 = any motion',
                 min: 0, max: 200, step: 1,
-                value: await g(CH.autoMouse, V.amThreshold),
-                onChange: (v) => flask.setU16(CH.autoMouse, V.amThreshold, v) }));
+                value: await g(CH_ZMK.autoMouse, V.amThreshold),
+                onChange: (v) => flask.setU16(CH_ZMK.autoMouse, V.amThreshold, v) }));
             if (caps.autoMouseExtend) {
                 am.append(toggleRow({
                     label: 'Keys extend the timeout',
                     hint: 'mouse-layer keys (clicks, snipe, gestures) re-arm the timer; typing keys still drop the layer',
-                    value: await g(CH.autoMouse, V.amExtend),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amExtend, v ? 1 : 0) }));
+                    value: await g(CH_ZMK.autoMouse, V.amExtend),
+                    onChange: (v) => flask.setU16(CH_ZMK.autoMouse, V.amExtend, v ? 1 : 0) }));
             }
             am.append(
-                selectRow({ label: 'Target layer', value: await g(CH.autoMouse, V.amLayer),
+                selectRow({ label: 'Target layer', value: await g(CH_ZMK.autoMouse, V.amLayer),
                     options: Array.from({ length: this.app.layerCount }, (_, i) =>
                         ({ value: i, label: this.app.profile?.layerNames?.[i] ?? `Layer ${i}` })),
-                    onChange: (v) => flask.setU16(CH.autoMouse, V.amLayer, Number(v)) }),
-                saveBar(() => flask.save(CH.autoMouse)));
+                    onChange: (v) => flask.setU16(CH_ZMK.autoMouse, V.amLayer, Number(v)) }),
+                saveBar(() => flask.save(CH_ZMK.autoMouse)));
             cardsRow.append(am);
         }
 
         // ---- autoscroll ----
         if (caps.autoscroll) {
             const as = card('Autoscroll', 'hands-free continuous scroll',
-                toggleRow({ label: 'Inverted', value: await g(CH.autoscroll, V.asInverted),
-                    onChange: (v) => flask.setU16(CH.autoscroll, V.asInverted, v ? 1 : 0) }),
+                toggleRow({ label: 'Inverted', value: await g(CH_ZMK.autoscroll, V.asInverted),
+                    onChange: (v) => flask.setU16(CH_ZMK.autoscroll, V.asInverted, v ? 1 : 0) }),
                 sliderRow({ label: 'Speed scale', hint: '1.00 = Ben White interval table as-is',
                     min: 25, max: 400, step: 5,
-                    value: await g(CH.autoscroll, V.asSpeedScale), format: pct,
-                    onChange: (v) => flask.setU16(CH.autoscroll, V.asSpeedScale, v) }));
+                    value: await g(CH_ZMK.autoscroll, V.asSpeedScale), format: pct,
+                    onChange: (v) => flask.setU16(CH_ZMK.autoscroll, V.asSpeedScale, v) }));
             if (caps.autoscrollStopOnKey) {
                 as.append(toggleRow({ label: 'Any key stops scrolling',
-                    value: await g(CH.autoscroll, V.asStopOnKey),
-                    onChange: (v) => flask.setU16(CH.autoscroll, V.asStopOnKey, v ? 1 : 0) }));
+                    value: await g(CH_ZMK.autoscroll, V.asStopOnKey),
+                    onChange: (v) => flask.setU16(CH_ZMK.autoscroll, V.asStopOnKey, v ? 1 : 0) }));
             }
             as.append(
                 el('button', {
                     class: 'btn small', text: 'Force stop (rescue)',
                     onclick: async () => {
-                        try { await flask.setU16(CH.autoscroll, V.asState, 0); toast('Autoscroll stopped'); }
+                        try { await flask.setU16(CH_ZMK.autoscroll, V.asState, 0); toast('Autoscroll stopped'); }
                         catch (e) { toast(e.message, true); }
                     },
                 }),
-                saveBar(() => flask.save(CH.autoscroll)));
+                saveBar(() => flask.save(CH_ZMK.autoscroll)));
             cardsRow.append(as);
         }
     }

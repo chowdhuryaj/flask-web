@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, cskDuplicateOf, cskSummary, trigText,
     MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI } from '../zmk-csk-codec.js?v=76';
-import { CH, V } from '../flaskproto.js?v=76';
+import { CH_ZMK, V } from '../flaskproto.js?v=76';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -36,7 +36,7 @@ eq(decodeCskSlot([1, 0, 7, 0, 0x36, 0, 7, 0, 0x33, 0, 0]).mods, MOD_SFT, 'stored
 eq(encodeCskSlot(1, { base: COMMA, shifted: SEMI }, true).length, 11, 'extended forced');
 
 // ---- MORPH_CAPS detect ----
-const flaskWith = (fn) => ({ getU16: async (ch, id) => { assert.equal(ch, CH.customShift); assert.equal(id, V.cskMorphCaps); return fn(); } });
+const flaskWith = (fn) => ({ getU16: async (ch, id) => { assert.equal(ch, CH_ZMK.customShift); assert.equal(id, V.cskMorphCaps); return fn(); } });
 eq(V.cskMorphCaps, 0x03, 'MORPH_CAPS id');
 eq(await cskMorphCaps(flaskWith(() => 1)), true, 'caps 1 -> morph UI');
 eq(await cskMorphCaps(flaskWith(() => { throw new Error('unhandled'); })), false, 'old firmware echoes 0xFF -> Shift-only');
@@ -75,11 +75,11 @@ eq(cskSummary({ base: BSP, shifted: DEL }, name), '⇧ ⌫ → ⌦', 'summary de
     const ws = createZmkTemplate('totem'); ws.key = 'mm-test';
     const g = new ZmkOfflineFlask(ws);
     eq(await cskMorphCaps(g), true, 'sim reports MORPH_CAPS');
-    const echo = decodeCskSlot(await g.setBytes(CH.customShift, V.cskSlot,
+    const echo = decodeCskSlot(await g.setBytes(CH_ZMK.customShift, V.cskSlot,
         encodeCskSlot(2, { base: BSP, shifted: DEL, mods: MOD_ALT, keep: true }), 1));
     eq(echo, { slot: 2, base: BSP, shifted: DEL, mods: MOD_ALT, keep: true }, 'sim echo carries trigger + keep');
-    eq(decodeCskSlot(await g.getBytes(CH.customShift, V.cskSlot, [2], 1)).mods, MOD_ALT, 'sim GET returns stored trigger');
-    eq(decodeCskSlot(await g.getBytes(CH.customShift, V.cskSlot, [3], 1)).mods, MOD_SFT, 'empty slot reads Shift');
+    eq(decodeCskSlot(await g.getBytes(CH_ZMK.customShift, V.cskSlot, [2], 1)).mods, MOD_ALT, 'sim GET returns stored trigger');
+    eq(decodeCskSlot(await g.getBytes(CH_ZMK.customShift, V.cskSlot, [3], 1)).mods, MOD_SFT, 'empty slot reads Shift');
 
     // ---- offline replay onto Shift-only firmware keeps morph slots queued ----
     const { zmkSyncExtras } = await import('../zmk-offline.js?v=76');

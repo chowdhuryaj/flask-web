@@ -22,7 +22,7 @@
 import { el, card, toast, modal } from './ui.js?v=76';
 import { saveState } from './save-state.js?v=76';
 import { applyFlaskState, saveFlaskChannels } from './zmk-export.js?v=76';
-import { CH } from './flaskproto.js?v=76';
+import { CH_ZMK } from './flaskproto.js?v=76';
 import { announceSlots } from './zmk-behaviour-common.js?v=76';
 import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=76';
 import {
@@ -121,7 +121,7 @@ export class ZmkModesTab {
                 // The device now differs from flash on these channels: Save must persist
                 // them, and Behaviour tabs that already read them hold stale tables.
                 for (const ch of f.channels) {
-                    const name = Object.entries(CH).find(([, v]) => v === ch)?.[0] ?? `0x${ch.toString(16)}`;
+                    const name = Object.entries(CH_ZMK).find(([, v]) => v === ch)?.[0] ?? `0x${ch.toString(16)}`;
                     saveState.markDirty(ch, name, () => this.app.flask.save(ch));
                     announceSlots(ch);
                 }

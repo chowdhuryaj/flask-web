@@ -17,7 +17,7 @@
 
 import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=76';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { usagesToText } from './zmk-adaptive-codec.js?v=76';   // macroSummary text
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary, onSlotsChanged, draftSlots, dim } from './zmk-behaviour-common.js?v=76';
 import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=76';
@@ -51,7 +51,7 @@ export class ZmkMacrosTab {
         registerSummary('macro', (m) => macroSummary(this.steps?.[m]));
         // Another tab wrote macro slots (Adaptive's text macros, a Mode):
         // our cache is stale and "New macro" would overwrite them.
-        onSlotsChanged(CH.macros, this, (d) => this.refresh(d.slot));
+        onSlotsChanged(CH_ZMK.macros, this, (d) => this.refresh(d.slot));
     }
 
     /** Re-read one slot, or everything when `slot` is omitted. */
@@ -69,7 +69,7 @@ export class ZmkMacrosTab {
     async readSlot(m) {
         const slot = [];
         for (let s = 0; s < this.stepCount; s++) {
-            const step = decodeMacroStep(await this.app.flask.getBytes(CH.macros, V.macrosStep, [m, s], 2));
+            const step = decodeMacroStep(await this.app.flask.getBytes(CH_ZMK.macros, V.macrosStep, [m, s], 2));
             slot.push({ action: step.action, param: step.param });
             if (step.action === MACRO_ACTION.empty) break;
         }
@@ -82,19 +82,19 @@ export class ZmkMacrosTab {
         // HUD poll backs off for the bulk step read (see combos tab note).
         hid?.pause?.();
         try {
-            this.enabled = await flask.getU16(CH.macros, V.macrosEnabled);
-            this.slotCount = await dim(this.app, CH.macros, V.macrosSlotCount);
-            this.stepCount = await dim(this.app, CH.macros, V.macrosStepCount);
-            this.tapMs = await flask.getU16(CH.macros, V.macrosTapMs);
-            this.waitMs = await flask.getU16(CH.macros, V.macrosWaitMs);
+            this.enabled = await flask.getU16(CH_ZMK.macros, V.macrosEnabled);
+            this.slotCount = await dim(this.app, CH_ZMK.macros, V.macrosSlotCount);
+            this.stepCount = await dim(this.app, CH_ZMK.macros, V.macrosStepCount);
+            this.tapMs = await flask.getU16(CH_ZMK.macros, V.macrosTapMs);
+            this.waitMs = await flask.getU16(CH_ZMK.macros, V.macrosWaitMs);
             this.steps = [];
             for (let m = 0; m < this.slotCount; m++) this.steps.push(await this.readSlot(m));
         } finally {
             hid?.resume?.();
         }
-        this.bar ??= reloadBar(CH.macros, {
+        this.bar ??= reloadBar(CH_ZMK.macros, {
             label: 'Macros',
-            save: () => this.app.flask.save(CH.macros),
+            save: () => this.app.flask.save(CH_ZMK.macros),
             reload: () => this.load(),
         });
         this.render();
@@ -102,7 +102,7 @@ export class ZmkMacrosTab {
 
     async writeStep(m, s) {
         try {
-            const r = await this.app.flask.setBytes(CH.macros, V.macrosStep,
+            const r = await this.app.flask.setBytes(CH_ZMK.macros, V.macrosStep,
                 encodeMacroStep(m, s, this.steps[m][s]), 2);
             const step = decodeMacroStep(r); // adopt the echo (normalized)
             this.steps[m][s] = { action: step.action, param: step.param };
@@ -184,7 +184,7 @@ export class ZmkMacrosTab {
 
     async play(m) {
         try {
-            await this.app.flask.setU16(CH.macros, V.macrosState, m + 1);
+            await this.app.flask.setU16(CH_ZMK.macros, V.macrosState, m + 1);
             toast(`Macro ${m} ▶ — plays on the keyboard`);
         } catch {
             toast('Play refused — another macro is running, or macros are disabled', true);
@@ -391,7 +391,7 @@ export class ZmkMacrosTab {
                 hint: 'master switch; also stops a running macro',
                 value: this.enabled,
                 onChange: async (val) => {
-                    this.enabled = await flask.setU16(CH.macros, V.macrosEnabled, val ? 1 : 0);
+                    this.enabled = await flask.setU16(CH_ZMK.macros, V.macrosEnabled, val ? 1 : 0);
                     return this.enabled;
                 },
             }),
@@ -401,7 +401,7 @@ export class ZmkMacrosTab {
                 min: 1, max: 500, step: 1, value: this.tapMs,
                 format: (v) => `${v} ms`,
                 onChange: async (val) => {
-                    this.tapMs = await flask.setU16(CH.macros, V.macrosTapMs, val);
+                    this.tapMs = await flask.setU16(CH_ZMK.macros, V.macrosTapMs, val);
                     return this.tapMs;
                 },
             }),
@@ -411,7 +411,7 @@ export class ZmkMacrosTab {
                 min: 0, max: 2000, step: 5, value: this.waitMs,
                 format: (v) => `${v} ms`,
                 onChange: async (val) => {
-                    this.waitMs = await flask.setU16(CH.macros, V.macrosWaitMs, val);
+                    this.waitMs = await flask.setU16(CH_ZMK.macros, V.macrosWaitMs, val);
                     return this.waitMs;
                 },
             }),
@@ -423,7 +423,7 @@ export class ZmkMacrosTab {
                 el('button', {
                     class: 'btn small', text: '⏹ Stop', title: 'stop whatever is playing (live-state rescue)',
                     onclick: async () => {
-                        try { await flask.setU16(CH.macros, V.macrosState, 0); toast('Stopped'); }
+                        try { await flask.setU16(CH_ZMK.macros, V.macrosState, 0); toast('Stopped'); }
                         catch (e) { toast(e.message, true); }
                     },
                 }),

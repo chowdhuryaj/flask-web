@@ -3,7 +3,7 @@
 // saves like any other), unhandled ids are dropped, failures stay queued.
 import assert from 'node:assert/strict';
 import { syncWorkspace, pendingCount, listWorkspaces, saveWorkspace } from '../offline.js?v=76';
-import { FlaskProto, CH, V, CMD } from '../flaskproto.js?v=76';
+import { FlaskProto, CH_ZMK, V, CMD } from '../flaskproto.js?v=76';
 import { ZmkOfflineFlask, createZmkTemplate, zmkSyncExtras, zmkPendingCount } from '../zmk-offline.js?v=76';
 import { encodeCskSlot } from '../zmk-csk-codec.js?v=76';
 import { encodeTdStep, encodeTdCfg, TD_ACTION } from '../zmk-tapdance-codec.js?v=76';
@@ -19,9 +19,9 @@ globalThis.localStorage ??= {
 // 1. The sim journals a tunable and replay applies + saves its channel.
 const ws = createZmkTemplate('imprint');
 const f = new ZmkOfflineFlask(ws);
-await f.setU16(CH.scrollSnap, V.snapThreshold, 80);
-await f.setU16(CH.tapDance, V.tdEnabled, 0);
-await f.save(CH.tapDance);
+await f.setU16(CH_ZMK.scrollSnap, V.snapThreshold, 80);
+await f.setU16(CH_ZMK.tapDance, V.tdEnabled, 0);
+await f.save(CH_ZMK.tapDance);
 assert.equal(pendingCount(ws), 2); checks++;
 const sent = [], saved = [];
 const app = {
@@ -31,16 +31,16 @@ const app = {
     },
 };
 const r = await syncWorkspace(app, ws);
-assert.deepEqual(sent.map((s) => s[0]).sort(), [CH.scrollSnap, CH.tapDance].sort()); checks++;
-assert.deepEqual(saved.sort(), [CH.scrollSnap, CH.tapDance].sort(), 'touched channels save, 0x28 included'); checks++;
+assert.deepEqual(sent.map((s) => s[0]).sort(), [CH_ZMK.scrollSnap, CH_ZMK.tapDance].sort()); checks++;
+assert.deepEqual(saved.sort(), [CH_ZMK.scrollSnap, CH_ZMK.tapDance].sort(), 'touched channels save, 0x28 included'); checks++;
 assert.equal(r.applied, 2); assert.equal(pendingCount(ws), 0, 'journal drained'); checks++;
 
 // 2. An id the device answers "unhandled" is dropped, a transport error stays queued.
-await f.setU16(CH.scrollSnap, V.snapEnabled, 1);
-await f.setU16(CH.autoscroll, V.asInverted, 1);
+await f.setU16(CH_ZMK.scrollSnap, V.snapEnabled, 1);
+await f.setU16(CH_ZMK.autoscroll, V.asInverted, 1);
 const bad = {
     flask: {
-        setU16: async (c) => { throw new Error(c === CH.scrollSnap ? 'unhandled' : 'timeout'); },
+        setU16: async (c) => { throw new Error(c === CH_ZMK.scrollSnap ? 'unhandled' : 'timeout'); },
         setI16: async () => 0, save: async () => {}, setBytes: async () => [],
     },
 };
@@ -50,14 +50,14 @@ assert.equal(pendingCount(ws), 1, 'only the transient failure stays queued'); ch
 
 // 3. Transient live ids never journal.
 const before = pendingCount(ws);
-await f.setU16(CH.autoscroll, V.asState, 0);
+await f.setU16(CH_ZMK.autoscroll, V.asState, 0);
 assert.equal(pendingCount(ws), before, 'asState force-stop is not journaled'); checks++;
 
 // 4. FlaskProto.save sends a SAVE frame for 0x28 (tap dance) on the ZMK line.
 const frames = [];
 const hid = { request: async (frame) => { frames.push(frame); return [CMD.save, frame[1], 0]; } };
-await new FlaskProto(hid).save(CH.tapDance);
-assert.deepEqual(frames.map((x) => x[1]), [CH.tapDance]); checks++;
+await new FlaskProto(hid).save(CH_ZMK.tapDance);
+assert.deepEqual(frames.map((x) => x[1]), [CH_ZMK.tapDance]); checks++;
 
 // 5. Only ZMK workspaces are listed; stored workspaces of other families are ignored.
 localStorage.setItem('flask-offline-adept', JSON.stringify({ key: 'adept', family: 'adept', dirty: {} }));
@@ -69,13 +69,13 @@ assert.deepEqual(listWorkspaces().map((w) => w.key), ['imprint']); checks++;
     const ws2 = createZmkTemplate('imprint');
     ws2.key = 'imprint2';
     const g = new ZmkOfflineFlask(ws2);
-    await g.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }), 1);
-    await g.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(5, { base: 0x70006, shifted: 0x70007 }), 1);
-    await g.setBytes(CH.tapDance, V.tdStep,
+    await g.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }), 1);
+    await g.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(5, { base: 0x70006, shifted: 0x70007 }), 1);
+    await g.setBytes(CH_ZMK.tapDance, V.tdStep,
         encodeTdStep(1, 0, { action: TD_ACTION.usage, param1: 0x70008 }), 2);
-    await g.setBytes(CH.tapDance, V.tdStep,
+    await g.setBytes(CH_ZMK.tapDance, V.tdStep,
         encodeTdStep(1, 1, { action: TD_ACTION.usage, param1: 0x70009 }), 2);
-    await g.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(1, 250), 1);
+    await g.setBytes(CH_ZMK.tapDance, V.tdCfg, encodeTdCfg(1, 250), 1);
     assert.equal(zmkPendingCount(ws2), 5, 'csk + td entries counted'); checks++;
 
     const writes = [], saves = [];
@@ -87,19 +87,19 @@ assert.deepEqual(listWorkspaces().map((w) => w.key), ['imprint']); checks++;
     assert.equal(r3.applied, 5); assert.deepEqual(r3.failures, []); checks += 2;
     const has = (c, i, p) => writes.some((w) => w[0] === c && w[1] === i
         && JSON.stringify(w[2]) === JSON.stringify(p));
-    assert.ok(has(CH.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }))); checks++;
-    assert.ok(has(CH.customShift, V.cskSlot, encodeCskSlot(5, { base: 0x70006, shifted: 0x70007 }))); checks++;
-    assert.ok(has(CH.tapDance, V.tdStep, encodeTdStep(1, 0, { action: TD_ACTION.usage, param1: 0x70008 }))); checks++;
-    assert.ok(has(CH.tapDance, V.tdStep, encodeTdStep(1, 1, { action: TD_ACTION.usage, param1: 0x70009 }))); checks++;
-    assert.ok(has(CH.tapDance, V.tdCfg, encodeTdCfg(1, 250))); checks++;
-    assert.deepEqual(saves.sort(), [CH.customShift, CH.tapDance].sort(), 'each channel saved once'); checks++;
+    assert.ok(has(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }))); checks++;
+    assert.ok(has(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(5, { base: 0x70006, shifted: 0x70007 }))); checks++;
+    assert.ok(has(CH_ZMK.tapDance, V.tdStep, encodeTdStep(1, 0, { action: TD_ACTION.usage, param1: 0x70008 }))); checks++;
+    assert.ok(has(CH_ZMK.tapDance, V.tdStep, encodeTdStep(1, 1, { action: TD_ACTION.usage, param1: 0x70009 }))); checks++;
+    assert.ok(has(CH_ZMK.tapDance, V.tdCfg, encodeTdCfg(1, 250))); checks++;
+    assert.deepEqual(saves.sort(), [CH_ZMK.customShift, CH_ZMK.tapDance].sort(), 'each channel saved once'); checks++;
     assert.equal(zmkPendingCount(ws2), 0, 'cleared after success'); checks++;
 
     // Failure stays queued, 'unhandled' is dropped.
-    await g.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }), 1);
-    await g.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(2, 300), 1);
+    await g.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(3, { base: 0x70004, shifted: 0x70005 }), 1);
+    await g.setBytes(CH_ZMK.tapDance, V.tdCfg, encodeTdCfg(2, 300), 1);
     const flaky = { flask: {
-        setBytes: async (c) => { throw new Error(c === CH.customShift ? 'timeout' : 'unhandled'); },
+        setBytes: async (c) => { throw new Error(c === CH_ZMK.customShift ? 'timeout' : 'unhandled'); },
         save: async () => {},
     } };
     const r4 = await zmkSyncExtras(flaky, ws2);

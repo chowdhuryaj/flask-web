@@ -21,7 +21,7 @@
 // shortcuts on Windows" pack (zmk-os-pack.js) loads ⌘→⌃ and its exceptions.
 
 import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { usageFromName, usageCap } from './zmk-keycodes.js?v=76';
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=76';
 import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty, cskMorphCaps, cskNeedsMorph, cskDuplicateOf,
@@ -50,7 +50,7 @@ export class ZmkShiftTab {
         this.morph = false;
         this.osk = false;       // OSK_CAPS: firmware takes OS condition / wildcard / count-mods
         this.osMode = null;     // board's current OS (OS_MAC / OS_PC) or null
-        onSlotsChanged(CH.customShift, this, () => { if (this.slots) this.load().catch(() => {}); });
+        onSlotsChanged(CH_ZMK.customShift, this, () => { if (this.slots) this.load().catch(() => {}); });
         installSlotSummary(app);
     }
 
@@ -61,19 +61,19 @@ export class ZmkShiftTab {
             this.morph = await cskMorphCaps(flask);
             this.osk = this.morph && await cskOskCaps(flask);
             this.osMode = this.osk ? await cskOsMode(flask) : null;
-            this.enabled = await flask.getU16(CH.customShift, V.cskEnabled);
-            this.slotCount = await dim(this.app, CH.customShift, V.cskSlotCount);
+            this.enabled = await flask.getU16(CH_ZMK.customShift, V.cskEnabled);
+            this.slotCount = await dim(this.app, CH_ZMK.customShift, V.cskSlotCount);
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
-                const r = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
+                const r = await flask.getBytes(CH_ZMK.customShift, V.cskSlot, [i], 1);
                 this.slots.push(decodeCskSlot(r));
             }
         } finally {
             hid?.resume?.();
         }
-        this.bar ??= reloadBar(CH.customShift, {
+        this.bar ??= reloadBar(CH_ZMK.customShift, {
             label: 'Mod morphs',
-            save: () => this.app.flask.save(CH.customShift),
+            save: () => this.app.flask.save(CH_ZMK.customShift),
             reload: () => this.load(),
         });
         this.render();
@@ -96,7 +96,7 @@ export class ZmkShiftTab {
                 this.render();
                 return;
             }
-            const r = await this.app.flask.setBytes(CH.customShift, V.cskSlot,
+            const r = await this.app.flask.setBytes(CH_ZMK.customShift, V.cskSlot,
                 encodeCskSlot(i, s), 1);
             this.slots[i] = decodeCskSlot(r); // adopt the echo
             this.bar?.markEdited();
@@ -371,7 +371,7 @@ export class ZmkShiftTab {
                 hint: 'master switch; slots stay stored while off',
                 value: this.enabled,
                 onChange: async (val) => {
-                    this.enabled = await flask.setU16(CH.customShift, V.cskEnabled, val ? 1 : 0);
+                    this.enabled = await flask.setU16(CH_ZMK.customShift, V.cskEnabled, val ? 1 : 0);
                     return this.enabled;
                 },
             }),

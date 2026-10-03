@@ -224,8 +224,8 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 
 /** Per-channel "Reload from device" bar. Replaces saveBar: there is no Save
  * button here, the top bar owns Save (saveState). `channel` is the source id
- * (CH.x) so Save runs channels in ascending order; `save` is what the status
- * bar runs for it, typically `() => flask.save(CH.x)`.
+ * (CH_ZMK.x) so Save runs channels in ascending order; `save` is what the status
+ * bar runs for it, typically `() => flask.save(CH_ZMK.x)`.
  *
  *   reloadBar(channel, {reload, save, label, note})
  *     reload   async () => void   re-read this screen from the device

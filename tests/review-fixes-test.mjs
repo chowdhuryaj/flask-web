@@ -27,7 +27,7 @@ const doc = new EventTarget();
 Object.assign(doc, { createElement: (t) => new Node(t), createTextNode: (t) => ({ nodeType: 3, textContent: t }), querySelector: () => null, body: new Node('body') });
 globalThis.document = doc;
 
-const { CH, V } = await import('../flaskproto.js?v=76');
+const { CH_ZMK, V } = await import('../flaskproto.js?v=76');
 const { zmkCapabilities } = await import('../zmk.js?v=76');
 const off = await import('../zmk-offline.js?v=76');
 const { createZmkTemplate, ZmkOfflineFlask, queuedLayersMatch, dropJournals } = off;
@@ -65,10 +65,10 @@ const mkApp = () => {
         && body.indexOf('app.flask = new FlaskProto(app.hid)') < body.indexOf('app.flask.handshake()'),
     'loadZmkDevice builds a new FlaskProto before the handshake');
     const a = mkApp(), b = mkApp();
-    await a.flask.setU16(CH.macros, V.macrosSlotCount, 8).catch(() => {});
-    const n1 = await common.dim(a, CH.macros, V.macrosSlotCount);
+    await a.flask.setU16(CH_ZMK.macros, V.macrosSlotCount, 8).catch(() => {});
+    const n1 = await common.dim(a, CH_ZMK.macros, V.macrosSlotCount);
     b.flask = { getU16: async () => 16 };
-    eq(await common.dim(b, CH.macros, V.macrosSlotCount), 16, 'a new client gets fresh counts');
+    eq(await common.dim(b, CH_ZMK.macros, V.macrosSlotCount), 16, 'a new client gets fresh counts');
     ok(n1 !== undefined);
 }
 
@@ -79,7 +79,7 @@ const mkApp = () => {
     ok(app.caps.gestures, 'gestures cap on');
     const r = (keymap) => common.macroInUse(app, 5, { keymap });
     eq(await r([]), false, 'unused slot');
-    await app.flask.setBytes(CH.gestures, V.gesturesSlot, encodeGestureSlot(0, 2, { action: 2, param: 5 }), 2);
+    await app.flask.setBytes(CH_ZMK.gestures, V.gesturesSlot, encodeGestureSlot(0, 2, { action: 2, param: 5 }), 2);
     eq(await r([]), true, 'gesture macro action 2 slot 5 counts as in use');
 }
 
@@ -101,7 +101,7 @@ const mkApp = () => {
     const rec = { action: 3, behavior: 'Tap Dance', behaviorId: 9999, param1: 1, param2: 0 };
     st.tapDance.slots[0].taps = [rec];
     await applyFlaskState(app, st);
-    const d = decodeTdStep(await app.flask.getBytes(CH.tapDance, V.tdStep, [0, 0], 2));
+    const d = decodeTdStep(await app.flask.getBytes(CH_ZMK.tapDance, V.tdStep, [0, 0], 2));
     ok(!d.action, 'name-resolved &ftd step was not written to the device');
 }
 

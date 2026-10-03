@@ -5,7 +5,7 @@ import { openPicker, valueLabel, renderBindingCell } from './binding-picker.js?v
 import { usageLabel } from './zmk-keycodes.js?v=76';
 import { decode, isRecursiveOutput } from './behavior-catalog.js?v=76';
 export { isRecursiveOutput };
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { decodeComboSlotV2, decodeComboSlotV3, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=76';
 import { decodeTdStep } from './zmk-tapdance-codec.js?v=76';
 import { decodeLeaderSlot, decodeGestureSlot } from './zmk-output-codec.js?v=76';
@@ -122,38 +122,38 @@ export async function macroInUse(app, slot, { rules = [], fallback = [], skipRul
     }
     if (fallback.some(hit)) return true;
     if (caps?.combos && caps.combosTyped) {
-        const n = await dim(app, CH.combos, V.combosSlotCount);
-        const keys = caps.combosKeys ? (await dim(app, CH.combos, V.combosKeys)) || 4 : 4;
+        const n = await dim(app, CH_ZMK.combos, V.combosSlotCount);
+        const keys = caps.combosKeys ? (await dim(app, CH_ZMK.combos, V.combosKeys)) || 4 : 4;
         for (let i = 0; i < n; i++) {
-            const r = await flask.getBytes(CH.combos, caps.combosTimed ? V.combosSlotV3 : V.combosSlotV2, [i], 1);
+            const r = await flask.getBytes(CH_ZMK.combos, caps.combosTimed ? V.combosSlotV3 : V.combosSlotV2, [i], 1);
             const c = caps.combosTimed ? decodeComboSlotV3(r, keys) : decodeComboSlotV2(r, keys);
             if (!comboSlotV2IsEmpty(c) && hit(c)) return true;
         }
     }
     if (caps?.tapDance) {
-        const n = await dim(app, CH.tapDance, V.tdSlotCount);
-        const taps = (await dim(app, CH.tapDance, V.tdTaps)) || 4;
+        const n = await dim(app, CH_ZMK.tapDance, V.tdSlotCount);
+        const taps = (await dim(app, CH_ZMK.tapDance, V.tdTaps)) || 4;
         for (let i = 0; i < n; i++) {
             for (let t = 0; t < taps; t++) {
-                const d = decodeTdStep(await flask.getBytes(CH.tapDance, V.tdStep, [i, t], 2));
+                const d = decodeTdStep(await flask.getBytes(CH_ZMK.tapDance, V.tdStep, [i, t], 2));
                 if (!d.action) break;
                 if (hit(d)) return true;
             }
         }
     }
     if (caps?.gestures) {
-        const sets = (await dim(app, CH.gestures, V.gesturesSetCount)) || 8;
+        const sets = (await dim(app, CH_ZMK.gestures, V.gesturesSetCount)) || 8;
         for (let s = 0; s < sets; s++) {
             for (let d = 0; d < 8; d++) {
-                if (hit(decodeGestureSlot(await flask.getBytes(CH.gestures, V.gesturesSlot, [s, d], 2)))) return true;
+                if (hit(decodeGestureSlot(await flask.getBytes(CH_ZMK.gestures, V.gesturesSlot, [s, d], 2)))) return true;
             }
         }
     }
     if (caps?.leader) {
-        const n = await dim(app, CH.leader, V.leaderSlotCount);
-        const keys = (await dim(app, CH.leader, V.leaderKeys)) || 8;
+        const n = await dim(app, CH_ZMK.leader, V.leaderSlotCount);
+        const keys = (await dim(app, CH_ZMK.leader, V.leaderKeys)) || 8;
         for (let i = 0; i < n; i++) {
-            if (hit(decodeLeaderSlot(await flask.getBytes(CH.leader, V.leaderSlot, [i], 1), keys))) return true;
+            if (hit(decodeLeaderSlot(await flask.getBytes(CH_ZMK.leader, V.leaderSlot, [i], 1), keys))) return true;
         }
     }
     const layers = keymap === undefined ? await liveKeymapLayers() : keymap;

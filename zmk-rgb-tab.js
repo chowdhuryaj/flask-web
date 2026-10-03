@@ -16,7 +16,7 @@
 // flat index grid until the keymap tab has connected once.
 
 import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast, modal } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { colorPicker, hsvCssOf as hsvCss } from './colorpicker.js?v=76';
 import { renderKeyboardSVG } from './board.js?v=76';
 
@@ -98,27 +98,27 @@ export class ZmkRgbTab {
 
         this.layer = 0;
         this.brush = [140, 255, 180];
-        this.enabled = await flask.getU16(CH.rgbMap, V.rgbmapEnabled);
-        this.layerCount = await flask.getU16(CH.rgbMap, V.rgbmapLayers);
-        this.ledCount = await flask.getU16(CH.rgbMap, V.rgbmapLeds);
+        this.enabled = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapEnabled);
+        this.layerCount = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapLayers);
+        this.ledCount = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapLeds);
         // v14: global brightness percent (native rgb_ug BRI analog).
         this.brightness = this.app.caps?.rgbBrightness
-            ? await flask.getU16(CH.rgbMap, V.rgbmapBrightness) : null;
+            ? await flask.getU16(CH_ZMK.rgbMap, V.rgbmapBrightness) : null;
         this.idleTimeout = this.app.caps?.rgbIdleTimeout
-            ? await flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout) : null;
+            ? await flask.getU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout) : null;
         if (this.app.caps?.rgbEffects) {
-            this.effect = await flask.getU16(CH.rgbMap, V.rgbmapEffect);
-            this.effectSpeed = await flask.getU16(CH.rgbMap, V.rgbmapEffectSpeed);
+            this.effect = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapEffect);
+            this.effectSpeed = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapEffectSpeed);
             this.effectHsv = [
-                await flask.getU16(CH.rgbMap, V.rgbmapEffectHue),
-                await flask.getU16(CH.rgbMap, V.rgbmapEffectSat),
-                await flask.getU16(CH.rgbMap, V.rgbmapEffectVal),
+                await flask.getU16(CH_ZMK.rgbMap, V.rgbmapEffectHue),
+                await flask.getU16(CH_ZMK.rgbMap, V.rgbmapEffectSat),
+                await flask.getU16(CH_ZMK.rgbMap, V.rgbmapEffectVal),
             ];
         }
         // Split-link diagnosis (0x09, RO): has the central discovered the
         // peripheral's rgb GATT characteristic? Older firmware answers
         // unhandled — treat as unknown.
-        try { this.splitLink = await flask.getU16(CH.rgbMap, V.rgbmapSplitLink); }
+        try { this.splitLink = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapSplitLink); }
         catch { this.splitLink = null; }
         this.layerCache = {};
         await this.loadLayer();
@@ -141,7 +141,7 @@ export class ZmkRgbTab {
         this.app.hid?.pause?.();
         try {
             for (let led = 0; led < this.ledCount; led++) {
-                const r = await this.app.flask.getBytes(CH.rgbMap, V.rgbmapLed, [layer, led], 2);
+                const r = await this.app.flask.getBytes(CH_ZMK.rgbMap, V.rgbmapLed, [layer, led], 2);
                 leds.push([r[2] ?? 0, r[3] ?? 0, r[4] ?? 0]);
             }
         } finally {
@@ -174,7 +174,7 @@ export class ZmkRgbTab {
     async paint(led) {
         const [h, s, v] = this.brush;
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, led, h, s, v], 2);
+            await this.app.flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [this.layer, led, h, s, v], 2);
             this.leds[led] = [h, s, v];
             this.render();
         } catch (e) { toast(`Paint failed: ${e.message}`, true); }
@@ -182,7 +182,7 @@ export class ZmkRgbTab {
 
     async clear(led) {
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, led, 0, 0, 0], 2);
+            await this.app.flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [this.layer, led, 0, 0, 0], 2);
             this.leds[led] = [0, 0, 0];
             this.render();
         } catch (e) { toast(`Clear failed: ${e.message}`, true); }
@@ -191,7 +191,7 @@ export class ZmkRgbTab {
     async fill() {
         const [h, s, v] = this.brush;
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, h, s, v], 1);
+            await this.app.flask.setBytes(CH_ZMK.rgbMap, V.rgbmapFill, [this.layer, h, s, v], 1);
             this.leds = this.layerCache[this.layer] = this.leds.map(() => [h, s, v]);
             this.render();
         } catch (e) { toast(`Fill failed: ${e.message}`, true); }
@@ -222,7 +222,7 @@ export class ZmkRgbTab {
         // the next run was unusable). Force Off for the sweep; finish/abort
         // restores.
         if (this.effect) {
-            try { this.effect = await this.app.flask.setU16(CH.rgbMap, V.rgbmapEffect, 0); }
+            try { this.effect = await this.app.flask.setU16(CH_ZMK.rgbMap, V.rgbmapEffect, 0); }
             catch { /* effect card still shows the truth on next load */ }
         }
         await this.lightWizardLed();
@@ -230,7 +230,7 @@ export class ZmkRgbTab {
 
     async _restoreWizardEffect(effectWas) {
         if (!effectWas) return;
-        try { this.effect = await this.app.flask.setU16(CH.rgbMap, V.rgbmapEffect, effectWas); }
+        try { this.effect = await this.app.flask.setU16(CH_ZMK.rgbMap, V.rgbmapEffect, effectWas); }
         catch { /* cosmetic */ }
     }
 
@@ -238,7 +238,7 @@ export class ZmkRgbTab {
         const w = this.wizard;
         w.orig = [...(this.leds[w.led] ?? [0, 0, 0])];
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [this.layer, w.led, 0, 0, 255], 2);
+            await this.app.flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [this.layer, w.led, 0, 0, 255], 2);
         } catch (e) {
             toast(`Couldn't light LED ${w.led}: ${e.message}`, true);
         }
@@ -248,7 +248,7 @@ export class ZmkRgbTab {
     async restoreWizardLed() {
         const w = this.wizard;
         try {
-            await this.app.flask.setBytes(CH.rgbMap, V.rgbmapLed,
+            await this.app.flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed,
                 [this.layer, w.led, ...(w.orig ?? [0, 0, 0])], 2);
         } catch { /* cosmetic — the map cache still holds the original */ }
     }
@@ -331,7 +331,7 @@ export class ZmkRgbTab {
         try {
             for (let start = 0; start < order.length; start += CHUNK) {
                 const part = order.slice(start, start + CHUNK).map((p) => p ?? 0xFF);
-                await flask.setBytes(CH.rgbMap, V.rgbmapLedOrder,
+                await flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLedOrder,
                     [start, part.length, ...part], 2);
             }
             return true;
@@ -381,7 +381,7 @@ export class ZmkRgbTab {
         const hsvSlider = (label, idx, vid) => sliderRow({
             label, min: 0, max: 255, step: 1, value: this.effectHsv[idx],
             onChange: async (v) => {
-                this.effectHsv[idx] = await flask.setU16(CH.rgbMap, vid, v);
+                this.effectHsv[idx] = await flask.setU16(CH_ZMK.rgbMap, vid, v);
                 return this.effectHsv[idx];
             },
         });
@@ -391,14 +391,14 @@ export class ZmkRgbTab {
                 label: 'Effect', value: this.effect,
                 options: EFFECT_NAMES.map((label, value) => ({ value, label })),
                 onChange: async (v) => {
-                    this.effect = await flask.setU16(CH.rgbMap, V.rgbmapEffect, Number(v));
+                    this.effect = await flask.setU16(CH_ZMK.rgbMap, V.rgbmapEffect, Number(v));
                     this.render();
                 },
             }),
             sliderRow({
                 label: 'Speed', min: 1, max: 255, step: 1, value: this.effectSpeed,
                 onChange: async (v) => {
-                    this.effectSpeed = await flask.setU16(CH.rgbMap, V.rgbmapEffectSpeed, v);
+                    this.effectSpeed = await flask.setU16(CH_ZMK.rgbMap, V.rgbmapEffectSpeed, v);
                     return this.effectSpeed;
                 },
             }),
@@ -504,7 +504,7 @@ export class ZmkRgbTab {
                 hint: '&frgb FRGB_TOG on the Control layer flips this too',
                 value: this.enabled,
                 onChange: async (val) => {
-                    this.enabled = await flask.setU16(CH.rgbMap, V.rgbmapEnabled, val ? 1 : 0);
+                    this.enabled = await flask.setU16(CH_ZMK.rgbMap, V.rgbmapEnabled, val ? 1 : 0);
                     return this.enabled;
                 },
             }),
@@ -514,7 +514,7 @@ export class ZmkRgbTab {
                 min: 0, max: 100, step: 5, value: this.brightness,
                 format: (v) => `${v}%`,
                 onChange: async (val) => {
-                    this.brightness = await flask.setU16(CH.rgbMap, V.rgbmapBrightness, val);
+                    this.brightness = await flask.setU16(CH_ZMK.rgbMap, V.rgbmapBrightness, val);
                     return this.brightness;
                 },
             }) : null,
@@ -526,7 +526,7 @@ export class ZmkRgbTab {
                 value: this.idleTimeout,
                 options: idleOptions(this.idleTimeout),
                 onChange: async (val) => {
-                    this.idleTimeout = await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout,
+                    this.idleTimeout = await flask.setU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout,
                         Number(val));
                     return this.idleTimeout;
                 },
@@ -552,7 +552,7 @@ export class ZmkRgbTab {
                     class: 'btn small', text: 'Clear layer',
                     onclick: async () => {
                         try {
-                            await flask.setBytes(CH.rgbMap, V.rgbmapFill, [this.layer, 0, 0, 0], 1);
+                            await flask.setBytes(CH_ZMK.rgbMap, V.rgbmapFill, [this.layer, 0, 0, 0], 1);
                             this.leds = this.layerCache[this.layer] = this.leds.map(() => [0, 0, 0]);
                             this.render();
                         } catch (e) { toast(`Clear failed: ${e.message}`, true); }
@@ -575,7 +575,7 @@ export class ZmkRgbTab {
                     : `Peripheral link: ${this.splitLink ? '✓ connected — right half receives edits' : '✗ NOT connected — right half will stay dark (re-pair the halves, then reload)'}`
                     + (storedLedMap() ? ' · measured LED map in use.' : ' · GUESSED LED order — run Map LEDs → keys.'),
             }),
-            saveBar(() => flask.save(CH.rgbMap),
+            saveBar(() => flask.save(CH_ZMK.rgbMap),
                 'Live edits reach both halves over the split link; Save persists on the central.'));
 
         this.root.replaceChildren(painter);

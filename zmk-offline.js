@@ -18,7 +18,7 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
          zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=76';
 import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=76';
@@ -491,86 +491,86 @@ function akNormalizeOut({ action, behaviorId, param1, param2 }, selfId) {
 function seedImprintTunables(tun, family = 'imprint') {
     const hw = ZMK_HARDWARE[family] ?? ZMK_HARDWARE.imprint;
     // totem: no pointing/RGB channels — its preview journals none of them.
-    const POINTING = [CH.autoscroll, CH.accel, CH.scrollSnap, CH.scrollScale, CH.gestures,
-        CH.ballSwap, CH.autoMouse];
+    const POINTING = [CH_ZMK.autoscroll, CH_ZMK.accel, CH_ZMK.scrollSnap, CH_ZMK.scrollScale, CH_ZMK.gestures,
+        CH_ZMK.ballSwap, CH_ZMK.autoMouse];
     const seed = (ch, id, val) => {
         if (!hw.pointing && POINTING.includes(ch)) return;
-        if (!hw.rgb && ch === CH.rgbMap) return;
+        if (!hw.rgb && ch === CH_ZMK.rgbMap) return;
         tun[`${ch}:${id}`] ??= { op: 'u16', val };
     };
-    seed(CH.autoscroll, V.asInverted, 0);
-    seed(CH.autoscroll, V.asSpeedScale, 100);
-    seed(CH.autoscroll, V.asStopOnKey, 1);
-    seed(CH.rgbMap, V.rgbmapEnabled, 1);
-    seed(CH.combos, V.combosEnabled, 1);
-    seed(CH.combos, V.combosTimeout, 50);
-    seed(CH.macros, V.macrosEnabled, 1);
-    seed(CH.macros, V.macrosTapMs, 30);
-    seed(CH.macros, V.macrosWaitMs, 15);
+    seed(CH_ZMK.autoscroll, V.asInverted, 0);
+    seed(CH_ZMK.autoscroll, V.asSpeedScale, 100);
+    seed(CH_ZMK.autoscroll, V.asStopOnKey, 1);
+    seed(CH_ZMK.rgbMap, V.rgbmapEnabled, 1);
+    seed(CH_ZMK.combos, V.combosEnabled, 1);
+    seed(CH_ZMK.combos, V.combosTimeout, 50);
+    seed(CH_ZMK.macros, V.macrosEnabled, 1);
+    seed(CH_ZMK.macros, V.macrosTapMs, 30);
+    seed(CH_ZMK.macros, V.macrosWaitMs, 15);
     // v9: accel (flask_accel firmware defaults — boots disabled, drashna
     // curve params x100; offset is SIGNED but the default is positive)
-    seed(CH.accel, V.accelEnabled, 0);
-    seed(CH.accel, V.accelTakeoff, 200);
-    seed(CH.accel, V.accelGrowth, 25);
-    seed(CH.accel, V.accelOffset, 220);
-    seed(CH.accel, V.accelLimit, 20);
+    seed(CH_ZMK.accel, V.accelEnabled, 0);
+    seed(CH_ZMK.accel, V.accelTakeoff, 200);
+    seed(CH_ZMK.accel, V.accelGrowth, 25);
+    seed(CH_ZMK.accel, V.accelOffset, 220);
+    seed(CH_ZMK.accel, V.accelLimit, 20);
     // v9: scroll snap (flask_scrollsnap DT defaults)
-    seed(CH.scrollSnap, V.snapEnabled, 1);
-    seed(CH.scrollSnap, V.snapThreshold, 63);
-    seed(CH.scrollSnap, V.snapSamples, 8);
-    seed(CH.scrollSnap, V.snapImmediate, 25);
-    seed(CH.scrollSnap, V.snapLockMs, 250);
-    seed(CH.scrollSnap, V.snapLockEvents, 0);
-    seed(CH.scrollSnap, V.snapIdleReset, 300);
+    seed(CH_ZMK.scrollSnap, V.snapEnabled, 1);
+    seed(CH_ZMK.scrollSnap, V.snapThreshold, 63);
+    seed(CH_ZMK.scrollSnap, V.snapSamples, 8);
+    seed(CH_ZMK.scrollSnap, V.snapImmediate, 25);
+    seed(CH_ZMK.scrollSnap, V.snapLockMs, 250);
+    seed(CH_ZMK.scrollSnap, V.snapLockEvents, 0);
+    seed(CH_ZMK.scrollSnap, V.snapIdleReset, 300);
     // v15: scroll speed (flask_scrollscale). The firmware boots at 100 —
     // "the keymap's compiled divisors verbatim" — and there is no DT knob to
     // disagree with, so 100 is the real boot state, not an idealized one.
-    seed(CH.scrollScale, V.scrollSpeedPct, 100);
+    seed(CH_ZMK.scrollScale, V.scrollSpeedPct, 100);
     // v9: rgb effect engine (firmware boot state — off, mid speed, teal-ish)
-    seed(CH.rgbMap, V.rgbmapEffect, 0);
-    seed(CH.rgbMap, V.rgbmapEffectSpeed, 128);
-    seed(CH.rgbMap, V.rgbmapEffectHue, 0);
-    seed(CH.rgbMap, V.rgbmapEffectSat, 255);
-    seed(CH.rgbMap, V.rgbmapEffectVal, 120);
+    seed(CH_ZMK.rgbMap, V.rgbmapEffect, 0);
+    seed(CH_ZMK.rgbMap, V.rgbmapEffectSpeed, 128);
+    seed(CH_ZMK.rgbMap, V.rgbmapEffectHue, 0);
+    seed(CH_ZMK.rgbMap, V.rgbmapEffectSat, 255);
+    seed(CH_ZMK.rgbMap, V.rgbmapEffectVal, 120);
     // v10: leader + gestures firmware defaults
-    seed(CH.leader, V.leaderEnabled, 1);
-    seed(CH.leader, V.leaderTimeout, 1000);
-    seed(CH.gestures, V.gesturesEnabled, 1);
-    seed(CH.gestures, V.gesturesRatchetStep, 150);
-    seed(CH.gestures, V.gesturesActiveSet, 0);
+    seed(CH_ZMK.leader, V.leaderEnabled, 1);
+    seed(CH_ZMK.leader, V.leaderTimeout, 1000);
+    seed(CH_ZMK.gestures, V.gesturesEnabled, 1);
+    seed(CH_ZMK.gestures, V.gesturesRatchetStep, 150);
+    seed(CH_ZMK.gestures, V.gesturesActiveSet, 0);
 
     // v11: ball swap (boots unswapped; effective is live-only — see the
     // ZmkOfflineFlask getU16 special case).
-    seed(CH.ballSwap, V.bswapSwapped, 0);
+    seed(CH_ZMK.ballSwap, V.bswapSwapped, 0);
 
     // v13: auto-mouse (flask_automouse firmware defaults — the keymap
     // node: enabled, 750 ms, threshold 0 = any motion, Mouse layer 3,
     // extend on non-transparent keys).
-    seed(CH.autoMouse, V.amEnabled, 1);
-    seed(CH.autoMouse, V.amTimeout, 750);
-    seed(CH.autoMouse, V.amThreshold, 0);
-    seed(CH.autoMouse, V.amLayer, 3);
-    seed(CH.autoMouse, V.amExtend, 1);
+    seed(CH_ZMK.autoMouse, V.amEnabled, 1);
+    seed(CH_ZMK.autoMouse, V.amTimeout, 750);
+    seed(CH_ZMK.autoMouse, V.amThreshold, 0);
+    seed(CH_ZMK.autoMouse, V.amLayer, 3);
+    seed(CH_ZMK.autoMouse, V.amExtend, 1);
 
     // v14: custom shift keys + tap dances boot enabled (empty tables);
     // rgb global brightness boots 100%.
-    seed(CH.customShift, V.cskEnabled, 1);
-    seed(CH.tapDance, V.tdEnabled, 1);
-    seed(CH.rgbMap, V.rgbmapBrightness, 100);
+    seed(CH_ZMK.customShift, V.cskEnabled, 1);
+    seed(CH_ZMK.tapDance, V.tdEnabled, 1);
+    seed(CH_ZMK.rgbMap, V.rgbmapBrightness, 100);
     // v16: idle blank timeout. The firmware defaults to
     // CONFIG_ZMK_IDLE_TIMEOUT/1000 = 30 s (it is deliberately the pre-v16
     // behaviour), so 30 is the real boot value — not an idealized "never".
-    seed(CH.rgbMap, V.rgbmapIdleTimeout, 30);
+    seed(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, 30);
     // v19: flask_autoshift boots OFF (Svalboard parity), retro on, 500 ms window.
     const A = ASH_DEFAULTS;
-    seed(CH.autoShift, V.ashEnabled, A.enabled);
-    seed(CH.autoShift, V.ashTimeout, A.timeout);
-    seed(CH.autoShift, V.ashGroups, A.groups);
-    seed(CH.autoShift, V.ashModifiers, A.modifiers);
-    seed(CH.autoShift, V.ashRepeat, A.repeat);
-    seed(CH.autoShift, V.ashNoAutoRepeat, A.noAutoRepeat);
-    seed(CH.autoShift, V.ashRetro, A.retro);
-    seed(CH.autoShift, V.ashRetroLimit, A.retroLimit);
+    seed(CH_ZMK.autoShift, V.ashEnabled, A.enabled);
+    seed(CH_ZMK.autoShift, V.ashTimeout, A.timeout);
+    seed(CH_ZMK.autoShift, V.ashGroups, A.groups);
+    seed(CH_ZMK.autoShift, V.ashModifiers, A.modifiers);
+    seed(CH_ZMK.autoShift, V.ashRepeat, A.repeat);
+    seed(CH_ZMK.autoShift, V.ashNoAutoRepeat, A.noAutoRepeat);
+    seed(CH_ZMK.autoShift, V.ashRetro, A.retro);
+    seed(CH_ZMK.autoShift, V.ashRetroLimit, A.retroLimit);
 }
 
 
@@ -840,14 +840,14 @@ export class ZmkOfflineFlask extends OfflineFlask {
     }
 
     async getU16(ch, id) {
-        if (ch === CH.meta) {
+        if (ch === CH_ZMK.meta) {
             if (id === V.metaProtocolVersion) return this.ws.protocolVersion;
             if (id === V.metaActiveLayer) return 0;
             if (id === V.metaFamily) return familyCode(this.ws.family);
             return 0;
         }
         if (ch === 0x2A && id === 0x01) return this.ws.zmk.holdtap?.length ?? 0;
-        if (ch === CH.adaptive) {
+        if (ch === CH_ZMK.adaptive) {
             const ak = this.ws.zmk.adaptive;
             if (!ak) throw new Error('unhandled');   // 0xFF echo: module not compiled in
             if (id === V.akEnabled) return ak.enabled;
@@ -856,43 +856,43 @@ export class ZmkOfflineFlask extends OfflineFlask {
             if (id === V.akStepCount) return ak.rules[0].steps.length;
             throw new Error('unhandled');
         }
-        if (ch === CH.autoShift) {
+        if (ch === CH_ZMK.autoShift) {
             if (!ASH_CLAMP[id]) throw new Error('unhandled');   // 0xFF echo
             return super.getU16(ch, id);
         }
-        if (ch === CH.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
-        if (ch === CH.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
-        if (ch === CH.rgbMap && id === V.rgbmapSplitLink) return 1; // sim halves always linked
-        if (ch === CH.combos && id === V.combosSlotCount) return this.ws.zmk.combos.length;
-        if (ch === CH.combos && id === V.combosKeys) return dims(this.ws.family).comboKeys;
-        if (ch === CH.macros && id === V.macrosSlotCount) return this.ws.zmk.macros.length;
-        if (ch === CH.macros && id === V.macrosStepCount) return this.ws.zmk.macros[0].length;
-        if (ch === CH.macros && id === V.macrosState) return 0; // never "playing"
-        if (ch === CH.leader && id === V.leaderSlotCount) return this.ws.zmk.leader.length;
-        if (ch === CH.leader && id === V.leaderKeys) return dims(this.ws.family).leaderKeys;
-        if (ch === CH.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
-        if (ch === CH.customShift && id === V.cskSlotCount) return this.ws.zmk.csk.length;
-        if (ch === CH.customShift && id === V.cskMorphCaps) return 1; // the sim speaks the 11-byte frame
-        if (ch === CH.customShift && id === V.cskOskCaps) return 1;   // ...and the OS flags (bits 1-4)
-        if (ch === CH.customShift && id === V.cskOsMode) return 1;    // the sim board is in Mac mode
-        if (ch === CH.tapDance && id === V.tdSlotCount) return this.ws.zmk.tapdance.length;
-        if (ch === CH.tapDance && id === V.tdTaps) return dims(this.ws.family).tdTaps;
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapSplitLink) return 1; // sim halves always linked
+        if (ch === CH_ZMK.combos && id === V.combosSlotCount) return this.ws.zmk.combos.length;
+        if (ch === CH_ZMK.combos && id === V.combosKeys) return dims(this.ws.family).comboKeys;
+        if (ch === CH_ZMK.macros && id === V.macrosSlotCount) return this.ws.zmk.macros.length;
+        if (ch === CH_ZMK.macros && id === V.macrosStepCount) return this.ws.zmk.macros[0].length;
+        if (ch === CH_ZMK.macros && id === V.macrosState) return 0; // never "playing"
+        if (ch === CH_ZMK.leader && id === V.leaderSlotCount) return this.ws.zmk.leader.length;
+        if (ch === CH_ZMK.leader && id === V.leaderKeys) return dims(this.ws.family).leaderKeys;
+        if (ch === CH_ZMK.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
+        if (ch === CH_ZMK.customShift && id === V.cskSlotCount) return this.ws.zmk.csk.length;
+        if (ch === CH_ZMK.customShift && id === V.cskMorphCaps) return 1; // the sim speaks the 11-byte frame
+        if (ch === CH_ZMK.customShift && id === V.cskOskCaps) return 1;   // ...and the OS flags (bits 1-4)
+        if (ch === CH_ZMK.customShift && id === V.cskOsMode) return 1;    // the sim board is in Mac mode
+        if (ch === CH_ZMK.tapDance && id === V.tdSlotCount) return this.ws.zmk.tapdance.length;
+        if (ch === CH_ZMK.tapDance && id === V.tdTaps) return dims(this.ws.family).tdTaps;
         // Ball swap "effective" is live-only (base XOR momentary holds) —
         // the sim has no held keys, so it always equals the base state.
-        if (ch === CH.ballSwap && id === V.bswapEffective) {
+        if (ch === CH_ZMK.ballSwap && id === V.bswapEffective) {
             return super.getU16(ch, V.bswapSwapped);
         }
         return super.getU16(ch, id);
     }
 
     async setU16(ch, id, value) {
-        if (ch === CH.autoShift) {
+        if (ch === CH_ZMK.autoShift) {
             if (!ASH_CLAMP[id]) throw new Error('unhandled');
             const v = ASH_CLAMP[id](value);
             this._journal(ch, id, 'u16', v);
             return v;
         }
-        if (ch === CH.adaptive) {
+        if (ch === CH_ZMK.adaptive) {
             const ak = this.ws.zmk.adaptive;
             if (!ak || id !== V.akEnabled) throw new Error('unhandled');   // counts are RO
             const v = value ? 1 : 0;
@@ -903,7 +903,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             return v;
         }
         // Live-state ids — never journal.
-        if (ch === CH.meta || (ch === CH.macros && id === V.macrosState)) {
+        if (ch === CH_ZMK.meta || (ch === CH_ZMK.macros && id === V.macrosState)) {
             return Math.max(0, Math.min(0xFFFF, Math.round(value))) & 0xFFFF;
         }
         // The gesture active set is a REAL persisted setting on
@@ -912,7 +912,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         // value below the compiled ZMK idle timeout (30 s) blanks AT that
         // timeout — the activity-idle event is the earliest signal the module
         // gets. Mirror it, or the app shows a setting the device can't honour.
-        if (ch === CH.rgbMap && id === V.rgbmapIdleTimeout) {
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapIdleTimeout) {
             const raw = Math.max(0, Math.round(value));
             const v = raw === 0 ? 0 : Math.max(30, raw);
             this.ws.tunables[`${ch}:${id}`] = { op: 'u16', val: v };
@@ -924,14 +924,14 @@ export class ZmkOfflineFlask extends OfflineFlask {
         // re-GETs after the SET, so the echo carries the clamped value — the
         // sim has to agree or an out-of-range write looks accepted here and
         // gets rejected on hardware.
-        if (ch === CH.scrollScale && id === V.scrollSpeedPct) {
+        if (ch === CH_ZMK.scrollScale && id === V.scrollSpeedPct) {
             const v = Math.min(Math.max(25, Math.round(value)), 400);
             this.ws.tunables[`${ch}:${id}`] = { op: 'u16', val: v };
             this.ws.dirty.tun[`${ch}:${id}`] = { op: 'u16', val: v };
             saveWorkspace(this.ws);
             return v;
         }
-        if (ch === CH.gestures && id === V.gesturesActiveSet) {
+        if (ch === CH_ZMK.gestures && id === V.gesturesActiveSet) {
             const v = Math.min(Math.max(0, Math.round(value)), this.ws.zmk.gestures.length - 1);
             this.ws.tunables[`${ch}:${id}`] = { op: 'u16', val: v };
             this.ws.dirty.tun[`${ch}:${id}`] = { op: 'u16', val: v };
@@ -1044,63 +1044,63 @@ export class ZmkOfflineFlask extends OfflineFlask {
     async getBytes(ch, id, payload = []) {
         const { zmk } = this.ws;
         if (ch === 0x2A && zmk.holdtap) return this._holdtapGet(id, payload[0] ?? 0);
-        if (ch === CH.keyState && id === V.keyStateBitmap) {
+        if (ch === CH_ZMK.keyState && id === V.keyStateBitmap) {
             return new Array(16).fill(0);
         }
-        if (ch === CH.rgbMap && id === V.rgbmapLed) {
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapLed) {
             const [layer, led] = payload;
             const hsv = zmk.rgb[layer]?.[led] ?? [0, 0, 0];
             return [layer, led, ...hsv];
         }
-        if (ch === CH.combos && id === V.combosSlot) {
+        if (ch === CH_ZMK.combos && id === V.combosSlot) {
             const slot = payload[0] ?? 0;
             const s = zmk.combos[slot] ?? comboSlotToTyped({ positions: [], usage: 0 });
             return encodeComboSlot(slot, comboTypedToLegacy(s), dims(this.ws.family).comboKeys);
         }
-        if (ch === CH.combos && id === V.combosSlotV2) {
+        if (ch === CH_ZMK.combos && id === V.combosSlotV2) {
             const slot = payload[0] ?? 0;
             const s = zmk.combos[slot] ?? emptyComboV3();
             return encodeComboSlotV2(slot, s, dims(this.ws.family).comboKeys);
         }
-        if (ch === CH.combos && id === V.combosSlotV3) {
+        if (ch === CH_ZMK.combos && id === V.combosSlotV3) {
             const slot = payload[0] ?? 0;
             const s = zmk.combos[slot] ?? emptyComboV3();
             return encodeComboSlotV3(slot, s, dims(this.ws.family).comboKeys);
         }
-        if (ch === CH.customShift && id === V.cskSlot) {
+        if (ch === CH_ZMK.customShift && id === V.cskSlot) {
             const slot = payload[0] ?? 0;
             const s = zmk.csk[slot] ?? { base: 0, shifted: 0 };
             return encodeCskSlot(slot, s, true);
         }
-        if (ch === CH.tapDance && id === V.tdStep) {
+        if (ch === CH_ZMK.tapDance && id === V.tdStep) {
             const [slot, tap] = payload;
             const o = zmk.tapdance[slot]?.taps[tap]
                 ?? { action: TD_ACTION.none, behaviorId: 0, param1: 0, param2: 0 };
             return encodeTdStep(slot, tap, o);
         }
-        if (ch === CH.tapDance && id === V.tdCfg) {
+        if (ch === CH_ZMK.tapDance && id === V.tdCfg) {
             const slot = payload[0] ?? 0;
             return encodeTdCfg(slot, zmk.tapdance[slot]?.termMs ?? 0);
         }
-        if (ch === CH.adaptive) return this._adaptiveGet(id, payload);
-        if (ch === CH.rgbMap && id === V.rgbmapLedOrder) {
+        if (ch === CH_ZMK.adaptive) return this._adaptiveGet(id, payload);
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapLedOrder) {
             const [start, count] = payload;
             if (start >= zmk.ledOrder.length || start + count > zmk.ledOrder.length) {
                 throw new Error('unhandled');
             }
             return [start, count, ...zmk.ledOrder.slice(start, start + count)];
         }
-        if (ch === CH.macros && id === V.macrosStep) {
+        if (ch === CH_ZMK.macros && id === V.macrosStep) {
             const [m, s] = payload;
             const step = zmk.macros[m]?.[s] ?? { action: MACRO_ACTION.empty, param: 0 };
             return encodeMacroStep(m, s, step);
         }
-        if (ch === CH.leader && id === V.leaderSlot) {
+        if (ch === CH_ZMK.leader && id === V.leaderSlot) {
             const seq = payload[0] ?? 0;
             const s = zmk.leader[seq] ?? { positions: [], action: 0, param: 0 };
             return encodeLeaderSlot(seq, s, dims(this.ws.family).leaderKeys);
         }
-        if (ch === CH.gestures && id === V.gesturesSlot) {
+        if (ch === CH_ZMK.gestures && id === V.gesturesSlot) {
             const [set, dir] = payload;
             const o = zmk.gestures[set]?.[dir] ?? { action: 0, param: 0 };
             return encodeGestureSlot(set, dir, o);
@@ -1111,8 +1111,8 @@ export class ZmkOfflineFlask extends OfflineFlask {
     async setBytes(ch, id, payload) {
         const { zmk } = this.ws;
         if (ch === 0x2A && zmk.holdtap && id === 0x50) return this._holdtapSet(payload);
-        if (ch === CH.adaptive) return this._adaptiveSet(id, payload);
-        if (ch === CH.rgbMap && id === V.rgbmapLed) {
+        if (ch === CH_ZMK.adaptive) return this._adaptiveSet(id, payload);
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapLed) {
             const [layer, led, h, s, v] = payload;
             if (zmk.rgb[layer]?.[led]) {
                 zmk.rgb[layer][led] = [h, s, v];
@@ -1121,7 +1121,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             }
             return payload;
         }
-        if (ch === CH.rgbMap && id === V.rgbmapFill) {
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapFill) {
             const [layer, h, s, v] = payload;
             if (zmk.rgb[layer]) {
                 for (let led = 0; led < zmk.rgb[layer].length; led++) {
@@ -1132,7 +1132,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             }
             return payload;
         }
-        if (ch === CH.combos && id === V.combosSlot) {
+        if (ch === CH_ZMK.combos && id === V.combosSlot) {
             const decoded = decodeComboSlot(payload, dims(this.ws.family).comboKeys);
             const slot = decoded.slot;
             if (!zmk.combos[slot]) return payload;
@@ -1145,7 +1145,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeComboSlot(slot, comboTypedToLegacy(zmk.combos[slot]), dims(this.ws.family).comboKeys);
         }
-        if (ch === CH.combos && id === V.combosSlotV2) {
+        if (ch === CH_ZMK.combos && id === V.combosSlotV2) {
             const d = decodeComboSlotV2(payload, dims(this.ws.family).comboKeys);
             if (!zmk.combos[d.slot]) return payload;
             const positions = d.positions
@@ -1172,7 +1172,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeComboSlotV2(d.slot, zmk.combos[d.slot], dims(this.ws.family).comboKeys);
         }
-        if (ch === CH.combos && id === V.combosSlotV3) {
+        if (ch === CH_ZMK.combos && id === V.combosSlotV3) {
             const d = decodeComboSlotV3(payload, dims(this.ws.family).comboKeys);
             if (!zmk.combos[d.slot]) return payload;
             const positions = d.positions
@@ -1199,7 +1199,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeComboSlotV3(d.slot, zmk.combos[d.slot], dims(this.ws.family).comboKeys);
         }
-        if (ch === CH.customShift && id === V.cskSlot) {
+        if (ch === CH_ZMK.customShift && id === V.cskSlot) {
             const d = decodeCskSlot(payload);
             if (!zmk.csk[d.slot]) return payload;
             zmk.csk[d.slot] = { base: d.base, shifted: d.shifted, mods: d.mods, keep: d.keep };
@@ -1208,7 +1208,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeCskSlot(d.slot, zmk.csk[d.slot], true);
         }
-        if (ch === CH.tapDance && id === V.tdStep) {
+        if (ch === CH_ZMK.tapDance && id === V.tdStep) {
             const d = decodeTdStep(payload);
             if (!zmk.tapdance[d.slot] || d.tap >= dims(this.ws.family).tdTaps) return payload;
             // Firmware normalization (flask_tapdance_output_set).
@@ -1225,7 +1225,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeTdStep(d.slot, d.tap, zmk.tapdance[d.slot].taps[d.tap]);
         }
-        if (ch === CH.tapDance && id === V.tdCfg) {
+        if (ch === CH_ZMK.tapDance && id === V.tdCfg) {
             const d = decodeTdCfg(payload);
             if (!zmk.tapdance[d.slot]) return payload;
             // Firmware clamp: 0 = default, else 50..1000.
@@ -1235,7 +1235,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeTdCfg(d.slot, zmk.tapdance[d.slot].termMs);
         }
-        if (ch === CH.rgbMap && id === V.rgbmapLedOrder) {
+        if (ch === CH_ZMK.rgbMap && id === V.rgbmapLedOrder) {
             const [start, count, ...pos] = payload;
             if (start >= zmk.ledOrder.length || start + count > zmk.ledOrder.length) {
                 throw new Error('unhandled');
@@ -1244,7 +1244,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return payload;
         }
-        if (ch === CH.macros && id === V.macrosStep) {
+        if (ch === CH_ZMK.macros && id === V.macrosStep) {
             const step = decodeMacroStep(payload);
             if (!zmk.macros[step.slot] || step.step >= zmk.macros[step.slot].length) return payload;
             const norm = decodeMacroStep(encodeMacroStep(step.slot, step.step, step));
@@ -1253,7 +1253,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeMacroStep(step.slot, step.step, norm);
         }
-        if (ch === CH.leader && id === V.leaderSlot) {
+        if (ch === CH_ZMK.leader && id === V.leaderSlot) {
             const d = decodeLeaderSlot(payload, dims(this.ws.family).leaderKeys);
             if (!zmk.leader[d.seq]) return payload;
             // Firmware normalization: valid board positions, leading prefix,
@@ -1267,7 +1267,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             saveWorkspace(this.ws);
             return encodeLeaderSlot(d.seq, zmk.leader[d.seq], dims(this.ws.family).leaderKeys);
         }
-        if (ch === CH.gestures && id === V.gesturesSlot) {
+        if (ch === CH_ZMK.gestures && id === V.gesturesSlot) {
             const d = decodeGestureSlot(payload);
             if (!zmk.gestures[d.set] || d.dir > 7) return payload;
             const action = d.action > 2 ? 0 : d.action;
@@ -1639,7 +1639,7 @@ async function zmkSyncExtrasInner(app, ws) {
     // pre-v9 firmware is fixed at the codec default of 4).
     let comboKeys = COMBO_MAX_KEYS;
     if (Object.keys(d.combo).length && app.caps?.combosKeys) {
-        try { comboKeys = await app.flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS; }
+        try { comboKeys = await app.flask.getU16(CH_ZMK.combos, V.combosKeys) || COMBO_MAX_KEYS; }
         catch { /* keep default */ }
     }
 
@@ -1650,52 +1650,52 @@ async function zmkSyncExtrasInner(app, ws) {
             // idle, layer survive), v12 the typed frame (behavior outputs
             // survive), older firmware the legacy usage-only view.
             if (app.caps?.combosTimed) {
-                await app.flask.setBytes(CH.combos, V.combosSlotV3,
+                await app.flask.setBytes(CH_ZMK.combos, V.combosSlotV3,
                     encodeComboSlotV3(Number(slot), ws.zmk.combos[slot], comboKeys), 1);
             } else if (app.caps?.combosTyped) {
-                await app.flask.setBytes(CH.combos, V.combosSlotV2,
+                await app.flask.setBytes(CH_ZMK.combos, V.combosSlotV2,
                     encodeComboSlotV2(Number(slot), ws.zmk.combos[slot], comboKeys), 1);
             } else {
-                await app.flask.setBytes(CH.combos, V.combosSlot,
+                await app.flask.setBytes(CH_ZMK.combos, V.combosSlot,
                     encodeComboSlot(Number(slot), comboTypedToLegacy(ws.zmk.combos[slot]),
                         comboKeys), 1);
             }
             ok.push(slot);
         } catch (e) { fail.push(`combo ${slot}: ${e.message}`); }
     }
-    await commit(CH.combos, d.combo, ok, 'combos');
+    await commit(CH_ZMK.combos, d.combo, ok, 'combos');
 
     ok = [];
     for (const key of Object.keys(d.macroStep)) {
         const [m, s] = key.split(',').map(Number);
         try {
-            await app.flask.setBytes(CH.macros, V.macrosStep,
+            await app.flask.setBytes(CH_ZMK.macros, V.macrosStep,
                 encodeMacroStep(m, s, ws.zmk.macros[m][s]), 2);
             ok.push(key);
         } catch (e) { fail.push(`macro ${key}: ${e.message}`); }
     }
-    await commit(CH.macros, d.macroStep, ok, 'macros');
+    await commit(CH_ZMK.macros, d.macroStep, ok, 'macros');
 
     ok = [];
     for (const seq of Object.keys(d.leaderSlot)) {
         try {
-            await app.flask.setBytes(CH.leader, V.leaderSlot,
+            await app.flask.setBytes(CH_ZMK.leader, V.leaderSlot,
                 encodeLeaderSlot(Number(seq), ws.zmk.leader[seq], dims(ws.family).leaderKeys), 1);
             ok.push(seq);
         } catch (e) { fail.push(`leader ${seq}: ${e.message}`); }
     }
-    await commit(CH.leader, d.leaderSlot, ok, 'leader');
+    await commit(CH_ZMK.leader, d.leaderSlot, ok, 'leader');
 
     ok = [];
     for (const key of Object.keys(d.gestureSlot)) {
         const [set, dir] = key.split(',').map(Number);
         try {
-            await app.flask.setBytes(CH.gestures, V.gesturesSlot,
+            await app.flask.setBytes(CH_ZMK.gestures, V.gesturesSlot,
                 encodeGestureSlot(set, dir, ws.zmk.gestures[set][dir]), 2);
             ok.push(key);
         } catch (e) { fail.push(`gesture ${key}: ${e.message}`); }
     }
-    await commit(CH.gestures, d.gestureSlot, ok, 'gestures');
+    await commit(CH_ZMK.gestures, d.gestureSlot, ok, 'gestures');
 
     // Custom shift: one slot frame per edited slot (same frame the Shift tab sends).
     ok = [];
@@ -1717,7 +1717,7 @@ async function zmkSyncExtrasInner(app, ws) {
                     continue;
                 }
             }
-            await app.flask.setBytes(CH.customShift, V.cskSlot,
+            await app.flask.setBytes(CH_ZMK.customShift, V.cskSlot,
                 encodeCskSlot(Number(slot), ws.zmk.csk[slot]), 1);
             ok.push(slot);
         } catch (e) {
@@ -1725,7 +1725,7 @@ async function zmkSyncExtrasInner(app, ws) {
             else fail.push(`shift ${slot}: ${e.message}`);
         }
     }
-    await commit(CH.customShift, d.cskSlot, ok, 'shift');
+    await commit(CH_ZMK.customShift, d.cskSlot, ok, 'shift');
 
     // Tap dance: keys are "slot,tap" (step frame) or "slot,cfg" (term frame).
     ok = [];
@@ -1735,9 +1735,9 @@ async function zmkSyncExtrasInner(app, ws) {
         try {
             if (!td) throw new Error('unhandled');
             if (which === 'cfg') {
-                await app.flask.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(Number(slot), td.termMs), 1);
+                await app.flask.setBytes(CH_ZMK.tapDance, V.tdCfg, encodeTdCfg(Number(slot), td.termMs), 1);
             } else {
-                await app.flask.setBytes(CH.tapDance, V.tdStep,
+                await app.flask.setBytes(CH_ZMK.tapDance, V.tdStep,
                     encodeTdStep(Number(slot), Number(which), td.taps[which]), 2);
             }
             ok.push(key);
@@ -1746,7 +1746,7 @@ async function zmkSyncExtrasInner(app, ws) {
             else fail.push(`tap dance ${key}: ${e.message}`);
         }
     }
-    await commit(CH.tapDance, d.tdStep, ok, 'tap dance');
+    await commit(CH_ZMK.tapDance, d.tdStep, ok, 'tap dance');
 
     // flask_adaptive: header, then every step, per edited rule (a deleted
     // rule is just its zeroed header); fallbacks are keyed f<set>. A device
@@ -1758,14 +1758,14 @@ async function zmkSyncExtrasInner(app, ws) {
             if (!ak) throw new Error('unhandled');
             if (key.startsWith('f')) {
                 const set = Number(key.slice(1));
-                await app.flask.setBytes(CH.adaptive, V.akFallback,
+                await app.flask.setBytes(CH_ZMK.adaptive, V.akFallback,
                     encodeAkFallback(set, ak.fallback[set]), 1);
             } else {
                 const i = Number(key), r = ak.rules[i];
-                await app.flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(i, r), 1);
+                await app.flask.setBytes(CH_ZMK.adaptive, V.akRule, encodeAkRule(i, r), 1);
                 if (r.trigger) {
                     for (let st = 0; st < r.steps.length; st++) {
-                        await app.flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(i, st, r.steps[st]), 2);
+                        await app.flask.setBytes(CH_ZMK.adaptive, V.akStep, encodeAkStep(i, st, r.steps[st]), 2);
                     }
                 }
             }
@@ -1775,7 +1775,7 @@ async function zmkSyncExtrasInner(app, ws) {
             else fail.push(`adaptive ${key}: ${e.message}`);
         }
     }
-    await commit(CH.adaptive, d.akRule, ok, 'adaptive');
+    await commit(CH_ZMK.adaptive, d.akRule, ok, 'adaptive');
 
     // A queued keymap can't apply here — Studio RPC needs its own serial
     // connect (user gesture) + physical unlock. Stash the workspace; the

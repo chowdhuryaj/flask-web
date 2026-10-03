@@ -6,7 +6,7 @@ import { encodeCskSlot, decodeCskSlot, cskSummary, cskDuplicateOf, cskNeedsOs, c
     MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI, OS_MAC, OS_PC, WILD_KEY } from '../zmk-csk-codec.js?v=76';
 import { OS_PACK } from '../zmk-os-pack.js?v=76';
 import { usageFromName, usageCap } from '../zmk-keycodes.js?v=76';
-import { CH, V } from '../flaskproto.js?v=76';
+import { CH_ZMK, V } from '../flaskproto.js?v=76';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -100,7 +100,7 @@ eq(cskDuplicateOf([WD(MOD_GUI | MOD_SFT, OS_PC), WD(MOD_GUI, 0)], 1), -1, 'a nar
 eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), WD(MOD_GUI, OS_PC)], 1), -1, 'a specific row earlier does not shadow a wildcard');
 
 // ---- caps probes ----
-const flaskWith = (fn) => ({ getU16: async (ch, id) => { assert.equal(ch, CH.customShift); return fn(id); } });
+const flaskWith = (fn) => ({ getU16: async (ch, id) => { assert.equal(ch, CH_ZMK.customShift); return fn(id); } });
 eq(await cskOskCaps(flaskWith((id) => { assert.equal(id, V.cskOskCaps); return 1; })), true, 'OSK_CAPS 1 -> OS UI');
 eq(await cskOskCaps(flaskWith(() => { throw new Error('unhandled'); })), false, 'old firmware -> controls hidden');
 eq(await cskOskCaps(flaskWith(() => 0)), false, 'OSK_CAPS 0 -> hidden');
@@ -125,14 +125,14 @@ eq([await cskOsMode(flaskWith(() => 0)), await cskOsMode(flaskWith(() => 1)), aw
     const ws = createZmkTemplate('totem'); ws.key = 'os-test';
     const g = new ZmkOfflineFlask(ws);
     eq(await cskOskCaps(g), true, 'sim reports OSK_CAPS 1');
-    eq(await g.getU16(CH.customShift, V.cskOsMode), 1, 'sim reports OS_MODE 1 (Mac)');
+    eq(await g.getU16(CH_ZMK.customShift, V.cskOsMode), 1, 'sim reports OS_MODE 1 (Mac)');
     eq(await cskOsMode(g), OS_MAC, 'sim OS mode is Mac');
     for (const [i, r] of OS_PACK.entries()) {
         const { src, ...slot } = r;
-        const echo = decodeCskSlot(await g.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(i, slot), 1));
+        const echo = decodeCskSlot(await g.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(i, slot), 1));
         eq(echo, { slot: i, ...slot }, `sim echo carries OS bits for pack row ${i}`);
     }
-    eq(decodeCskSlot(await g.getBytes(CH.customShift, V.cskSlot, [0], 1)).wild, true, 'sim GET returns the wildcard');
+    eq(decodeCskSlot(await g.getBytes(CH_ZMK.customShift, V.cskSlot, [0], 1)).wild, true, 'sim GET returns the wildcard');
 
     // replay onto firmware without OSK_CAPS keeps OS slots queued
     const ws2 = createZmkTemplate('totem'); ws2.key = 'os-test2';
@@ -162,10 +162,10 @@ eq([await cskOsMode(flaskWith(() => 0)), await cskOsMode(flaskWith(() => 1)), aw
     // backup: new bits round trip, plain slots stay byte-identical
     const { exportFlaskState, applyFlaskState } = await import('../zmk-export.js?v=76');
     const g2 = new ZmkOfflineFlask(createZmkTemplate('totem'));
-    await g2.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(0, { base: Q, shifted: F4 }), 1);
-    await g2.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(1, { base: Q, shifted: F4, mods: MOD_ALT, keep: true }), 1);
+    await g2.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(0, { base: Q, shifted: F4 }), 1);
+    await g2.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(1, { base: Q, shifted: F4, mods: MOD_ALT, keep: true }), 1);
     const { src: _s, ...wsl } = OS_PACK[0];
-    await g2.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(2, wsl), 1);
+    await g2.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(2, wsl), 1);
     const caps = { customShift: true };
     const out = await exportFlaskState({ flask: g2, caps });
     eq(out.customShift.slots[0], { base: Q, shifted: F4 }, 'plain slot exports exactly as before');
@@ -173,7 +173,7 @@ eq([await cskOsMode(flaskWith(() => 0)), await cskOsMode(flaskWith(() => 1)), aw
     eq(out.customShift.slots[2], { base: WILD_KEY, shifted: wsl.shifted, mods: MOD_GUI, keep: false, os: OS_PC, wild: true, count: true }, 'OS slot carries os/wild/count');
     const g3 = new ZmkOfflineFlask(createZmkTemplate('totem'));
     const res = await applyFlaskState({ flask: g3, caps }, JSON.parse(JSON.stringify(out)));
-    eq(decodeCskSlot(await g3.getBytes(CH.customShift, V.cskSlot, [2], 1)), { slot: 2, ...wsl }, 'restore brings the OS bits back');
+    eq(decodeCskSlot(await g3.getBytes(CH_ZMK.customShift, V.cskSlot, [2], 1)), { slot: 2, ...wsl }, 'restore brings the OS bits back');
     eq(res.failures.filter((f) => /customShift/.test(f)), [], 'no customShift failures on OS-aware target');
     // restore onto firmware without OSK_CAPS skips OS rows and says why
     const sent = [];

@@ -13,7 +13,7 @@
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
 import { el, card, toast } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { diag } from './diag.js?v=76';
 import { calibrateButton } from './zmk-ht-calibrate-card.js?v=76';
 import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION,
@@ -103,82 +103,82 @@ export class ZmkTestTab {
         const t0 = performance.now();
         try {
             await probe('meta: protocol version', async () =>
-                `v${await flask.getU16(CH.meta, V.metaProtocolVersion)}`);
+                `v${await flask.getU16(CH_ZMK.meta, V.metaProtocolVersion)}`);
             await probe('meta: family id', async () =>
-                `${await flask.getU16(CH.meta, V.metaFamily)}`);
+                `${await flask.getU16(CH_ZMK.meta, V.metaFamily)}`);
             await probe('meta: active layer', async () =>
-                `${await flask.getU16(CH.meta, V.metaActiveLayer)}`);
+                `${await flask.getU16(CH_ZMK.meta, V.metaActiveLayer)}`);
 
             if (caps.combos) {
                 // The flag-verify that would have caught "combos fire while
                 // off" being a stale wire: the DEVICE must report the flip.
                 await probe('combos: enabled flag round-trip', () =>
-                    flipU16(CH.combos, V.combosEnabled, 0));
+                    flipU16(CH_ZMK.combos, V.combosEnabled, 0));
                 await probe('combos: last-slot write/read/restore', async () => {
-                    const count = await flask.getU16(CH.combos, V.combosSlotCount);
+                    const count = await flask.getU16(CH_ZMK.combos, V.combosSlotCount);
                     const keys = caps.combosKeys
-                        ? (await flask.getU16(CH.combos, V.combosKeys) || 4) : 4;
+                        ? (await flask.getU16(CH_ZMK.combos, V.combosKeys) || 4) : 4;
                     const i = count - 1;
                     if (caps.combosTyped) {
-                        const orig = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
+                        const orig = await flask.getBytes(CH_ZMK.combos, V.combosSlotV2, [i], 1);
                         const test = encodeComboSlotV2(i, {
                             positions: [0, 1], action: COMBO_ACTION.usage, param1: 0x70004,
                         }, keys);
-                        const echo = await flask.setBytes(CH.combos, V.combosSlotV2, test, 1);
+                        const echo = await flask.setBytes(CH_ZMK.combos, V.combosSlotV2, test, 1);
                         const back = decodeComboSlotV2(echo, keys);
-                        await flask.setBytes(CH.combos, V.combosSlotV2, [i, ...orig.slice(1)], 1);
+                        await flask.setBytes(CH_ZMK.combos, V.combosSlotV2, [i, ...orig.slice(1)], 1);
                         if (back.action !== COMBO_ACTION.usage || back.param1 !== 0x70004) {
                             throw new Error('echo mismatch');
                         }
                         return `slot ${i} (typed)`;
                     }
-                    const orig = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
-                    const echo = await flask.setBytes(CH.combos, V.combosSlot,
+                    const orig = await flask.getBytes(CH_ZMK.combos, V.combosSlot, [i], 1);
+                    const echo = await flask.setBytes(CH_ZMK.combos, V.combosSlot,
                         [i, 0, 1, ...new Array(keys - 2).fill(0xFF), 0x00, 0x07, 0x00, 0x04], 1);
-                    await flask.setBytes(CH.combos, V.combosSlot, [i, ...orig.slice(1)], 1);
+                    await flask.setBytes(CH_ZMK.combos, V.combosSlot, [i, ...orig.slice(1)], 1);
                     if (echo[keys + 4] !== 0x04) throw new Error('echo mismatch');
                     return `slot ${i} (legacy)`;
                 });
             }
             if (caps.macros) {
                 await probe('macros: enabled flag round-trip', () =>
-                    flipU16(CH.macros, V.macrosEnabled, 0));
+                    flipU16(CH_ZMK.macros, V.macrosEnabled, 0));
             }
             if (caps.leader) {
                 await probe('leader: enabled flag round-trip', () =>
-                    flipU16(CH.leader, V.leaderEnabled, 0));
+                    flipU16(CH_ZMK.leader, V.leaderEnabled, 0));
             }
             if (caps.autoscroll) {
                 await probe('autoscroll: inverted flag round-trip', () =>
-                    flipU16(CH.autoscroll, V.asInverted, 1));
+                    flipU16(CH_ZMK.autoscroll, V.asInverted, 1));
             }
             if (caps.rgbIdleTimeout) {
                 await probe('rgb: idle timeout round-trip', () =>
-                    flipU16(CH.rgbMap, V.rgbmapIdleTimeout, 300));
+                    flipU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, 300));
                 // Nonzero values under the compiled ZMK idle timeout cannot be
                 // honoured (that event is the earliest signal flask_rgb gets),
                 // so the device must store and echo the FLOOR, not the request.
                 // An echo of 5 means it is reporting a setting it does not have.
                 await probe('rgb: idle timeout floors below 30s', async () => {
-                    const orig = await flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout);
-                    const got = await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 5);
-                    await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, orig);
+                    const orig = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout);
+                    const got = await flask.setU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, 5);
+                    await flask.setU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, orig);
                     if (got !== 30) throw new Error(`sent 5, device reports ${got} (want 30)`);
                     return `5→${got}, restored ${orig}`;
                 });
             }
             if (caps.scrollSpeed) {
                 await probe('scroll speed: round-trip', () =>
-                    flipU16(CH.scrollScale, V.scrollSpeedPct, 175));
+                    flipU16(CH_ZMK.scrollScale, V.scrollSpeedPct, 175));
                 // The firmware clamps to 25..400 and the handler re-GETs after
                 // the SET, so the echo must carry the CLAMPED value. An echo of
                 // 500 here means the clamp never ran (or the reply is a stale
                 // wire) — the class of wire bug the sim provably cannot catch.
                 await probe('scroll speed: clamps out-of-range', async () => {
-                    const orig = await flask.getU16(CH.scrollScale, V.scrollSpeedPct);
-                    const echo = await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 500);
-                    const got = await flask.getU16(CH.scrollScale, V.scrollSpeedPct);
-                    await flask.setU16(CH.scrollScale, V.scrollSpeedPct, orig);
+                    const orig = await flask.getU16(CH_ZMK.scrollScale, V.scrollSpeedPct);
+                    const echo = await flask.setU16(CH_ZMK.scrollScale, V.scrollSpeedPct, 500);
+                    const got = await flask.getU16(CH_ZMK.scrollScale, V.scrollSpeedPct);
+                    await flask.setU16(CH_ZMK.scrollScale, V.scrollSpeedPct, orig);
                     if (got !== 400) throw new Error(`sent 500, device kept ${got} (want 400)`);
                     if (echo != null && echo !== 400) {
                         throw new Error(`echo said ${echo}, device stored ${got}`);
@@ -188,10 +188,10 @@ export class ZmkTestTab {
             }
             if (caps.rgbMap) {
                 await probe('rgb: led write/read/restore', async () => {
-                    const orig = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [0, 0], 2);
-                    await flask.setBytes(CH.rgbMap, V.rgbmapLed, [0, 0, 1, 2, 3], 2);
-                    const back = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [0, 0], 2);
-                    await flask.setBytes(CH.rgbMap, V.rgbmapLed, [0, 0, ...orig.slice(2, 5)], 2);
+                    const orig = await flask.getBytes(CH_ZMK.rgbMap, V.rgbmapLed, [0, 0], 2);
+                    await flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [0, 0, 1, 2, 3], 2);
+                    const back = await flask.getBytes(CH_ZMK.rgbMap, V.rgbmapLed, [0, 0], 2);
+                    await flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [0, 0, ...orig.slice(2, 5)], 2);
                     if (back[2] !== 1 || back[3] !== 2 || back[4] !== 3) {
                         throw new Error(`read back ${back.slice(2, 5)}`);
                     }
@@ -200,8 +200,8 @@ export class ZmkTestTab {
             }
             if (caps.rgbLedOrder) {
                 await probe('rgb: LED-order chunk round-trip', async () => {
-                    const orig = await flask.getBytes(CH.rgbMap, V.rgbmapLedOrder, [0, 4], 2);
-                    const echo = await flask.setBytes(CH.rgbMap, V.rgbmapLedOrder,
+                    const orig = await flask.getBytes(CH_ZMK.rgbMap, V.rgbmapLedOrder, [0, 4], 2);
+                    const echo = await flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLedOrder,
                         [0, 4, ...orig.slice(2, 6)], 2);
                     if (echo.length < 6) throw new Error('short echo');
                     return `first 4 = ${orig.slice(2, 6).join(',')}`;
@@ -209,17 +209,17 @@ export class ZmkTestTab {
             }
             if (caps.ballSwap) {
                 await probe('ballswap: effective readable', async () =>
-                    `${await flask.getU16(CH.ballSwap, V.bswapEffective)}`);
+                    `${await flask.getU16(CH_ZMK.ballSwap, V.bswapEffective)}`);
             }
             if (caps.autoMouse) {
                 await probe('automouse: timeout round-trip', async () => {
-                    const orig = await flask.getU16(CH.autoMouse, V.amTimeout);
+                    const orig = await flask.getU16(CH_ZMK.autoMouse, V.amTimeout);
                     const want = orig === 750 ? 800 : 750;
-                    await flask.setU16(CH.autoMouse, V.amTimeout, want);
-                    const got = await flask.getU16(CH.autoMouse, V.amTimeout);
-                    await flask.setU16(CH.autoMouse, V.amTimeout, orig);
+                    await flask.setU16(CH_ZMK.autoMouse, V.amTimeout, want);
+                    const got = await flask.getU16(CH_ZMK.autoMouse, V.amTimeout);
+                    await flask.setU16(CH_ZMK.autoMouse, V.amTimeout, orig);
                     if (got !== want) throw new Error(`wrote ${want}, device reports ${got}`);
-                    return `${orig} ms (layer ${await flask.getU16(CH.autoMouse, V.amLayer)})`;
+                    return `${orig} ms (layer ${await flask.getU16(CH_ZMK.autoMouse, V.amLayer)})`;
                 });
             }
             if (caps.combosTimed) {
@@ -227,27 +227,27 @@ export class ZmkTestTab {
                 // "prior probe polluted the slot". Uses a fresh slot, clears
                 // it first, then round-trips distinctive values.
                 await probe('combos: v3 timing on CLEAN slot (diag)', async () => {
-                    const count = await flask.getU16(CH.combos, V.combosSlotCount);
-                    const keys = (await flask.getU16(CH.combos, V.combosKeys)) || 4;
+                    const count = await flask.getU16(CH_ZMK.combos, V.combosSlotCount);
+                    const keys = (await flask.getU16(CH_ZMK.combos, V.combosKeys)) || 4;
                     const j = count - 2; // untouched by the v2/v3 slot-(count-1) probes
                     const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, '0')).join(' ');
-                    const save = await flask.getBytes(CH.combos, V.combosSlotV3, [j], 1);
+                    const save = await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [j], 1);
                     // 1) clear (action none → firmware forces timing to 0)
-                    await flask.setBytes(CH.combos, V.combosSlotV3,
+                    await flask.setBytes(CH_ZMK.combos, V.combosSlotV3,
                         encodeComboSlotV3(j, { positions: [], action: COMBO_ACTION.none }, keys), 1);
                     const cleared = decodeComboSlotV3(
-                        await flask.getBytes(CH.combos, V.combosSlotV3, [j], 1), keys);
+                        await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [j], 1), keys);
                     // 2) write distinctive timing (values absent from any other frame)
                     const wtx = encodeComboSlotV3(j, {
                         positions: [2, 3], action: COMBO_ACTION.usage, param1: 0x7000A,
                         timeoutMs: 201, priorIdleMs: 151, layer: 1,
                     }, keys);
-                    const wecho = await flask.setBytes(CH.combos, V.combosSlotV3, wtx, 1);
+                    const wecho = await flask.setBytes(CH_ZMK.combos, V.combosSlotV3, wtx, 1);
                     const set = decodeComboSlotV3(wecho, keys);
                     // 3) independent read-back
                     const rb = decodeComboSlotV3(
-                        await flask.getBytes(CH.combos, V.combosSlotV3, [j], 1), keys);
-                    await flask.setBytes(CH.combos, V.combosSlotV3, [j, ...save.slice(1)], 1);
+                        await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [j], 1), keys);
+                    await flask.setBytes(CH_ZMK.combos, V.combosSlotV3, [j, ...save.slice(1)], 1);
                     const ok = rb.timeoutMs === 201 && rb.priorIdleMs === 151 && rb.layer === 1;
                     const msg = `slot ${j}: cleared ${cleared.timeoutMs}/${cleared.priorIdleMs}/${cleared.layer}`
                         + `; setEcho ${set.timeoutMs}/${set.priorIdleMs}/${set.layer}`
@@ -259,17 +259,17 @@ export class ZmkTestTab {
                 // v14 timed slot: wire-proves timeout/prior-idle/layer echo
                 // through the SLOT_V3 frame (encoding bugs beat the sim).
                 await probe('combos: timed-slot (v3) round-trip', async () => {
-                    const count = await flask.getU16(CH.combos, V.combosSlotCount);
-                    const keys = (await flask.getU16(CH.combos, V.combosKeys)) || 4;
+                    const count = await flask.getU16(CH_ZMK.combos, V.combosSlotCount);
+                    const keys = (await flask.getU16(CH_ZMK.combos, V.combosKeys)) || 4;
                     const i = count - 1;
-                    const orig = await flask.getBytes(CH.combos, V.combosSlotV3, [i], 1);
+                    const orig = await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [i], 1);
                     const test = encodeComboSlotV3(i, {
                         positions: [0, 1], action: COMBO_ACTION.usage, param1: 0x70004,
                         timeoutMs: 120, priorIdleMs: 90, layer: 0,
                     }, keys);
-                    const echo = await flask.setBytes(CH.combos, V.combosSlotV3, test, 1);
+                    const echo = await flask.setBytes(CH_ZMK.combos, V.combosSlotV3, test, 1);
                     const back = decodeComboSlotV3(echo, keys);
-                    await flask.setBytes(CH.combos, V.combosSlotV3, [i, ...orig.slice(1)], 1);
+                    await flask.setBytes(CH_ZMK.combos, V.combosSlotV3, [i, ...orig.slice(1)], 1);
                     if (back.timeoutMs !== 120 || back.priorIdleMs !== 90 || back.layer !== 0) {
                         const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, '0')).join(' ');
                         throw new Error(`timing echo ${back.timeoutMs}/${back.priorIdleMs}/${back.layer}`
@@ -280,15 +280,15 @@ export class ZmkTestTab {
             }
             if (caps.customShift) {
                 await probe('shift: enabled flag round-trip', () =>
-                    flipU16(CH.customShift, V.cskEnabled, 0));
+                    flipU16(CH_ZMK.customShift, V.cskEnabled, 0));
                 await probe('shift: last-pair write/read/restore', async () => {
-                    const count = await flask.getU16(CH.customShift, V.cskSlotCount);
+                    const count = await flask.getU16(CH_ZMK.customShift, V.cskSlotCount);
                     const i = count - 1;
-                    const orig = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
-                    const echo = await flask.setBytes(CH.customShift, V.cskSlot,
+                    const orig = await flask.getBytes(CH_ZMK.customShift, V.cskSlot, [i], 1);
+                    const echo = await flask.setBytes(CH_ZMK.customShift, V.cskSlot,
                         encodeCskSlot(i, { base: 0x70036, shifted: 0x70033 }), 1);
                     const back = decodeCskSlot(echo);
-                    await flask.setBytes(CH.customShift, V.cskSlot, [i, ...orig.slice(1)], 1);
+                    await flask.setBytes(CH_ZMK.customShift, V.cskSlot, [i, ...orig.slice(1)], 1);
                     if (back.base !== 0x70036 || back.shifted !== 0x70033) {
                         throw new Error('echo mismatch');
                     }
@@ -297,18 +297,18 @@ export class ZmkTestTab {
             }
             if (caps.tapDance) {
                 await probe('tapdance: enabled flag round-trip', () =>
-                    flipU16(CH.tapDance, V.tdEnabled, 0));
+                    flipU16(CH_ZMK.tapDance, V.tdEnabled, 0));
                 await probe('tapdance: last-slot term + step round-trip', async () => {
-                    const count = await flask.getU16(CH.tapDance, V.tdSlotCount);
+                    const count = await flask.getU16(CH_ZMK.tapDance, V.tdSlotCount);
                     const i = count - 1;
-                    const origCfg = await flask.getBytes(CH.tapDance, V.tdCfg, [i], 1);
-                    const origStep = await flask.getBytes(CH.tapDance, V.tdStep, [i, 0], 2);
-                    const cfgEcho = decodeTdCfg(await flask.setBytes(CH.tapDance, V.tdCfg,
+                    const origCfg = await flask.getBytes(CH_ZMK.tapDance, V.tdCfg, [i], 1);
+                    const origStep = await flask.getBytes(CH_ZMK.tapDance, V.tdStep, [i, 0], 2);
+                    const cfgEcho = decodeTdCfg(await flask.setBytes(CH_ZMK.tapDance, V.tdCfg,
                         encodeTdCfg(i, 250), 1));
-                    const stepEcho = decodeTdStep(await flask.setBytes(CH.tapDance, V.tdStep,
+                    const stepEcho = decodeTdStep(await flask.setBytes(CH_ZMK.tapDance, V.tdStep,
                         encodeTdStep(i, 0, { action: TD_ACTION.usage, param1: 0x70004 }), 2));
-                    await flask.setBytes(CH.tapDance, V.tdCfg, [i, ...origCfg.slice(1)], 1);
-                    await flask.setBytes(CH.tapDance, V.tdStep, [i, 0, ...origStep.slice(2)], 2);
+                    await flask.setBytes(CH_ZMK.tapDance, V.tdCfg, [i, ...origCfg.slice(1)], 1);
+                    await flask.setBytes(CH_ZMK.tapDance, V.tdStep, [i, 0, ...origStep.slice(2)], 2);
                     if (cfgEcho.termMs !== 250 || stepEcho.param1 !== 0x70004) {
                         throw new Error('echo mismatch');
                     }
@@ -317,11 +317,11 @@ export class ZmkTestTab {
             }
             if (caps.rgbBrightness) {
                 await probe('rgb: brightness round-trip', async () => {
-                    const orig = await flask.getU16(CH.rgbMap, V.rgbmapBrightness);
+                    const orig = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapBrightness);
                     const want = orig === 100 ? 60 : 100;
-                    await flask.setU16(CH.rgbMap, V.rgbmapBrightness, want);
-                    const got = await flask.getU16(CH.rgbMap, V.rgbmapBrightness);
-                    await flask.setU16(CH.rgbMap, V.rgbmapBrightness, orig);
+                    await flask.setU16(CH_ZMK.rgbMap, V.rgbmapBrightness, want);
+                    const got = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapBrightness);
+                    await flask.setU16(CH_ZMK.rgbMap, V.rgbmapBrightness, orig);
                     if (got !== want) throw new Error(`wrote ${want}, device reports ${got}`);
                     return `${orig}%`;
                 });
@@ -478,7 +478,7 @@ export class ZmkTestTab {
                 if (recommended == null) { toast('Need ≥5 trials first', true); return; }
                 if (!this.app.caps?.combos) { toast('Combos need firmware v7+', true); return; }
                 try {
-                    const echoed = await this.app.flask.setU16(CH.combos, V.combosTimeout, recommended);
+                    const echoed = await this.app.flask.setU16(CH_ZMK.combos, V.combosTimeout, recommended);
                     toast(`Combos timeout → ${echoed} ms (Save on the Combos tab persists)`);
                 } catch (e) { toast(`Write failed: ${e.message}`, true); }
             },

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
     ASH_GROUPS, ASH_DEFAULTS, clampAshTimeout, clampRetroLimit, clampAshGroups, ashEligible,
 } from '../zmk-autoshift-codec.js?v=76';
-import { CH, V, CMD, FlaskProto } from '../flaskproto.js?v=76';
+import { CH_ZMK, V, CMD, FlaskProto } from '../flaskproto.js?v=76';
 import { zmkCapabilities } from '../zmk.js?v=76';
 import { createZmkTemplate, ZmkOfflineFlask, normalizeZmkWorkspace } from '../zmk-offline.js?v=76';
 import { syncWorkspace, pendingCount } from '../offline.js?v=76';
@@ -25,7 +25,7 @@ const throwsUnhandled = async (fn, m) => {
 };
 
 // ---- 1. wire constants + frames (FlaskProto against a scripted device) ----
-eq([CH.autoShift, V.ashEnabled, V.ashTimeout, V.ashGroups, V.ashModifiers, V.ashRepeat, V.ashNoAutoRepeat, V.ashRetro, V.ashRetroLimit],
+eq([CH_ZMK.autoShift, V.ashEnabled, V.ashTimeout, V.ashGroups, V.ashModifiers, V.ashRepeat, V.ashNoAutoRepeat, V.ashRetro, V.ashRetroLimit],
     [0x2C, 1, 2, 3, 4, 5, 6, 7, 8]);
 {
     const sent = [];
@@ -44,13 +44,13 @@ eq([CH.autoShift, V.ashEnabled, V.ashTimeout, V.ashGroups, V.ashModifiers, V.ash
         const r = reply[Object.keys(reply).find((k) => key.startsWith(k))];
         return r ?? [0xFF, f[1], f[2]];
     } });
-    eq(await fp.getU16(CH.autoShift, V.ashTimeout), 175, 'GET timeout');
-    eq(await fp.setU16(CH.autoShift, V.ashTimeout, 20), 50, 'SET 20 echoes 50');
-    eq(await fp.setU16(CH.autoShift, V.ashTimeout, 1500), 1000, 'SET 1500 echoes 1000');
-    eq(await fp.setU16(CH.autoShift, V.ashGroups, 0xFFFF), 0x1F, 'groups 0xFFFF echoes 0x1F');
-    eq(await fp.getU16(CH.autoShift, V.ashRetroLimit), 500, 'GET retro limit');
-    eq(await fp.setU16(CH.autoShift, V.ashRetroLimit, 9000), 5000, 'limit 9000 echoes 5000');
-    await throwsUnhandled(() => fp.getU16(CH.autoShift, 9), 'unknown id -> FF -> unhandled');
+    eq(await fp.getU16(CH_ZMK.autoShift, V.ashTimeout), 175, 'GET timeout');
+    eq(await fp.setU16(CH_ZMK.autoShift, V.ashTimeout, 20), 50, 'SET 20 echoes 50');
+    eq(await fp.setU16(CH_ZMK.autoShift, V.ashTimeout, 1500), 1000, 'SET 1500 echoes 1000');
+    eq(await fp.setU16(CH_ZMK.autoShift, V.ashGroups, 0xFFFF), 0x1F, 'groups 0xFFFF echoes 0x1F');
+    eq(await fp.getU16(CH_ZMK.autoShift, V.ashRetroLimit), 500, 'GET retro limit');
+    eq(await fp.setU16(CH_ZMK.autoShift, V.ashRetroLimit, 9000), 5000, 'limit 9000 echoes 5000');
+    await throwsUnhandled(() => fp.getU16(CH_ZMK.autoShift, 9), 'unknown id -> FF -> unhandled');
     eq(sent.slice(0, 2), ['08 2C 02', '07 2C 02 00 14'], 'frames are [cmd, 0x2C, id, u16 BE]');
 }
 
@@ -80,59 +80,59 @@ const mkApp = (family = 'totem') => {
 {
     const a = mkApp();
     eq(a.ws.protocolVersion, 19, 'the unplugged Totem answers v19 so the tab can be tried');
-    const get = (id) => a.flask.getU16(CH.autoShift, id);
+    const get = (id) => a.flask.getU16(CH_ZMK.autoShift, id);
     eq([await get(1), await get(2), await get(3), await get(4), await get(5), await get(6), await get(7), await get(8)],
         [0, 175, 0x0F, 0, 0, 0, 1, 500], 'contract defaults');
-    eq(await a.flask.setU16(CH.autoShift, V.ashEnabled, 5), 1, 'enabled 5 -> 1');
-    eq(await a.flask.setU16(CH.autoShift, V.ashTimeout, 20), 50);
-    eq(await a.flask.setU16(CH.autoShift, V.ashTimeout, 1500), 1000);
-    eq(await a.flask.setU16(CH.autoShift, V.ashGroups, 0xFFFF), 0x1F);
-    eq(await a.flask.setU16(CH.autoShift, V.ashRetroLimit, 0), 0, 'limit 0 = no limit');
-    eq(await a.flask.setU16(CH.autoShift, V.ashRetroLimit, 20), 50);
-    eq(await a.flask.setU16(CH.autoShift, V.ashRetroLimit, 9000), 5000);
-    eq(await a.flask.setU16(CH.autoShift, V.ashRepeat, 3), 1);
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashEnabled, 5), 1, 'enabled 5 -> 1');
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashTimeout, 20), 50);
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashTimeout, 1500), 1000);
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashGroups, 0xFFFF), 0x1F);
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashRetroLimit, 0), 0, 'limit 0 = no limit');
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashRetroLimit, 20), 50);
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashRetroLimit, 9000), 5000);
+    eq(await a.flask.setU16(CH_ZMK.autoShift, V.ashRepeat, 3), 1);
     eq(await get(V.ashTimeout), 1000, 'GET returns the applied value');
     await throwsUnhandled(() => get(9), 'unknown id');
-    await throwsUnhandled(() => a.flask.setU16(CH.autoShift, 9, 1), 'unknown id SET');
+    await throwsUnhandled(() => a.flask.setU16(CH_ZMK.autoShift, 9, 1), 'unknown id SET');
 
     // Both families carry Auto Shift at v19 (the sim follows ZMK_EXPECTED_PROTOCOL).
     const imp = mkApp('imprint');
-    eq(await imp.flask.getU16(CH.autoShift, V.ashTimeout), 175, 'imprint v19: channel answers');
+    eq(await imp.flask.getU16(CH_ZMK.autoShift, V.ashTimeout), 175, 'imprint v19: channel answers');
     eq(imp.ws.protocolVersion, 19, 'imprint sim is v19');
 }
 
 // ---- 4. older stored Totem workspace picks the defaults up (append-only normalize) ----
 {
     const ws = createZmkTemplate('totem');
-    for (const k of Object.keys(ws.tunables)) if (k.startsWith(`${CH.autoShift}:`)) delete ws.tunables[k];
+    for (const k of Object.keys(ws.tunables)) if (k.startsWith(`${CH_ZMK.autoShift}:`)) delete ws.tunables[k];
     ws.protocolVersion = 18;
     normalizeZmkWorkspace(ws);
-    eq(ws.tunables[`${CH.autoShift}:${V.ashTimeout}`], { op: 'u16', val: 175 });
+    eq(ws.tunables[`${CH_ZMK.autoShift}:${V.ashTimeout}`], { op: 'u16', val: 175 });
     eq(ws.protocolVersion, 19);
-    ws.tunables[`${CH.autoShift}:${V.ashTimeout}`] = { op: 'u16', val: 300 };
+    ws.tunables[`${CH_ZMK.autoShift}:${V.ashTimeout}`] = { op: 'u16', val: 300 };
     normalizeZmkWorkspace(ws);
-    eq(ws.tunables[`${CH.autoShift}:${V.ashTimeout}`].val, 300, 'saved values are not clobbered');
+    eq(ws.tunables[`${CH_ZMK.autoShift}:${V.ashTimeout}`].val, 300, 'saved values are not clobbered');
 }
 
 // ---- 5. journal + replay ----
 {
     const a = mkApp();
     eq(pendingCount(a.ws), 0, 'seeding does not journal');
-    await a.flask.setU16(CH.autoShift, V.ashEnabled, 1);
-    await a.flask.setU16(CH.autoShift, V.ashTimeout, 20);        // journals the clamped 50
-    await a.flask.setU16(CH.autoShift, V.ashRetroLimit, 0);
-    await a.flask.save(CH.autoShift);
+    await a.flask.setU16(CH_ZMK.autoShift, V.ashEnabled, 1);
+    await a.flask.setU16(CH_ZMK.autoShift, V.ashTimeout, 20);        // journals the clamped 50
+    await a.flask.setU16(CH_ZMK.autoShift, V.ashRetroLimit, 0);
+    await a.flask.save(CH_ZMK.autoShift);
     eq(pendingCount(a.ws), 3);
-    eq(a.ws.dirty.tun[`${CH.autoShift}:${V.ashTimeout}`], { op: 'u16', val: 50 }, 'the journal holds the clamped value');
+    eq(a.ws.dirty.tun[`${CH_ZMK.autoShift}:${V.ashTimeout}`], { op: 'u16', val: 50 }, 'the journal holds the clamped value');
     const sent = [], saved = [];
     const dev = { flask: { setU16: async (c, i, v) => { sent.push([c, i, v]); return v; }, setI16: async (_c, _i, v) => v,
         save: async (c) => { saved.push(c); }, setBytes: async () => [] } };
     const r = await syncWorkspace(dev, a.ws);
     eq(r.applied, 3); eq(pendingCount(a.ws), 0, 'journal drained');
-    eq(sent.sort((x, y) => x[1] - y[1]), [[CH.autoShift, 1, 1], [CH.autoShift, 2, 50], [CH.autoShift, 8, 0]]);
-    eq(saved, [CH.autoShift], 'channel 0x2C saved once');
+    eq(sent.sort((x, y) => x[1] - y[1]), [[CH_ZMK.autoShift, 1, 1], [CH_ZMK.autoShift, 2, 50], [CH_ZMK.autoShift, 8, 0]]);
+    eq(saved, [CH_ZMK.autoShift], 'channel 0x2C saved once');
     // a v18 device answers unhandled: dropped, not retried forever
-    await a.flask.setU16(CH.autoShift, V.ashEnabled, 0);
+    await a.flask.setU16(CH_ZMK.autoShift, V.ashEnabled, 0);
     const v18 = { flask: { setU16: async () => { throw new Error('unhandled'); }, setI16: async () => 0, save: async () => {}, setBytes: async () => [] } };
     const r2 = await syncWorkspace(v18, a.ws);
     eq([r2.dropped.length, pendingCount(a.ws)], [1, 0], 'unhandled dropped');
@@ -142,22 +142,22 @@ const mkApp = (family = 'totem') => {
 {
     const a = mkApp();
     for (const [id, v] of [[V.ashEnabled, 1], [V.ashTimeout, 220], [V.ashGroups, 0x1B], [V.ashModifiers, 1],
-        [V.ashRepeat, 1], [V.ashNoAutoRepeat, 1], [V.ashRetro, 0], [V.ashRetroLimit, 0]]) await a.flask.setU16(CH.autoShift, id, v);
+        [V.ashRepeat, 1], [V.ashNoAutoRepeat, 1], [V.ashRetro, 0], [V.ashRetroLimit, 0]]) await a.flask.setU16(CH_ZMK.autoShift, id, v);
     const state = await exportFlaskState(a);
     eq(state.autoShift, { enabled: 1, timeout: 220, groups: 0x1B, modifiers: 1, repeat: 1, noAutoRepeat: 1, retro: 0, retroLimit: 0 });
     eq(JSON.parse(JSON.stringify(state.autoShift)), state.autoShift, 'JSON-safe');
     const b = mkApp();
     const res = await applyFlaskState(b, state);
     eq(res.failures, [], 'import applies cleanly');
-    ok(res.channels.includes(CH.autoShift), 'import SAVEs channel 0x2C');
+    ok(res.channels.includes(CH_ZMK.autoShift), 'import SAVEs channel 0x2C');
     eq((await exportFlaskState(b)).autoShift, state.autoShift, 'imported settings equal the exported ones');
     // a v18 device (no caps.autoshift) neither exports nor applies the section
     const old = mkApp(); old.caps = { ...old.caps, autoshift: false };
     eq((await exportFlaskState(old)).autoShift, undefined, 'no section without caps.autoshift');
     const res2 = await applyFlaskState(old, state);
     eq(res2.failures, [], 'importing into a v18 board skips the section');
-    eq(await old.flask.getU16(CH.autoShift, V.ashTimeout), 175, 'and writes nothing');
-    ok(!old.ws.dirty.tun[`${CH.autoShift}:${V.ashTimeout}`], 'and journals nothing');
+    eq(await old.flask.getU16(CH_ZMK.autoShift, V.ashTimeout), 175, 'and writes nothing');
+    ok(!old.ws.dirty.tun[`${CH_ZMK.autoShift}:${V.ashTimeout}`], 'and journals nothing');
 }
 
 console.log(`autoshift-test: ${checks} checks OK`);

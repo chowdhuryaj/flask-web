@@ -12,7 +12,7 @@ export const CMD = { set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
 // not serve answers id_unhandled, which this app reads as "device lacks this
 // feature"; the caps gates in zmk.js stop the UI offering what a family
 // lacks.
-export const CH = {
+export const CH_ZMK = {
     meta: 0x00,
     accel: 0x10, gestures: 0x11,
     customShift: 0x16, leader: 0x19,
@@ -158,8 +158,8 @@ export class FlaskProto {
         const v = Math.max(0, Math.min(0xFFFF, Math.round(value))) & 0xFFFF;
         // Live actions (macro play, autoscroll force-stop) must not be re-sent
         // on a slow echo: the retry would fire the action twice.
-        const live = (channel === CH.macros && valueID === V.macrosState)
-            || (channel === CH.autoscroll && valueID === V.asState);
+        const live = (channel === CH_ZMK.macros && valueID === V.macrosState)
+            || (channel === CH_ZMK.autoscroll && valueID === V.asState);
         const r = await this.hid.request([CMD.set, channel, valueID, v >> 8, v & 0xFF], 0,
             live ? { retries: 0 } : undefined);
         if (r[0] !== CMD.set) throw new Error('unhandled');
@@ -209,7 +209,7 @@ export class FlaskProto {
      * Flask surface. */
     async handshake() {
         try {
-            return await this.getU16(CH.meta, V.metaProtocolVersion);
+            return await this.getU16(CH_ZMK.meta, V.metaProtocolVersion);
         } catch {
             return null; // timeout or unhandled → no Flask surface
         }

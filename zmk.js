@@ -1,10 +1,10 @@
 // ZMK-line support — everything the app knows about ZMK Flask devices
 // (the Cyboard Imprint, family "imprint"; the TOTEM 38-key split, family
 // "totem") lives HERE. The keymap lives in the firmware repo + ZMK Studio;
-// the app speaks the Flask frame (flaskproto.js CH/V/CMD) via
+// the app speaks the Flask frame (flaskproto.js CH_ZMK/V/CMD) via
 // zmk-flask-modules flask_proto.
 
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { diag } from './diag.js?v=76';
 import { TOTEM_GEOM } from './zmk-totem-layout.js?v=76';
 
@@ -120,7 +120,7 @@ export const ZMK_EXPECTED_PROTOCOL = { imprint: 19, totem: 19 };
  * "row,col" strings matching the published ZMK geometry (row 0, col =
  * position index). */
 export async function zmkReadKeyState(flask) {
-    const bytes = await flask.getBytes(CH.keyState, V.keyStateBitmap, []);
+    const bytes = await flask.getBytes(CH_ZMK.keyState, V.keyStateBitmap, []);
     const next = new Set();
     bytes.forEach((b, i) => {
         for (let bit = 0; bit < 8; bit++) {
@@ -264,7 +264,7 @@ export function zmkProfile(family) {
  * answers unhandled. Returns the raw bits or null. */
 export async function zmkReportResetCause(flask, toast) {
     try {
-        const bits = await flask.getU16(CH.meta, V.metaResetCause);
+        const bits = await flask.getU16(CH_ZMK.meta, V.metaResetCause);
         const names = [];
         if (bits & 0x0001) names.push('pin');
         if (bits & 0x0002) names.push('software');
@@ -300,7 +300,7 @@ export function zmkFamilyMismatch(fileFamily, deviceFamily) {
  * unknown code, returns null: the family is unresolved and writes stay blocked. */
 export async function confirmZmkFamily(flask, candidate) {
     try {
-        const code = await flask.getU16(CH.meta, V.metaFamily);
+        const code = await flask.getU16(CH_ZMK.meta, V.metaFamily);
         return ZMK_FAMILY_CODES[code] ?? null;
     } catch (e) {
         return e?.message === 'unhandled' ? candidate : null;

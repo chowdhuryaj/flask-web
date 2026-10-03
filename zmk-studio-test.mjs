@@ -396,7 +396,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 {
     const { createZmkTemplate, ZmkOfflineFlask, OfflineStudioClient,
             zmkPendingCount } = await import('./zmk-offline.js?v=76');
-    const { CH, V } = await import('./flaskproto.js?v=76');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=76');
     const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=76');
 
     // localStorage shim so saveWorkspace calls inside the sims don't throw.
@@ -418,57 +418,57 @@ eq(zigzag(1), 2, 'zigzag(1)');
         'template speaks the expected imprint protocol');
 
     const flask = new ZmkOfflineFlask(ws);
-    eq(await flask.getU16(CH.meta, V.metaFamily), 4, 'sim meta family = imprint');
-    eq(await flask.getU16(CH.macros, V.macrosSlotCount), 32, 'sim macro slots (v9 Kconfig default)');
-    eq(await flask.getU16(CH.macros, V.macrosStepCount), 32, 'sim macro steps (v9 Kconfig default)');
-    eq(await flask.getU16(CH.combos, V.combosSlotCount), 64, 'sim combo slots (v9 Kconfig default)');
-    eq(await flask.getU16(CH.combos, V.combosKeys), 8, 'sim advertises keys-per-slot (v9)');
-    eq(await flask.getU16(CH.combos, V.combosTimeout), 50, 'sim seeds combo timeout default');
-    eq(await flask.getU16(CH.autoscroll, V.asSpeedScale), 100, 'sim seeds autoscroll scale');
+    eq(await flask.getU16(CH_ZMK.meta, V.metaFamily), 4, 'sim meta family = imprint');
+    eq(await flask.getU16(CH_ZMK.macros, V.macrosSlotCount), 32, 'sim macro slots (v9 Kconfig default)');
+    eq(await flask.getU16(CH_ZMK.macros, V.macrosStepCount), 32, 'sim macro steps (v9 Kconfig default)');
+    eq(await flask.getU16(CH_ZMK.combos, V.combosSlotCount), 64, 'sim combo slots (v9 Kconfig default)');
+    eq(await flask.getU16(CH_ZMK.combos, V.combosKeys), 8, 'sim advertises keys-per-slot (v9)');
+    eq(await flask.getU16(CH_ZMK.combos, V.combosTimeout), 50, 'sim seeds combo timeout default');
+    eq(await flask.getU16(CH_ZMK.autoscroll, V.asSpeedScale), 100, 'sim seeds autoscroll scale');
     // v9 seeds: accel boots disabled with drashna defaults; snap enabled.
-    eq(await flask.getU16(CH.accel, V.accelEnabled), 0, 'sim accel boots disabled');
-    eq(await flask.getU16(CH.accel, V.accelTakeoff), 200, 'sim accel takeoff default');
+    eq(await flask.getU16(CH_ZMK.accel, V.accelEnabled), 0, 'sim accel boots disabled');
+    eq(await flask.getU16(CH_ZMK.accel, V.accelTakeoff), 200, 'sim accel takeoff default');
     // v15 scroll speed: 100 = "the keymap's compiled divisors verbatim", so
     // the firmware's boot value and the sim's must agree on the no-op point.
     // v16 rgb idle blank: 30 = CONFIG_ZMK_IDLE_TIMEOUT/1000, the firmware's
     // real default (deliberately the pre-v16 behaviour).
-    eq(await flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout), 30,
+    eq(await flask.getU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout), 30,
         'sim rgb idle timeout boots at the firmware default (30s)');
-    eq(await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 5), 30,
+    eq(await flask.setU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, 5), 30,
         'sim floors a sub-30s idle timeout like the firmware');
-    eq(await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 0), 0,
+    eq(await flask.setU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, 0), 0,
         'sim keeps 0 (never blank) rather than flooring it');
-    await flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 30);
-    eq(await flask.getU16(CH.scrollScale, V.scrollSpeedPct), 100,
+    await flask.setU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, 30);
+    eq(await flask.getU16(CH_ZMK.scrollScale, V.scrollSpeedPct), 100,
         'sim scroll speed boots at the firmware default (100 = no change)');
     // The sim mirrors flask_scrollscale_params_set's 25..400 clamp; the
     // firmware re-GETs after a SET so the echo is the clamped value.
-    eq(await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 500), 400,
+    eq(await flask.setU16(CH_ZMK.scrollScale, V.scrollSpeedPct, 500), 400,
         'sim clamps scroll speed high like the firmware');
-    eq(await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 5), 25,
+    eq(await flask.setU16(CH_ZMK.scrollScale, V.scrollSpeedPct, 5), 25,
         'sim clamps scroll speed low like the firmware');
-    await flask.setU16(CH.scrollScale, V.scrollSpeedPct, 100);
-    eq(await flask.getU16(CH.scrollSnap, V.snapEnabled), 1, 'sim snap boots enabled');
-    eq(await flask.getU16(CH.scrollSnap, V.snapThreshold), 63, 'sim snap threshold default');
-    eq(await flask.getU16(CH.rgbMap, V.rgbmapEffect), 0, 'sim rgb effect boots off');
+    await flask.setU16(CH_ZMK.scrollScale, V.scrollSpeedPct, 100);
+    eq(await flask.getU16(CH_ZMK.scrollSnap, V.snapEnabled), 1, 'sim snap boots enabled');
+    eq(await flask.getU16(CH_ZMK.scrollSnap, V.snapThreshold), 63, 'sim snap threshold default');
+    eq(await flask.getU16(CH_ZMK.rgbMap, V.rgbmapEffect), 0, 'sim rgb effect boots off');
     // v13 seeds: auto-mouse mirrors the flask_automouse keymap node.
-    eq(await flask.getU16(CH.autoMouse, V.amEnabled), 1, 'sim automouse boots enabled');
-    eq(await flask.getU16(CH.autoMouse, V.amTimeout), 750, 'sim automouse timeout default');
-    eq(await flask.getU16(CH.autoMouse, V.amThreshold), 0, 'sim automouse threshold default');
-    eq(await flask.getU16(CH.autoMouse, V.amLayer), 3, 'sim automouse targets the Mouse layer');
-    eq(await flask.getU16(CH.autoMouse, V.amExtend), 1, 'sim automouse extends on key');
-    eq(await flask.setU16(CH.autoMouse, V.amTimeout, 0), 0, 'sim automouse latch (0) set echoes');
-    eq(await flask.getU16(CH.autoMouse, V.amTimeout), 0, 'sim automouse latch persists');
-    await flask.setU16(CH.autoMouse, V.amTimeout, 750);
+    eq(await flask.getU16(CH_ZMK.autoMouse, V.amEnabled), 1, 'sim automouse boots enabled');
+    eq(await flask.getU16(CH_ZMK.autoMouse, V.amTimeout), 750, 'sim automouse timeout default');
+    eq(await flask.getU16(CH_ZMK.autoMouse, V.amThreshold), 0, 'sim automouse threshold default');
+    eq(await flask.getU16(CH_ZMK.autoMouse, V.amLayer), 3, 'sim automouse targets the Mouse layer');
+    eq(await flask.getU16(CH_ZMK.autoMouse, V.amExtend), 1, 'sim automouse extends on key');
+    eq(await flask.setU16(CH_ZMK.autoMouse, V.amTimeout, 0), 0, 'sim automouse latch (0) set echoes');
+    eq(await flask.getU16(CH_ZMK.autoMouse, V.amTimeout), 0, 'sim automouse latch persists');
+    await flask.setU16(CH_ZMK.autoMouse, V.amTimeout, 750);
 
     // Combo slot write round-trip + journal (8-position v9 frame).
     const comboFrame = [2, 10, 20, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x07, 0x00, 0x04];
-    const echo = await flask.setBytes(CH.combos, V.combosSlot, comboFrame);
+    const echo = await flask.setBytes(CH_ZMK.combos, V.combosSlot, comboFrame);
     eq([...echo], comboFrame, 'sim combo slot echoes (8-pos frame)');
     eq(zmkPendingCount(ws), 1, 'combo edit journals');
 
     // Macro step write normalizes unknown actions like the firmware.
-    const mecho = await flask.setBytes(CH.macros, V.macrosStep, [0, 0, 9, 0, 0, 0, 5]);
+    const mecho = await flask.setBytes(CH_ZMK.macros, V.macrosStep, [0, 0, 9, 0, 0, 0, 5]);
     eq([...mecho], [0, 0, 0, 0, 0, 0, 0], 'sim macro step normalizes bad action to empty');
 
     // Studio sim: binding write + layer ops mirror real semantics.
@@ -606,7 +606,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 {
     const { createZmkTemplate, ZmkOfflineFlask, zmkPendingCount, zmkClearDirty } =
         await import('./zmk-offline.js?v=76');
-    const { CH, V } = await import('./flaskproto.js?v=76');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=76');
     const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=76');
     const { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot } =
         await import('./zmk-output-codec.js?v=76');
@@ -615,37 +615,37 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(ws.protocolVersion, ZMK_EXPECTED_PROTOCOL.imprint,
         'template speaks the protocol the app expects');
     const flask = new ZmkOfflineFlask(ws);
-    eq(await flask.getU16(CH.leader, V.leaderSlotCount), 32, 'sim leader slots');
-    eq(await flask.getU16(CH.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
-    eq(await flask.getU16(CH.leader, V.leaderTimeout), 1000, 'sim leader timeout default');
-    eq(await flask.getU16(CH.gestures, V.gesturesSetCount), 8, 'sim gesture sets');
-    eq(await flask.getU16(CH.gestures, V.gesturesRatchetStep), 150, 'sim ratchet default');
+    eq(await flask.getU16(CH_ZMK.leader, V.leaderSlotCount), 32, 'sim leader slots');
+    eq(await flask.getU16(CH_ZMK.leader, V.leaderKeys), 8, 'sim leader keys-per-seq');
+    eq(await flask.getU16(CH_ZMK.leader, V.leaderTimeout), 1000, 'sim leader timeout default');
+    eq(await flask.getU16(CH_ZMK.gestures, V.gesturesSetCount), 8, 'sim gesture sets');
+    eq(await flask.getU16(CH_ZMK.gestures, V.gesturesRatchetStep), 150, 'sim ratchet default');
 
     // Firmware-seeded defaults: set 0 East = Right Arrow (0x7004F).
-    const east = decodeGestureSlot(await flask.getBytes(CH.gestures, V.gesturesSlot, [0, 0]));
+    const east = decodeGestureSlot(await flask.getBytes(CH_ZMK.gestures, V.gesturesSlot, [0, 0]));
     eq(east.action, 1, 'set 0 East seeds a usage output');
     eq(east.param, 0x7004F, 'set 0 East = Right Arrow');
     // Set 3 West = ^⇧Tab (mods 0x03 << 24 | 0x7002B).
-    const w3 = decodeGestureSlot(await flask.getBytes(CH.gestures, V.gesturesSlot, [3, 4]));
+    const w3 = decodeGestureSlot(await flask.getBytes(CH_ZMK.gestures, V.gesturesSlot, [3, 4]));
     eq(w3.param >>> 0, ((0x03 << 24) | 0x7002B) >>> 0, 'set 3 West = Ctrl-Shift-Tab');
 
     // Writes journal + normalize + echo.
-    const le = await flask.setBytes(CH.leader, V.leaderSlot,
+    const le = await flask.setBytes(CH_ZMK.leader, V.leaderSlot,
         encodeLeaderSlot(0, { positions: [12, 200, 13], action: 9, param: 7 }, 8));
     const lb = decodeLeaderSlot(le, 8);
     eq(lb.positions.join(','), '12,13', 'sim drops off-board leader positions');
     eq(lb.action, 0, 'sim normalizes unknown leader action to none');
-    const ge = await flask.setBytes(CH.gestures, V.gesturesSlot,
+    const ge = await flask.setBytes(CH_ZMK.gestures, V.gesturesSlot,
         encodeGestureSlot(1, 1, { action: 2, param: 4 }));
     eq(decodeGestureSlot(ge).param, 4, 'sim gesture write echoes');
     eq(zmkPendingCount(ws), 2, 'leader + gesture edits journal');
 
     // ---- v11: ball swap channel (0x27) ----
-    eq(await flask.getU16(CH.ballSwap, V.bswapSwapped), 0, 'sim boots unswapped');
-    eq(await flask.getU16(CH.ballSwap, V.bswapEffective), 0, 'sim effective mirrors base');
-    eq(await flask.setU16(CH.ballSwap, V.bswapSwapped, 1), 1, 'sim swap set echoes');
-    eq(await flask.getU16(CH.ballSwap, V.bswapEffective), 1, 'sim effective follows the base');
-    eq(await flask.setU16(CH.ballSwap, V.bswapSwapped, 0), 0, 'sim swap clears');
+    eq(await flask.getU16(CH_ZMK.ballSwap, V.bswapSwapped), 0, 'sim boots unswapped');
+    eq(await flask.getU16(CH_ZMK.ballSwap, V.bswapEffective), 0, 'sim effective mirrors base');
+    eq(await flask.setU16(CH_ZMK.ballSwap, V.bswapSwapped, 1), 1, 'sim swap set echoes');
+    eq(await flask.getU16(CH_ZMK.ballSwap, V.bswapEffective), 1, 'sim effective follows the base');
+    eq(await flask.setU16(CH_ZMK.ballSwap, V.bswapSwapped, 0), 0, 'sim swap clears');
     zmkClearDirty(ws);
     eq(zmkPendingCount(ws), 0, 'clear drops v10 extras too');
 }
@@ -655,7 +655,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=76');
     const { zmkCapabilities } = await import('./zmk.js?v=76');
     const { exportFlaskState, applyFlaskState } = await import('./zmk-export.js?v=76');
-    const { CH, V } = await import('./flaskproto.js?v=76');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=76');
     const { encodeComboSlot } = await import('./zmk-combos-codec.js?v=76');
     const { encodeLeaderSlot } = await import('./zmk-output-codec.js?v=76');
 
@@ -668,18 +668,18 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
     // Device A: make it distinctive.
     const a = mkApp();
-    await a.flask.setU16(CH.scrollSnap, V.snapThreshold, 80);
-    await a.flask.setU16(CH.scrollScale, V.scrollSpeedPct, 175);
-    await a.flask.setU16(CH.rgbMap, V.rgbmapIdleTimeout, 0); // never blank
-    await a.flask.setBytes(CH.rgbMap, V.rgbmapLed, [1, 7, 10, 20, 30]);
-    await a.flask.setBytes(CH.combos, V.combosSlot,
+    await a.flask.setU16(CH_ZMK.scrollSnap, V.snapThreshold, 80);
+    await a.flask.setU16(CH_ZMK.scrollScale, V.scrollSpeedPct, 175);
+    await a.flask.setU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, 0); // never blank
+    await a.flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [1, 7, 10, 20, 30]);
+    await a.flask.setBytes(CH_ZMK.combos, V.combosSlot,
         encodeComboSlot(5, { positions: [10, 11], usage: 0x70005 }, 8));
-    await a.flask.setBytes(CH.leader, V.leaderSlot,
+    await a.flask.setBytes(CH_ZMK.leader, V.leaderSlot,
         encodeLeaderSlot(3, { positions: [12, 13], action: 2, param: 4 }, 8));
-    await a.flask.setU16(CH.gestures, V.gesturesActiveSet, 2);
+    await a.flask.setU16(CH_ZMK.gestures, V.gesturesActiveSet, 2);
 
-    await a.flask.setU16(CH.autoMouse, V.amTimeout, 0);       // latch mode
-    await a.flask.setU16(CH.autoMouse, V.amThreshold, 40);
+    await a.flask.setU16(CH_ZMK.autoMouse, V.amTimeout, 0);       // latch mode
+    await a.flask.setU16(CH_ZMK.autoMouse, V.amThreshold, 40);
 
     const state = await exportFlaskState(a);
     eq(state.scrollSnap.threshold, 80, 'export carries snap threshold');
@@ -699,17 +699,17 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const { applied, failures } = await applyFlaskState(b, state);
     eq(failures.length, 0, 'import applies with no failures');
     eq(applied > 700, true, 'import writes the full surface (map + slots + knobs)');
-    eq(await b.flask.getU16(CH.scrollSnap, V.snapThreshold), 80, 'import restored snap');
-    eq(await b.flask.getU16(CH.scrollScale, V.scrollSpeedPct), 175,
+    eq(await b.flask.getU16(CH_ZMK.scrollSnap, V.snapThreshold), 80, 'import restored snap');
+    eq(await b.flask.getU16(CH_ZMK.scrollScale, V.scrollSpeedPct), 175,
         'import restored scroll speed');
-    eq(await b.flask.getU16(CH.rgbMap, V.rgbmapIdleTimeout), 0,
+    eq(await b.flask.getU16(CH_ZMK.rgbMap, V.rgbmapIdleTimeout), 0,
         'import restored the rgb idle timeout');
-    const led = await b.flask.getBytes(CH.rgbMap, V.rgbmapLed, [1, 7]);
+    const led = await b.flask.getBytes(CH_ZMK.rgbMap, V.rgbmapLed, [1, 7]);
     eq([led[2], led[3], led[4]].join(','), '10,20,30', 'import restored the RGB map');
-    eq(await b.flask.getU16(CH.gestures, V.gesturesActiveSet), 2, 'import restored active set');
-    eq(await b.flask.getU16(CH.autoMouse, V.amTimeout), 0, 'import restored automouse latch');
-    eq(await b.flask.getU16(CH.autoMouse, V.amThreshold), 40, 'import restored automouse threshold');
-    const b5 = await b.flask.getBytes(CH.combos, V.combosSlot, [5]);
+    eq(await b.flask.getU16(CH_ZMK.gestures, V.gesturesActiveSet), 2, 'import restored active set');
+    eq(await b.flask.getU16(CH_ZMK.autoMouse, V.amTimeout), 0, 'import restored automouse latch');
+    eq(await b.flask.getU16(CH_ZMK.autoMouse, V.amThreshold), 40, 'import restored automouse threshold');
+    const b5 = await b.flask.getBytes(CH_ZMK.combos, V.combosSlot, [5]);
     eq(b5[1], 10, 'import restored combo positions');
 
     // Modes switch: `save: false` writes everything LIVE and touches no
@@ -723,9 +723,9 @@ eq(zigzag(1), 2, 'zigzag(1)');
     eq(live.failures.length, 0, 'live-apply lands with no failures');
     eq(cSaves.length, 0, 'live-apply issues no SAVE for any channel');
     eq(live.saved, 0, 'live-apply reports nothing saved');
-    eq(await c.flask.getU16(CH.scrollSnap, V.snapThreshold), 80,
+    eq(await c.flask.getU16(CH_ZMK.scrollSnap, V.snapThreshold), 80,
         'live-apply still writes values through to the device');
-    eq(await c.flask.getU16(CH.autoMouse, V.amThreshold), 40,
+    eq(await c.flask.getU16(CH_ZMK.autoMouse, V.amThreshold), 40,
         'live-apply writes automouse through too');
 
     // …and the default still saves, so import/auto-restore are unchanged.
@@ -967,7 +967,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
         removeItem(k) { this._m.delete(k); },
     };
     const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=76');
-    const { CH, V } = await import('./flaskproto.js?v=76');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=76');
     const { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION } =
         await import('./zmk-combos-codec.js?v=76');
 
@@ -979,19 +979,19 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
     const ws = createZmkTemplate('imprint');
     const flask = new ZmkOfflineFlask(ws);
-    const echo = await flask.setBytes(CH.combos, V.combosSlotV2, encodeComboSlotV2(2, t, 8));
+    const echo = await flask.setBytes(CH_ZMK.combos, V.combosSlotV2, encodeComboSlotV2(2, t, 8));
     eq(decodeComboSlotV2(echo, 8).action, COMBO_ACTION.behavior, 'sim stores behavior action');
-    const legacy = await flask.getBytes(CH.combos, V.combosSlot, [2], 1);
+    const legacy = await flask.getBytes(CH_ZMK.combos, V.combosSlot, [2], 1);
     eq((legacy[9] | legacy[10] | legacy[11] | legacy[12]) >>> 0, 0,
         'legacy view reports usage 0 for a behavior slot');
-    await flask.setBytes(CH.combos, V.combosSlot,
+    await flask.setBytes(CH_ZMK.combos, V.combosSlot,
         [3, 1, 2, 255, 255, 255, 255, 255, 255, 0x00, 0x07, 0x00, 0x04]);
-    const typed = decodeComboSlotV2(await flask.getBytes(CH.combos, V.combosSlotV2, [3], 1), 8);
+    const typed = decodeComboSlotV2(await flask.getBytes(CH_ZMK.combos, V.combosSlotV2, [3], 1), 8);
     eq(typed.action, COMBO_ACTION.usage, 'legacy write lands as a usage action');
     eq(typed.param1, 0x70004, 'legacy usage carried into param1');
 
-    await flask.setBytes(CH.rgbMap, V.rgbmapLedOrder, [10, 4, 60, 61, 62, 255]);
-    eq([...await flask.getBytes(CH.rgbMap, V.rgbmapLedOrder, [10, 4], 2)],
+    await flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLedOrder, [10, 4, 60, 61, 62, 255]);
+    eq([...await flask.getBytes(CH_ZMK.rgbMap, V.rgbmapLedOrder, [10, 4], 2)],
         [10, 4, 60, 61, 62, 255], 'ledOrder chunk round trip');
     delete globalThis.localStorage;
 }
@@ -1005,7 +1005,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
         removeItem(k) { this._m.delete(k); },
     };
     const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=76');
-    const { CH, V } = await import('./flaskproto.js?v=76');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=76');
     const { encodeComboSlotV3, decodeComboSlotV3, COMBO_ACTION, COMBO_LAYER_ANY } =
         await import('./zmk-combos-codec.js?v=76');
     const { encodeCskSlot, decodeCskSlot, cskSlotIsEmpty } =
@@ -1025,27 +1025,27 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     // state), not an empty table.
     const ws = createZmkTemplate('imprint');
     const flask = new ZmkOfflineFlask(ws);
-    const d0 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [0], 1), 8);
+    const d0 = decodeComboSlotV3(await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [0], 1), 8);
     eq(d0.positions, [27, 26], 'default 0 = copy_cut positions');
     eq(d0.timeoutMs, 35, 'default 0 timeout 35 ms');
     eq(d0.priorIdleMs, 150, 'default 0 prior-idle 150 ms');
     eq(d0.layer, COMBO_LAYER_ANY, 'default 0 fires on all layers');
-    const d15 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [15], 1), 8);
+    const d15 = decodeComboSlotV3(await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [15], 1), 8);
     eq(d15.layer, 0, 'excl combo is layer-0 gated');
-    const d27 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [27], 1), 8);
+    const d27 = decodeComboSlotV3(await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [27], 1), 8);
     eq(d27.action, COMBO_ACTION.behavior, 'rrep default is a behavior output');
-    const d25 = decodeComboSlotV3(await flask.getBytes(CH.combos, V.combosSlotV3, [25], 1), 8);
+    const d25 = decodeComboSlotV3(await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [25], 1), 8);
     eq(d25.timeoutMs, 50, 'z combo keeps its 50 ms window');
     eq(d25.param2 >>> 0, 0x7001D, 'z combo carries lt tap usage in param2');
 
     // v3 write normalization: timeout clamps 10..2000, emptied slot resets
     // timing/layer.
-    const echo3 = decodeComboSlotV3(await flask.setBytes(CH.combos, V.combosSlotV3,
+    const echo3 = decodeComboSlotV3(await flask.setBytes(CH_ZMK.combos, V.combosSlotV3,
         encodeComboSlotV3(40, { positions: [1, 2], action: COMBO_ACTION.usage,
             param1: 0x70004, timeoutMs: 5, priorIdleMs: 90, layer: 3 }, 8)), 8);
     eq(echo3.timeoutMs, 10, 'v3 timeout clamps up to 10');
     eq(echo3.layer, 3, 'v3 layer stored');
-    const cleared = decodeComboSlotV3(await flask.setBytes(CH.combos, V.combosSlotV3,
+    const cleared = decodeComboSlotV3(await flask.setBytes(CH_ZMK.combos, V.combosSlotV3,
         encodeComboSlotV3(40, { positions: [], action: COMBO_ACTION.none,
             timeoutMs: 500, priorIdleMs: 90, layer: 3 }, 8)), 8);
     eq(cleared.timeoutMs, 0, 'emptied slot zeroes timeout');
@@ -1057,10 +1057,10 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(decodeCskSlot(cskEnc), { slot: 4, base: 0x70036, shifted: 0x70033, mods: 2, keep: false },
         'csk codec round trip');
     eq(cskSlotIsEmpty({ base: 0, shifted: 0 }), true, 'csk empty rule');
-    const cskEcho = decodeCskSlot(await flask.setBytes(CH.customShift, V.cskSlot, cskEnc));
+    const cskEcho = decodeCskSlot(await flask.setBytes(CH_ZMK.customShift, V.cskSlot, cskEnc));
     eq(cskEcho.base, 0x70036, 'sim stores the csk base');
-    eq(await flask.getU16(CH.customShift, V.cskSlotCount), 32, 'csk slot count');
-    eq(await flask.getU16(CH.customShift, V.cskEnabled), 1, 'csk boots enabled');
+    eq(await flask.getU16(CH_ZMK.customShift, V.cskSlotCount), 32, 'csk slot count');
+    eq(await flask.getU16(CH_ZMK.customShift, V.cskEnabled), 1, 'csk boots enabled');
 
     // tap dance codec + sim round trip (term clamp + step normalization).
     const stepEnc = encodeTdStep(2, 1, { action: TD_ACTION.usage, param1: 0x70005 });
@@ -1068,20 +1068,20 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(decodeTdStep(stepEnc), { slot: 2, tap: 1, action: TD_ACTION.usage,
         behaviorId: 0, param1: 0x70005, param2: 0 }, 'td step codec round trip');
     eq(decodeTdCfg(encodeTdCfg(2, 250)), { slot: 2, termMs: 250 }, 'td cfg codec round trip');
-    const cfgEcho = decodeTdCfg(await flask.setBytes(CH.tapDance, V.tdCfg, encodeTdCfg(2, 20)));
+    const cfgEcho = decodeTdCfg(await flask.setBytes(CH_ZMK.tapDance, V.tdCfg, encodeTdCfg(2, 20)));
     eq(cfgEcho.termMs, 50, 'sim clamps the term up to 50');
-    await flask.setBytes(CH.tapDance, V.tdStep, stepEnc);
-    const stepBack = decodeTdStep(await flask.getBytes(CH.tapDance, V.tdStep, [2, 1], 2));
+    await flask.setBytes(CH_ZMK.tapDance, V.tdStep, stepEnc);
+    const stepBack = decodeTdStep(await flask.getBytes(CH_ZMK.tapDance, V.tdStep, [2, 1], 2));
     eq(stepBack.param1, 0x70005, 'sim stores the td step');
     eq(tdDanceLength([{ action: 1 }, { action: 0 }, { action: 1 }]), 1,
         'dance length is the contiguous prefix');
-    eq(await flask.getU16(CH.tapDance, V.tdSlotCount), 16, 'td slot count');
-    eq(await flask.getU16(CH.tapDance, V.tdTaps), 4, 'td taps per slot');
+    eq(await flask.getU16(CH_ZMK.tapDance, V.tdSlotCount), 16, 'td slot count');
+    eq(await flask.getU16(CH_ZMK.tapDance, V.tdTaps), 4, 'td taps per slot');
 
     // v14 leader capacity + brightness seed.
-    eq(await flask.getU16(CH.leader, V.leaderSlotCount), 32, 'leader slots 32 (v14)');
-    eq(await flask.getU16(CH.rgbMap, V.rgbmapBrightness), 100, 'brightness boots 100%');
-    const b = await flask.setU16(CH.rgbMap, V.rgbmapBrightness, 60);
+    eq(await flask.getU16(CH_ZMK.leader, V.leaderSlotCount), 32, 'leader slots 32 (v14)');
+    eq(await flask.getU16(CH_ZMK.rgbMap, V.rgbmapBrightness), 100, 'brightness boots 100%');
+    const b = await flask.setU16(CH_ZMK.rgbMap, V.rgbmapBrightness, 60);
     eq(b, 60, 'brightness set echoes');
     delete globalThis.localStorage;
 }
@@ -1258,7 +1258,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     // Hidden exactly as online: pointing/RGB caps off, none of their tunables seeded.
     const caps = zmkCapabilities(ws.family, ws.protocolVersion);
     eq(caps.mouse || caps.rgbMap || caps.gestures, false, 'offline totem caps hide pointing/RGB');
-    const { CH: CHn } = await import('./flaskproto.js?v=76');
+    const { CH_ZMK: CHn } = await import('./flaskproto.js?v=76');
     const banned = [CHn.autoscroll, CHn.accel, CHn.scrollSnap, CHn.scrollScale, CHn.gestures,
         CHn.ballSwap, CHn.autoMouse, CHn.rgbMap].map(String);
     eq(Object.keys(ws.tunables).some((k) => banned.includes(k.split(':')[0])), false, 'no pointing/RGB tunables seeded for totem');

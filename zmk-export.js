@@ -9,7 +9,7 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { zmkBehaviors } from './zmk-keycodes.js?v=76';
 import { isRecursiveOutput } from './behavior-catalog.js?v=76';
 import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=76';
@@ -63,92 +63,92 @@ async function exportFlaskStateInner(app) {
 
     if (caps.autoscroll) {
         out.autoscroll = {
-            inverted: await g(CH.autoscroll, V.asInverted),
-            speedScale: await g(CH.autoscroll, V.asSpeedScale),
-            stopOnKey: await g(CH.autoscroll, V.asStopOnKey),
+            inverted: await g(CH_ZMK.autoscroll, V.asInverted),
+            speedScale: await g(CH_ZMK.autoscroll, V.asSpeedScale),
+            stopOnKey: await g(CH_ZMK.autoscroll, V.asStopOnKey),
         };
     }
     if (caps.accel) {
         out.accel = {
-            enabled: await g(CH.accel, V.accelEnabled),
-            takeoff: await g(CH.accel, V.accelTakeoff),
-            growth: await g(CH.accel, V.accelGrowth),
-            offset: await flask.getI16(CH.accel, V.accelOffset),
-            limit: await g(CH.accel, V.accelLimit),
+            enabled: await g(CH_ZMK.accel, V.accelEnabled),
+            takeoff: await g(CH_ZMK.accel, V.accelTakeoff),
+            growth: await g(CH_ZMK.accel, V.accelGrowth),
+            offset: await flask.getI16(CH_ZMK.accel, V.accelOffset),
+            limit: await g(CH_ZMK.accel, V.accelLimit),
         };
     }
     if (caps.scrollSnap) {
         out.scrollSnap = {
-            enabled: await g(CH.scrollSnap, V.snapEnabled),
-            threshold: await g(CH.scrollSnap, V.snapThreshold),
-            samples: await g(CH.scrollSnap, V.snapSamples),
-            immediate: await g(CH.scrollSnap, V.snapImmediate),
-            lockMs: await g(CH.scrollSnap, V.snapLockMs),
-            lockEvents: await g(CH.scrollSnap, V.snapLockEvents),
-            idleReset: await g(CH.scrollSnap, V.snapIdleReset),
+            enabled: await g(CH_ZMK.scrollSnap, V.snapEnabled),
+            threshold: await g(CH_ZMK.scrollSnap, V.snapThreshold),
+            samples: await g(CH_ZMK.scrollSnap, V.snapSamples),
+            immediate: await g(CH_ZMK.scrollSnap, V.snapImmediate),
+            lockMs: await g(CH_ZMK.scrollSnap, V.snapLockMs),
+            lockEvents: await g(CH_ZMK.scrollSnap, V.snapLockEvents),
+            idleReset: await g(CH_ZMK.scrollSnap, V.snapIdleReset),
         };
     }
     if (caps.scrollSpeed) {
-        out.scrollSpeed = { speedPct: await g(CH.scrollScale, V.scrollSpeedPct) };
+        out.scrollSpeed = { speedPct: await g(CH_ZMK.scrollScale, V.scrollSpeedPct) };
     }
     if (caps.ballSwap) {
-        out.ballSwap = { swapped: await g(CH.ballSwap, V.bswapSwapped) };
+        out.ballSwap = { swapped: await g(CH_ZMK.ballSwap, V.bswapSwapped) };
     }
     if (caps.autoMouse) {
         out.autoMouse = {
-            enabled: await g(CH.autoMouse, V.amEnabled),
-            timeout: await g(CH.autoMouse, V.amTimeout),
-            threshold: await g(CH.autoMouse, V.amThreshold),
-            layer: await g(CH.autoMouse, V.amLayer),
-            extend: await g(CH.autoMouse, V.amExtend),
+            enabled: await g(CH_ZMK.autoMouse, V.amEnabled),
+            timeout: await g(CH_ZMK.autoMouse, V.amTimeout),
+            threshold: await g(CH_ZMK.autoMouse, V.amThreshold),
+            layer: await g(CH_ZMK.autoMouse, V.amLayer),
+            extend: await g(CH_ZMK.autoMouse, V.amExtend),
         };
     }
     if (caps.autoshift) {
         out.autoShift = {
-            enabled: await g(CH.autoShift, V.ashEnabled),
-            timeout: await g(CH.autoShift, V.ashTimeout),
-            groups: await g(CH.autoShift, V.ashGroups),
-            modifiers: await g(CH.autoShift, V.ashModifiers),
-            repeat: await g(CH.autoShift, V.ashRepeat),
-            noAutoRepeat: await g(CH.autoShift, V.ashNoAutoRepeat),
-            retro: await g(CH.autoShift, V.ashRetro),
-            retroLimit: await g(CH.autoShift, V.ashRetroLimit),
+            enabled: await g(CH_ZMK.autoShift, V.ashEnabled),
+            timeout: await g(CH_ZMK.autoShift, V.ashTimeout),
+            groups: await g(CH_ZMK.autoShift, V.ashGroups),
+            modifiers: await g(CH_ZMK.autoShift, V.ashModifiers),
+            repeat: await g(CH_ZMK.autoShift, V.ashRepeat),
+            noAutoRepeat: await g(CH_ZMK.autoShift, V.ashNoAutoRepeat),
+            retro: await g(CH_ZMK.autoShift, V.ashRetro),
+            retroLimit: await g(CH_ZMK.autoShift, V.ashRetroLimit),
         };
     }
     if (caps.rgbMap) {
-        const layers = await g(CH.rgbMap, V.rgbmapLayers);
-        const leds = await g(CH.rgbMap, V.rgbmapLeds);
+        const layers = await g(CH_ZMK.rgbMap, V.rgbmapLayers);
+        const leds = await g(CH_ZMK.rgbMap, V.rgbmapLeds);
         const map = [];
         for (let l = 0; l < layers; l++) {
             const row = [];
             for (let led = 0; led < leds; led++) {
-                const r = await flask.getBytes(CH.rgbMap, V.rgbmapLed, [l, led], 2);
+                const r = await flask.getBytes(CH_ZMK.rgbMap, V.rgbmapLed, [l, led], 2);
                 row.push([r[2] ?? 0, r[3] ?? 0, r[4] ?? 0]);
             }
             map.push(row);
         }
-        out.rgb = { enabled: await g(CH.rgbMap, V.rgbmapEnabled), map };
+        out.rgb = { enabled: await g(CH_ZMK.rgbMap, V.rgbmapEnabled), map };
         if (caps.rgbEffects) {
-            out.rgb.effect = await g(CH.rgbMap, V.rgbmapEffect);
-            out.rgb.effectSpeed = await g(CH.rgbMap, V.rgbmapEffectSpeed);
+            out.rgb.effect = await g(CH_ZMK.rgbMap, V.rgbmapEffect);
+            out.rgb.effectSpeed = await g(CH_ZMK.rgbMap, V.rgbmapEffectSpeed);
             out.rgb.effectHsv = [
-                await g(CH.rgbMap, V.rgbmapEffectHue),
-                await g(CH.rgbMap, V.rgbmapEffectSat),
-                await g(CH.rgbMap, V.rgbmapEffectVal),
+                await g(CH_ZMK.rgbMap, V.rgbmapEffectHue),
+                await g(CH_ZMK.rgbMap, V.rgbmapEffectSat),
+                await g(CH_ZMK.rgbMap, V.rgbmapEffectVal),
             ];
         }
         if (caps.rgbBrightness) {
-            out.rgb.brightness = await g(CH.rgbMap, V.rgbmapBrightness);
+            out.rgb.brightness = await g(CH_ZMK.rgbMap, V.rgbmapBrightness);
         }
         if (caps.rgbIdleTimeout) {
-            out.rgb.idleTimeout = await g(CH.rgbMap, V.rgbmapIdleTimeout);
+            out.rgb.idleTimeout = await g(CH_ZMK.rgbMap, V.rgbmapIdleTimeout);
         }
     }
     if (caps.customShift) {
-        const count = await g(CH.customShift, V.cskSlotCount);
+        const count = await g(CH_ZMK.customShift, V.cskSlotCount);
         const slots = [];
         for (let i = 0; i < count; i++) {
-            const r = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
+            const r = await flask.getBytes(CH_ZMK.customShift, V.cskSlot, [i], 1);
             const { base, shifted, mods, keep, os, wild, count } = decodeCskSlot(r);
             // Trigger/keep only when not the Shift default, and os/wild/count only
             // when set, so old exports stay byte-identical and old files (no
@@ -158,21 +158,21 @@ async function exportFlaskStateInner(app) {
                 : { base, shifted, mods, keep, ...osBits });
         }
         out.customShift = {
-            enabled: await g(CH.customShift, V.cskEnabled),
+            enabled: await g(CH_ZMK.customShift, V.cskEnabled),
             slots,
         };
     }
     if (caps.tapDance) {
-        const count = await g(CH.tapDance, V.tdSlotCount);
-        const tapCap = await g(CH.tapDance, V.tdTaps) || 4;
+        const count = await g(CH_ZMK.tapDance, V.tdSlotCount);
+        const tapCap = await g(CH_ZMK.tapDance, V.tdTaps) || 4;
         const slots = [];
         for (let i = 0; i < count; i++) {
-            const cfg = decodeTdCfg(await flask.getBytes(CH.tapDance, V.tdCfg, [i], 1));
+            const cfg = decodeTdCfg(await flask.getBytes(CH_ZMK.tapDance, V.tdCfg, [i], 1));
             const taps = [];
             // A dance is its contiguous prefix: stop at the first NONE (apply pads the rest).
             // A Tap Dance / Adaptive Key step would recurse in the firmware: not exported.
             for (let t = 0; t < tapCap; t++) {
-                const d = decodeTdStep(await flask.getBytes(CH.tapDance, V.tdStep, [i, t], 2));
+                const d = decodeTdStep(await flask.getBytes(CH_ZMK.tapDance, V.tdStep, [i, t], 2));
                 if (!d.action || isRecursiveOutput(d)) break;
                 taps.push(namedOut({ action: d.action, behaviorId: d.behaviorId,
                     param1: d.param1, param2: d.param2 }));
@@ -180,75 +180,75 @@ async function exportFlaskStateInner(app) {
             slots.push({ termMs: cfg.termMs, taps });
         }
         out.tapDance = {
-            enabled: await g(CH.tapDance, V.tdEnabled),
+            enabled: await g(CH_ZMK.tapDance, V.tdEnabled),
             slots,
         };
     }
     if (caps.adaptive) {
         // Live rules only (trigger and an output); pool index kept, it is the priority order.
-        const sets = await g(CH.adaptive, V.akSetCount);
-        const ruleCap = await g(CH.adaptive, V.akRuleCount);
-        const stepCap = await g(CH.adaptive, V.akStepCount) || 6;
+        const sets = await g(CH_ZMK.adaptive, V.akSetCount);
+        const ruleCap = await g(CH_ZMK.adaptive, V.akRuleCount);
+        const stepCap = await g(CH_ZMK.adaptive, V.akStepCount) || 6;
         const out1 = (d) => (isRecursiveOutput(d) ? { ...NO_OUT }
             : namedOut({ action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 }));
         const fallback = [];
         for (let st = 0; st < sets; st++) {
-            fallback.push(out1(decodeAkFallback(await flask.getBytes(CH.adaptive, V.akFallback, [st], 1))));
+            fallback.push(out1(decodeAkFallback(await flask.getBytes(CH_ZMK.adaptive, V.akFallback, [st], 1))));
         }
         const rules = [];
         for (let i = 0; i < ruleCap; i++) {
-            const h = decodeAkRule(await flask.getBytes(CH.adaptive, V.akRule, [i], 1));
+            const h = decodeAkRule(await flask.getBytes(CH_ZMK.adaptive, V.akRule, [i], 1));
             if (!h.trigger) continue;
             const steps = [];
             for (let s = 0; s < stepCap; s++) {
-                const d = decodeAkStep(await flask.getBytes(CH.adaptive, V.akStep, [i, s], 2));
+                const d = decodeAkStep(await flask.getBytes(CH_ZMK.adaptive, V.akStep, [i, s], 2));
                 if (!d.action || isRecursiveOutput(d)) break;
                 steps.push(out1(d));
             }
             if (steps.length) rules.push({ index: i, set: h.set, trigger: h.trigger, maxIdleMs: h.maxIdleMs, strict: h.strict, steps });
         }
-        out.adaptive = { enabled: await g(CH.adaptive, V.akEnabled), fallback, rules };
+        out.adaptive = { enabled: await g(CH_ZMK.adaptive, V.akEnabled), fallback, rules };
     }
     if (caps.combos) {
-        const count = await g(CH.combos, V.combosSlotCount);
+        const count = await g(CH_ZMK.combos, V.combosSlotCount);
         const keys = caps.combosKeys
-            ? (await g(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
+            ? (await g(CH_ZMK.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         const slots = [];
         for (let i = 0; i < count; i++) {
             // v14: timed slots carry per-combo timeout/prior-idle/layer;
             // v12: TYPED slots (behavior outputs survive a backup);
             // pre-v12 exports keep the legacy {positions, usage}.
             if (caps.combosTimed) {
-                const r = await flask.getBytes(CH.combos, V.combosSlotV3, [i], 1);
+                const r = await flask.getBytes(CH_ZMK.combos, V.combosSlotV3, [i], 1);
                 const { positions, action, behaviorId, param1, param2,
                     timeoutMs, priorIdleMs, layer } = decodeComboSlotV3(r, keys);
                 slots.push({ positions, ...namedOut({ action, behaviorId, param1, param2 }),
                     timeoutMs, priorIdleMs, layer });
             } else if (caps.combosTyped) {
-                const r = await flask.getBytes(CH.combos, V.combosSlotV2, [i], 1);
+                const r = await flask.getBytes(CH_ZMK.combos, V.combosSlotV2, [i], 1);
                 const { positions, action, behaviorId, param1, param2 } =
                     decodeComboSlotV2(r, keys);
                 slots.push({ positions, ...namedOut({ action, behaviorId, param1, param2 }) });
             } else {
-                const r = await flask.getBytes(CH.combos, V.combosSlot, [i], 1);
+                const r = await flask.getBytes(CH_ZMK.combos, V.combosSlot, [i], 1);
                 const { positions, usage } = decodeComboSlot(r, keys);
                 slots.push({ positions, usage });
             }
         }
         out.combos = {
-            enabled: await g(CH.combos, V.combosEnabled),
-            timeout: await g(CH.combos, V.combosTimeout),
+            enabled: await g(CH_ZMK.combos, V.combosEnabled),
+            timeout: await g(CH_ZMK.combos, V.combosTimeout),
             keys, slots,
         };
     }
     if (caps.macros) {
-        const count = await g(CH.macros, V.macrosSlotCount);
-        const steps = await g(CH.macros, V.macrosStepCount);
+        const count = await g(CH_ZMK.macros, V.macrosSlotCount);
+        const steps = await g(CH_ZMK.macros, V.macrosStepCount);
         const slots = [];
         for (let m = 0; m < count; m++) {
             const slot = [];
             for (let s = 0; s < steps; s++) {
-                const r = await flask.getBytes(CH.macros, V.macrosStep, [m, s], 2);
+                const r = await flask.getBytes(CH_ZMK.macros, V.macrosStep, [m, s], 2);
                 const d = decodeMacroStep(r);
                 if (d.action === 0) break;      // steps end at the first empty
                 slot.push({ action: d.action, param: d.param });
@@ -256,43 +256,43 @@ async function exportFlaskStateInner(app) {
             slots.push(slot);
         }
         out.macros = {
-            enabled: await g(CH.macros, V.macrosEnabled),
-            tapMs: await g(CH.macros, V.macrosTapMs),
-            waitMs: await g(CH.macros, V.macrosWaitMs),
+            enabled: await g(CH_ZMK.macros, V.macrosEnabled),
+            tapMs: await g(CH_ZMK.macros, V.macrosTapMs),
+            waitMs: await g(CH_ZMK.macros, V.macrosWaitMs),
             slots,
         };
     }
     if (caps.leader) {
-        const count = await g(CH.leader, V.leaderSlotCount);
-        const keys = await g(CH.leader, V.leaderKeys) || 8;
+        const count = await g(CH_ZMK.leader, V.leaderSlotCount);
+        const keys = await g(CH_ZMK.leader, V.leaderKeys) || 8;
         const slots = [];
         for (let i = 0; i < count; i++) {
-            const r = await flask.getBytes(CH.leader, V.leaderSlot, [i], 1);
+            const r = await flask.getBytes(CH_ZMK.leader, V.leaderSlot, [i], 1);
             const d = decodeLeaderSlot(r, keys);
             slots.push({ positions: d.positions, action: d.action, param: d.param });
         }
         out.leader = {
-            enabled: await g(CH.leader, V.leaderEnabled),
-            timeout: await g(CH.leader, V.leaderTimeout),
+            enabled: await g(CH_ZMK.leader, V.leaderEnabled),
+            timeout: await g(CH_ZMK.leader, V.leaderTimeout),
             keys, slots,
         };
     }
     if (caps.gestures) {
-        const setCount = await g(CH.gestures, V.gesturesSetCount) || 8;
+        const setCount = await g(CH_ZMK.gestures, V.gesturesSetCount) || 8;
         const sets = [];
         for (let s = 0; s < setCount; s++) {
             const dirs = [];
             for (let d = 0; d < 8; d++) {
-                const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [s, d], 2);
+                const r = await flask.getBytes(CH_ZMK.gestures, V.gesturesSlot, [s, d], 2);
                 const o = decodeGestureSlot(r);
                 dirs.push({ action: o.action, param: o.param });
             }
             sets.push(dirs);
         }
         out.gestures = {
-            enabled: await g(CH.gestures, V.gesturesEnabled),
-            ratchetStep: await g(CH.gestures, V.gesturesRatchetStep),
-            activeSet: await g(CH.gestures, V.gesturesActiveSet),
+            enabled: await g(CH_ZMK.gestures, V.gesturesEnabled),
+            ratchetStep: await g(CH_ZMK.gestures, V.gesturesRatchetStep),
+            activeSet: await g(CH_ZMK.gestures, V.gesturesActiveSet),
             sets,
         };
     }
@@ -348,18 +348,18 @@ async function applyFlaskStateInner(app, data, save = true) {
     };
 
     await section('autoscroll', caps.autoscroll, async (s) => {
-        if (s.inverted != null) await setU(CH.autoscroll, V.asInverted, s.inverted);
-        if (s.speedScale != null) await setU(CH.autoscroll, V.asSpeedScale, s.speedScale);
-        if (s.stopOnKey != null) await setU(CH.autoscroll, V.asStopOnKey, s.stopOnKey);
-    }, CH.autoscroll);
+        if (s.inverted != null) await setU(CH_ZMK.autoscroll, V.asInverted, s.inverted);
+        if (s.speedScale != null) await setU(CH_ZMK.autoscroll, V.asSpeedScale, s.speedScale);
+        if (s.stopOnKey != null) await setU(CH_ZMK.autoscroll, V.asStopOnKey, s.stopOnKey);
+    }, CH_ZMK.autoscroll);
 
     await section('accel', caps.accel, async (s) => {
-        if (s.enabled != null) await setU(CH.accel, V.accelEnabled, s.enabled);
-        if (s.takeoff != null) await setU(CH.accel, V.accelTakeoff, s.takeoff);
-        if (s.growth != null) await setU(CH.accel, V.accelGrowth, s.growth);
-        if (s.offset != null) { await flask.setI16(CH.accel, V.accelOffset, s.offset); applied++; }
-        if (s.limit != null) await setU(CH.accel, V.accelLimit, s.limit);
-    }, CH.accel);
+        if (s.enabled != null) await setU(CH_ZMK.accel, V.accelEnabled, s.enabled);
+        if (s.takeoff != null) await setU(CH_ZMK.accel, V.accelTakeoff, s.takeoff);
+        if (s.growth != null) await setU(CH_ZMK.accel, V.accelGrowth, s.growth);
+        if (s.offset != null) { await flask.setI16(CH_ZMK.accel, V.accelOffset, s.offset); applied++; }
+        if (s.limit != null) await setU(CH_ZMK.accel, V.accelLimit, s.limit);
+    }, CH_ZMK.accel);
 
     await section('scrollSnap', caps.scrollSnap, async (s) => {
         const ids = [['enabled', V.snapEnabled], ['threshold', V.snapThreshold],
@@ -367,66 +367,66 @@ async function applyFlaskStateInner(app, data, save = true) {
             ['lockMs', V.snapLockMs], ['lockEvents', V.snapLockEvents],
             ['idleReset', V.snapIdleReset]];
         for (const [k, id] of ids) {
-            if (s[k] != null) await setU(CH.scrollSnap, id, s[k]);
+            if (s[k] != null) await setU(CH_ZMK.scrollSnap, id, s[k]);
         }
-    }, CH.scrollSnap);
+    }, CH_ZMK.scrollSnap);
 
     await section('scrollSpeed', caps.scrollSpeed, async (s) => {
-        if (s.speedPct != null) await setU(CH.scrollScale, V.scrollSpeedPct, s.speedPct);
-    }, CH.scrollScale);
+        if (s.speedPct != null) await setU(CH_ZMK.scrollScale, V.scrollSpeedPct, s.speedPct);
+    }, CH_ZMK.scrollScale);
 
     await section('ballSwap', caps.ballSwap, async (s) => {
-        if (s.swapped != null) await setU(CH.ballSwap, V.bswapSwapped, s.swapped);
-    }, CH.ballSwap);
+        if (s.swapped != null) await setU(CH_ZMK.ballSwap, V.bswapSwapped, s.swapped);
+    }, CH_ZMK.ballSwap);
 
     await section('autoMouse', caps.autoMouse, async (s) => {
-        if (s.enabled != null) await setU(CH.autoMouse, V.amEnabled, s.enabled);
-        if (s.timeout != null) await setU(CH.autoMouse, V.amTimeout, s.timeout);
-        if (s.threshold != null) await setU(CH.autoMouse, V.amThreshold, s.threshold);
-        if (s.layer != null) await setU(CH.autoMouse, V.amLayer, s.layer);
-        if (s.extend != null) await setU(CH.autoMouse, V.amExtend, s.extend);
-    }, CH.autoMouse);
+        if (s.enabled != null) await setU(CH_ZMK.autoMouse, V.amEnabled, s.enabled);
+        if (s.timeout != null) await setU(CH_ZMK.autoMouse, V.amTimeout, s.timeout);
+        if (s.threshold != null) await setU(CH_ZMK.autoMouse, V.amThreshold, s.threshold);
+        if (s.layer != null) await setU(CH_ZMK.autoMouse, V.amLayer, s.layer);
+        if (s.extend != null) await setU(CH_ZMK.autoMouse, V.amExtend, s.extend);
+    }, CH_ZMK.autoMouse);
 
     await section('autoShift', caps.autoshift, async (s) => {
         const ids = [['enabled', V.ashEnabled], ['timeout', V.ashTimeout], ['groups', V.ashGroups],
             ['modifiers', V.ashModifiers], ['repeat', V.ashRepeat], ['noAutoRepeat', V.ashNoAutoRepeat],
             ['retro', V.ashRetro], ['retroLimit', V.ashRetroLimit]];
         for (const [k, id] of ids) {
-            if (s[k] != null) await setU(CH.autoShift, id, s[k]);
+            if (s[k] != null) await setU(CH_ZMK.autoShift, id, s[k]);
         }
-    }, CH.autoShift);
+    }, CH_ZMK.autoShift);
 
     await section('rgb', caps.rgbMap, async (s) => {
-        const layers = await flask.getU16(CH.rgbMap, V.rgbmapLayers);
-        const leds = await flask.getU16(CH.rgbMap, V.rgbmapLeds);
+        const layers = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapLayers);
+        const leds = await flask.getU16(CH_ZMK.rgbMap, V.rgbmapLeds);
         for (let l = 0; l < Math.min(layers, s.map?.length ?? 0); l++) {
             for (let led = 0; led < Math.min(leds, s.map[l].length); led++) {
                 const [h, sa, v] = s.map[l][led];
-                await flask.setBytes(CH.rgbMap, V.rgbmapLed, [l, led, h, sa, v], 2);
+                await flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [l, led, h, sa, v], 2);
                 applied++;
             }
         }
-        if (s.enabled != null) await setU(CH.rgbMap, V.rgbmapEnabled, s.enabled);
+        if (s.enabled != null) await setU(CH_ZMK.rgbMap, V.rgbmapEnabled, s.enabled);
         if (caps.rgbEffects && s.effect != null) {
-            await setU(CH.rgbMap, V.rgbmapEffect, s.effect);
-            await setU(CH.rgbMap, V.rgbmapEffectSpeed, s.effectSpeed ?? 128);
+            await setU(CH_ZMK.rgbMap, V.rgbmapEffect, s.effect);
+            await setU(CH_ZMK.rgbMap, V.rgbmapEffectSpeed, s.effectSpeed ?? 128);
             const [h, sa, v] = s.effectHsv ?? [0, 255, 120];
-            await setU(CH.rgbMap, V.rgbmapEffectHue, h);
-            await setU(CH.rgbMap, V.rgbmapEffectSat, sa);
-            await setU(CH.rgbMap, V.rgbmapEffectVal, v);
+            await setU(CH_ZMK.rgbMap, V.rgbmapEffectHue, h);
+            await setU(CH_ZMK.rgbMap, V.rgbmapEffectSat, sa);
+            await setU(CH_ZMK.rgbMap, V.rgbmapEffectVal, v);
         }
         if (caps.rgbBrightness && s.brightness != null) {
-            await setU(CH.rgbMap, V.rgbmapBrightness, s.brightness);
+            await setU(CH_ZMK.rgbMap, V.rgbmapBrightness, s.brightness);
         }
         if (caps.rgbIdleTimeout && s.idleTimeout != null) {
-            await setU(CH.rgbMap, V.rgbmapIdleTimeout, s.idleTimeout);
+            await setU(CH_ZMK.rgbMap, V.rgbmapIdleTimeout, s.idleTimeout);
         }
-    }, CH.rgbMap);
+    }, CH_ZMK.rgbMap);
 
     await section('combos', caps.combos, async (s) => {
-        const count = await flask.getU16(CH.combos, V.combosSlotCount);
+        const count = await flask.getU16(CH_ZMK.combos, V.combosSlotCount);
         const keys = caps.combosKeys
-            ? (await flask.getU16(CH.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
+            ? (await flask.getU16(CH_ZMK.combos, V.combosKeys) || COMBO_MAX_KEYS) : COMBO_MAX_KEYS;
         // File slots may be legacy {usage}, typed (v12) or timed (v14);
         // device may be any of those too — bridge every direction.
         const file = (s.slots ?? []).slice(0, count)
@@ -447,23 +447,23 @@ async function applyFlaskStateInner(app, data, save = true) {
         for (let i = 0; i < file.length; i++) {
             const typed = file[i];
             if (caps.combosTimed) {
-                await flask.setBytes(CH.combos, V.combosSlotV3,
+                await flask.setBytes(CH_ZMK.combos, V.combosSlotV3,
                     encodeComboSlotV3(i, typed, keys), 1); // missing timing encodes as 0/ANY
             } else if (caps.combosTyped) {
-                await flask.setBytes(CH.combos, V.combosSlotV2,
+                await flask.setBytes(CH_ZMK.combos, V.combosSlotV2,
                     encodeComboSlotV2(i, typed, keys), 1);
             } else {
-                await flask.setBytes(CH.combos, V.combosSlot,
+                await flask.setBytes(CH_ZMK.combos, V.combosSlot,
                     encodeComboSlot(i, comboTypedToLegacy(typed), keys), 1);
             }
             applied++;
         }
-        if (s.enabled != null) await setU(CH.combos, V.combosEnabled, s.enabled);
-        if (s.timeout != null) await setU(CH.combos, V.combosTimeout, s.timeout);
-    }, CH.combos);
+        if (s.enabled != null) await setU(CH_ZMK.combos, V.combosEnabled, s.enabled);
+        if (s.timeout != null) await setU(CH_ZMK.combos, V.combosTimeout, s.timeout);
+    }, CH_ZMK.combos);
 
     await section('customShift', caps.customShift, async (s) => {
-        const count = await flask.getU16(CH.customShift, V.cskSlotCount);
+        const count = await flask.getU16(CH_ZMK.customShift, V.cskSlotCount);
         const morph = await cskMorphCaps(flask);
         let osk;   // probed once, only if a slot needs it
         const extra = (s.slots ?? []).slice(count).filter((x) => x.base || x.shifted).length;
@@ -482,38 +482,38 @@ async function applyFlaskStateInner(app, data, save = true) {
                     continue;
                 }
             }
-            await flask.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(i, slot), 1);
+            await flask.setBytes(CH_ZMK.customShift, V.cskSlot, encodeCskSlot(i, slot), 1);
             applied++;
         }
-        if (s.enabled != null) await setU(CH.customShift, V.cskEnabled, s.enabled);
-    }, CH.customShift);
+        if (s.enabled != null) await setU(CH_ZMK.customShift, V.cskEnabled, s.enabled);
+    }, CH_ZMK.customShift);
 
     await section('tapDance', caps.tapDance, async (s) => {
-        const count = await flask.getU16(CH.tapDance, V.tdSlotCount);
-        const tapCap = await flask.getU16(CH.tapDance, V.tdTaps) || 4;
+        const count = await flask.getU16(CH_ZMK.tapDance, V.tdSlotCount);
+        const tapCap = await flask.getU16(CH_ZMK.tapDance, V.tdTaps) || 4;
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
             const slot = s.slots[i];
-            await flask.setBytes(CH.tapDance, V.tdCfg,
+            await flask.setBytes(CH_ZMK.tapDance, V.tdCfg,
                 encodeTdCfg(i, slot.termMs ?? 0), 1);
             applied++;
             // Pad with NONE: an export lists only the live prefix, and a stale tap
             // behind it on the device would come alive with the next edit.
             for (let t = 0; t < tapCap; t++) {
                 const o = slot.taps?.[t];
-                await flask.setBytes(CH.tapDance, V.tdStep,
+                await flask.setBytes(CH_ZMK.tapDance, V.tdStep,
                     encodeTdStep(i, t, o ? ((x) => (isRecursiveOutput(x) ? NO_OUT : x))(out(o)) : NO_OUT), 2);
                 applied++;
             }
         }
-        if (s.enabled != null) await setU(CH.tapDance, V.tdEnabled, s.enabled);
-    }, CH.tapDance);
+        if (s.enabled != null) await setU(CH_ZMK.tapDance, V.tdEnabled, s.enabled);
+    }, CH_ZMK.tapDance);
 
     await section('adaptive', caps.adaptive, async (s) => {
-        const sets = await flask.getU16(CH.adaptive, V.akSetCount);
-        const ruleCap = await flask.getU16(CH.adaptive, V.akRuleCount);
-        const stepCap = await flask.getU16(CH.adaptive, V.akStepCount) || 6;
+        const sets = await flask.getU16(CH_ZMK.adaptive, V.akSetCount);
+        const ruleCap = await flask.getU16(CH_ZMK.adaptive, V.akRuleCount);
+        const stepCap = await flask.getU16(CH_ZMK.adaptive, V.akStepCount) || 6;
         for (let st = 0; st < Math.min(sets, s.fallback?.length ?? 0); st++) {
-            await flask.setBytes(CH.adaptive, V.akFallback, encodeAkFallback(st, ((x) => (isRecursiveOutput(x) ? NO_OUT : x))(out(s.fallback[st]))), 1);
+            await flask.setBytes(CH_ZMK.adaptive, V.akFallback, encodeAkFallback(st, ((x) => (isRecursiveOutput(x) ? NO_OUT : x))(out(s.fallback[st]))), 1);
             applied++;
         }
         // Device rules the file does not list are deleted, so the file is the whole table
@@ -521,65 +521,65 @@ async function applyFlaskStateInner(app, data, save = true) {
         const listed = new Set((s.rules ?? []).map((r) => r.index));
         for (let i = 0; i < ruleCap; i++) {
             if (listed.has(i)) continue;
-            const h = decodeAkRule(await flask.getBytes(CH.adaptive, V.akRule, [i], 1));
+            const h = decodeAkRule(await flask.getBytes(CH_ZMK.adaptive, V.akRule, [i], 1));
             if (!h.trigger) continue;
-            await flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(i, {}), 1);
+            await flask.setBytes(CH_ZMK.adaptive, V.akRule, encodeAkRule(i, {}), 1);
             applied++;
         }
         for (const r of s.rules ?? []) {
             if (r.index >= ruleCap || r.set >= sets) continue;
-            await flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(r.index, r), 1);
+            await flask.setBytes(CH_ZMK.adaptive, V.akRule, encodeAkRule(r.index, r), 1);
             for (let st = 0; st < stepCap; st++) {
-                await flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(r.index, st, r.steps?.[st] ? ((x) => (isRecursiveOutput(x) ? {} : x))(out(r.steps[st])) : {}), 2);
+                await flask.setBytes(CH_ZMK.adaptive, V.akStep, encodeAkStep(r.index, st, r.steps?.[st] ? ((x) => (isRecursiveOutput(x) ? {} : x))(out(r.steps[st])) : {}), 2);
             }
             applied++;
         }
-        if (s.enabled != null) await setU(CH.adaptive, V.akEnabled, s.enabled);
-    }, CH.adaptive);
+        if (s.enabled != null) await setU(CH_ZMK.adaptive, V.akEnabled, s.enabled);
+    }, CH_ZMK.adaptive);
 
     await section('macros', caps.macros, async (s) => {
-        const count = await flask.getU16(CH.macros, V.macrosSlotCount);
-        const stepCap = await flask.getU16(CH.macros, V.macrosStepCount);
+        const count = await flask.getU16(CH_ZMK.macros, V.macrosSlotCount);
+        const stepCap = await flask.getU16(CH_ZMK.macros, V.macrosStepCount);
         for (let m = 0; m < Math.min(count, s.slots?.length ?? 0); m++) {
             const slot = s.slots[m];
             for (let st = 0; st < stepCap; st++) {
                 const step = slot[st] ?? { action: 0, param: 0 };
-                await flask.setBytes(CH.macros, V.macrosStep,
+                await flask.setBytes(CH_ZMK.macros, V.macrosStep,
                     encodeMacroStep(m, st, step), 2);
                 applied++;
                 if (!slot[st]) break;   // wrote the terminating empty — done
             }
         }
-        if (s.enabled != null) await setU(CH.macros, V.macrosEnabled, s.enabled);
-        if (s.tapMs != null) await setU(CH.macros, V.macrosTapMs, s.tapMs);
-        if (s.waitMs != null) await setU(CH.macros, V.macrosWaitMs, s.waitMs);
-    }, CH.macros);
+        if (s.enabled != null) await setU(CH_ZMK.macros, V.macrosEnabled, s.enabled);
+        if (s.tapMs != null) await setU(CH_ZMK.macros, V.macrosTapMs, s.tapMs);
+        if (s.waitMs != null) await setU(CH_ZMK.macros, V.macrosWaitMs, s.waitMs);
+    }, CH_ZMK.macros);
 
     await section('leader', caps.leader, async (s) => {
-        const count = await flask.getU16(CH.leader, V.leaderSlotCount);
-        const keys = await flask.getU16(CH.leader, V.leaderKeys) || 8;
+        const count = await flask.getU16(CH_ZMK.leader, V.leaderSlotCount);
+        const keys = await flask.getU16(CH_ZMK.leader, V.leaderKeys) || 8;
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
-            await flask.setBytes(CH.leader, V.leaderSlot,
+            await flask.setBytes(CH_ZMK.leader, V.leaderSlot,
                 encodeLeaderSlot(i, s.slots[i], keys), 1);
             applied++;
         }
-        if (s.enabled != null) await setU(CH.leader, V.leaderEnabled, s.enabled);
-        if (s.timeout != null) await setU(CH.leader, V.leaderTimeout, s.timeout);
-    }, CH.leader);
+        if (s.enabled != null) await setU(CH_ZMK.leader, V.leaderEnabled, s.enabled);
+        if (s.timeout != null) await setU(CH_ZMK.leader, V.leaderTimeout, s.timeout);
+    }, CH_ZMK.leader);
 
     await section('gestures', caps.gestures, async (s) => {
-        const setCount = await flask.getU16(CH.gestures, V.gesturesSetCount) || 8;
+        const setCount = await flask.getU16(CH_ZMK.gestures, V.gesturesSetCount) || 8;
         for (let st = 0; st < Math.min(setCount, s.sets?.length ?? 0); st++) {
             for (let d = 0; d < Math.min(8, s.sets[st].length); d++) {
-                await flask.setBytes(CH.gestures, V.gesturesSlot,
+                await flask.setBytes(CH_ZMK.gestures, V.gesturesSlot,
                     encodeGestureSlot(st, d, s.sets[st][d]), 2);
                 applied++;
             }
         }
-        if (s.enabled != null) await setU(CH.gestures, V.gesturesEnabled, s.enabled);
-        if (s.ratchetStep != null) await setU(CH.gestures, V.gesturesRatchetStep, s.ratchetStep);
-        if (s.activeSet != null) await setU(CH.gestures, V.gesturesActiveSet, s.activeSet);
-    }, CH.gestures);
+        if (s.enabled != null) await setU(CH_ZMK.gestures, V.gesturesEnabled, s.enabled);
+        if (s.ratchetStep != null) await setU(CH_ZMK.gestures, V.gesturesRatchetStep, s.ratchetStep);
+        if (s.activeSet != null) await setU(CH_ZMK.gestures, V.gesturesActiveSet, s.activeSet);
+    }, CH_ZMK.gestures);
 
     if (data.slotNames) {
         zmkApplySlotNames(app.profile?.family ?? 'imprint', data.slotNames);

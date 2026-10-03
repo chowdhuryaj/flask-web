@@ -30,7 +30,7 @@ Object.assign(doc, {
 });
 globalThis.document = doc;
 
-const { CH, V } = await import('../flaskproto.js?v=76');
+const { CH_ZMK, V } = await import('../flaskproto.js?v=76');
 const { zmkCapabilities } = await import('../zmk.js?v=76');
 const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=76');
 const { saveState } = await import('../save-state.js?v=76');
@@ -72,7 +72,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 const macroSteps = async (app, m) => {
     const out = [];
     for (let s = 0; s < 32; s++) {
-        const d = decodeMacroStep(await app.flask.getBytes(CH.macros, V.macrosStep, [m, s], 2));
+        const d = decodeMacroStep(await app.flask.getBytes(CH_ZMK.macros, V.macrosStep, [m, s], 2));
         if (d.action === MACRO_ACTION.empty) break;
         out.push(d);
     }
@@ -97,7 +97,7 @@ const stub = (tab) => { tab.render = () => {}; return tab; };
     eq((await macroSteps(app, 0)).length, 11, 'slot 0 still holds all 11 typed characters');
 
     // a stale cache (event missed) is caught against the device too
-    await app.flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(2, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
+    await app.flask.setBytes(CH_ZMK.macros, V.macrosStep, encodeMacroStep(2, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
     await macros.addMacro();
     ok(macros.drafts.has(3) && !macros.drafts.has(2), 'New macro skips a slot the device holds although the cache says empty');
     eq(macros.steps[2][0].action, MACRO_ACTION.tap, 'and fixes the cache for it');
@@ -147,7 +147,7 @@ const stub = (tab) => { tab.render = () => {}; return tab; };
     eq((await macroSteps(app, e.created)).length, 12, 'keymap unknown -> not freed');
     // a macro made by someone else (no "AK:" name, not made here) is never touched
     ak.refsKeymap = [];
-    await app.flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(20, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
+    await app.flask.setBytes(CH_ZMK.macros, V.macrosStep, encodeMacroStep(20, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
     await ak.createRule(1, { trigger: 0x0007001C, steps: [{ action: AK_ACTION.macro, behaviorId: 0, param1: 20, param2: 0 }], maxIdleMs: 0 });
     const k = ak.rules.findIndex((r) => r.trigger === 0x0007001C);
     await ak.deleteRule(k);
@@ -185,10 +185,10 @@ const stub = (tab) => { tab.render = () => {}; return tab; };
     ok(live.filter((r) => { const k = r.steps.findIndex((s) => !s.action); return k >= 0 && k < 5; }).every((r) => r.steps[5].unknown), 'steps behind NONE are flagged unread');
     // an unread tail is overwritten (not trusted) by the next write
     const r0 = live[0];
-    await app.flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(r0.index, 5, { action: 1, param1: 0x70005 }), 2);   // stale tail behind NONE
+    await app.flask.setBytes(CH_ZMK.adaptive, V.akStep, encodeAkStep(r0.index, 5, { action: 1, param1: 0x70005 }), 2);   // stale tail behind NONE
     await ak.load();
     await ak.setOutput(r0.index, { steps: [{ action: 1, behaviorId: 0, param1: 0x70006, param2: 0 }] });
-    eq(decodeAkStep(await app.flask.getBytes(CH.adaptive, V.akStep, [r0.index, 5], 2)).action, 0, 'stale step behind NONE cleared by the write');
+    eq(decodeAkStep(await app.flask.getBytes(CH_ZMK.adaptive, V.akStep, [r0.index, 5], 2)).action, 0, 'stale step behind NONE cleared by the write');
 }
 
 // ---- Perf: Tap Dance load stops at NONE; writes clear the unread tail ----
@@ -199,11 +199,11 @@ const stub = (tab) => { tab.render = () => {}; return tab; };
     await td.load();
     ok(n.get <= 4 + 16 + 16, `tap dance load: one tap read per empty dance (${n.get})`);
     // WB-14: a refused write leaves the cache alone
-    await app.flask.setBytes(CH.tapDance, V.tdStep, encodeTdStep(3, 2, { action: 1, param1: 0x70004 }), 2);   // tail behind NONE
+    await app.flask.setBytes(CH_ZMK.tapDance, V.tdStep, encodeTdStep(3, 2, { action: 1, param1: 0x70004 }), 2);   // tail behind NONE
     await td.load();
     ok(td.slots[3].taps[2].unknown, 'tap behind NONE is unread');
     await td.writeStep(3, 0, { slot: 3, tap: 0, action: 1, behaviorId: 0, param1: 0x70005, param2: 0 });
-    eq(decodeTdStep(await app.flask.getBytes(CH.tapDance, V.tdStep, [3, 2], 2)).action, 0, 'filling tap 0 clears the dead tail first');
+    eq(decodeTdStep(await app.flask.getBytes(CH_ZMK.tapDance, V.tdStep, [3, 2], 2)).action, 0, 'filling tap 0 clears the dead tail first');
     const real = app.flask.setBytes.bind(app.flask);
     app.flask.setBytes = async () => { throw new Error('timeout'); };
     await td.writeStep(3, 1, { slot: 3, tap: 1, action: 1, behaviorId: 0, param1: 0x70006, param2: 0 });
@@ -226,12 +226,12 @@ const stub = (tab) => { tab.render = () => {}; return tab; };
         ok(!ids.includes('tap-dance') && !ids.includes('adaptive'), `${surf} offers neither Tap Dance nor Adaptive Key`);
     }
     const app = mkApp();
-    await app.flask.setBytes(CH.tapDance, V.tdStep, encodeTdStep(0, 0, { action: 3, behaviorId: TD, param1: 1 }), 2);
+    await app.flask.setBytes(CH_ZMK.tapDance, V.tdStep, encodeTdStep(0, 0, { action: 3, behaviorId: TD, param1: 1 }), 2);
     const td = stub(new ZmkTapDanceTab(app));
     await td.load();
     eq(td.slots[0].taps[0].action, 0, 'tap-dance step that is &ftd shows as empty');
     const ak = stub(new ZmkAdaptiveTab(app));
-    await app.flask.setBytes(CH.adaptive, V.akFallback, [0, 3, FAK >> 8, FAK & 255, 0, 0, 0, 1, 0, 0, 0, 0], 1).catch(() => {});
+    await app.flask.setBytes(CH_ZMK.adaptive, V.akFallback, [0, 3, FAK >> 8, FAK & 255, 0, 0, 0, 1, 0, 0, 0, 0], 1).catch(() => {});
     await ak.load();
     ok(!catalog.isRecursiveOutput(ak.fallback[0]), 'adaptive fallback never shows a recursive output');
     // export drops it
@@ -267,8 +267,8 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
     const macros = stub(new ZmkMacrosTab(app));
     await macros.load();
     saveState.reset();
-    await app.flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(4, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
-    common.announceSlots(CH.macros);
+    await app.flask.setBytes(CH_ZMK.macros, V.macrosStep, encodeMacroStep(4, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
+    common.announceSlots(CH_ZMK.macros);
     await flush(); await flush();
     eq(macros.steps[4][0].action, MACRO_ACTION.tap, 'a whole-table announcement reloads the Macros tab');
     const { ZmkModesTab } = await import('../zmk-modes-tab.js?v=76');
@@ -279,7 +279,7 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
     saveState.reset();
     modes.applyLive('m1');
     for (let k = 0; k < 20 && !saveState.dirty().length; k++) await flush();
-    ok(saveState.dirty().some((d) => d.source === CH.macros), 'Apply live registers the written channel so Save persists it');
+    ok(saveState.dirty().some((d) => d.source === CH_ZMK.macros), 'Apply live registers the written channel so Save persists it');
     await flush(); await flush();
     eq(macros.steps[0][0].param, 0x70005, 'and the loaded Macros tab shows the mode\'s table');
     eq(modeSummary({ data: { layers: [], flask: { adaptive: {}, customShift: {} } } }), '0 layers · shift keys, adaptive keys', 'WB-16 summary names adaptive / shift keys');
@@ -288,9 +288,9 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
 // ---- WB-05: behavior outputs carry names and resolve by name ----
 {
     const app = mkApp();
-    await app.flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(40, 0, { action: 1, param1: 0x70004 }), 2);
-    await app.flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(40, { set: 0, trigger: 0x0007001A }), 1);
-    await app.flask.setBytes(CH.adaptive, V.akStep, encodeAkStep(40, 1, { action: 3, behaviorId: SK, param1: 0x700E1 }), 2);
+    await app.flask.setBytes(CH_ZMK.adaptive, V.akStep, encodeAkStep(40, 0, { action: 1, param1: 0x70004 }), 2);
+    await app.flask.setBytes(CH_ZMK.adaptive, V.akRule, encodeAkRule(40, { set: 0, trigger: 0x0007001A }), 1);
+    await app.flask.setBytes(CH_ZMK.adaptive, V.akStep, encodeAkStep(40, 1, { action: 3, behaviorId: SK, param1: 0x700E1 }), 2);
     const st = await exportFlaskState(app);
     const r40 = st.adaptive.rules.find((r) => r.index === 40);
     eq(r40.steps[1].behavior, 'Sticky Key', 'adaptive step carries the behavior name');
@@ -303,7 +303,7 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
     const b = mkApp();
     const res = await applyFlaskState(b, file);
     eq(res.failures, [], 'applies cleanly');
-    eq(decodeAkStep(await b.flask.getBytes(CH.adaptive, V.akStep, [40, 1], 2)).behaviorId, SK, 'resolved by name, not by the stale id');
+    eq(decodeAkStep(await b.flask.getBytes(CH_ZMK.adaptive, V.akStep, [40, 1], 2)).behaviorId, SK, 'resolved by name, not by the stale id');
     // no name -> the id is used; an unknown name -> the output is dropped
     eq(resolveOut({ action: 3, behaviorId: 7, param1: 1 }), { action: 3, behaviorId: 7, param1: 1 }, 'no name: id kept');
     eq(resolveOut({ action: 3, behaviorId: 7, behavior: 'Nope' }), null, 'unknown name: unresolved');
@@ -312,7 +312,7 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
     const c = mkApp();
     const res2 = await applyFlaskState(c, file2);
     eq(res2.unresolved >= 1, true, 'counted');
-    eq(decodeAkStep(await c.flask.getBytes(CH.adaptive, V.akStep, [40, 1], 2)).action, 0, 'unresolvable behavior output applied as empty');
+    eq(decodeAkStep(await c.flask.getBytes(CH_ZMK.adaptive, V.akStep, [40, 1], 2)).action, 0, 'unresolvable behavior output applied as empty');
 }
 
 // ---- WB-07 combos: timing set before the output survives the echo ----
@@ -357,8 +357,8 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
 {
     const app = mkApp();
     const n = reads(app);
-    await common.dim(app, CH.macros, V.macrosSlotCount);
-    await common.dim(app, CH.macros, V.macrosSlotCount);
+    await common.dim(app, CH_ZMK.macros, V.macrosSlotCount);
+    await common.dim(app, CH_ZMK.macros, V.macrosSlotCount);
     eq(n.get, 1, 'dim() caches per flask client');
     const td = stub(new ZmkTapDanceTab(app));
     const before = n.get;

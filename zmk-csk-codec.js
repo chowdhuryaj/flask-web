@@ -25,7 +25,7 @@
 // OSK_CAPS (RO u16 0x05) = 1 on firmware that takes them; OS_MODE (RO u16
 // 0x04) = the board's current OS (0 PC, 1 Mac, 0xFFFF no switch-layout module).
 
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 
 export const MOD_CTL = 1, MOD_SFT = 2, MOD_ALT = 4, MOD_GUI = 8;
 export const MOD_SHIFT_ONLY = MOD_SFT;
@@ -145,7 +145,7 @@ export function cskDuplicateOf(slots, i) {
  * any other error (timeout, disconnect) is rethrown so callers don't mistake a
  * flaky link for old firmware. */
 export async function cskMorphCaps(flask) {
-    try { return (await flask.getU16(CH.customShift, V.cskMorphCaps)) === 1; }
+    try { return (await flask.getU16(CH_ZMK.customShift, V.cskMorphCaps)) === 1; }
     catch (e) {
         if (e?.message === 'unhandled') return false;
         throw e;
@@ -164,7 +164,7 @@ export function cskNeedsOs(s) {
 
 /** true when the firmware takes flags bits 1-4 (OSK_CAPS == 1). Same error rule as cskMorphCaps. */
 export async function cskOskCaps(flask) {
-    try { return (await flask.getU16(CH.customShift, V.cskOskCaps)) === 1; }
+    try { return (await flask.getU16(CH_ZMK.customShift, V.cskOskCaps)) === 1; }
     catch (e) {
         if (e?.message === 'unhandled') return false;
         throw e;
@@ -175,7 +175,7 @@ export async function cskOskCaps(flask) {
  * the firmware has no switch-layout module or doesn't report it. */
 export async function cskOsMode(flask) {
     try {
-        const v = await flask.getU16(CH.customShift, V.cskOsMode);
+        const v = await flask.getU16(CH_ZMK.customShift, V.cskOsMode);
         return v === 0 ? OS_PC : v === 1 ? OS_MAC : null;
     } catch (e) {
         if (e?.message === 'unhandled') return null;

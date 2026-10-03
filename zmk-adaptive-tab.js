@@ -13,7 +13,7 @@
 
 import { el, card, toggleRow, modal, toast, renameLabel, reloadBar } from './ui.js?v=76';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { saveState } from './save-state.js?v=76';
 import {
     blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary,
@@ -68,7 +68,7 @@ export class ZmkAdaptiveTab {
         installSlotSummary(app);
         registerSummary('adaptive', (set) => this.setSummary(set));
         // A Mode was applied: the rule pool changed behind our cache.
-        onSlotsChanged(CH.adaptive, this, () => { if (this.rules.length) this.load().catch(() => {}); });
+        onSlotsChanged(CH_ZMK.adaptive, this, () => { if (this.rules.length) this.load().catch(() => {}); });
     }
 
     get fam() { return this.app.profile?.family ?? 'totem'; }
@@ -77,13 +77,13 @@ export class ZmkAdaptiveTab {
         const { flask, hid } = this.app;
         hid?.pause?.();
         try {
-            this.enabled = await flask.getU16(CH.adaptive, V.akEnabled);
-            this.setCount = await dim(this.app, CH.adaptive, V.akSetCount);
-            this.ruleCount = await dim(this.app, CH.adaptive, V.akRuleCount);
-            this.stepCount = await dim(this.app, CH.adaptive, V.akStepCount) || 6;
+            this.enabled = await flask.getU16(CH_ZMK.adaptive, V.akEnabled);
+            this.setCount = await dim(this.app, CH_ZMK.adaptive, V.akSetCount);
+            this.ruleCount = await dim(this.app, CH_ZMK.adaptive, V.akRuleCount);
+            this.stepCount = await dim(this.app, CH_ZMK.adaptive, V.akStepCount) || 6;
             this.rules = [];
             for (let i = 0; i < this.ruleCount; i++) {
-                const rule = { ...decodeAkRule(await flask.getBytes(CH.adaptive, V.akRule, [i], 1)), index: i };
+                const rule = { ...decodeAkRule(await flask.getBytes(CH_ZMK.adaptive, V.akRule, [i], 1)), index: i };
                 rule.steps = [];
                 // An empty rule has nothing to read; a live one is read to its first NONE
                 // (the firmware stops there too, flask_adaptive.c: steps behind it never run).
@@ -91,7 +91,7 @@ export class ZmkAdaptiveTab {
                 let ended = rule.trigger === 0;
                 for (let s = 0; s < this.stepCount; s++) {
                     if (ended) { rule.steps.push(rule.trigger === 0 ? noStep() : { ...noStep(), unknown: true }); continue; }
-                    const o = readOut(decodeAkStep(await flask.getBytes(CH.adaptive, V.akStep, [i, s], 2)));
+                    const o = readOut(decodeAkStep(await flask.getBytes(CH_ZMK.adaptive, V.akStep, [i, s], 2)));
                     rule.steps.push(o);
                     if (!o.action) ended = true;
                 }
@@ -99,15 +99,15 @@ export class ZmkAdaptiveTab {
             }
             this.fallback = [];
             for (let st = 0; st < this.setCount; st++) {
-                const d = decodeAkFallback(await flask.getBytes(CH.adaptive, V.akFallback, [st], 1));
+                const d = decodeAkFallback(await flask.getBytes(CH_ZMK.adaptive, V.akFallback, [st], 1));
                 this.fallback.push(readOut(d));
             }
         } finally {
             hid?.resume?.();
         }
-        this.bar ??= reloadBar(CH.adaptive, {
+        this.bar ??= reloadBar(CH_ZMK.adaptive, {
             label: 'Adaptive keys',
-            save: () => this.app.flask.save(CH.adaptive),
+            save: () => this.app.flask.save(CH_ZMK.adaptive),
             reload: () => this.load(),
         });
         this.render();
@@ -119,14 +119,14 @@ export class ZmkAdaptiveTab {
      * from the echo, so a refused write leaves it showing what the device holds. */
     async writeHeader(i, patch = {}) {
         const r = this.rules[i];
-        const echo = decodeAkRule(await this.app.flask.setBytes(CH.adaptive, V.akRule, encodeAkRule(i, { ...r, ...patch }), 1));
+        const echo = decodeAkRule(await this.app.flask.setBytes(CH_ZMK.adaptive, V.akRule, encodeAkRule(i, { ...r, ...patch }), 1));
         Object.assign(r, { set: echo.set, trigger: echo.trigger, maxIdleMs: echo.maxIdleMs, strict: echo.strict });
         if (echo.trigger === 0) r.steps = Array.from({ length: this.stepCount }, noStep);
         this.bar?.markEdited();
     }
 
     async writeStep(i, s, step) {
-        const d = decodeAkStep(await this.app.flask.setBytes(CH.adaptive, V.akStep,
+        const d = decodeAkStep(await this.app.flask.setBytes(CH_ZMK.adaptive, V.akStep,
             encodeAkStep(i, s, step), 2));
         this.rules[i].steps[s] = { action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 };
         this.bar?.markEdited();
@@ -146,7 +146,7 @@ export class ZmkAdaptiveTab {
 
     async writeFallback(set, o) {
         try {
-            const d = decodeAkFallback(await this.app.flask.setBytes(CH.adaptive, V.akFallback,
+            const d = decodeAkFallback(await this.app.flask.setBytes(CH_ZMK.adaptive, V.akFallback,
                 encodeAkFallback(set, o), 1));
             this.fallback[set] = { action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 };
             this.bar?.markEdited();
@@ -169,7 +169,7 @@ export class ZmkAdaptiveTab {
     async freeMacroSlot(count) {
         for (let m = 0; m < count; m++) {
             if (draftSlots.macro.has(m)) continue;
-            const d = decodeMacroStep(await this.app.flask.getBytes(CH.macros, V.macrosStep, [m, 0], 2));
+            const d = decodeMacroStep(await this.app.flask.getBytes(CH_ZMK.macros, V.macrosStep, [m, 0], 2));
             if (d.action === MACRO_ACTION.empty) return m;
         }
         return null;
@@ -190,14 +190,14 @@ export class ZmkAdaptiveTab {
         if (!caps.macros) {
             throw new Error(`Text over ${this.stepCount} characters needs a macro, and this keyboard has none.`);
         }
-        const slots = await dim(this.app, CH.macros, V.macrosSlotCount);
-        const cap = await dim(this.app, CH.macros, V.macrosStepCount);
+        const slots = await dim(this.app, CH_ZMK.macros, V.macrosSlotCount);
+        const cap = await dim(this.app, CH_ZMK.macros, V.macrosStepCount);
         if (usages.length > cap) {
             throw new Error(`A macro holds at most ${cap} characters; this text has ${usages.length}.`);
         }
         const slot = await this.freeMacroSlot(slots);
         if (slot == null) throw new Error(`All ${slots} macro slots are in use; free one in Behaviour › Macros.`);
-        const put = (s, step) => flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(slot, s, step), 2);
+        const put = (s, step) => flask.setBytes(CH_ZMK.macros, V.macrosStep, encodeMacroStep(slot, s, step), 2);
         try {
             for (let s = 0; s < usages.length; s++) await put(s, { action: MACRO_ACTION.tap, param: usages[s] });
             // A cleared slot can keep a dead tail behind step 0: end the text explicitly.
@@ -208,19 +208,19 @@ export class ZmkAdaptiveTab {
         }
         zmkSetSlotName(this.fam, 'macros', slot, `AK: ${text}`.slice(0, 40));
         this.macroText[slot] = text.length > 14 ? `${text.slice(0, 14)}…` : text;
-        saveState.markDirty(CH.macros, 'Macros', () => this.app.flask.save(CH.macros));
-        announceSlots(CH.macros, { slot });
+        saveState.markDirty(CH_ZMK.macros, 'Macros', () => this.app.flask.save(CH_ZMK.macros));
+        announceSlots(CH_ZMK.macros, { slot });
         return { steps: [{ action: AK_ACTION.macro, behaviorId: 0, param1: slot, param2: 0 }], created: slot };
     }
 
     /** Empty every live step of a macro slot (step 0 first, so it is dead at once). */
     async wipeMacro(slot) {
         const { flask } = this.app;
-        const cap = await dim(this.app, CH.macros, V.macrosStepCount);
+        const cap = await dim(this.app, CH_ZMK.macros, V.macrosStepCount);
         let live = 0;
-        while (live < cap && decodeMacroStep(await flask.getBytes(CH.macros, V.macrosStep, [slot, live], 2)).action !== MACRO_ACTION.empty) live++;
+        while (live < cap && decodeMacroStep(await flask.getBytes(CH_ZMK.macros, V.macrosStep, [slot, live], 2)).action !== MACRO_ACTION.empty) live++;
         for (let s = 0; s < live; s++) {
-            await flask.setBytes(CH.macros, V.macrosStep, encodeMacroStep(slot, s, { action: MACRO_ACTION.empty, param: 0 }), 2);
+            await flask.setBytes(CH_ZMK.macros, V.macrosStep, encodeMacroStep(slot, s, { action: MACRO_ACTION.empty, param: 0 }), 2);
         }
     }
 
@@ -245,8 +245,8 @@ export class ZmkAdaptiveTab {
         await this.wipeMacro(slot);
         zmkSetSlotName(this.fam, 'macros', slot, '');
         delete this.macroText[slot];
-        saveState.markDirty(CH.macros, 'Macros', () => this.app.flask.save(CH.macros));
-        announceSlots(CH.macros, { slot });
+        saveState.markDirty(CH_ZMK.macros, 'Macros', () => this.app.flask.save(CH_ZMK.macros));
+        announceSlots(CH_ZMK.macros, { slot });
         return true;
     }
 
@@ -565,7 +565,7 @@ export class ZmkAdaptiveTab {
                 hint: 'master switch; with it off the rules are skipped and each set\'s fallback still fires',
                 value: this.enabled,
                 onChange: async (val) => {
-                    this.enabled = await flask.setU16(CH.adaptive, V.akEnabled, val ? 1 : 0);
+                    this.enabled = await flask.setU16(CH_ZMK.adaptive, V.akEnabled, val ? 1 : 0);
                     this.bar?.markEdited();
                     return this.enabled;
                 },

@@ -6,7 +6,7 @@ import { el, toast, modal } from './ui.js?v=76';
 import { diag } from './diag.js?v=76';
 import { FlaskHID } from './webhid.js?v=76';
 import { renderPreflight } from './preflight.js?v=76';
-import { FlaskProto, CH, V } from './flaskproto.js?v=76';
+import { FlaskProto, CH_ZMK, V } from './flaskproto.js?v=76';
 import { isZmkFamily, pickReconnectDevice, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
          zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=76';
 import { CommandPalette } from './command-palette.js?v=76';
@@ -371,7 +371,7 @@ async function probeAdaptive() {
     if (!app.caps || !isZmkFamily(app.family)) return;
     app.caps.adaptive = false;
     if ((app.protocolVersion ?? 0) < 18) return;
-    try { app.caps.adaptive = !!(await app.flask.getU16(CH.adaptive, V.akSetCount)); }
+    try { app.caps.adaptive = !!(await app.flask.getU16(CH_ZMK.adaptive, V.akSetCount)); }
     catch { app.caps.adaptive = false; }
 }
 

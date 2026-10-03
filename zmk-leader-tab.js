@@ -6,7 +6,7 @@
 // BindingPicker (zmk.typedOutput).
 
 import { el, card, sliderRow, toggleRow, toast, reloadBar } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { ZMK_LEADER_FN_PRESET } from './zmk.js?v=76';
 import { board } from './board.js?v=76';
 import { kpParam } from './zmk-keycodes.js?v=76';
@@ -19,7 +19,7 @@ export class ZmkLeaderTab {
         this.app = app;
         this.root = blurClicks(el('div'));
         this.drafts = new Set();
-        onSlotsChanged(CH.leader, this, () => { if (this.slots && this.editing == null) this.load().catch(() => {}); });
+        onSlotsChanged(CH_ZMK.leader, this, () => { if (this.slots && this.editing == null) this.load().catch(() => {}); });
     }
 
     async load() {
@@ -27,21 +27,21 @@ export class ZmkLeaderTab {
         // HUD poll backs off for the bulk slot read (see combos tab note).
         hid?.pause?.();
         try {
-            this.enabled = await flask.getU16(CH.leader, V.leaderEnabled);
-            this.timeout = await flask.getU16(CH.leader, V.leaderTimeout);
-            this.slotCount = await dim(this.app, CH.leader, V.leaderSlotCount);
-            this.maxKeys = await dim(this.app, CH.leader, V.leaderKeys) || 8;
+            this.enabled = await flask.getU16(CH_ZMK.leader, V.leaderEnabled);
+            this.timeout = await flask.getU16(CH_ZMK.leader, V.leaderTimeout);
+            this.slotCount = await dim(this.app, CH_ZMK.leader, V.leaderSlotCount);
+            this.maxKeys = await dim(this.app, CH_ZMK.leader, V.leaderKeys) || 8;
             this.slots = [];
             for (let i = 0; i < this.slotCount; i++) {
-                const r = await flask.getBytes(CH.leader, V.leaderSlot, [i], 1);
+                const r = await flask.getBytes(CH_ZMK.leader, V.leaderSlot, [i], 1);
                 this.slots.push(decodeLeaderSlot(r, this.maxKeys));
             }
         } finally {
             hid?.resume?.();
         }
-        this.bar ??= reloadBar(CH.leader, {
+        this.bar ??= reloadBar(CH_ZMK.leader, {
             label: 'Leader',
-            save: () => this.app.flask.save(CH.leader),
+            save: () => this.app.flask.save(CH_ZMK.leader),
             reload: () => this.load(),
         });
         this.render();
@@ -49,7 +49,7 @@ export class ZmkLeaderTab {
 
     async writeSlot(i, before = null) {
         try {
-            const r = await this.app.flask.setBytes(CH.leader, V.leaderSlot,
+            const r = await this.app.flask.setBytes(CH_ZMK.leader, V.leaderSlot,
                 encodeLeaderSlot(i, this.slots[i], this.maxKeys), 1);
             this.slots[i] = decodeLeaderSlot(r, this.maxKeys);
             this.bar?.markEdited();
@@ -116,7 +116,7 @@ export class ZmkLeaderTab {
                 const i = free[k];
                 this.slots[i] = { seq: i, positions: [...todo[k].positions],
                     action: OUTPUT_ACTION.usage, param: todo[k].usage };
-                const r = await this.app.flask.setBytes(CH.leader, V.leaderSlot,
+                const r = await this.app.flask.setBytes(CH_ZMK.leader, V.leaderSlot,
                     encodeLeaderSlot(i, this.slots[i], this.maxKeys), 1);
                 this.slots[i] = decodeLeaderSlot(r, this.maxKeys);
             }
@@ -263,7 +263,7 @@ export class ZmkLeaderTab {
                 hint: 'master switch; sequences stay stored while off',
                 value: this.enabled,
                 onChange: async (val) => {
-                    this.enabled = await flask.setU16(CH.leader, V.leaderEnabled, val ? 1 : 0);
+                    this.enabled = await flask.setU16(CH_ZMK.leader, V.leaderEnabled, val ? 1 : 0);
                     return this.enabled;
                 },
             }),
@@ -273,7 +273,7 @@ export class ZmkLeaderTab {
                 min: 100, max: 5000, step: 50, value: this.timeout,
                 format: (v) => `${v} ms`,
                 onChange: async (val) => {
-                    this.timeout = await flask.setU16(CH.leader, V.leaderTimeout, val);
+                    this.timeout = await flask.setU16(CH_ZMK.leader, V.leaderTimeout, val);
                     return this.timeout;
                 },
             }),

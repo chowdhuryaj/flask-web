@@ -5,7 +5,7 @@
 // live and the top bar's Save writes flash (reloadBar, source 0x2C).
 
 import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { blurClicks } from './zmk-behaviour-common.js?v=76';
 import {
     ASH_GROUPS, ASH_DEFAULTS, ASH_TIMEOUT, ASH_RETRO_LIMIT, clampAshTimeout, clampRetroLimit,
@@ -37,13 +37,13 @@ export class ZmkAutoshiftTab {
         const { flask, hid } = this.app;
         hid?.pause?.();
         try {
-            for (const [k, id] of Object.entries(IDS)) this.v[k] = await flask.getU16(CH.autoShift, id);
+            for (const [k, id] of Object.entries(IDS)) this.v[k] = await flask.getU16(CH_ZMK.autoShift, id);
         } finally {
             hid?.resume?.();
         }
-        this.bar ??= reloadBar(CH.autoShift, {
+        this.bar ??= reloadBar(CH_ZMK.autoShift, {
             label: 'Auto Shift',
-            save: () => this.app.flask.save(CH.autoShift),
+            save: () => this.app.flask.save(CH_ZMK.autoShift),
             reload: () => this.load(),
         });
         this.render();
@@ -51,7 +51,7 @@ export class ZmkAutoshiftTab {
 
     /** SET one value, adopt the echo, mark the channel edited. Throws on failure. */
     async put(key, value) {
-        const echo = await this.app.flask.setU16(CH.autoShift, IDS[key], value);
+        const echo = await this.app.flask.setU16(CH_ZMK.autoShift, IDS[key], value);
         this.v[key] = echo;
         this.bar?.markEdited();
         this.sync();

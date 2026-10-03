@@ -12,7 +12,7 @@
 // (both balls stroke gestures).
 
 import { el, card, sliderRow, toggleRow, selectRow, toast, renameLabel, reloadBar } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { renderKeyboardSVG } from './board.js?v=76';
 import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=76';
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=76';
@@ -36,15 +36,15 @@ export class ZmkGesturesTab {
         installSlotSummary(app);
         this.set = 0;
         this.sets = [];     // [set][dir] typed outputs — all sets, cached
-        onSlotsChanged(CH.gestures, this, () => { if (this.sets.length) this.load().catch(() => {}); });
+        onSlotsChanged(CH_ZMK.gestures, this, () => { if (this.sets.length) this.load().catch(() => {}); });
     }
 
     async load() {
         const { flask, hid } = this.app;
-        this.enabled = await flask.getU16(CH.gestures, V.gesturesEnabled);
-        this.ratchet = await flask.getU16(CH.gestures, V.gesturesRatchetStep);
-        this.activeSet = await flask.getU16(CH.gestures, V.gesturesActiveSet);
-        this.setCount = await dim(this.app, CH.gestures, V.gesturesSetCount) || 8;
+        this.enabled = await flask.getU16(CH_ZMK.gestures, V.gesturesEnabled);
+        this.ratchet = await flask.getU16(CH_ZMK.gestures, V.gesturesRatchetStep);
+        this.activeSet = await flask.getU16(CH_ZMK.gestures, V.gesturesActiveSet);
+        this.setCount = await dim(this.app, CH_ZMK.gestures, V.gesturesSetCount) || 8;
         this.set = Math.min(this.set, this.setCount - 1);
         // All sets up front (setCount × 8 slot frames — same burst size as
         // the combos tab): blank-set detection for the Active-set dropdown
@@ -55,7 +55,7 @@ export class ZmkGesturesTab {
             for (let s = 0; s < this.setCount; s++) {
                 const dirs = [];
                 for (let dir = 0; dir < 8; dir++) {
-                    const r = await flask.getBytes(CH.gestures, V.gesturesSlot, [s, dir], 2);
+                    const r = await flask.getBytes(CH_ZMK.gestures, V.gesturesSlot, [s, dir], 2);
                     dirs.push(decodeGestureSlot(r));
                 }
                 this.sets.push(dirs);
@@ -63,9 +63,9 @@ export class ZmkGesturesTab {
         } finally {
             hid?.resume?.();
         }
-        this.bar ??= reloadBar(CH.gestures, {
+        this.bar ??= reloadBar(CH_ZMK.gestures, {
             label: 'Gestures',
-            save: () => this.app.flask.save(CH.gestures),
+            save: () => this.app.flask.save(CH_ZMK.gestures),
             reload: () => this.load(),
         });
         this.render();
@@ -80,7 +80,7 @@ export class ZmkGesturesTab {
     /** Write direction `dir` of the shown set; the cache changes only from the echo. */
     async writeDir(dir, out) {
         try {
-            const r = await this.app.flask.setBytes(CH.gestures, V.gesturesSlot,
+            const r = await this.app.flask.setBytes(CH_ZMK.gestures, V.gesturesSlot,
                 encodeGestureSlot(this.set, dir, out), 2);
             this.sets[this.set][dir] = decodeGestureSlot(r);
             this.bar?.markEdited();
@@ -169,7 +169,7 @@ export class ZmkGesturesTab {
                 hint: 'master switch; the tables stay stored while off',
                 value: this.enabled,
                 onChange: async (val) => {
-                    this.enabled = await flask.setU16(CH.gestures, V.gesturesEnabled, val ? 1 : 0);
+                    this.enabled = await flask.setU16(CH_ZMK.gestures, V.gesturesEnabled, val ? 1 : 0);
                     return this.enabled;
                 },
             }),
@@ -178,7 +178,7 @@ export class ZmkGesturesTab {
                 hint: 'ball travel per fire — lower = more sensitive',
                 min: 50, max: 2000, step: 10, value: this.ratchet,
                 onChange: async (val) => {
-                    this.ratchet = await flask.setU16(CH.gestures, V.gesturesRatchetStep, val);
+                    this.ratchet = await flask.setU16(CH_ZMK.gestures, V.gesturesRatchetStep, val);
                     return this.ratchet;
                 },
             }),
@@ -188,7 +188,7 @@ export class ZmkGesturesTab {
                 value: this.activeSet,
                 options: activeOptions,
                 onChange: async (val) => {
-                    this.activeSet = await flask.setU16(CH.gestures, V.gesturesActiveSet, Number(val));
+                    this.activeSet = await flask.setU16(CH_ZMK.gestures, V.gesturesActiveSet, Number(val));
                     this.bar?.markEdited();   // render() detaches the select before ui.js can announce the edit
                     this.render();
                 },

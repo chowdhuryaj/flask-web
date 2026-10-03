@@ -249,17 +249,17 @@ const loadable = (t, { unsaved, keys }) => {
 
 // ---- flaskproto: NaN and live-action retries ----
 {
-    const { FlaskProto, CH, V } = await import('../flaskproto.js?v=76');
+    const { FlaskProto, CH_ZMK, V } = await import('../flaskproto.js?v=76');
     const seen = [];
     const hid = { request: async (p, e, o) => { seen.push([p, o]); return [p[0], p[1], p[2], p[3], p[4]]; } };
     const fp = new FlaskProto(hid);
-    await assert.rejects(fp.setU16(CH.combos, 1, NaN), RangeError); checks++;
-    await assert.rejects(fp.setI16(CH.accel, V.accelOffset, NaN), RangeError); checks++;
-    await fp.setU16(CH.macros, V.macrosState, 3);
+    await assert.rejects(fp.setU16(CH_ZMK.combos, 1, NaN), RangeError); checks++;
+    await assert.rejects(fp.setI16(CH_ZMK.accel, V.accelOffset, NaN), RangeError); checks++;
+    await fp.setU16(CH_ZMK.macros, V.macrosState, 3);
     eq(seen.at(-1)[1], { retries: 0 }, 'macro play is never re-sent');
-    await fp.setU16(CH.combos, 1, 3);
+    await fp.setU16(CH_ZMK.combos, 1, 3);
     eq(seen.at(-1)[1], undefined, 'ordinary SET keeps the default retries');
-    await fp.setI16(CH.accel, V.accelOffset, 99999);
+    await fp.setI16(CH_ZMK.accel, V.accelOffset, 99999);
     eq(seen.at(-1)[0].slice(3), [0x7f, 0xff], 'setI16 clamps instead of wrapping');
 }
 

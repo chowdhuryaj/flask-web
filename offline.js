@@ -13,7 +13,7 @@
 // zmk-offline.js.
 
 import { el, modal, toast } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { isZmkFamily } from './zmk.js?v=76';
 
 const LS_PREFIX = 'flask-offline-';
@@ -25,7 +25,7 @@ export const BASE_PREFIX = 'flask-offline-base:';
 // Live-state value ids (SET is a transient action, not a setting) — never
 // journal these offline. '<ch>:<id>' decimal.
 const LIVE_SET = new Set([
-    `${CH.autoscroll}:5`,   // asState force-stop
+    `${CH_ZMK.autoscroll}:5`,   // asState force-stop
 ]);
 
 // ---------- storage ----------
@@ -113,7 +113,7 @@ export class OfflineFlask {
 
     _journal(ch, id, op, val) {
         const k = tk(ch, id);
-        if (LIVE_SET.has(k) || ch === CH.meta) return; // transient — drop
+        if (LIVE_SET.has(k) || ch === CH_ZMK.meta) return; // transient — drop
         this.ws.tunables[k] = { op, val };
         this.ws.dirty.tun[k] = { op, val };
         saveWorkspace(this.ws);
@@ -131,7 +131,7 @@ export class OfflineFlask {
 
 // ---------- sync: replay the journal onto a real device ----------
 
-const CH_NAMES = Object.fromEntries(Object.entries(CH).map(([k, v]) => [v, k]));
+const CH_NAMES = Object.fromEntries(Object.entries(CH_ZMK).map(([k, v]) => [v, k]));
 
 /** Human-readable change list for the confirm modal. */
 export function describeChanges(ws) {
@@ -217,13 +217,13 @@ export async function syncWorkspace(app, ws) {
     for (const [k, hsv] of Object.entries(ws.dirty.rgb)) {
         const [l, led] = k.split(',').map(Number);
         try {
-            await app.flask.setBytes(CH.rgbMap, V.rgbmapLed, [l, led, ...hsv]);
+            await app.flask.setBytes(CH_ZMK.rgbMap, V.rgbmapLed, [l, led, ...hsv]);
             rgbDone.push(k);
         } catch (e) { fail.push(`rgb ${k}: ${e.message}`); }
     }
     if (rgbDone.length) {
         try {
-            await app.flask.save(CH.rgbMap);
+            await app.flask.save(CH_ZMK.rgbMap);
             for (const k of rgbDone) { delete ws.dirty.rgb[k]; applied++; }
         } catch (e) {
             if (e.message === 'unhandled') for (const k of rgbDone) { delete ws.dirty.rgb[k]; applied++; }

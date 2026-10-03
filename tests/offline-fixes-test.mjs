@@ -37,7 +37,7 @@ globalThis.localStorage ??= {
 };
 
 const { syncWorkspace, maybeSyncOffline, pendingCount, saveWorkspace, loadWorkspace } = await import('../offline.js?v=76');
-const { CH, V } = await import('../flaskproto.js?v=76');
+const { CH_ZMK, V } = await import('../flaskproto.js?v=76');
 const { createZmkTemplate, ZmkOfflineFlask, zmkSyncExtras, zmkPendingCount, zmkDescribeChanges, dropJournals,
         seedWorkspaceFromDevice, OfflineStudioClient, attachZmkOffline } = await import('../zmk-offline.js?v=76');
 const { zmkCapabilities } = await import('../zmk.js?v=76');
@@ -52,7 +52,7 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
 {
     const ws = createZmkTemplate('imprint');
     const f = new ZmkOfflineFlask(ws);
-    await f.setU16(CH.scrollSnap, V.snapThreshold, 80);
+    await f.setU16(CH_ZMK.scrollSnap, V.snapThreshold, 80);
     let saveErr = new Error('timeout');
     const app = { flask: { setU16: async (_c, _i, v) => v, setI16: async (_c, _i, v) => v,
         save: async () => { if (saveErr) throw saveErr; }, setBytes: async () => [] } };
@@ -60,7 +60,7 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
     eq(r.applied, 0, 'SAVE timed out: nothing counted applied');
     eq(pendingCount(ws), 1, 'entry stays queued'); eq(r.failures.length, 1);
     ok(/SAVE failed/.test(r.failures[0]));
-    ok(ws.dirty.saves.includes(CH.scrollSnap), 'the SAVE is retried next connect');
+    ok(ws.dirty.saves.includes(CH_ZMK.scrollSnap), 'the SAVE is retried next connect');
     saveErr = new Error('unhandled');
     const r2 = await syncWorkspace(app, ws);
     eq(r2.applied, 1); eq(pendingCount(ws), 0, 'channel without persistence: nothing to lose, drains');
@@ -73,18 +73,18 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
     const f = new ZmkOfflineFlask(ws);
     const combo = { positions: [1, 2], action: COMBO_ACTION.usage, behaviorId: 0, param1: 0x70004, param2: 0,
         timeoutMs: 120, priorIdleMs: 90, layer: 2 };
-    await f.setBytes(CH.combos, V.combosSlotV3, encodeComboSlotV3(5, combo, 8), 1);
-    await f.setBytes(CH.macros, V.macrosStep, encodeMacroStep(0, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
+    await f.setBytes(CH_ZMK.combos, V.combosSlotV3, encodeComboSlotV3(5, combo, 8), 1);
+    await f.setBytes(CH_ZMK.macros, V.macrosStep, encodeMacroStep(0, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
     eq(zmkPendingCount(ws), 2);
     const writes = [];
     let failSave = true;
     const dev = (caps) => ({ caps, flask: {
         getU16: async () => 8,
         setBytes: async (c, i, p) => { writes.push([c, i, [...p]]); return p; },
-        save: async (c) => { if (failSave && c === CH.macros) throw new Error('timeout'); },
+        save: async (c) => { if (failSave && c === CH_ZMK.macros) throw new Error('timeout'); },
     } });
     const r = await zmkSyncExtras(dev(zmkCapabilities('imprint', 14)), ws);
-    const cw = writes.find((w) => w[0] === CH.combos);
+    const cw = writes.find((w) => w[0] === CH_ZMK.combos);
     eq(cw[1], V.combosSlotV3, 'v14 firmware gets the timed combo frame');
     const back = decodeComboSlotV3(cw[2], 8);
     eq([back.timeoutMs, back.priorIdleMs, back.layer], [120, 90, 2], 'window/idle/layer survive the replay');
@@ -95,10 +95,10 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
     const r2 = await zmkSyncExtras(dev(zmkCapabilities('imprint', 14)), ws);
     eq(r2.applied, 1); eq(zmkPendingCount(ws), 0);
     // v12 firmware keeps the typed frame.
-    await f.setBytes(CH.combos, V.combosSlotV3, encodeComboSlotV3(6, combo, 8), 1);
+    await f.setBytes(CH_ZMK.combos, V.combosSlotV3, encodeComboSlotV3(6, combo, 8), 1);
     writes.length = 0;
     await zmkSyncExtras(dev(zmkCapabilities('imprint', 12)), ws);
-    eq(writes.find((w) => w[0] === CH.combos)[1], V.combosSlotV2);
+    eq(writes.find((w) => w[0] === CH_ZMK.combos)[1], V.combosSlotV2);
 }
 
 // ---- WC-02: device-seeded workspace refuses layer structure ops ----
@@ -146,8 +146,8 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
         mem.clear();
         const ws = createZmkTemplate('imprint');
         const f = new ZmkOfflineFlask(ws);
-        await f.setU16(CH.scrollSnap, V.snapThreshold, 80);
-        await f.setBytes(CH.macros, V.macrosStep, encodeMacroStep(0, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
+        await f.setU16(CH_ZMK.scrollSnap, V.snapThreshold, 80);
+        await f.setBytes(CH_ZMK.macros, V.macrosStep, encodeMacroStep(0, 0, { action: MACRO_ACTION.tap, param: 0x70004 }), 2);
         saveWorkspace(ws);
         return ws;
     };
@@ -191,7 +191,7 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
     app = mkApp(); p = open(app); await new Promise((r) => setTimeout(r, 0));
     await button('Apply now').click();
     eq(await p, 'applied');
-    ok(sent.some((s) => s[0] === 'u16') && sent.some((s) => s[0] === 'bytes' && s[1][0] === CH.macros));
+    ok(sent.some((s) => s[0] === 'u16') && sent.some((s) => s[0] === 'bytes' && s[1][0] === CH_ZMK.macros));
     eq(zmkPendingCount(loadWorkspace('imprint')), 0);
 
     // Unplug while the dialog is open: dialog closes, nothing sent, queue kept.

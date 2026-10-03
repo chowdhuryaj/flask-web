@@ -7,7 +7,7 @@
 // device connection; the popup never opens one.
 
 import { el } from './ui.js?v=76';
-import { CH, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V } from './flaskproto.js?v=76';
 import { renderKeyboardSVG } from './board.js?v=76';
 import { appearance } from './themes.js?v=76';
 
@@ -265,7 +265,7 @@ export class HUD {
             const now = performance.now();
             if (app.caps.hudLayer && (changed || now - (this._layerAt ?? 0) >= 1000)) {
                 this._layerAt = now;
-                const layer = await app.flask.getU16(CH.meta, V.metaActiveLayer);
+                const layer = await app.flask.getU16(CH_ZMK.meta, V.metaActiveLayer);
                 if (layer !== this.liveLayer) {
                     this.liveLayer = layer;
                     if (!this.peek) this.shownLayer = layer;
@@ -280,13 +280,13 @@ export class HUD {
             if ((tick % 4) === 1 && (app.caps.autoscroll || app.caps.macros || app.caps.ballSwap)) {
                 const status = {};
                 if (app.caps.autoscroll) {
-                    status.autoscroll = await app.flask.getI16(CH.autoscroll, V.asState);
+                    status.autoscroll = await app.flask.getI16(CH_ZMK.autoscroll, V.asState);
                 }
                 if (app.caps.macros) {
-                    status.macro = await app.flask.getU16(CH.macros, V.macrosState);
+                    status.macro = await app.flask.getU16(CH_ZMK.macros, V.macrosState);
                 }
                 if (app.caps.ballSwap) {
-                    status.bswap = await app.flask.getU16(CH.ballSwap, V.bswapEffective);
+                    status.bswap = await app.flask.getU16(CH_ZMK.ballSwap, V.bswapEffective);
                 }
                 if (JSON.stringify(status) !== JSON.stringify(this._liveStatus)) {
                     this._liveStatus = status;

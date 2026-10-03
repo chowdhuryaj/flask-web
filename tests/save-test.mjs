@@ -194,10 +194,10 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 // ---- offline queue count feeds the status bar ----
 {
     const { createZmkTemplate, ZmkOfflineFlask, offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=76');
-    const { CH, V } = await import('../flaskproto.js?v=76');
+    const { CH_ZMK, V } = await import('../flaskproto.js?v=76');
     const ws = createZmkTemplate('imprint');
     eq(offlineQueued(ws), 0);
-    await new ZmkOfflineFlask(ws).setU16(CH.scrollSnap, V.snapThreshold, 80);
+    await new ZmkOfflineFlask(ws).setU16(CH_ZMK.scrollSnap, V.snapThreshold, 80);
     eq(offlineQueued(ws), 1);
     eq(discardOfflineQueued(ws), 1);
     eq(offlineQueued(ws), 0);
