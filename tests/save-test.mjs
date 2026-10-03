@@ -168,6 +168,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     // Tap dances now export only their live prefix (apply pads the rest with NONE).
     const trimmed = structuredClone(old.flask);
     for (const sl of trimmed.tapDance?.slots ?? []) { const n = sl.taps.findIndex((t) => !t.action); sl.taps = n < 0 ? sl.taps : sl.taps.slice(0, n); }
+    // The sim now has 32 mod-morph slots; a 16-slot fixture leaves the rest empty.
+    while (trimmed.customShift && trimmed.customShift.slots.length < 32) trimmed.customShift.slots.push({ base: 0, shifted: 0 });
     eq(again, trimmed, 'export after import equals the old file byte for byte (as JSON), tap dances trimmed to their live prefix');
     eq(JSON.stringify(again), JSON.stringify(trimmed), 'serialises identically');
 

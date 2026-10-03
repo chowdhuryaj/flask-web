@@ -33,7 +33,7 @@ import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
          comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=66';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=66';
+import { decodeCskSlot, encodeCskSlot, cskMorphCaps, cskNeedsMorph } from './zmk-csk-codec.js?v=66';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
     from './zmk-tapdance-codec.js?v=66';
 import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=66';
@@ -58,7 +58,7 @@ const IMPRINT = {
     leaderKeys: 8,
     gestureSets: 8,
     // v14: custom shift keys + runtime tap dances
-    cskSlots: 16,
+    cskSlots: 32,
     tdSlots: 16,
     tdTaps: 4,
     // v18 (Totem only; imprint has no flask_adaptive): Kconfig defaults.
@@ -1665,9 +1665,18 @@ async function zmkSyncExtrasInner(app, ws) {
 
     // Custom shift: one slot frame per edited slot (same frame the Shift tab sends).
     ok = [];
+    let morph;   // probed once, only if a slot is queued
     for (const slot of Object.keys(d.cskSlot)) {
         try {
             if (!ws.zmk.csk[slot]) throw new Error('unhandled');
+            // Shift-only firmware would echo OK but store a plain Shift slot.
+            if (cskNeedsMorph(ws.zmk.csk[slot])) {
+                morph ??= await cskMorphCaps(app.flask);
+                if (!morph) {
+                    fail.push(`shift ${slot}: needs mod-morph firmware, still queued`);
+                    continue;
+                }
+            }
             await app.flask.setBytes(CH.customShift, V.cskSlot,
                 encodeCskSlot(Number(slot), ws.zmk.csk[slot]), 1);
             ok.push(slot);

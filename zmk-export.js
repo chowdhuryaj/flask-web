@@ -21,7 +21,7 @@ import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=66';
 import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=66';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
     from './zmk-output-codec.js?v=66';
-import { encodeCskSlot, decodeCskSlot, cskMorphCaps, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=66';
+import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=66';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
     from './zmk-tapdance-codec.js?v=66';
 import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
@@ -441,10 +441,12 @@ async function applyFlaskStateInner(app, data, save = true) {
     await section('customShift', caps.customShift, async (s) => {
         const count = await flask.getU16(CH.customShift, V.cskSlotCount);
         const morph = await cskMorphCaps(flask);
+        const extra = (s.slots ?? []).slice(count).filter((x) => x.base || x.shifted).length;
+        if (extra) failures.push(`customShift: ${extra} slot(s) past this board's ${count}, not written`);
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
             const slot = s.slots[i];
             // Shift-only firmware cannot hold another trigger set or keep-mods.
-            if (!morph && ((slot.mods || MOD_SHIFT_ONLY) !== MOD_SHIFT_ONLY || slot.keep)) {
+            if (!morph && cskNeedsMorph(slot)) {
                 failures.push(`customShift slot ${i}: needs mod-morph firmware, skipped`);
                 continue;
             }

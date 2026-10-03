@@ -19,7 +19,7 @@ import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=66';
 import { CH, V } from './flaskproto.js?v=66';
 import { usageFromName } from './zmk-keycodes.js?v=66';
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=66';
-import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty, cskMorphCaps, cskDuplicateOf,
+import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty, cskMorphCaps, cskNeedsMorph, cskDuplicateOf,
     cskSummary, trigText, TRIGGER_MODS, MOD_CTL, MOD_SFT, MOD_ALT, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=66';
 
 // One-click starters. Encodings ride usageFromName so the table stays data —
@@ -71,8 +71,14 @@ export class ZmkShiftTab {
     async writeSlot(i, before = null) {
         try {
             const s = this.slots[i];
-            // Shift-only firmware cannot carry another trigger set.
-            if (!this.morph) { s.mods = MOD_SHIFT_ONLY; s.keep = false; }
+            // Shift-only firmware cannot carry another trigger set: refuse rather than
+            // silently rewrite a ⌃/⌥/⌘ or keep slot as plain Shift.
+            if (!this.morph && cskNeedsMorph(s)) {
+                if (before) this.slots[i] = before;
+                toast('This firmware is Shift-only; update it to write ⌃ ⌥ ⌘ triggers or keep-mods', true);
+                this.render();
+                return;
+            }
             const r = await this.app.flask.setBytes(CH.customShift, V.cskSlot,
                 encodeCskSlot(i, s), 1);
             this.slots[i] = decodeCskSlot(r); // adopt the echo
@@ -244,7 +250,9 @@ export class ZmkShiftTab {
             el('div', { class: 'note faint',
                 text: 'A slot fires only when exactly its trigger modifiers are held, so ⇧ , and ⌃⇧ , are separate slots. '
                     + 'The replacement picker\'s modifier row rides the replacement, e.g. pick R with ⇧ for h→R. '
-                    + (this.morph ? 'Keep mods leaves the trigger pressed with the replacement. ' : '') + 'Edits are live.' }));
+                    + (this.morph ? 'Keep mods leaves the trigger pressed with the replacement. ' : '')
+                    + 'With ⌃ or ⌘ triggers the trigger stays masked until the morphed key is released, so roll-then-shortcut (⌃H then ⌃C) sends a plain key: release first. '
+                    + 'Edits are live.' }));
 
         this.root.replaceChildren(controls,
             ...visible.map((i) => this.pairCard(i)),

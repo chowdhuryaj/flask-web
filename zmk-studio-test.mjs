@@ -1059,7 +1059,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(cskSlotIsEmpty({ base: 0, shifted: 0 }), true, 'csk empty rule');
     const cskEcho = decodeCskSlot(await flask.setBytes(CH.customShift, V.cskSlot, cskEnc));
     eq(cskEcho.base, 0x70036, 'sim stores the csk base');
-    eq(await flask.getU16(CH.customShift, V.cskSlotCount), 16, 'csk slot count');
+    eq(await flask.getU16(CH.customShift, V.cskSlotCount), 32, 'csk slot count');
     eq(await flask.getU16(CH.customShift, V.cskEnabled), 1, 'csk boots enabled');
 
     // tap dance codec + sim round trip (term clamp + step normalization).

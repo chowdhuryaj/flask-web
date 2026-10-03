@@ -76,14 +76,25 @@ export function cskSummary(s, label) {
  * trigger set — it would shadow or be shadowed — or -1. Empty bases never clash. */
 export function cskDuplicateOf(slots, i) {
     const s = slots[i];
-    if (!s || !(s.base & 0xFFFFFF)) return -1;
-    return slots.findIndex((o, oi) => oi !== i && !cskSlotIsEmpty(o)
+    if (!s || !(s.base & 0xFFFFFF) || !s.shifted) return -1;   // incomplete slot (no replacement) never clashes
+    return slots.findIndex((o, oi) => oi !== i && !cskSlotIsEmpty(o) && o.base && o.shifted
         && (o.base & 0xFFFFFF) === (s.base & 0xFFFFFF)
         && (o.mods || MOD_SHIFT_ONLY) === (s.mods || MOD_SHIFT_ONLY));
 }
 
-/** true when the firmware has the trigger/flags bytes (MORPH_CAPS == 1). */
+/** true when the firmware has the trigger/flags bytes (MORPH_CAPS == 1).
+ * false only for the definitive 'unhandled' answer (old Shift-only firmware);
+ * any other error (timeout, disconnect) is rethrown so callers don't mistake a
+ * flaky link for old firmware. */
 export async function cskMorphCaps(flask) {
     try { return (await flask.getU16(CH.customShift, V.cskMorphCaps)) === 1; }
-    catch { return false; }
+    catch (e) {
+        if (e?.message === 'unhandled') return false;
+        throw e;
+    }
+}
+
+/** true when the slot needs mod-morph firmware (trigger other than Shift, or keep). */
+export function cskNeedsMorph(s) {
+    return (s.mods || MOD_SHIFT_ONLY) !== MOD_SHIFT_ONLY || !!s.keep;
 }
