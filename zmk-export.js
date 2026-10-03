@@ -9,23 +9,23 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=67';
-import { zmkBehaviors } from './zmk-keycodes.js?v=67';
-import { isRecursiveOutput } from './behavior-catalog.js?v=67';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=67';
+import { CH, V } from './flaskproto.js?v=68';
+import { zmkBehaviors } from './zmk-keycodes.js?v=68';
+import { isRecursiveOutput } from './behavior-catalog.js?v=68';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=68';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=67';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=67';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=67';
+         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=68';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=68';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=68';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=67';
-import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=67';
+    from './zmk-output-codec.js?v=68';
+import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=68';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=67';
+    from './zmk-tapdance-codec.js?v=68';
 import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
-    from './zmk-adaptive-codec.js?v=67';
+    from './zmk-adaptive-codec.js?v=68';
 
 /** Behavior ids shift between firmware builds and differ from the offline sim,
  * so a behavior output (action 3) is exported with its display name beside the
@@ -137,10 +137,13 @@ async function exportFlaskStateInner(app) {
         const slots = [];
         for (let i = 0; i < count; i++) {
             const r = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
-            const { base, shifted, mods, keep } = decodeCskSlot(r);
-            // Trigger/keep only when not the Shift default, so old exports stay
-            // byte-identical and old files (no fields) import as Shift.
-            slots.push(mods === MOD_SHIFT_ONLY && !keep ? { base, shifted } : { base, shifted, mods, keep });
+            const { base, shifted, mods, keep, os, wild, count } = decodeCskSlot(r);
+            // Trigger/keep only when not the Shift default, and os/wild/count only
+            // when set, so old exports stay byte-identical and old files (no
+            // fields) import as plain Shift slots.
+            const osBits = os || wild || count ? { os: os || 0, wild: !!wild, count: !!count } : null;
+            slots.push(mods === MOD_SHIFT_ONLY && !keep && !osBits ? { base, shifted }
+                : { base, shifted, mods, keep, ...osBits });
         }
         out.customShift = {
             enabled: await g(CH.customShift, V.cskEnabled),
@@ -441,6 +444,7 @@ async function applyFlaskStateInner(app, data, save = true) {
     await section('customShift', caps.customShift, async (s) => {
         const count = await flask.getU16(CH.customShift, V.cskSlotCount);
         const morph = await cskMorphCaps(flask);
+        let osk;   // probed once, only if a slot needs it
         const extra = (s.slots ?? []).slice(count).filter((x) => x.base || x.shifted).length;
         if (extra) failures.push(`customShift: ${extra} slot(s) past this board's ${count}, not written`);
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
@@ -449,6 +453,13 @@ async function applyFlaskStateInner(app, data, save = true) {
             if (!morph && cskNeedsMorph(slot)) {
                 failures.push(`customShift slot ${i}: needs mod-morph firmware, skipped`);
                 continue;
+            }
+            if (cskNeedsOs(slot)) {
+                osk ??= morph && await cskOskCaps(flask);
+                if (!osk) {
+                    failures.push(`customShift slot ${i}: needs OS-aware firmware, skipped`);
+                    continue;
+                }
             }
             await flask.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(i, slot), 1);
             applied++;
@@ -576,4 +587,4 @@ export async function saveFlaskChannels(app, channels) {
 }
 
 // window.flaskExportKeymap / window.flaskPrintLayers (side-effect import; see zmk-extras.js)
-import './zmk-extras.js?v=67';
+import './zmk-extras.js?v=68';

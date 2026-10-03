@@ -12,8 +12,8 @@ globalThis.localStorage ??= {
     get length() { return this._m.size; },
 };
 
-const { SaveState, discardMessage } = await import('../save-state.js?v=67');
-const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=67');
+const { SaveState, discardMessage } = await import('../save-state.js?v=68');
+const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=68');
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -149,8 +149,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- old ZMK export (v2 JSON with `family`) still imports and round-trips ----
 {
-    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js?v=67');
-    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js?v=67');
+    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js?v=68');
+    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js?v=68');
     const old = JSON.parse(fixture('zmk-export-v2.json'));
     eq([old.kind, old.version, old.family], ['flask-zmk-keymap', 2, 'imprint'], 'fixture has the v2 header with family');
     ok(isModePayload(old), 'old file is a valid mode payload');
@@ -180,7 +180,7 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     const live = await applyFlaskState(app, old.flask, { save: false });
     eq(saved, [], 'save:false never saves');
     ok(live.channels.length > 1, 'channels to save reported');
-    const { saveFlaskChannels } = await import('../zmk-export.js?v=67');
+    const { saveFlaskChannels } = await import('../zmk-export.js?v=68');
     let n = 0;
     app.flask.save = async (ch) => { n++; if (ch === live.channels[1]) throw new Error('nope'); };
     const sr = await saveFlaskChannels(app, live.channels);
@@ -190,8 +190,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- offline queue count feeds the status bar ----
 {
-    const { createZmkTemplate, ZmkOfflineFlask, offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=67');
-    const { CH, V } = await import('../flaskproto.js?v=67');
+    const { createZmkTemplate, ZmkOfflineFlask, offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=68');
+    const { CH, V } = await import('../flaskproto.js?v=68');
     const ws = createZmkTemplate('imprint');
     eq(offlineQueued(ws), 0);
     await new ZmkOfflineFlask(ws).setU16(CH.scrollSnap, V.snapThreshold, 80);

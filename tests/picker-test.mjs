@@ -1,8 +1,8 @@
 // WP3 surfaces (§4.7): what each picker surface shows, per device.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SURFACES, surfaceEntries } from '../binding-picker.js?v=67';
-import { setZmkContext } from '../zmk-keycodes.js?v=67';
+import { SURFACES, surfaceEntries } from '../binding-picker.js?v=68';
+import { setZmkContext } from '../zmk-keycodes.js?v=68';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -58,8 +58,8 @@ eq(surfaceEntries('zmk.comboOutput').find((e) => e.id === 'mod-tap').params.some
 // behaviors (Super Delete tap-dance, key repeat): zero metadata sets. Hidden from the
 // picker, still shown as existing bindings.
 {
-    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=67');
-    const { describeBinding } = await import('../behavior-catalog.js?v=67');
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=68');
+    const { describeBinding } = await import('../behavior-catalog.js?v=68');
     // decodeBehaviorDetails yields metadata: [] for sets_len 0 AND for -ENODEV, flagged or not.
     const dev = TOTEM_DEFAULT.behaviors.map((d) => ({ id: d.id, displayName: d.displayName,
         metadata: d.metadata.every((m) => !m.param1.length && !m.param2.length) ? [] : d.metadata }));

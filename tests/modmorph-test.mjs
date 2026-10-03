@@ -2,8 +2,8 @@
 // MORPH_CAPS detect, duplicate detection, summary text, sim round trip.
 import assert from 'node:assert/strict';
 import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, cskDuplicateOf, cskSummary, trigText,
-    MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI } from '../zmk-csk-codec.js?v=67';
-import { CH, V } from '../flaskproto.js?v=67';
+    MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI } from '../zmk-csk-codec.js?v=68';
+import { CH, V } from '../flaskproto.js?v=68';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -71,7 +71,7 @@ eq(cskSummary({ base: BSP, shifted: DEL }, name), '⇧ ⌫ → ⌦', 'summary de
 {
     globalThis.localStorage = { _m: new Map(), getItem(k) { return this._m.get(k) ?? null; },
         setItem(k, v) { this._m.set(k, String(v)); }, removeItem(k) { this._m.delete(k); } };
-    const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=67');
+    const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=68');
     const ws = createZmkTemplate('totem'); ws.key = 'mm-test';
     const g = new ZmkOfflineFlask(ws);
     eq(await cskMorphCaps(g), true, 'sim reports MORPH_CAPS');
@@ -82,7 +82,7 @@ eq(cskSummary({ base: BSP, shifted: DEL }, name), '⇧ ⌫ → ⌦', 'summary de
     eq(decodeCskSlot(await g.getBytes(CH.customShift, V.cskSlot, [3], 1)).mods, MOD_SFT, 'empty slot reads Shift');
 
     // ---- offline replay onto Shift-only firmware keeps morph slots queued ----
-    const { zmkSyncExtras } = await import('../zmk-offline.js?v=67');
+    const { zmkSyncExtras } = await import('../zmk-offline.js?v=68');
     eq(ws.zmk.csk.length, 32, 'template has 32 mod-morph slots');
     const ws2 = createZmkTemplate('totem'); ws2.key = 'mm-test2';
     ws2.zmk.csk[1] = { base: COMMA, shifted: SEMI };                              // plain Shift
@@ -108,7 +108,7 @@ eq(cskSummary({ base: BSP, shifted: DEL }, name), '⇧ ⌫ → ⌦', 'summary de
     eq([modern.sent, Object.keys(ws2.zmkDirty.cskSlot).length], [[2, 3], 0], 'mod-morph firmware takes them and drains the journal');
 
     // ---- applyFlaskState reports slots past the target's count ----
-    const { applyFlaskState } = await import('../zmk-export.js?v=67');
+    const { applyFlaskState } = await import('../zmk-export.js?v=68');
     const slotsFile = Array.from({ length: 20 }, (_, i) => (i === 1 || i === 18 ? { base: COMMA, shifted: SEMI } : { base: 0, shifted: 0 }));
     const tgt = { sent: [], flask: {
         getU16: async (c, id) => { if (id === V.cskSlotCount) return 16; if (id === V.cskMorphCaps) return 1; return 0; },

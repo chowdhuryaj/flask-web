@@ -43,7 +43,9 @@ export const V = {
     gesturesSlot: 0x50,
     // custom shift keys (v14): slot frame [slot, base u32 BE, shifted u32 BE]
     // + (morph firmware) [trigger mods, flags]; cskMorphCaps RO u16 = 1 there
+    // OS-aware flags (bits 1-4): cskOsMode RO u16 (0 PC, 1 Mac, 0xFFFF none), cskOskCaps RO u16 = 1 there
     cskEnabled: 0x01, cskSlotCount: 0x02, cskMorphCaps: 0x03,
+    cskOsMode: 0x04, cskOskCaps: 0x05,
     cskSlot: 0x50,
     // leader (flask_leader v10): typed-output sequence frames at 0x50
     leaderTimeout: 0x01,

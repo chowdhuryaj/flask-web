@@ -14,13 +14,20 @@
 // 24-31); the base is matched by page+id (its mod bits are ignored by the
 // firmware). Firmware without MORPH_CAPS is Shift-only: the same UI minus the
 // trigger chips and keep toggle. Same slot-list pattern as the Leader tab.
+//
+// OS-aware rows (OSK_CAPS firmware): each slot can be conditioned on the board's
+// OS mode (Any / Mac / Windows), match ANY key ("Any key" wildcard: only the
+// trigger and replacement mods matter), and count keymap mods. The "Mac
+// shortcuts on Windows" pack (zmk-os-pack.js) loads ⌘→⌃ and its exceptions.
 
-import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=67';
-import { CH, V } from './flaskproto.js?v=67';
-import { usageFromName } from './zmk-keycodes.js?v=67';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=67';
+import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=68';
+import { CH, V } from './flaskproto.js?v=68';
+import { usageFromName, usageCap } from './zmk-keycodes.js?v=68';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=68';
 import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty, cskMorphCaps, cskNeedsMorph, cskDuplicateOf,
-    cskSummary, trigText, TRIGGER_MODS, MOD_CTL, MOD_SFT, MOD_ALT, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=67';
+    cskSummary, trigText, TRIGGER_MODS, MOD_CTL, MOD_SFT, MOD_ALT, MOD_SHIFT_ONLY,
+    cskNeedsOs, cskOskCaps, cskOsMode, cskClash, OS_ANY, OS_MAC, OS_PC, OS_NAMES, WILD_KEY } from './zmk-csk-codec.js?v=68';
+import { OS_PACK, OS_PACK_LABEL } from './zmk-os-pack.js?v=68';
 
 // One-click starters. Encodings ride usageFromName so the table stays data —
 // names must exist in zmk-keycodes.js. shiftedMods = implicit-modifier bits
@@ -41,6 +48,8 @@ export class ZmkShiftTab {
         this.root = blurClicks(el('div'));
         this.drafts = new Set();
         this.morph = false;
+        this.osk = false;       // OSK_CAPS: firmware takes OS condition / wildcard / count-mods
+        this.osMode = null;     // board's current OS (OS_MAC / OS_PC) or null
         onSlotsChanged(CH.customShift, this, () => { if (this.slots) this.load().catch(() => {}); });
         installSlotSummary(app);
     }
@@ -50,6 +59,8 @@ export class ZmkShiftTab {
         hid?.pause?.();
         try {
             this.morph = await cskMorphCaps(flask);
+            this.osk = this.morph && await cskOskCaps(flask);
+            this.osMode = this.osk ? await cskOsMode(flask) : null;
             this.enabled = await flask.getU16(CH.customShift, V.cskEnabled);
             this.slotCount = await dim(this.app, CH.customShift, V.cskSlotCount);
             this.slots = [];
@@ -71,6 +82,12 @@ export class ZmkShiftTab {
     async writeSlot(i, before = null) {
         try {
             const s = this.slots[i];
+            if (!this.osk && cskNeedsOs(s)) {
+                if (before) this.slots[i] = before;
+                toast('This firmware has no OS-aware shortcuts; update it to use OS, any-key or count-mods rows', true);
+                this.render();
+                return;
+            }
             // Shift-only firmware cannot carry another trigger set: refuse rather than
             // silently rewrite a ⌃/⌥/⌘ or keep slot as plain Shift.
             if (!this.morph && cskNeedsMorph(s)) {
@@ -113,13 +130,31 @@ export class ZmkShiftTab {
         let shifted = usageFromName(p.shifted);
         if (base == null || shifted == null) { toast('Preset keycode missing', true); return; }
         if (p.shiftedMods) shifted = (((p.shiftedMods & 0xFF) << 24) | shifted) >>> 0;
-        // Same base under the same trigger set → don't duplicate.
-        if (this.slots.some((s) => !cskSlotIsEmpty(s) && (s.base & 0xFFFFFF) === (base & 0xFFFFFF)
-            && s.mods === mods)) {
+        // Same base under the same trigger set (any OS) → don't duplicate.
+        if (this.slots.some((s) => !cskSlotIsEmpty(s) && !s.os && !s.wild
+            && (s.base & 0xFFFFFF) === (base & 0xFFFFFF) && s.mods === mods)) {
             toast(`${trigText(mods)} on that base key is already mapped`, true);
             return;
         }
         this.addPair({ base: base >>> 0, shifted: shifted >>> 0, mods, keep: !!p.keep });
+    }
+
+    /** Load the "Mac shortcuts on Windows" pack into free slots, skipping rows that already exist. */
+    async addPack() {
+        const empty = (i) => ({ slot: i, base: 0, shifted: 0, mods: MOD_SHIFT_ONLY, keep: false });
+        let added = 0, existing = 0, noRoom = 0;
+        for (const { src, ...row } of OS_PACK) {
+            if (this.slots.some((s) => !cskSlotIsEmpty(s) && s.shifted && cskClash(s, row))) { existing++; continue; }
+            const i = this.freeSlot();
+            if (i < 0) { noRoom++; continue; }
+            this.slots[i] = { slot: i, ...row };
+            await this.writeSlot(i, empty(i));
+            if (cskSlotIsEmpty(this.slots[i])) return;     // write failed: its toast already says why
+            added++;
+        }
+        const skip = existing ? `, ${existing} already there` : '';
+        if (noRoom) toast(`${OS_PACK_LABEL}: added ${added}${skip}; ${noRoom} did not fit (${this.slotCount} slots). Delete some slots and load it again`, true);
+        else toast(`${OS_PACK_LABEL}: added ${added} of ${OS_PACK.length}${skip}`);
     }
 
     async clearSlot(i) {
@@ -134,6 +169,45 @@ export class ZmkShiftTab {
         if (!mods) { toast('A mod morph needs at least one trigger modifier', true); return; }
         const before = { ...s };
         s.mods = mods;
+        this.writeSlot(i, before);
+    }
+
+    /** Set OS condition; picking an OS turns count-keymap-mods on (the point of an OS row). */
+    setOs(i, os) {
+        const before = { ...this.slots[i] };
+        const s = this.slots[i];
+        s.os = os;
+        if (os && !before.os) s.count = true;
+        this.writeSlot(i, before);
+    }
+
+    toggleCount(i) {
+        const before = { ...this.slots[i] };
+        this.slots[i].count = !before.count;
+        this.writeSlot(i, before);
+    }
+
+    /** Any key on: base and replacement key become the placeholder (only mods matter).
+     * Off: both sides go back to "pick a key". */
+    toggleWild(i) {
+        const s = this.slots[i];
+        const before = { ...s };
+        if (!s.wild) {
+            s.wild = true;
+            s.base = WILD_KEY;
+            s.shifted = (((s.shifted >>> 24) << 24) | WILD_KEY) >>> 0;
+        } else {
+            s.wild = false;
+            s.base = 0;
+            s.shifted = 0;
+        }
+        this.writeSlot(i, before);
+    }
+
+    toggleReplMod(i, bit) {
+        const s = this.slots[i];
+        const before = { ...s };
+        s.shifted = ((((s.shifted >>> 24) ^ bit) << 24) | WILD_KEY) >>> 0;
         this.writeSlot(i, before);
     }
 
@@ -164,7 +238,8 @@ export class ZmkShiftTab {
     pairCard(i) {
         const s = this.slots[i];
         const live = !cskSlotIsEmpty(s) && s.base !== 0 && s.shifted !== 0;
-        const label = (u) => outText({ action: 1, param1: u }, 'zmk.cskShifted');
+        const osRow = !!(s.os || s.wild);
+        const label = osRow ? (u) => usageCap(u) : (u) => outText({ action: 1, param1: u }, 'zmk.cskShifted');
         const trig = trigText(s.mods);
         const tile = (side, value, hint) => el('div', {},
             el('div', { class: 'note faint', text: hint }),
@@ -176,6 +251,40 @@ export class ZmkShiftTab {
             }, value ? outCell({ action: 1, param1: value }, side === 'base' ? 'zmk.cskBase' : 'zmk.cskShifted') : `${hint}…`));
 
         const dup = cskDuplicateOf(this.slots, i);
+        const wild = this.osk && s.wild;
+        const rmods = (s.shifted >>> 24) & 0x0F;
+        const anyKeyTile = el('div', {},
+            el('div', { class: 'note faint', text: 'base key' }),
+            el('div', { class: 'code', style: 'min-width:72px; min-height:44px; font-size:1.05em; display:flex; align-items:center; justify-content:center; padding:0 10px',
+                text: 'any key' }));
+        const replMods = el('div', {},
+            el('div', { class: 'note faint', text: 'replacement mods + same key' }),
+            el('div', { style: 'display:flex; gap:4px', role: 'group', 'aria-label': `Slot ${i} replacement modifiers` },
+                ...TRIGGER_MODS.map((t) => el('button', {
+                    class: 'chip' + (rmods & t.bit ? ' on' : ''),
+                    style: 'min-height:44px; min-width:44px; font-size:1.05em',
+                    title: t.name, 'aria-pressed': String(!!(rmods & t.bit)),
+                    text: t.glyph,
+                    onclick: () => this.toggleReplMod(i, t.bit),
+                }))));
+        const osSel = this.osk ? el('label', { class: 'note', style: 'display:flex; flex-direction:column; gap:2px' },
+            'OS',
+            el('select', {
+                'aria-label': `Slot ${i} OS condition`, 'data-os': String(s.os || 0),
+                style: 'min-height:44px',
+                onchange: (e) => this.setOs(i, Number(e.target.value)),
+            }, ...[[OS_ANY, 'Any OS'], [OS_MAC, 'Mac'], [OS_PC, 'Windows']].map(([v, t]) =>
+                el('option', { value: String(v), selected: (s.os || 0) === v, text: t })))) : null;
+        const anyKey = this.osk ? el('label', {
+            class: 'note', style: 'display:flex; gap:6px; align-items:center; padding-bottom:12px',
+            title: 'match every key under the trigger modifiers; only the modifiers change, the pressed key is kept',
+        }, el('input', { type: 'checkbox', checked: !!s.wild, onchange: () => this.toggleWild(i) }),
+        'any key') : null;
+        const countMods = this.osk ? el('label', {
+            class: 'note', style: 'display:flex; gap:6px; align-items:center; padding-bottom:12px',
+            title: 'Makes &kp ⌘C keys and combo outputs count as the trigger, not just held mods. On by default for OS rows.',
+        }, el('input', { type: 'checkbox', checked: !!s.count, onchange: () => this.toggleCount(i) }),
+        'count keymap mods') : null;
         const chips = this.morph ? el('div', {},
             el('div', { class: 'note faint', text: 'trigger (held exactly)' }),
             el('div', { style: 'display:flex; gap:4px', role: 'group', 'aria-label': `Slot ${i} trigger modifiers` },
@@ -205,15 +314,30 @@ export class ZmkShiftTab {
                     onclick: () => this.clearSlot(i),
                 })),
             el('div', { style: 'display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap' },
+                osSel,
                 chips,
-                tile('base', s.base, 'base key'),
+                wild ? anyKeyTile : tile('base', s.base, 'base key'),
                 el('span', { style: 'font-size:1.4em; padding-bottom:10px', text: `${trig}→` }),
-                tile('shifted', s.shifted, 'replacement'),
+                wild ? replMods : tile('shifted', s.shifted, 'replacement'),
+                anyKey,
+                countMods,
                 keep),
             dup >= 0 ? el('div', {
                 class: 'note', role: 'alert', 'data-dup': String(dup),
-                text: `Duplicate: slot ${dup} already maps ${trig} + this base key, so one of them never fires. Change the trigger or the key.`,
+                text: s.wild
+                    ? `Duplicate: slot ${dup} already maps ${trig} + any key${s.os ? ` on ${OS_NAMES[s.os]}` : ''}, so one of them never fires. Change the trigger or the OS.`
+                    : `Duplicate: slot ${dup} already maps ${trig} + this base key${s.os || this.slots[dup].os ? ' for an overlapping OS' : ''}, so one of them never fires. Change the trigger, the OS or the key.`,
             }) : null);
+    }
+
+    osNote() {
+        if (!this.osk) {
+            return el('div', { class: 'note faint', 'data-os-note': 'none',
+                text: 'This firmware has no OS-aware shortcuts (OSK_CAPS); update it for Mac/Windows rows, any-key rows and the Mac shortcuts pack.' });
+        }
+        const mode = this.osMode === OS_MAC ? 'Mac' : this.osMode === OS_PC ? 'Windows (PC)' : 'unknown (no switch-layout module)';
+        return el('div', { class: 'note', 'data-os-note': 'on',
+            text: `Board OS mode: ${mode}. The Control layer's &sw_layout key toggles it. Author rows in Mac terms (⌘C); a Windows row only fires while the board is in PC mode.` });
     }
 
     render() {
@@ -244,9 +368,15 @@ export class ZmkShiftTab {
                     class: 'btn small', text: p.label, title: p.hint,
                     onclick: () => this.addPreset(p),
                 })),
+                this.osk ? el('button', {
+                    class: 'btn small primary', text: OS_PACK_LABEL, 'data-os-pack': '1',
+                    title: `${OS_PACK.length} slots: ⌘ + any key → ⌃ + same key, plus Windows exceptions (⌘Q → Alt+F4, ⌘← → Home, ⌥← → Ctrl+←, ...). Skips rows already present.`,
+                    onclick: () => this.addPack(),
+                }) : null,
                 el('span', { class: 'note faint', text: `${used}/${this.slotCount} slots used` }),
                 ),
             this.bar,
+            this.morph ? this.osNote() : null,
             el('div', { class: 'note faint',
                 text: 'A slot fires only when exactly its trigger modifiers are held, so ⇧ , and ⌃⇧ , are separate slots. '
                     + 'The replacement picker\'s modifier row rides the replacement, e.g. pick R with ⇧ for h→R. '

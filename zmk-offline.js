@@ -18,29 +18,29 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=67';
+import { CH, V } from './flaskproto.js?v=68';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=67';
-import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=67';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=67';
-import { isUnassignable } from './behavior-catalog.js?v=67';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=68';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=68';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=68';
+import { isUnassignable } from './behavior-catalog.js?v=68';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
-         describeChanges, BASE_PREFIX } from './offline.js?v=67';
-import { saveState } from './save-state.js?v=67';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=67';
-import { kpParam, cpParam, usageFromName, layerLabel } from './zmk-keycodes.js?v=67';
+         describeChanges, BASE_PREFIX } from './offline.js?v=68';
+import { saveState } from './save-state.js?v=68';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=68';
+import { kpParam, cpParam, usageFromName, layerLabel } from './zmk-keycodes.js?v=68';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=67';
-import { decodeCskSlot, encodeCskSlot, cskMorphCaps, cskNeedsMorph } from './zmk-csk-codec.js?v=67';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=68';
+import { decodeCskSlot, encodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps } from './zmk-csk-codec.js?v=68';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=67';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=67';
+    from './zmk-tapdance-codec.js?v=68';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=68';
 import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
-         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=67';
+         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=68';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=67';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=68';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 
@@ -849,6 +849,8 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
         if (ch === CH.customShift && id === V.cskSlotCount) return this.ws.zmk.csk.length;
         if (ch === CH.customShift && id === V.cskMorphCaps) return 1; // the sim speaks the 11-byte frame
+        if (ch === CH.customShift && id === V.cskOskCaps) return 1;   // ...and the OS flags (bits 1-4)
+        if (ch === CH.customShift && id === V.cskOsMode) return 1;    // the sim board is in Mac mode
         if (ch === CH.tapDance && id === V.tdSlotCount) return this.ws.zmk.tapdance.length;
         if (ch === CH.tapDance && id === V.tdTaps) return dims(this.ws.family).tdTaps;
         // Ball swap "effective" is live-only (base XOR momentary holds) —
@@ -1171,6 +1173,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
             const d = decodeCskSlot(payload);
             if (!zmk.csk[d.slot]) return payload;
             zmk.csk[d.slot] = { base: d.base, shifted: d.shifted, mods: d.mods, keep: d.keep };
+            for (const k of ['os', 'wild', 'count']) if (d[k]) zmk.csk[d.slot][k] = d[k];
             this.ws.zmkDirty.cskSlot[d.slot] = true;
             saveWorkspace(this.ws);
             return encodeCskSlot(d.slot, zmk.csk[d.slot], true);
@@ -1666,12 +1669,18 @@ async function zmkSyncExtrasInner(app, ws) {
 
     // Custom shift: one slot frame per edited slot (same frame the Shift tab sends).
     ok = [];
-    let morph;   // probed once, only if a slot is queued
+    let morph, osk;   // probed once, only if a slot needs them
     for (const slot of Object.keys(d.cskSlot)) {
         try {
             if (!ws.zmk.csk[slot]) throw new Error('unhandled');
-            // Shift-only firmware would echo OK but store a plain Shift slot.
-            if (cskNeedsMorph(ws.zmk.csk[slot])) {
+            // Firmware without OSK_CAPS would drop the OS/wildcard/count bits.
+            if (cskNeedsOs(ws.zmk.csk[slot])) {
+                osk ??= await cskOskCaps(app.flask);
+                if (!osk) {
+                    fail.push(`shift ${slot}: needs OS-aware firmware, still queued`);
+                    continue;
+                }
+            } else if (cskNeedsMorph(ws.zmk.csk[slot])) {   // Shift-only firmware would echo OK but store a plain Shift slot
                 morph ??= await cskMorphCaps(app.flask);
                 if (!morph) {
                     fail.push(`shift ${slot}: needs mod-morph firmware, still queued`);
