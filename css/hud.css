@@ -31,10 +31,20 @@
   body.hud-pip .hud .layer-strip button { font-size: 9px; padding: 2px 5px; }
 }
 
-/* Electron panel: the window is transparent + vibrancy 'hud', so the page
- * paints no background and the OS material shows through. */
-body.hud-electron { background: transparent; }
-body.hud-electron .hud { background: transparent; box-shadow: none; border: 0; }
+/* Electron overlay: transparent click-through window (desktop/main.js sets
+ * its opacity). The card paints the app theme's surface; its height drives
+ * the window height (hud.js ResizeObserver), so no min-height here. Close
+ * button and hint are dropped: the menu and shortcut own show/hide. */
+body.hud-electron { background: transparent; margin: 0; overflow: hidden; }
+body.hud-electron .hud {
+  min-height: 0;
+  border-radius: 12px;
+  border: 1px solid var(--border2);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  padding: 8px;
+}
+body.hud-electron .hud .hud-top,
+body.hud-electron .hud .hint { display: none; }
 
 /* ---- Totem-Flask window chrome (titleBarStyle hiddenInset) ----
  * desktop/preload.js adds .totem-desktop to <html>. The traffic lights sit

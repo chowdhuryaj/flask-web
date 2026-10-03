@@ -6,8 +6,8 @@
 // Left out on purpose: ⌥← ⌥→ (the PC swapper holds Alt itself, slk_wleft/wright
 // already send Ctrl+arrows) and ⌘⌫ (the wildcard gives Ctrl+⌫).
 
-import { usageFromName } from './zmk-keycodes.js?v=69';
-import { MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI, OS_PC, WILD_KEY } from './zmk-csk-codec.js?v=69';
+import { usageFromName } from './zmk-keycodes.js?v=70';
+import { MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI, OS_PC, WILD_KEY } from './zmk-csk-codec.js?v=70';
 
 const C = MOD_CTL, S = MOD_SFT, A = MOD_ALT, G = MOD_GUI;
 // [trigger mods, base, replacement, replacement mods, source note]

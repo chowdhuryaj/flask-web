@@ -20,9 +20,9 @@
 //
 // Env: FLASK_DESKTOP_SMOKE=1  smoke run (implies no devices), prints probes, exits
 //      FLASK_NO_DEVICE=1      refuse every device grant (safe to launch with a keyboard plugged in)
-//      TOTEM_NO_PANEL=1       use the focusable:false HUD fallback instead of type:'panel'
+//      TOTEM_NO_PANEL=1       HUD as a plain focusable:false window instead of type:'panel'
 
-const { app, BrowserWindow, Menu, protocol, session, screen, dialog, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, protocol, session, screen, dialog, shell, ipcMain, globalShortcut } = require('electron');
 const { execFile } = require('child_process');
 const fs = require('fs');
 const http = require('http');
@@ -186,73 +186,113 @@ app.on('web-contents-created', (_e, contents) => {
     contents.on('will-navigate', (e, url) => { if (!isAppUrl(url)) e.preventDefault(); });
 });
 
-// ---- HUD panel -------------------------------------------------------------
+// ---- HUD overlay -----------------------------------------------------------
+//
+// The renderer opens the HUD as a same-origin popup (hud.js:
+// window.open('about:blank', 'flask-hud')) and paints the live keymap into it
+// from its own single device connection; this process owns the window: flags,
+// corner placement on the cursor's display, menu, global shortcut, settings.
 
-const HUD_SNAP = 32;   // px, parity with native HUDController
-const HUD_MARGIN = 12;
-const hudBoundsFile = () => path.join(app.getPath('userData'), 'hud-bounds.json');
+const hudPrefs = require('./hud-prefs');
+const HUD_SHORTCUT = 'Control+Alt+Command+K';
 const usePanel = process.platform === 'darwin' && !process.env.TOTEM_NO_PANEL;
+const hudPrefsFile = () => path.join(app.getPath('userData'), 'hud.json');
+let hudSettings = null;   // loaded in start()
+let hudWin = null;
+let hudPlacedOn = '';     // display id + workArea the HUD was last placed on
+let hudFollow = null;
 
-function loadHudBounds() {
-    try {
-        const b = JSON.parse(fs.readFileSync(hudBoundsFile(), 'utf8'));
-        const ok = ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(b[k]));
-        // Ignore a frame that no longer sits on any attached display.
-        const visible = ok && screen.getAllDisplays().some((d) => {
-            const w = d.workArea;
-            return b.x < w.x + w.width && b.x + b.width > w.x && b.y < w.y + w.height && b.y + b.height > w.y;
-        });
-        return visible ? b : null;
-    } catch { return null; }
-}
-
-function snapHud(win) {
-    const b = win.getBounds();
-    const wa = screen.getDisplayMatching(b).workArea;
-    const left = b.x - wa.x, right = wa.x + wa.width - (b.x + b.width);
-    const top = b.y - wa.y, bottom = wa.y + wa.height - (b.y + b.height);
-    if (Math.min(left, right) > HUD_SNAP || Math.min(top, bottom) > HUD_SNAP) return; // not near a corner
-    const x = left <= right ? wa.x + HUD_MARGIN : wa.x + wa.width - b.width - HUD_MARGIN;
-    const y = top <= bottom ? wa.y + HUD_MARGIN : wa.y + wa.height - b.height - HUD_MARGIN;
-    if (x !== b.x || y !== b.y) win.setBounds({ ...b, x, y }, true);
-}
-
-function wireHud(win) {
-    win.setAlwaysOnTop(true, 'floating');
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    let timer;
-    const settle = () => {
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-            if (win.isDestroyed()) return;
-            snapHud(win);
-            try { fs.writeFileSync(hudBoundsFile(), JSON.stringify(win.getBounds())); } catch { /* best effort */ }
-        }, 150);
-    };
-    win.on('moved', settle);
-    win.on('resized', settle);
+/** Move the HUD to its corner of the display under the cursor. Re-places only
+ * when that display (or its workArea: dock, resolution, add/remove) changed,
+ * unless forced. */
+function placeHud(force) {
+    if (!hudWin || hudWin.isDestroyed()) return;
+    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const key = `${d.id}:${JSON.stringify(d.workArea)}`;
+    if (!force && key === hudPlacedOn) return;
+    hudPlacedOn = key;
+    const [, height] = hudWin.getSize();
+    hudWin.setBounds(hudPrefs.cornerBounds(d.workArea, { width: hudSettings.width, height }, hudSettings.corner));
 }
 
 function hudWindowOptions() {
-    const saved = loadHudBounds();
+    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const b = hudPrefs.cornerBounds(d.workArea, { width: hudSettings.width, height: Math.round(hudSettings.width * 0.55) },
+        hudSettings.corner);
     return {
-        width: 460, height: 300, minWidth: 220, minHeight: 140,
-        ...(saved || {}),
+        ...b,
+        show: false,              // shown inactive in wireHud: never steals focus
         frame: false,
         transparent: true,
-        vibrancy: 'hud',
-        hasShadow: true,
-        roundedCorners: true,
-        resizable: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        resizable: false,
+        movable: false,
         minimizable: false,
         maximizable: false,
         fullscreenable: false,
+        focusable: false,
         skipTaskbar: true,
+        hiddenInMissionControl: true,
         title: 'Totem-Flask HUD',
-        // Non-activating NSPanel: clicking the HUD does not steal focus from
-        // the app being typed in. focusable:false is the documented fallback.
-        ...(usePanel ? { type: 'panel' } : { focusable: false }),
+        // Non-activating NSPanel: the level that can sit over full-screen apps.
+        ...(usePanel ? { type: 'panel' } : {}),
         alwaysOnTop: true,
+        webPreferences: { backgroundThrottling: false },
+    };
+}
+
+function wireHud(win) {
+    hudWin = win;
+    hudPlacedOn = '';
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.setIgnoreMouseEvents(true, { forward: true });   // click-through
+    win.setOpacity(hudSettings.opacity);
+    placeHud(true);
+    win.showInactive();
+    // ponytail: 200 ms cursor poll; Electron has no cursor-moved-display event.
+    hudFollow = setInterval(() => placeHud(false), 200);
+    win.on('closed', () => { clearInterval(hudFollow); hudFollow = null; hudWin = null; });
+}
+
+function saveHudSettings(patch) {
+    Object.assign(hudSettings, patch);
+    hudPrefs.save(hudPrefsFile(), hudSettings);
+    if (hudWin && !hudWin.isDestroyed()) {
+        hudWin.setOpacity(hudSettings.opacity);
+        placeHud(true);
+    }
+}
+
+/** Show HUD on/off. From the menu or shortcut the renderer is told to open
+ * or close it; from the renderer (its Pop out button) only the setting moves. */
+function setHudShown(shown, mainWin, fromRenderer) {
+    saveHudSettings({ shown });
+    for (const id of ['hud-show', 'hud-show-app']) {
+        const item = Menu.getApplicationMenu()?.getMenuItemById(id);
+        if (item) item.checked = shown;
+    }
+    if (!fromRenderer && mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('hud-set', shown);
+}
+
+function hudMenu(getWin) {
+    const radio = (label, key, value) => ({
+        label, type: 'radio', checked: hudSettings[key] === value,
+        click: () => saveHudSettings({ [key]: value }),
+    });
+    const title = (c) => c.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+    return {
+        label: 'HUD',
+        submenu: [
+            { id: 'hud-show', label: 'Show HUD', type: 'checkbox', checked: hudSettings.shown,
+                accelerator: HUD_SHORTCUT, registerAccelerator: false,   // the global shortcut owns it
+                click: (item) => setHudShown(item.checked, getWin(), false) },
+            { type: 'separator' },
+            { label: 'Corner', submenu: hudPrefs.CORNERS.map((c) => radio(title(c), 'corner', c)) },
+            { label: 'Size', submenu: Object.entries(hudPrefs.SIZES).map(([n, w]) => radio(`${n} (${w} px)`, 'width', w)) },
+            { label: 'Opacity', submenu: hudPrefs.OPACITIES.map((o) => radio(`${Math.round(o * 100)}%`, 'opacity', o)) },
+        ],
     };
 }
 
@@ -449,6 +489,10 @@ function buildMenu(getWin) {
             submenu: [
                 { role: 'about' }, updates, ...imp,
                 { type: 'separator' },
+                { id: 'hud-show-app', label: 'Show HUD', type: 'checkbox', checked: hudSettings.shown,
+                    accelerator: HUD_SHORTCUT, registerAccelerator: false,
+                    click: (item) => setHudShown(item.checked, getWin(), false) },
+                { type: 'separator' },
                 { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
                 { type: 'separator' },
                 { role: 'quit' },
@@ -459,6 +503,7 @@ function buildMenu(getWin) {
         },
         { role: 'editMenu' },
         { role: 'viewMenu' },
+        hudMenu(getWin),
         { role: 'windowMenu' },
         ...(isMac ? [] : [{ role: 'help', submenu: [{ role: 'about' }] }]),
     ];
@@ -475,10 +520,27 @@ async function start() {
     await app.whenReady();
     app.setAboutPanelOptions({ applicationName: 'Totem-Flask', applicationVersion: app.getVersion() });
     let win = null;
+    hudSettings = hudPrefs.load(hudPrefsFile());
     if (!process.env.FLASK_SKIP_MENU) buildMenu(() => win);
     registerAppProtocol();
     wireSecurity(session.defaultSession);
     ipcMain.handle('native-flask-running', (e) => (isAppUrl(e.senderFrame.url) ? nativeFlaskRunning() : false));
+    ipcMain.handle('hud-shown', (e) => isAppUrl(e.senderFrame.url) && hudSettings.shown);
+    ipcMain.on('hud-set-shown', (e, v) => { if (isAppUrl(e.senderFrame.url)) setHudShown(!!v, win, true); });
+    // The popup reports its content height at the current width; fit to it.
+    ipcMain.on('hud-fit', (e, h) => {
+        if (!isAppUrl(e.senderFrame.url) || !hudWin || hudWin.isDestroyed() || !Number.isFinite(h)) return;
+        hudWin.setSize(hudSettings.width, Math.max(60, Math.ceil(h)));
+        placeHud(true);   // cornerBounds clamps a too-tall HUD to the display
+    });
+    for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
+        screen.on(ev, () => placeHud(true));
+    }
+    if (!SMOKE) {
+        const ok = globalShortcut.register(HUD_SHORTCUT, () => setHudShown(!hudSettings.shown, win, false));
+        if (!ok) console.warn(`HUD shortcut ${HUD_SHORTCUT} is taken by another app`);
+        app.on('will-quit', () => globalShortcut.unregisterAll());
+    }
 
     win = new BrowserWindow({
         width: 1480,
@@ -522,9 +584,9 @@ async function start() {
     win.on('closed', () => app.quit());
 
     // The HUD opens `window.open('about:blank', 'flask-hud', …)`: a same-origin
-    // popup, so it shares this renderer's HID/serial session (no IPC). Style it
-    // as a non-activating always-on-top panel. Anything else is refused;
-    // plain https links go to the default browser.
+    // popup, so it shares this renderer's HID/serial session (no second
+    // connection). Styled as a click-through always-on-top panel (HUD overlay
+    // above). Anything else is refused; plain https links go to the browser.
     win.webContents.setWindowOpenHandler(({ frameName, url }) => {
         if (frameName === 'flask-hud') return { action: 'allow', overrideBrowserWindowOptions: hudWindowOptions() };
         if (/^https:\/\//.test(url)) shell.openExternal(url);
@@ -535,6 +597,8 @@ async function start() {
         wireHud(child);
         child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     });
+    // A reload drops the renderer's handle on the popup; don't leave it orphaned.
+    win.webContents.on('did-start-loading', () => { if (hudWin && !hudWin.isDestroyed()) hudWin.close(); });
 
     win.loadURL(`${ORIGIN}/`);
 
@@ -553,7 +617,7 @@ async function start() {
 }
 
 /** Smoke mode: prove the page loads on the app origin with the device APIs
- * present, the HUD panel opens, and nothing logs a console error. Prints probe
+ * present, the HUD overlay opens in its corner, and nothing logs a console error. Prints probe
  * lines and exits. Never grants a device (NO_DEVICE). */
 function smoke(win) {
     const errors = [];
@@ -584,29 +648,23 @@ function smoke(win) {
             '!!window.open("about:blank", "flask-hud", "popup,width=460,height=300")');
         setTimeout(async () => {
             const hud = BrowserWindow.getAllWindows().find((w) => w !== win);
-            // Corner snap + persisted frame: drop the HUD 20 px off the
-            // bottom-left corner of its display and expect 12 px margins.
-            let snap = null;
+            // Corner placement on the cursor's display (12 px in).
+            let corner = null;
             if (hud) {
-                const wa = screen.getDisplayMatching(hud.getBounds()).workArea;
-                const b = hud.getBounds();
-                hud.setBounds({ ...b, x: wa.x + 20, y: wa.y + wa.height - b.height - 20 });
-                await new Promise((r) => setTimeout(r, 900));
-                let saved = null;
-                try { saved = JSON.parse(fs.readFileSync(hudBoundsFile(), 'utf8')); } catch { /* none */ }
+                const wa = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
                 const nb = hud.getBounds();
-                snap = { x: nb.x - wa.x, bottomGap: wa.y + wa.height - (nb.y + nb.height), saved: !!saved && saved.x === nb.x && saved.y === nb.y };
+                const want = hudPrefs.cornerBounds(wa, nb, hudSettings.corner);
+                corner = { at: hudSettings.corner, ok: nb.x === want.x && nb.y === want.y, width: nb.width };
             }
             const hudProbe = JSON.stringify({
                 opened: hudOpened,
                 window: !!hud,
                 alwaysOnTop: hud ? hud.isAlwaysOnTop() : false,
                 panel: !!hud && usePanel,
-                focusableFallback: !!hud && !usePanel,
+                focusable: hud ? hud.isFocusable() : null,
                 hudFocused: hud ? hud.isFocused() : null,
-                mainFocused: win.isFocused(),
                 title: hud ? hud.getTitle() : null,
-                snap,
+                corner,
             });
             console.log(`FLASK_DESKTOP_SMOKE ${ORIGIN}/ ${probe}`);
             console.log(`FLASK_DESKTOP_SMOKE devices ${devices}`);

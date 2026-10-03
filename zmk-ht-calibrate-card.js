@@ -5,15 +5,15 @@
 // Opened from Behaviour › Hold timing, the Keymap per-key timing card and the
 // Test tab. Needs firmware with 0x54; otherwise it says so.
 
-import { el, modal, toast } from './ui.js?v=69';
-import { board } from './board.js?v=69';
-import { saveState } from './save-state.js?v=69';
-import { decode, tapHoldSpecOf, holdTapParts } from './behavior-catalog.js?v=69';
-import { HOLDTAP_FLAVORS, handsOf, triggerPreset, POSITIONAL_MODES, LOG_REASONS, decodeHoldtapSlot, HT_LOG } from './zmk-holdtap-codec.js?v=69';
+import { el, modal, toast } from './ui.js?v=70';
+import { board } from './board.js?v=70';
+import { saveState } from './save-state.js?v=70';
+import { decode, tapHoldSpecOf, holdTapParts } from './behavior-catalog.js?v=70';
+import { HOLDTAP_FLAVORS, handsOf, triggerPreset, POSITIONAL_MODES, LOG_REASONS, decodeHoldtapSlot, HT_LOG } from './zmk-holdtap-codec.js?v=70';
 import {
     hasFeature, readPositional, startLogPoll, applyRecommendation, analyzeHoldtap, usageChar,
     buildPassage, holdPrompts, diffTyped, typedEnough, MIN_TAP_SAMPLES,
-} from './zmk-ht-calibrate.js?v=69';
+} from './zmk-ht-calibrate.js?v=70';
 
 const CH = 0x2A;
 const ADAPTER = 'zmk-studio';

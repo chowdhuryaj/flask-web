@@ -6,7 +6,7 @@
 import {
     HT_POSITIONAL, HT_LOG, decodeHoldtapLog, decodeHoldtapSlot, encodeHoldtapSlot,
     encodePositional, decodePositional,
-} from './zmk-holdtap-codec.js?v=69';
+} from './zmk-holdtap-codec.js?v=70';
 
 const CH = 0x2A;
 const SLOT = 0x50;

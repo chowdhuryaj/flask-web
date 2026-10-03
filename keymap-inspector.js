@@ -11,15 +11,15 @@
 // The inspector never advances the selection (it edits THIS key). A plain pick
 // from the palette still auto-advances; that is board.assign's default.
 
-import { el, toast } from './ui.js?v=69';
-import { board } from './board.js?v=69';
-import { legendOf } from './legend.js?v=69';
-import { layerIndex } from './keymap-layers.js?v=69';
-import { surfaceEntries } from './binding-picker.js?v=69';
-import { keyTimingCard } from './zmk-holdtiming-card.js?v=69';
-import { zmkBehaviors } from './zmk-keycodes.js?v=69';
+import { el, toast } from './ui.js?v=70';
+import { board } from './board.js?v=70';
+import { legendOf } from './legend.js?v=70';
+import { layerIndex } from './keymap-layers.js?v=70';
+import { surfaceEntries } from './binding-picker.js?v=70';
+import { keyTimingCard } from './zmk-holdtiming-card.js?v=70';
+import { zmkBehaviors } from './zmk-keycodes.js?v=70';
 import { timingBackendNow, TIMING_PARAM, HOLDTAP, decode, encode, composeTapHold, tapHoldSpecOf,
-    homeRowPlan, holdTapParts, modsText } from './behavior-catalog.js?v=69';
+    homeRowPlan, holdTapParts, modsText } from './behavior-catalog.js?v=70';
 
 const ADAPTER = 'zmk-studio';
 const MODS = [['Ctl', '⌃', 0x01], ['Sft', '⇧', 0x02], ['Alt', '⌥', 0x04], ['Gui', '⌘', 0x08]];

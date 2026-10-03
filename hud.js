@@ -1,11 +1,15 @@
-// HUD: live layer + keymap + pressed keys, floating over other apps via
+// HUD: live layer + keymap + pressed keys, floating over other apps. In the
+// Totem-Flask desktop app it is a click-through always-on-top popup that
+// desktop/main.js pins to a corner of the cursor's display; in a browser,
 // Document Picture-in-Picture (Chromium 116+), with an in-page draggable
 // corner-snapping overlay as fallback. Poll cadences: ~15 Hz layer + key
-// state, status chips every 4th tick.
+// state, status chips every 4th tick. All data comes over the page's own
+// device connection; the popup never opens one.
 
-import { el } from './ui.js?v=69';
-import { CH, V } from './flaskproto.js?v=69';
-import { renderKeyboardSVG } from './board.js?v=69';
+import { el } from './ui.js?v=70';
+import { CH, V } from './flaskproto.js?v=70';
+import { renderKeyboardSVG } from './board.js?v=70';
+import { appearance } from './themes.js?v=70';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;
@@ -13,6 +17,7 @@ const MARGIN = 12;
 export class HUD {
     constructor(app) {
         this.app = app;      // { hid, flask, profile, caps, keymap, layerCount, readKeyState }
+        appearance.addEventListener('appearance', () => this._syncTheme());
         this.open = false;
         this.win = null;     // PiP Window or null (fallback overlay)
         this.overlay = null;
@@ -25,8 +30,15 @@ export class HUD {
         this._busy = false;
     }
 
+    /** User toggle (Pop out, palette): also remembered by the desktop app. */
     async toggle() {
-        if (this.open) { this.close(); return; }
+        await this.setOpen(!this.open);
+        window.totemFlask?.setHudShown?.(this.open);
+    }
+
+    async setOpen(v) {
+        if (v === this.open) return;
+        if (!v) { this.close(); return; }
         this.open = true;
         this.rootEl = this._buildRoot();
         // Document PiP needs real browser UI. Electron exposes the global
@@ -37,9 +49,8 @@ export class HUD {
         // feel, bench 5 ask). The in-page overlay stays the last fallback.
         if (navigator.userAgent.includes('Electron')) {
             try {
-                // Frame (size, position, corner snap) is owned by the main
-                // process (desktop/main.js writes hud-bounds.json); these
-                // features are only the first-run default.
+                // Frame (size, corner, display, opacity) is owned by the
+                // main process; these features are placeholders.
                 const feats = 'popup,width=460,height=300';
                 const w = window.open('about:blank', 'flask-hud', feats);
                 if (w) {
@@ -47,9 +58,12 @@ export class HUD {
                     this._electronWin = true;
                     this._dressWindow(w);
                     w.document.title = 'Totem-Flask HUD';
-                    // Frameless window: the whole HUD is the drag handle,
-                    // controls opt out (app-region CSS in styles.css).
+                    // Click-through overlay: compact look (css/hud.css), and
+                    // the window height follows the content at its width.
                     w.document.body.classList.add('hud-electron');
+                    this._fit = new w.ResizeObserver(() =>
+                        window.totemFlask?.hudFit?.(this.rootEl.getBoundingClientRect().height));
+                    this._fit.observe(this.rootEl);
                 }
             } catch {
                 this.win = null;
@@ -90,16 +104,24 @@ export class HUD {
                 win.document.head.append(sheet.ownerNode.cloneNode(true));
             }
         }
-        // Mirror any theme vars pinned on the main document root.
-        win.document.documentElement.style.cssText =
-            document.documentElement.style.cssText;
+        this._syncTheme();
         win.document.body.className = 'hud-pip';
         win.document.body.append(this.rootEl);
         win.addEventListener('pagehide', () => { if (this.open) this.close(); });
     }
 
+    /** Mirror the theme vars + mode pinned on the main document root. */
+    _syncTheme() {
+        const root = this.win?.document?.documentElement;
+        if (!root) return;
+        root.style.cssText = document.documentElement.style.cssText;
+        if (document.documentElement.dataset.theme) root.dataset.theme = document.documentElement.dataset.theme;
+    }
+
     close() {
         this.open = false;
+        this._fit?.disconnect();
+        this._fit = null;
         clearInterval(this._timer);
         this._timer = null;
         try { this.win?.close(); } catch { /* already closed */ }

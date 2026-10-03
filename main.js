@@ -2,27 +2,27 @@
 // runs the post-connect load sequence (handshake, family confirm, offline
 // replay, tabs), drives capability-gated tabs, themes, and the HUD.
 
-import { el, toast, modal } from './ui.js?v=69';
-import { diag } from './diag.js?v=69';
-import { FlaskHID } from './webhid.js?v=69';
-import { renderPreflight } from './preflight.js?v=69';
-import { FlaskProto, CH, V } from './flaskproto.js?v=69';
+import { el, toast, modal } from './ui.js?v=70';
+import { diag } from './diag.js?v=70';
+import { FlaskHID } from './webhid.js?v=70';
+import { renderPreflight } from './preflight.js?v=70';
+import { FlaskProto, CH, V } from './flaskproto.js?v=70';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=69';
-import { CommandPalette } from './command-palette.js?v=69';
-import { HUD } from './hud.js?v=69';
+         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=70';
+import { CommandPalette } from './command-palette.js?v=70';
+import { HUD } from './hud.js?v=70';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
          zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
-         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=69';
-import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=69';
-import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=69';
-import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=69';
-import { shell } from './app-shell.js?v=69';
-import { installCaptions, setCaptionGroup } from './caption.js?v=69';
-import { saveState, discardMessage } from './save-state.js?v=69';
-import { board } from './board.js?v=69';
-import { attachHoldtap } from './behavior-catalog.js?v=69';
-import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=69';
+         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=70';
+import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=70';
+import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=70';
+import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=70';
+import { shell } from './app-shell.js?v=70';
+import { installCaptions, setCaptionGroup } from './caption.js?v=70';
+import { saveState, discardMessage } from './save-state.js?v=70';
+import { board } from './board.js?v=70';
+import { attachHoldtap } from './behavior-catalog.js?v=70';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=70';
 
 function downloadText(filename, text) {
     const a = document.createElement('a');
@@ -201,6 +201,8 @@ async function loadZmkDevice(device) {
     if (stale()) return;
     buildTabs();
     if (TABS.length) await showTab(TABS[0].id);
+    // Desktop: bring the HUD back if it was showing last time.
+    if (!stale() && await window.totemFlask?.hudShown?.()) { await app.hud.setOpen(true); syncHudBtn(); }
 }
 
 /** Replay the ZMK-shaped half of the offline queue (slot edits + queued keymap). */
@@ -545,6 +547,16 @@ function init() {
     $('landing-connect').addEventListener('click', connectClick);
     $('hud-btn').addEventListener('click', async () => { await app.hud.toggle(); syncHudBtn(); });
     setInterval(syncHudBtn, 1000);   // the HUD can close itself (its own ✕, pagehide)
+    // Desktop menu / global shortcut (Show HUD). The HUD is live device
+    // state, so with no keyboard it waits for the next connect.
+    window.totemFlask?.onHudSet?.(async (on) => {
+        if (on && $('app-frame').dataset.mode !== 'device') {
+            toast('The HUD shows once the keyboard is connected.');
+            return;
+        }
+        await app.hud.setOpen(on);
+        syncHudBtn();
+    });
     // Black-box diagnostics: live transport/Studio event log + export —
     // the no-reflash crash-capture path (bench 5 ask). The ring runs
     // unconditionally from page load; this is just the window onto it.

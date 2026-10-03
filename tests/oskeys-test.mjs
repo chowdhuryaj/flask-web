@@ -3,10 +3,10 @@
 // offline sim + replay guard, backup round trip.
 import assert from 'node:assert/strict';
 import { encodeCskSlot, decodeCskSlot, cskSummary, cskDuplicateOf, cskNeedsOs, cskOskCaps, cskOsMode,
-    MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI, OS_MAC, OS_PC, WILD_KEY } from '../zmk-csk-codec.js?v=69';
-import { OS_PACK } from '../zmk-os-pack.js?v=69';
-import { usageFromName, usageCap } from '../zmk-keycodes.js?v=69';
-import { CH, V } from '../flaskproto.js?v=69';
+    MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI, OS_MAC, OS_PC, WILD_KEY } from '../zmk-csk-codec.js?v=70';
+import { OS_PACK } from '../zmk-os-pack.js?v=70';
+import { usageFromName, usageCap } from '../zmk-keycodes.js?v=70';
+import { CH, V } from '../flaskproto.js?v=70';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -121,7 +121,7 @@ eq([await cskOsMode(flaskWith(() => 0)), await cskOsMode(flaskWith(() => 1)), aw
 {
     globalThis.localStorage = { _m: new Map(), getItem(k) { return this._m.get(k) ?? null; },
         setItem(k, v) { this._m.set(k, String(v)); }, removeItem(k) { this._m.delete(k); } };
-    const { createZmkTemplate, ZmkOfflineFlask, zmkSyncExtras } = await import('../zmk-offline.js?v=69');
+    const { createZmkTemplate, ZmkOfflineFlask, zmkSyncExtras } = await import('../zmk-offline.js?v=70');
     const ws = createZmkTemplate('totem'); ws.key = 'os-test';
     const g = new ZmkOfflineFlask(ws);
     eq(await cskOskCaps(g), true, 'sim reports OSK_CAPS 1');
@@ -160,7 +160,7 @@ eq([await cskOsMode(flaskWith(() => 0)), await cskOsMode(flaskWith(() => 1)), aw
     eq([modern.sent, Object.keys(ws2.zmkDirty.cskSlot).length], [[2, 3], 0], 'OS-aware firmware takes them and drains the journal');
 
     // backup: new bits round trip, plain slots stay byte-identical
-    const { exportFlaskState, applyFlaskState } = await import('../zmk-export.js?v=69');
+    const { exportFlaskState, applyFlaskState } = await import('../zmk-export.js?v=70');
     const g2 = new ZmkOfflineFlask(createZmkTemplate('totem'));
     await g2.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(0, { base: Q, shifted: F4 }), 1);
     await g2.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(1, { base: Q, shifted: F4, mods: MOD_ALT, keep: true }), 1);

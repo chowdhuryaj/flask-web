@@ -29,6 +29,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "hud-prefs.js",
       "package.json"
     ],
     "extraResources": [

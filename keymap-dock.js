@@ -11,13 +11,13 @@
 //        binding?             (kind 'binding': ready to write),
 //        build?(tap)          (layer-tap / toggle: rebuilt around the key's tap)}
 
-import { el } from './ui.js?v=69';
-import { board, DRAG_TYPE } from './board.js?v=69';
-import { surfaceEntries } from './binding-picker.js?v=69';
-import { captureOneKey } from './zmk-capture.js?v=69';
-import { usageParts, kpParam } from './zmk-keycodes.js?v=69';
-import { legendOf } from './legend.js?v=69';
-import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText } from './behavior-catalog.js?v=69';
+import { el } from './ui.js?v=70';
+import { board, DRAG_TYPE } from './board.js?v=70';
+import { surfaceEntries } from './binding-picker.js?v=70';
+import { captureOneKey } from './zmk-capture.js?v=70';
+import { usageParts, kpParam } from './zmk-keycodes.js?v=70';
+import { legendOf } from './legend.js?v=70';
+import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText } from './behavior-catalog.js?v=70';
 
 const ADAPTER = 'zmk-studio';
 const KEY_A = 0x04;
