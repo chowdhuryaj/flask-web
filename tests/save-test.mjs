@@ -163,6 +163,9 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     eq(res.failures, [], 'old export applies with no failed sections');
     ok(res.applied > 0, 'writes happened');
     const again = await exportFlaskState(app);
+    // the fixture predates v19: drop the autoShift section the v19 sim adds
+    const autoShift = again.autoShift; delete again.autoShift; again.protocol = old.flask.protocol;
+    ok(autoShift, 'v19 sim exports autoShift');
     eq(Object.keys(again).sort(), Object.keys(old.flask).sort(), 'same sections');
     eq(old.flask.accel.takeoff, 321, 'fixture carries a non-default value');
     // Tap dances now export only their live prefix (apply pads the rest with NONE).

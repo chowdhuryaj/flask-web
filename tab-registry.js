@@ -24,6 +24,7 @@ import { ZmkLeaderTab } from './zmk-leader-tab.js?v=76';
 import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=76';
 import { ZmkShiftTab } from './zmk-shift-tab.js?v=76';
 import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=76';
+import { ZmkAutoshiftTab } from './zmk-autoshift-tab.js?v=76';
 import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=76';
 import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=76';
 import { ZmkTestTab } from './zmk-test-tab.js?v=76';
@@ -60,6 +61,8 @@ export const TAB_TABLE = [
     { id: 'zmk-combos', label: 'Combos', group: 'behaviour', screen: 'combos', when: (a) => a.caps.combos, ctor: ZmkCombosTab },
     { id: 'zmk-macros', label: 'Macros', group: 'behaviour', screen: 'macros', when: (a) => a.caps.macros, ctor: ZmkMacrosTab },
     { id: 'zmk-tapdance', label: 'Tap Dance', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.tapDance, ctor: ZmkTapDanceTab },
+    // flask_autoshift (0x2C, v19): caps.autoshift is zmkCapabilities (version >= 19).
+    { id: 'zmk-autoshift', label: 'Auto Shift', group: 'behaviour', screen: 'behaviours', when: (a) => zmk(a) && !!a.caps.autoshift, ctor: ZmkAutoshiftTab },
     // §1.3: "Shift" → "Shift Keys"; now the full mod-morph editor. The id stays
     // 'zmk-shift' (routes, saved tab, command palette ids); only the label moved.
     { id: 'zmk-shift', label: 'Mod Morph', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.customShift, ctor: ZmkShiftTab },

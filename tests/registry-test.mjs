@@ -36,7 +36,7 @@ const SPEC_1_3 = {
     'zmk-combos': 'behaviour', 'zmk-macros': 'behaviour', 'zmk-tapdance': 'behaviour',
     'zmk-shift': 'behaviour', 'zmk-leader': 'behaviour', 'zmk-modes': 'device', 'zmk-test': 'device',
     keyboard: 'device',
-    'zmk-holdtiming': 'behaviour', 'zmk-adaptive': 'behaviour',
+    'zmk-holdtiming': 'behaviour', 'zmk-adaptive': 'behaviour', 'zmk-autoshift': 'behaviour',
 };
 const groupIds = new Set(TAB_GROUPS.map((g) => g.id));
 for (const [id, group] of Object.entries(SPEC_1_3)) {
@@ -81,6 +81,20 @@ for (const ws of Object.keys(before)) {
     assert.ok(!beh('generic', true).includes('zmk-adaptive'), 'never without a ZMK family'); checks++;
     const t = TAB_TABLE.find((u) => u.id === 'zmk-adaptive');
     assert.equal(t.label, 'Adaptive'); assert.equal(t.screen, 'behaviours'); checks += 2;
+}
+// flask_autoshift: Behaviour › Auto Shift only with caps.autoshift (zmkCapabilities, v>=19), ZMK
+// only, right before Shift Keys; Adaptive still follows Shift Keys.
+{
+    const beh = (fam, as) => tabsFor({ family: fam, caps: { ...zmkCapabilities(fam, 19), adaptive: true, autoshift: as } })
+        .filter((t) => t.group === 'behaviour').map((t) => t.id);
+    assert.ok(beh('totem', true).includes('zmk-autoshift')); checks++;
+    assert.equal(beh('totem', true)[beh('totem', true).indexOf('zmk-shift') - 1], 'zmk-autoshift', 'right before Shift Keys'); checks++;
+    assert.equal(beh('totem', true)[beh('totem', true).indexOf('zmk-shift') + 1], 'zmk-adaptive', 'Adaptive still right after Shift Keys'); checks++;
+    assert.ok(!beh('totem', false).includes('zmk-autoshift')); checks++;
+    assert.ok(!beh('totem', undefined).includes('zmk-autoshift'), 'v18 firmware: no probe, no tab'); checks++;
+    assert.ok(!beh('generic', true).includes('zmk-autoshift'), 'never without a ZMK family'); checks++;
+    const t = TAB_TABLE.find((u) => u.id === 'zmk-autoshift');
+    assert.equal(t.label, 'Auto Shift'); assert.equal(t.screen, 'behaviours'); checks += 2;
 }
 assert.deepEqual(tabsFor({ trainerOnly: true }).map((t) => t.id), ['trainer']); checks++;
 // Rows sharing an id must agree on label and group.

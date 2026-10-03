@@ -26,6 +26,7 @@ export const CH = {
     tapDance: 0x28, // v14+: flask_tapdance runtime tap dances
     scrollScale: 0x29, // v15+: flask_scrollscale live scroll speed
     adaptive: 0x2B, // v18+ (Totem): flask_adaptive runtime adaptive keys (&fak)
+    autoShift: 0x2C, // v19+ (Totem): flask_autoshift runtime global auto shift + retro shift
 };
 
 export const V = {
@@ -125,6 +126,10 @@ export const V = {
     // tap-dance step frame), fallback [set, action, behavior u16, p1, p2].
     akEnabled: 0x01, akSetCount: 0x02, akRuleCount: 0x03, akStepCount: 0x04,
     akRule: 0x50, akStep: 0x51, akFallback: 0x52,
+    // auto shift (0x2C, v19) — every value a plain u16 (prefix ash: as* is
+    // autoscroll). groups = bitmask (zmk-autoshift-codec ASH_GROUPS).
+    ashEnabled: 0x01, ashTimeout: 0x02, ashGroups: 0x03, ashModifiers: 0x04,
+    ashRepeat: 0x05, ashNoAutoRepeat: 0x06, ashRetro: 0x07, ashRetroLimit: 0x08,
 };
 
 // ---------- typed operations over a FlaskHID ----------

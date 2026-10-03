@@ -103,6 +103,18 @@ async function exportFlaskStateInner(app) {
             extend: await g(CH.autoMouse, V.amExtend),
         };
     }
+    if (caps.autoshift) {
+        out.autoShift = {
+            enabled: await g(CH.autoShift, V.ashEnabled),
+            timeout: await g(CH.autoShift, V.ashTimeout),
+            groups: await g(CH.autoShift, V.ashGroups),
+            modifiers: await g(CH.autoShift, V.ashModifiers),
+            repeat: await g(CH.autoShift, V.ashRepeat),
+            noAutoRepeat: await g(CH.autoShift, V.ashNoAutoRepeat),
+            retro: await g(CH.autoShift, V.ashRetro),
+            retroLimit: await g(CH.autoShift, V.ashRetroLimit),
+        };
+    }
     if (caps.rgbMap) {
         const layers = await g(CH.rgbMap, V.rgbmapLayers);
         const leds = await g(CH.rgbMap, V.rgbmapLeds);
@@ -374,6 +386,15 @@ async function applyFlaskStateInner(app, data, save = true) {
         if (s.layer != null) await setU(CH.autoMouse, V.amLayer, s.layer);
         if (s.extend != null) await setU(CH.autoMouse, V.amExtend, s.extend);
     }, CH.autoMouse);
+
+    await section('autoShift', caps.autoshift, async (s) => {
+        const ids = [['enabled', V.ashEnabled], ['timeout', V.ashTimeout], ['groups', V.ashGroups],
+            ['modifiers', V.ashModifiers], ['repeat', V.ashRepeat], ['noAutoRepeat', V.ashNoAutoRepeat],
+            ['retro', V.ashRetro], ['retroLimit', V.ashRetroLimit]];
+        for (const [k, id] of ids) {
+            if (s[k] != null) await setU(CH.autoShift, id, s[k]);
+        }
+    }, CH.autoShift);
 
     await section('rgb', caps.rgbMap, async (s) => {
         const layers = await flask.getU16(CH.rgbMap, V.rgbmapLayers);

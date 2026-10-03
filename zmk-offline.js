@@ -39,6 +39,8 @@ import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
 import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=76';
 import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
          decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=76';
+import { ASH_DEFAULTS, clampAshTimeout, clampRetroLimit, clampAshGroups, clampAshFlag }
+    from './zmk-autoshift-codec.js?v=76';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
          encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=76';
 
@@ -559,13 +561,31 @@ function seedImprintTunables(tun, family = 'imprint') {
     // CONFIG_ZMK_IDLE_TIMEOUT/1000 = 30 s (it is deliberately the pre-v16
     // behaviour), so 30 is the real boot value — not an idealized "never".
     seed(CH.rgbMap, V.rgbmapIdleTimeout, 30);
+    // v19: flask_autoshift boots OFF (Svalboard parity), retro on, 500 ms window.
+    const A = ASH_DEFAULTS;
+    seed(CH.autoShift, V.ashEnabled, A.enabled);
+    seed(CH.autoShift, V.ashTimeout, A.timeout);
+    seed(CH.autoShift, V.ashGroups, A.groups);
+    seed(CH.autoShift, V.ashModifiers, A.modifiers);
+    seed(CH.autoShift, V.ashRepeat, A.repeat);
+    seed(CH.autoShift, V.ashNoAutoRepeat, A.noAutoRepeat);
+    seed(CH.autoShift, V.ashRetro, A.retro);
+    seed(CH.autoShift, V.ashRetroLimit, A.retroLimit);
 }
+
+
+/** SET clamps for 0x2C, per contract §2 (the echo is the applied value). */
+const ASH_CLAMP = {
+    [V.ashEnabled]: clampAshFlag, [V.ashTimeout]: clampAshTimeout, [V.ashGroups]: clampAshGroups,
+    [V.ashModifiers]: clampAshFlag, [V.ashRepeat]: clampAshFlag, [V.ashNoAutoRepeat]: clampAshFlag,
+    [V.ashRetro]: clampAshFlag, [V.ashRetroLimit]: clampRetroLimit,
+};
 
 export function createZmkTemplate(family) {
     if (!FAMILY_DIMS[family]) throw new Error(`no ZMK template for family "${family}"`);
     const layers = family === 'totem' ? buildTotemLayers() : buildDefaultLayers();
     const keymap = { layers, availableLayers: 0, maxLayerNameLength: 20 };
-    const version = ZMK_EXPECTED_PROTOCOL[family];
+    const version = ZMK_EXPECTED_PROTOCOL[family] ?? 0;
 
     // Firmware defaults, so the tuning cards open with real values.
     const tun = {};
@@ -647,7 +667,7 @@ export function normalizeZmkWorkspace(ws) {
         // workspace "gets a firmware update" on load: version bumps and
         // newly-added tunable ids seed their firmware defaults (existing
         // saved values untouched).
-        const expected = ZMK_EXPECTED_PROTOCOL[ws.family] ?? ws.protocolVersion;
+        const expected = ZMK_EXPECTED_PROTOCOL[ws.family] || ws.protocolVersion;
         const storedVersion = ws.protocolVersion ?? 0;
         if (storedVersion < expected) ws.protocolVersion = expected;
         ws.tunables ??= {};
@@ -836,6 +856,10 @@ export class ZmkOfflineFlask extends OfflineFlask {
             if (id === V.akStepCount) return ak.rules[0].steps.length;
             throw new Error('unhandled');
         }
+        if (ch === CH.autoShift) {
+            if (!ASH_CLAMP[id]) throw new Error('unhandled');   // 0xFF echo
+            return super.getU16(ch, id);
+        }
         if (ch === CH.rgbMap && id === V.rgbmapLayers) return this.ws.zmk.rgb.length;
         if (ch === CH.rgbMap && id === V.rgbmapLeds) return this.ws.zmk.rgb[0].length;
         if (ch === CH.rgbMap && id === V.rgbmapSplitLink) return 1; // sim halves always linked
@@ -862,6 +886,12 @@ export class ZmkOfflineFlask extends OfflineFlask {
     }
 
     async setU16(ch, id, value) {
+        if (ch === CH.autoShift) {
+            if (!ASH_CLAMP[id]) throw new Error('unhandled');
+            const v = ASH_CLAMP[id](value);
+            this._journal(ch, id, 'u16', v);
+            return v;
+        }
         if (ch === CH.adaptive) {
             const ak = this.ws.zmk.adaptive;
             if (!ak || id !== V.akEnabled) throw new Error('unhandled');   // counts are RO

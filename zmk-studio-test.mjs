@@ -1166,8 +1166,13 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(ZMK_FAMILY_CODES[4], 'imprint', 'meta family code 4 stays imprint');
     eq(ZMK_FAMILIES.includes('totem'), true, 'totem is a ZMK family');
     eq(ZMK_FAMILY_LABELS.totem, 'TOTEM (ZMK)', 'totem label');
-    eq(ZMK_EXPECTED_PROTOCOL.totem, 18, 'totem is v18 (flask_adaptive 0x2B)');
-    eq(ZMK_EXPECTED_PROTOCOL.imprint, 16, 'imprint stays v16');
+    eq(ZMK_EXPECTED_PROTOCOL.totem, 19, 'totem is v19 (flask_autoshift 0x2C)');
+    eq(ZMK_EXPECTED_PROTOCOL.imprint, 19, 'imprint expects v19 (reaches it once rebuilt on the unified modules)');
+    eq(zmkCapabilities('imprint', 16).autoshift, false, 'imprint on v16 degrades: no Auto Shift');
+    eq(zmkCapabilities('imprint', 19).autoshift, true, 'imprint v19: Auto Shift');
+    eq(zmkCapabilities('totem', 18).autoshift, false, 'totem v18: no Auto Shift');
+    eq(zmkCapabilities('totem', 19).autoshift, true, 'totem v19: Auto Shift');
+    eq(zmkCapabilities('totem', undefined).autoshift, false, 'no flask protocol: no Auto Shift');
     // Shared VID/PID stays a candidate (imprint); meta 0x03 decides 4 vs 5.
     eq(zmkFamilyCandidate(0x1D50, 0x615E), 'imprint', 'VID/PID is only a candidate');
     const fake = (code) => ({ getU16: async () => code });
@@ -1235,6 +1240,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     eq(TOTEM_GEOM.length, 38, 'totem layout has 38 keys');
     const ws = createZmkTemplate('totem');
     ws._notify = () => {};
+    // The sim may run ahead of the app's expected protocol (v19 Auto Shift is tryable before the bump).
     eq(ws.protocolVersion, ZMK_EXPECTED_PROTOCOL.totem, 'offline totem protocol version');
     eq(ws.zmk.keymap.layers.every((l) => l.bindings.length === 38), true, 'every offline totem layer has 38 bindings');
     eq(ws.profile.keys.length, 38, 'offline totem profile has 38 keys');

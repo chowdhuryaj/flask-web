@@ -91,8 +91,14 @@ export function familyLabel(family) {
 // added flask_holdtap 0x2A: per-key-position runtime hold-tap timing. v18
 // (totem only) added flask_adaptive 0x2B: runtime adaptive keys (&fak <set>:
 // rules keyed on the previous key, typed multi-step outputs). Probed, not
-// table-gated: caps.adaptive comes from main.js probeAdaptive().
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 16, totem: 18 };
+// table-gated: caps.adaptive comes from main.js probeAdaptive(). v19 (both
+// families) adds flask_autoshift 0x2C: runtime global auto shift + retro shift
+// (caps.autoshift, version-gated).
+// Both families expect 19 (caps.autoshift is version-gated in zmkCapabilities,
+// firmware ships it off). The Imprint reaches 19 once its config is rebuilt on
+// the unified modules; until then it reports 16, the autoshift/holdtap/adaptive
+// features stay gated off and the header shows the reflash warning.
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 19, totem: 19 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -183,6 +189,9 @@ export function zmkCapabilities(family, version) {
         rgbEffects: rgb && v >= 9,
         // flask_macros runtime macros (0x25, v8) — the Macros tab.
         macros: flask && v >= 8,
+        // flask_autoshift (0x2C, v19): global auto shift + retro shift — the
+        // Auto Shift tab. Both families; the firmware ships it off.
+        autoshift: flask && v >= 19,
         hudLayer: flask,    // meta 0x02 active layer — always on the ZMK line
     };
 }
