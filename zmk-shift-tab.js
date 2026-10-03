@@ -142,19 +142,24 @@ export class ZmkShiftTab {
     /** Load the "Mac shortcuts on Windows" pack into free slots, skipping rows that already exist. */
     async addPack() {
         const empty = (i) => ({ slot: i, base: 0, shifted: 0, mods: MOD_SHIFT_ONLY, keep: false });
-        let added = 0, existing = 0, noRoom = 0;
-        for (const { src, ...row } of OS_PACK) {
-            if (this.slots.some((s) => !cskSlotIsEmpty(s) && s.shifted && cskClash(s, row))) { existing++; continue; }
+        // Specifics first, the wildcard last (it only catches what they miss).
+        const rows = [...OS_PACK].sort((a, b) => !!a.wild - !!b.wild)
+            .filter((r) => !this.slots.some((s) => !cskSlotIsEmpty(s) && s.shifted && cskClash(s, r)));
+        const existing = OS_PACK.length - rows.length;
+        const free = this.slots.filter((s, idx) => cskSlotIsEmpty(s) && !this.drafts.has(idx)).length;
+        if (rows.length > free) {
+            toast(`${OS_PACK_LABEL} needs ${rows.length} free slots, only ${free} free. Delete some slots and load it again`, true);
+            return;
+        }
+        let added = 0;
+        for (const { src, ...row } of rows) {
             const i = this.freeSlot();
-            if (i < 0) { noRoom++; continue; }
             this.slots[i] = { slot: i, ...row };
             await this.writeSlot(i, empty(i));
             if (cskSlotIsEmpty(this.slots[i])) return;     // write failed: its toast already says why
             added++;
         }
-        const skip = existing ? `, ${existing} already there` : '';
-        if (noRoom) toast(`${OS_PACK_LABEL}: added ${added}${skip}; ${noRoom} did not fit (${this.slotCount} slots). Delete some slots and load it again`, true);
-        else toast(`${OS_PACK_LABEL}: added ${added} of ${OS_PACK.length}${skip}`);
+        toast(`${OS_PACK_LABEL}: added ${added} of ${OS_PACK.length}${existing ? `, ${existing} already there` : ''}`);
     }
 
     async clearSlot(i) {
@@ -326,7 +331,7 @@ export class ZmkShiftTab {
                 class: 'note', role: 'alert', 'data-dup': String(dup),
                 text: s.wild
                     ? `Duplicate: slot ${dup} already maps ${trig} + any key${s.os ? ` on ${OS_NAMES[s.os]}` : ''}, so one of them never fires. Change the trigger or the OS.`
-                    : `Duplicate: slot ${dup} already maps ${trig} + this base key${s.os || this.slots[dup].os ? ' for an overlapping OS' : ''}, so one of them never fires. Change the trigger, the OS or the key.`,
+                    : `Duplicate: slot ${dup} already maps ${trig} + this base key${s.os ? ` on ${OS_NAMES[s.os]}` : ''}, so one of them never fires. Change the trigger, the OS or the key.`,
             }) : null);
     }
 
@@ -337,7 +342,7 @@ export class ZmkShiftTab {
         }
         const mode = this.osMode === OS_MAC ? 'Mac' : this.osMode === OS_PC ? 'Windows (PC)' : 'unknown (no switch-layout module)';
         return el('div', { class: 'note', 'data-os-note': 'on',
-            text: `Board OS mode: ${mode}. The Control layer's &sw_layout key toggles it. Author rows in Mac terms (⌘C); a Windows row only fires while the board is in PC mode.` });
+            text: `Board OS mode: ${mode}. The Control layer's &sw_layout key toggles it. Author rows in Mac terms (⌘C); a Windows row only fires while the board is in PC mode. On Windows ⌘Tab gives a single Alt+Tab (last window); use the app-switcher key to cycle.` });
     }
 
     render() {
@@ -370,7 +375,7 @@ export class ZmkShiftTab {
                 })),
                 this.osk ? el('button', {
                     class: 'btn small primary', text: OS_PACK_LABEL, 'data-os-pack': '1',
-                    title: `${OS_PACK.length} slots: ⌘ + any key → ⌃ + same key, plus Windows exceptions (⌘Q → Alt+F4, ⌘← → Home, ⌥← → Ctrl+←, ...). Skips rows already present.`,
+                    title: `${OS_PACK.length} slots: ⌘ + any key → ⌃ + same key, plus Windows exceptions (⌘Q → Alt+F4, ⌘← → Home, ...). Skips rows already present.`,
                     onclick: () => this.addPack(),
                 }) : null,
                 el('span', { class: 'note faint', text: `${used}/${this.slotCount} slots used` }),

@@ -3,6 +3,8 @@
 // is OS = Windows with "count keymap mods" on. Names resolve through
 // usageFromName (zmk-keycodes.js); mods are the trigger/replacement bit sets
 // (⌃ 1, ⇧ 2, ⌥ 4, ⌘ 8). One wildcard + specific exceptions; specifics win.
+// Left out on purpose: ⌥← ⌥→ (the PC swapper holds Alt itself, slk_wleft/wright
+// already send Ctrl+arrows) and ⌘⌫ (the wildcard gives Ctrl+⌫).
 
 import { usageFromName } from './zmk-keycodes.js?v=68';
 import { MOD_CTL, MOD_SFT, MOD_ALT, MOD_GUI, OS_PC, WILD_KEY } from './zmk-csk-codec.js?v=68';
@@ -21,14 +23,9 @@ const SPECIFIC = [
     [G | S, 'Right Arrow', 'End', S, 'Select to line end'],
     [G | S, 'Up Arrow', 'Home', C | S, 'Select to document start'],
     [G | S, 'Down Arrow', 'End', C | S, 'Select to document end'],
-    [A, 'Left Arrow', 'Left Arrow', C, 'Word left'],
-    [A, 'Right Arrow', 'Right Arrow', C, 'Word right'],
-    [A | S, 'Left Arrow', 'Left Arrow', C | S, 'Select word left'],
-    [A | S, 'Right Arrow', 'Right Arrow', C | S, 'Select word right'],
     [A, 'Backspace', 'Backspace', C, 'Delete word back'],
     [A, 'Delete', 'Delete', C, 'Delete word forward'],
-    [G, 'Backspace', 'Home', S, 'Select to line start (one-key limit: it selects, it does not delete; press Backspace after)'],
-    [G, 'Space', 'Left GUI', 0, 'Spotlight becomes the Windows key (Start/search)'],
+    [G, 'Space', 'Escape', C, 'Spotlight becomes Ctrl+Esc (opens Start; a bare GUI replacement would be masked)'],
     [C | G, 'Q', 'L', G, 'Lock screen: Win+L'],
     [G | A, 'Escape', 'Escape', C | S, 'Force quit becomes Task Manager: Ctrl+Shift+Esc'],
     [G | S, '4', 'S', G | S, 'Screenshot region: Win+Shift+S'],

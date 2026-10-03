@@ -54,7 +54,10 @@ eq([usageFromName('Home'), usageFromName('End'), usageFromName('F4'), usageFromN
 ok_(names.includes("'Print Screen'") && !names.includes("'PrintScreen'"), 'pack uses the name the table knows');
 const PRESETS_EXISTING = 5;   // the starter buttons in zmk-shift-tab.js
 ok_(OS_PACK.length + PRESETS_EXISTING <= 32, `pack (${OS_PACK.length}) + 5 starter presets fits 32 slots`);
-eq(OS_PACK.length, 27, 'one wildcard + 26 exceptions');
+eq(OS_PACK.length, 22, 'one wildcard + 21 exceptions');
+ok_(!OS_PACK.some((r) => r.shifted === usageFromName('Left GUI')), 'no masked GUI-only replacement');
+ok_(!OS_PACK.some((r) => r.mods === MOD_ALT && !r.wild && (r.base & 0xFFFFFF) === 0x50), 'no ⌥← rows (PC swapper owns them)');
+ok_(!OS_PACK.some((r) => r.mods === MOD_GUI && (r.base & 0xFFFFFF) === 0x2A), 'no ⌘⌫ row (wildcard gives Ctrl+⌫)');
 ok_(OS_PACK.every((r) => r.os === OS_PC && r.count === true && r.base && r.shifted && r.src), 'every row: Windows, count mods, live, sourced');
 eq(OS_PACK.filter((r) => r.wild).length, 1, 'exactly one wildcard');
 eq(OS_PACK.map((r, i) => cskDuplicateOf(OS_PACK, i)).filter((d) => d >= 0), [], 'pack has no duplicates inside itself');
@@ -64,7 +67,7 @@ ok_(row(MOD_GUI, 'Q', 'F4', MOD_ALT), '⌘Q → Alt+F4');
 ok_(row(MOD_GUI | MOD_SFT, 'Z', 'Y', MOD_CTL), '⌘⇧Z → Ctrl+Y');
 ok_(row(MOD_GUI, 'Left Arrow', 'Home'), '⌘← → Home');
 ok_(row(MOD_GUI | MOD_SFT, 'Down Arrow', 'End', MOD_CTL | MOD_SFT), '⌘⇧↓ → Ctrl+Shift+End');
-ok_(row(MOD_GUI, 'Space', 'Left GUI'), '⌘Space → Win');
+ok_(row(MOD_GUI, 'Space', 'Escape', MOD_CTL), '⌘Space → Ctrl+Esc');
 ok_(row(MOD_CTL | MOD_GUI, 'Q', 'L', MOD_GUI), '⌃⌘Q → Win+L');
 ok_(row(MOD_GUI | MOD_ALT, 'Escape', 'Escape', MOD_CTL | MOD_SFT), '⌘⌥Esc → Ctrl+Shift+Esc');
 ok_(row(MOD_GUI | MOD_SFT, '4', 'S', MOD_GUI | MOD_SFT), '⌘⇧4 → Win+Shift+S');
@@ -75,7 +78,10 @@ const SP = (mods, os, base = Q) => ({ base, shifted: F4, mods, os, keep: false }
 const WD = (mods, os) => ({ base: WILD_KEY, shifted: ((MOD_CTL << 24) | WILD_KEY) >>> 0, mods, os, wild: true });
 eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), SP(MOD_GUI, OS_PC)], 0), 1, 'same base, trigger, OS clash');
 eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), SP(MOD_GUI, OS_MAC)], 0), -1, 'Mac and Windows rows can coexist');
-eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), SP(MOD_GUI, 0)], 0), 1, 'Any OS overlaps a Windows row');
+eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), SP(MOD_GUI, 0)], 0), -1, 'an Any-OS row never shadows a Windows row (OS-specific is checked first)');
+eq(cskDuplicateOf([SP(MOD_GUI, 0), SP(MOD_GUI, 0)], 0), 1, 'two Any-OS rows clash');
+eq(cskDuplicateOf([{ base: usageFromName('Backspace'), shifted: usageFromName('Delete'), mods: MOD_ALT, keep: true },
+    { ...SP(MOD_ALT, OS_PC, usageFromName('Backspace')), shifted: usageFromName('Backspace') }], 1), -1, 'starter ⌥⌫→⌦ keep does not clash with a Windows ⌥⌫ row');
 eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), SP(MOD_GUI, OS_PC, A)], 0), -1, 'different base is fine');
 eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), SP(MOD_GUI, OS_PC)], 0), -1, 'wildcard and specific never clash (specific wins)');
 eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), WD(MOD_GUI, OS_PC)], 1), 0, 'two wildcards on one trigger+OS clash');

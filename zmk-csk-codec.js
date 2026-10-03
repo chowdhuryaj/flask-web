@@ -104,14 +104,14 @@ export function cskSummary(s, label) {
 }
 
 /** Could both slots catch the same press (so one shadows the other)? Same
- * wildcard-ness, same trigger set, OS conditions that can hold together, and
- * for specific slots the same base key (page+id). Wildcards never clash with
- * specific slots: a specific slot wins by design. */
+ * wildcard-ness, same trigger set, the SAME OS condition (the firmware checks
+ * OS-specific specific slots before any-OS ones, so an Any row never shadows a
+ * Mac/Windows row), and for specific slots the same base key (page+id).
+ * Wildcards never clash with specific slots: a specific slot wins by design. */
 export function cskClash(a, b) {
     if (!!a.wild !== !!b.wild) return false;
     if ((a.mods || MOD_SHIFT_ONLY) !== (b.mods || MOD_SHIFT_ONLY)) return false;
-    const oa = a.os || 0, ob = b.os || 0;
-    if (oa && ob && oa !== ob) return false;
+    if ((a.os || 0) !== (b.os || 0)) return false;
     return a.wild || (a.base & 0xFFFFFF) === (b.base & 0xFFFFFF);
 }
 
