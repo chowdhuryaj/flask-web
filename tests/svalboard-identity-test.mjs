@@ -53,7 +53,7 @@ sval.caps = capabilities(sval.family, sval.protocolVersion);
 eq(await readBoardMeta(sp, sval.caps), { variant: 2, clusterKeys: 5, absentDrops: 3, half: 1, fiveKey: true }, 'meta 0x04-0x07 into the device record');
 eq(qmkProfile('svalboard', 8).matrixRows, 10);
 const svalTabs = tabsFor(sval).map((t) => t.id);
-eq(svalTabs, ['qmk-combos', 'qmk-chords', 'qmk-tapdance', 'qmk-overrides', 'qmk-leader', 'qmk-shift',
+eq(svalTabs, ['qmk-keymap', 'qmk-combos', 'qmk-chords', 'qmk-tapdance', 'qmk-overrides', 'qmk-leader', 'qmk-shift',
     'qmk-macros', 'qmk-typing', 'qmk-mouse', 'qmk-settings', 'trainer', 'keyboard'], 'Svalboard v27 tab rows');
 for (const t of tabsFor(sval)) ok(t.screen, `${t.id} has a screen`);
 ok(!svalTabs.some((id) => id.startsWith('zmk-') || ['mouse', 'gestures', 'rgb'].includes(id)), 'no ZMK row on a Svalboard');
@@ -63,7 +63,7 @@ for (const k of ['accel', 'smoothing', 'wiggle', 'autoscroll', 'teleport', 'snip
 }
 // Plain Vial firmware (no Flask meta): Vial rows only.
 const plain = { family: 'svalboard', caps: capabilities('svalboard', null) };
-eq(tabsFor(plain).map((t) => t.id), ['qmk-combos', 'qmk-tapdance', 'qmk-overrides', 'qmk-macros', 'qmk-settings', 'trainer', 'keyboard'], 'stock Svalboard firmware: Vial tabs only');
+eq(tabsFor(plain).map((t) => t.id), ['qmk-keymap', 'qmk-combos', 'qmk-tapdance', 'qmk-overrides', 'qmk-macros', 'qmk-settings', 'trainer', 'keyboard'], 'stock Svalboard firmware: Vial tabs only');
 // Unplugged Svalboard: tunables only (no Vial surface, no chords).
 const off = { family: 'svalboard', caps: { ...capabilities('svalboard', 27), vial: false, cornerCombos: false } };
 eq(tabsFor(off).map((t) => t.id), ['qmk-leader', 'qmk-shift', 'qmk-typing', 'qmk-mouse', 'trainer', 'keyboard'], 'Svalboard Unplugged tabs');

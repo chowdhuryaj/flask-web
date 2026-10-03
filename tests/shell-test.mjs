@@ -45,7 +45,7 @@ eq(screenOf('zmk-leader'), 'behaviours'); eq(screenOf('zmk-holdtiming'), 'behavi
     // The board stays up for tabs that pick positions on it; only Keymap has the side panel.
     for (const id of ['zmk-keymap', 'zmk-combos', 'zmk-leader', 'zmk-holdtiming']) ok(BOARD_TABS.has(id), `${id} needs the board`);
     ok(!BOARD_TABS.has('zmk-macros') && !BOARD_TABS.has('keyboard'), 'macros / keyboard do not');
-    eq([...SIDE_TABS], ['zmk-keymap']);
+    eq([...SIDE_TABS], ['zmk-keymap', 'qmk-keymap'], 'side panel: the two keymap tabs');
 }
 
 // ---- themes ----

@@ -43,6 +43,7 @@ import { QmkShiftTab } from './qmk-shift-tab.js?v=76';
 import { TypingTab } from './typing-tab.js?v=76';
 import { CornerTab } from './corner-tab.js?v=76';
 import { QmkMouseTab } from './qmk-mouse-tab.js?v=76';
+import { QmkKeymapTab } from './qmk-keymap-tab.js?v=76';
 
 /**
  * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the
@@ -63,12 +64,13 @@ const qmk = (app) => isQmkFamily(app.family);
 // Order = tab order (the first visible row is the landing tab). No Build /
 // Bench / bake / Tap Calibrator / Teleport rows; those stay native-only.
 export const TAB_TABLE = [
-    // Svalboard rows first: TABS[0] is the landing tab, and the QMK keymap
-    // row (Phase B) goes above them. None of them can appear on a ZMK board.
+    // Svalboard rows first: TABS[0] is the landing tab (the QMK keymap).
+    // None of them can appear on a ZMK board.
     // ---- Svalboard (QMK line). Vial rows need the live Vial surface
     // (caps.vial is false while Unplugged); Flask rows need the handshake.
     // Positional chords are "Chords", not "Combos": Vial's combos match
     // keycodes, these match switch positions.
+    { id: 'qmk-keymap', label: 'Keymap', group: 'keys', screen: 'keymap', when: (a) => qmk(a) && !!a.caps.vial, ctor: QmkKeymapTab },
     { id: 'qmk-combos', label: 'Combos', group: 'behaviour', screen: 'combos', when: (a) => qmk(a) && !!a.caps.vial, ctor: ComboTab },
     { id: 'qmk-chords', label: 'Chords', group: 'behaviour', screen: 'combos', when: (a) => qmk(a) && !!a.caps.cornerCombos, ctor: CornerTab },
     { id: 'qmk-tapdance', label: 'Tap Dance', group: 'behaviour', screen: 'behaviours', when: (a) => qmk(a) && !!a.caps.vial, ctor: TapDanceTab },
@@ -126,8 +128,11 @@ export const SCREENS = [
 ];
 // Tabs that need the board (and layer rail) on screen: Keymap edits keys,
 // Combos and Leader pick positions on it, Hold timing jumps to a key.
-export const BOARD_TABS = new Set(['zmk-keymap', 'zmk-combos', 'zmk-leader', 'zmk-holdtiming']);
-export const SIDE_TABS = new Set(['zmk-keymap']);   // the right context panel
+// Svalboard: Macros and Tap Dance paste M n / TD(n) onto the selected key,
+// Chords draws its boxes on the board.
+export const BOARD_TABS = new Set(['zmk-keymap', 'zmk-combos', 'zmk-leader', 'zmk-holdtiming',
+    'qmk-keymap', 'qmk-macros', 'qmk-tapdance', 'qmk-chords']);
+export const SIDE_TABS = new Set(['zmk-keymap', 'qmk-keymap']);   // the right context panel
 
 /** @returns {{id:string,label:string,group:string,screen:string,ctor:Function}[]} */
 export function tabsFor(app) {

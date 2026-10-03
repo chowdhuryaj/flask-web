@@ -163,7 +163,7 @@ async function loadDevice(device) {
  * immediate (no Save step); Flask tunables save per channel, and corner
  * chords (0x28) never save. */
 async function loadQmkDevice(device) {
-    app.keymap = null;      // Phase B: the QMK keymap tab publishes it
+    app.keymap = null;      // the QMK keymap tab publishes it (Vial readKeymap)
     app.readKeyState = null;
     const gen = connectGen;
     const stale = () => gen !== connectGen || !app.hid.connected;
@@ -174,6 +174,9 @@ async function loadQmkDevice(device) {
     app.viaVersion = await app.vial.viaProtocolVersion();
     app.vialVersion = (await app.vial.vialKeyboardID()).version;
     app.layerCount = await app.vial.layerCount();
+    // Picker slot ranges for M n / TD(n) before the Macros / Tap Dance tabs load.
+    app.macroCount = await app.vial.macroCount();
+    app.tapDanceCount = (await app.vial.dynamicEntryCounts()).tapDance;
     if (stale()) return;
 
     app.protocolVersion = await app.flask.handshake();

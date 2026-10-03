@@ -28,10 +28,21 @@
   h2 { margin: 18px 0 6px; font-size: 14px; }
   #result { position: sticky; top: 0; padding: 8px; font: 12px/1.4 monospace; white-space: pre;
             background: var(--surface2, #222); border: 1px solid var(--border, #444); z-index: 9; }
+  #editor { height: 860px; }
 </style>
 </head>
 <body>
 <div id="result">running…</div>
+<!-- The keymap tab gets the app's editor frame: rail, board, dock, inspector. -->
+<div class="editor" id="editor" data-screen="keymap" data-board="1" data-side="1">
+  <aside class="rail" id="rail" aria-label="Layers"><div class="layerbar-slot" id="layerbar-slot"></div></aside>
+  <section class="board-wrap" id="board-wrap">
+    <div class="board-slot" id="board-slot"></div>
+    <div class="board-foot"><div class="board-state" id="board-state" aria-live="polite"></div></div>
+  </section>
+  <section class="palette work" id="palette"><div class="palette-body" id="palette-body"><div id="panels"></div></div></section>
+  <aside class="side" id="side" aria-label="Key inspector"></aside>
+</div>
 <div id="mounts"></div>
 
 <script type="module">
@@ -40,6 +51,9 @@ import { CH_QMK, V_QMK, CC } from './flaskproto.js?v=76';
 import { TapDance, Combo, KeyOverride, QMK_SETTINGS } from './vialproto.js?v=76';
 import { tabsFor } from './tab-registry.js?v=76';
 import { saveState } from './save-state.js?v=76';
+import { shell } from './app-shell.js?v=76';
+import { board } from './board.js?v=76';
+import { SVALBOARD_LAYOUT } from './svalboard-layout.js?v=76';
 
 const VERSION = 27;
 
@@ -103,9 +117,20 @@ class FakeFlask {
     async handshake() { return VERSION; }
 }
 
-/** Fake Vial client: the API the Svalboard tabs call. */
+/** Fake Vial client: the API the Svalboard tabs call. The keymap holds one
+ * of each legend kind on layer 0 (MT, LT, MO, M n, TD(n), a Svalboard custom). */
 class FakeVial {
-    constructor() { this.writes = []; this.macroBuf = new Uint8Array(64); }
+    constructor() {
+        this.writes = []; this.macroBuf = new Uint8Array(64);
+        this.keymap = Array.from({ length: 8 }, (_, l) => Array.from({ length: 10 }, () => Array(6).fill(l ? 0x0001 : 0x0000)));
+        const k0 = this.keymap[0];
+        SVALBOARD_LAYOUT.keys.forEach((k, i) => { k0[k.row][k.col] = 0x04 + (i % 26); });   // letters
+        Object.assign(k0[1], { 2: 0x2217 });          // l1c: MT(⇧, T)
+        Object.assign(k0[2], { 2: 0x4115 });          // l2c: LT(1, R)
+        Object.assign(k0[0], { 2: 0x5221, 3: 0x7700, 4: 0x5701, 1: 0x7E00 });   // thumb: MO(1), M0, TD(1), Left DPI +
+    }
+    async readKeymap(layers, rows, cols) { return this.keymap.slice(0, layers).map((l) => l.slice(0, rows).map((r) => r.slice(0, cols))); }
+    async setKeycode(layer, row, col, kc) { this.writes.push(['key', layer, row, col, kc]); this.keymap[layer][row][col] = kc; }
     async qmkSettingsQSIDs() { return QMK_SETTINGS.slice(0, 6).map((d) => d.qsid); }
     async qmkSettingGet() { return 1; }
     async qmkSettingSet(...a) { this.writes.push(['qs', ...a]); }
@@ -129,11 +154,12 @@ const flask = new FakeFlask();
 const vial = new FakeVial();
 const caps = capabilities('svalboard', VERSION);
 const app = {
-    flask, vial, family: 'svalboard', protocolVersion: VERSION, caps,
+    flask, vial, family: 'svalboard', protocolVersion: VERSION, caps, macroCount: 4, tapDanceCount: 4,
     layerCount: 8, profile: qmkProfile('svalboard', 8), board: null, unlocked: true,
     showTab: (id) => document.querySelector(`[data-tab-mount="${id}"]`)?.scrollIntoView(),
 };
 saveState.setLine('qmk');
+shell.mount({ layerBar: document.getElementById('layerbar-slot'), board: document.getElementById('board-slot') });
 
 const lines = [];
 const mounts = document.getElementById('mounts');
@@ -143,7 +169,7 @@ for (const t of tabs) {
     mounts.append(Object.assign(document.createElement('h2'), { textContent: `${t.label} (${t.id}, screen ${t.screen})` }));
     const panel = Object.assign(document.createElement('div'), { className: 'panel active' });
     panel.dataset.tabMount = t.id;
-    mounts.append(panel);
+    (t.id === 'qmk-keymap' ? document.getElementById('panels') : mounts).append(panel);
     try {
         const tab = new t.ctor(app);
         panel.append(tab.root);
@@ -161,6 +187,32 @@ async function drive(label, fn) {
     try { await fn(); lines.push(`OK   ${label}`); }
     catch (e) { lines.push(`FAIL ${label}: ${e.message}`); console.error(label, e); }
 }
+const tick = () => new Promise((r) => setTimeout(r, 30));
+await drive('keymap: legends for MT / LT / MO / M n / TD(n) / custom', async () => {
+    const txt = document.getElementById('board-slot').textContent.replace(/\s/g, '');   // a long legend wraps to two lines
+    for (const t of ['T', '⇧', 'R', 'NavNas', 'M0', 'TD1', 'LeftDPI+']) if (!txt.includes(t)) throw new Error(`no "${t}" on the board`);
+});
+await drive('keymap: select a key, pick B, Vial setKeycode lands, legend updates', async () => {
+    const sel = { kind: 'key', row: 1, col: 0 };   // l1s
+    board.select(sel);
+    await tick();
+    const n = vial.writes.length;
+    document.querySelector('#panels [data-tile="key:letters:5:0"]').click();
+    await tick();
+    const w = vial.writes.slice(n);
+    if (JSON.stringify(w) !== JSON.stringify([['key', 0, 1, 0, 0x05]])) throw new Error(`writes ${JSON.stringify(w)}`);
+    const g = [...document.querySelectorAll('#board-slot g.key')].find((x) => x.getAttribute('aria-label')?.startsWith('Key l1s'));
+    if (g?.querySelector('.cap-main')?.textContent !== 'B') throw new Error(`legend ${g?.textContent}`);
+    if (!document.getElementById('board-state').textContent.includes('Applied live')) throw new Error('no Applied live chip');
+});
+await drive('keymap: paste M1 from the Macros row onto the selected key', async () => {
+    board.select({ kind: 'key', row: 1, col: 3 });   // l1n
+    await tick();
+    document.querySelector('[data-tab-mount="qmk-macros"] [data-paste="M1"]').click();
+    await tick();
+    const w = vial.writes.at(-1);
+    if (JSON.stringify(w) !== JSON.stringify(['key', 0, 1, 3, 0x7701])) throw new Error(`write ${JSON.stringify(w)}`);
+});
 await drive('chords: bind def 0 writes one 0x28 output, no save', async () => {
     const n = flask.writes.length;
     await mounted['qmk-chords']._set(0, 0x0004);

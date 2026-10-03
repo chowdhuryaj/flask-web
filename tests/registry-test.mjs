@@ -38,7 +38,7 @@ const SPEC_1_3 = {
     keyboard: 'device',
     'zmk-holdtiming': 'behaviour', 'zmk-adaptive': 'behaviour', 'zmk-autoshift': 'behaviour',
     // Svalboard (QMK line), restored 2026-10-03.
-    'qmk-combos': 'behaviour', 'qmk-chords': 'behaviour', 'qmk-tapdance': 'behaviour',
+    'qmk-keymap': 'keys', 'qmk-combos': 'behaviour', 'qmk-chords': 'behaviour', 'qmk-tapdance': 'behaviour',
     'qmk-overrides': 'behaviour', 'qmk-leader': 'behaviour', 'qmk-shift': 'behaviour',
     'qmk-macros': 'behaviour', 'qmk-typing': 'device', 'qmk-mouse': 'device', 'qmk-settings': 'device',
 };
