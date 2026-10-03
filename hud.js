@@ -3,9 +3,9 @@
 // corner-snapping overlay as fallback. Poll cadences: ~15 Hz layer + key
 // state, status chips every 4th tick.
 
-import { el } from './ui.js?v=65';
-import { CH, V } from './flaskproto.js?v=65';
-import { renderKeyboardSVG } from './board.js?v=65';
+import { el } from './ui.js?v=66';
+import { CH, V } from './flaskproto.js?v=66';
+import { renderKeyboardSVG } from './board.js?v=66';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;

@@ -7,17 +7,17 @@ import { readFileSync } from 'node:fs';
 import {
     AK_ACTION, encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback,
     akRuleIsEmpty, akRuleIsLive, akSeqLength, textToUsages, usagesToText,
-} from '../zmk-adaptive-codec.js?v=65';
-import { CH, V } from '../flaskproto.js?v=65';
-import { zmkCapabilities } from '../zmk.js?v=65';
+} from '../zmk-adaptive-codec.js?v=66';
+import { CH, V } from '../flaskproto.js?v=66';
+import { zmkCapabilities } from '../zmk.js?v=66';
 import { createZmkTemplate, ZmkOfflineFlask, adaptiveTable, zmkSyncExtras, zmkPendingCount,
-         zmkClearDirty, normalizeZmkWorkspace } from '../zmk-offline.js?v=65';
-import { exportFlaskState, applyFlaskState } from '../zmk-export.js?v=65';
+         zmkClearDirty, normalizeZmkWorkspace } from '../zmk-offline.js?v=66';
+import { exportFlaskState, applyFlaskState } from '../zmk-export.js?v=66';
 import { parseKeymap, generate } from '../gen-totem-default.mjs';
-import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=65';
-import { exportKeymapText } from '../zmk-dt-export.js?v=65';
-import * as catalog from '../behavior-catalog.js?v=65';
-import { setZmkContext } from '../zmk-keycodes.js?v=65';
+import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=66';
+import { exportKeymapText } from '../zmk-dt-export.js?v=66';
+import * as catalog from '../behavior-catalog.js?v=66';
+import { setZmkContext } from '../zmk-keycodes.js?v=66';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };

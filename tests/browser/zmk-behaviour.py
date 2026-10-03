@@ -153,7 +153,7 @@ def main():
         page.wait_for_timeout(400)
         check(ws(page, 'totem')['zmk']['holdtap'][33]['term'] == 330, 'slot 33 term written to the sim')
         check('unsaved' in save_text(page), f'status bar SAVE dirty after slot 33: {save_text(page)!r}')
-        check('Hold-tap timing' in page.evaluate("import('./save-state.js?v=65').then(m => m.saveState.dirty().map(d => d.label).join('|'))"), 'Hold-tap timing is a registered source')
+        check('Hold-tap timing' in page.evaluate("import('./save-state.js?v=66').then(m => m.saveState.dirty().map(d => d.label).join('|'))"), 'Hold-tap timing is a registered source')
         row.locator('.flavor[data-flavor="2"]').click()
         page.wait_for_timeout(300)
         check(ws(page, 'totem')['zmk']['holdtap'][33]['flavor'] == 2, 'flavor written')
@@ -180,14 +180,30 @@ def main():
         shot(page, 'leader-output-picker')
         page.keyboard.press('Escape')
 
-        go(page, 'Behaviour', 'Shift Keys')
-        page.locator('button', has_text='＋ New pair').first.click()
+        go(page, 'Behaviour', 'Mod Morph')
+        page.locator('button', has_text='＋ New slot').first.click()
         page.locator('[data-card], .card button.code', has_text='base key').first.click()
         sheet = page.locator('.picker-sheet')
         check(sheet.count() == 1, 'CSK base opens the picker sheet')
         check(sheet.locator('.bp-mods, [aria-label="Held with the key"]').count() == 0
               and 'Held with the key' not in sheet.inner_text(), 'CSK base picker shows no mods row')
         page.keyboard.press('Escape')
+
+        # Mod morph: trigger chips (offline sim speaks MORPH_CAPS), last chip cannot be cleared.
+        grp = page.locator('[aria-label$="trigger modifiers"]').first
+        chips = grp.locator('button.chip')
+        check(chips.count() == 4, f'4 trigger chips, got {chips.count()}')
+        check(chips.nth(1).get_attribute('aria-pressed') == 'true', 'shift chip starts on')
+        chips.nth(1).click()
+        page.wait_for_timeout(200)
+        check(page.locator('[aria-label$="trigger modifiers"]').first.locator('button.chip').nth(1).get_attribute('aria-pressed') == 'true',
+              'the last trigger chip stays on')
+        page.locator('[aria-label$="trigger modifiers"]').first.locator('button.chip').nth(0).click()
+        page.wait_for_timeout(200)
+        pressed = [b.get_attribute('aria-pressed') for b in page.locator('[aria-label$="trigger modifiers"]').first.locator('button.chip').all()]
+        check(pressed == ['true', 'true', 'false', 'false'], f'ctrl+shift chips on: {pressed}')
+        check(page.get_by_text('keep mods').count() >= 1, 'keep mods toggle shown')
+        shot(page, 'mod-morph-slot')
 
         go(page, 'Behaviour', 'Tap Dance')
         page.locator('button', has_text='New tap dance').first.click()

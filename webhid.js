@@ -3,8 +3,8 @@
 // matcher + timeout/retry/drain semantics, with a FIFO promise chain so any
 // caller (tabs, HUD poll) can fire and ordering is preserved.
 
-import { diag, diagHex } from './diag.js?v=65';
-import { ZMK_VIDPID } from './zmk.js?v=65';
+import { diag, diagHex } from './diag.js?v=66';
+import { ZMK_VIDPID } from './zmk.js?v=66';
 
 export const USAGE_PAGE = 0xFF60;
 export const USAGE = 0x61;

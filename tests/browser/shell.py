@@ -19,17 +19,17 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 OUT = h.ROOT / 'tests' / 'artifacts' / 'shell'
 GROUPS = ['Keys', 'Behaviour', 'Device', 'Trainer']
 SUBSET = {  # tab labels that must exist per group (1.4); WP4 adds more later
-    'totem': {'Behaviour': {'Combos', 'Macros', 'Tap Dance', 'Shift Keys', 'Leader'},
+    'totem': {'Behaviour': {'Combos', 'Macros', 'Tap Dance', 'Mod Morph', 'Leader'},
               'Device': {'Modes', 'Test', 'Keyboard'}},
-    'imprint': {'Behaviour': {'Combos', 'Macros', 'Tap Dance', 'Shift Keys', 'Leader'},
+    'imprint': {'Behaviour': {'Combos', 'Macros', 'Tap Dance', 'Mod Morph', 'Leader'},
                 'Device': {'Mouse', 'Gestures', 'RGB', 'Modes', 'Test', 'Keyboard'}},
 }
 
 
 SCREENS = ['Keymap', 'Combos', 'Behaviours', 'Macros', 'Device', 'Test', 'Trainer']
 SUBTABS = {  # screen -> sub-tab labels that must exist (look-shell: the second row is the screens)
-    'totem': {'Behaviours': {'Tap Dance', 'Shift Keys', 'Leader'}, 'Device': {'Modes', 'Keyboard'}},
-    'imprint': {'Behaviours': {'Tap Dance', 'Shift Keys', 'Leader'}, 'Device': {'Mouse', 'Gestures', 'RGB', 'Modes', 'Keyboard'}},
+    'totem': {'Behaviours': {'Tap Dance', 'Mod Morph', 'Leader'}, 'Device': {'Modes', 'Keyboard'}},
+    'imprint': {'Behaviours': {'Tap Dance', 'Mod Morph', 'Leader'}, 'Device': {'Mouse', 'Gestures', 'RGB', 'Modes', 'Keyboard'}},
 }
 
 
@@ -121,14 +121,14 @@ def check_assign_command(browser, failures):
     if labels():
         failures.append('palette offers Assign with no key selected')
     page.evaluate("""async () => {
-      const { board } = await import('./board.js?v=65');
+      const { board } = await import('./board.js?v=66');
       board.selectedKey = () => ({ layer: 0, pos: 1 });
     }""")
     if 'Assign to selected key…' not in labels():
         failures.append('palette lacks "Assign to selected key…" with a key selected')
     # Status bar Save segment follows saveState.
     page.evaluate("""async () => {
-      const { saveState } = await import('./save-state.js?v=65');
+      const { saveState } = await import('./save-state.js?v=66');
       saveState.markDirty('studio-keymap', 'keymap', async () => {});
     }""")
     txt = page.locator('#save-btn').inner_text()

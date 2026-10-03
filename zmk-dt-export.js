@@ -319,7 +319,7 @@ export function exportKeymapText(data, opts = {}) {
     const leaderLive = (flask.leader?.slots ?? []).filter((s) => s.positions?.length && s.action).length;
     if (leaderLive) notExported.push(`leader: ${leaderLive} flask_leader sequence(s) (position-based runtime slots; urob's leader-key nodes are key-code based). Re-create them in the firmware's leader node or keep the app's JSON export.`);
     const cskLive = (flask.customShift?.slots ?? []).filter((s) => s.base || s.shifted).length;
-    if (cskLive) notExported.push(`shift keys: ${cskLive} custom-shift pair(s) (flask_csk is a global runtime table; model them as mod-morph nodes by hand).`);
+    if (cskLive) notExported.push(`shift keys: ${cskLive} mod-morph slot(s) with per-slot trigger sets and keep-mods (flask_csk is a global runtime table; model them as mod-morph nodes by hand).`);
     const akLive = (flask.adaptive?.rules ?? []).length;
     if (akLive) notExported.push(`adaptive keys: ${akLive} flask_adaptive rule(s) (a runtime table; the keymap's ak nodes are only the compiled defaults). Keep the app's JSON export.`);
     const gestLive = (flask.gestures?.sets ?? []).flat().filter((g) => g.action).length;

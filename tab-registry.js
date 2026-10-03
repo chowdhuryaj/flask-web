@@ -15,22 +15,22 @@
 // `app` needs only {trainerOnly, family, caps}. Constructors are called as
 // `new ctor(app)` by main.js; nothing here touches the DOM.
 
-import { isZmkFamily } from './zmk.js?v=65';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=65';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=65';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=65';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=65';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=65';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=65';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=65';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=65';
-import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=65';
-import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=65';
-import { ZmkTestTab } from './zmk-test-tab.js?v=65';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=65';
-import { MouseTab } from './mouse-tab.js?v=65';
-import { TrainerTab } from './trainer-tab.js?v=65';
-import { KeyboardTab } from './app-shell.js?v=65';
+import { isZmkFamily } from './zmk.js?v=66';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=66';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=66';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=66';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=66';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=66';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=66';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=66';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=66';
+import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=66';
+import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=66';
+import { ZmkTestTab } from './zmk-test-tab.js?v=66';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=66';
+import { MouseTab } from './mouse-tab.js?v=66';
+import { TrainerTab } from './trainer-tab.js?v=66';
+import { KeyboardTab } from './app-shell.js?v=66';
 
 /**
  * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the
@@ -60,8 +60,9 @@ export const TAB_TABLE = [
     { id: 'zmk-combos', label: 'Combos', group: 'behaviour', screen: 'combos', when: (a) => a.caps.combos, ctor: ZmkCombosTab },
     { id: 'zmk-macros', label: 'Macros', group: 'behaviour', screen: 'macros', when: (a) => a.caps.macros, ctor: ZmkMacrosTab },
     { id: 'zmk-tapdance', label: 'Tap Dance', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.tapDance, ctor: ZmkTapDanceTab },
-    // §1.3: renamed "Shift" → "Shift Keys" (native label).
-    { id: 'zmk-shift', label: 'Shift Keys', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.customShift, ctor: ZmkShiftTab },
+    // §1.3: "Shift" → "Shift Keys"; now the full mod-morph editor. The id stays
+    // 'zmk-shift' (routes, saved tab, command palette ids); only the label moved.
+    { id: 'zmk-shift', label: 'Mod Morph', group: 'behaviour', screen: 'behaviours', when: (a) => a.caps.customShift, ctor: ZmkShiftTab },
     // flask_adaptive (0x2B, v18): caps.adaptive is main.js's async probe (GET 2B 02
     // answers); Imprint and older Totem images answer 0xFF, so the tab hides.
     { id: 'zmk-adaptive', label: 'Adaptive', group: 'behaviour', screen: 'behaviours', when: (a) => zmk(a) && !!a.caps.adaptive, ctor: ZmkAdaptiveTab },

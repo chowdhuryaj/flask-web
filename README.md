@@ -47,7 +47,7 @@ RPC or Flask-channel editors.
 - **Macros** (0x25, v8+) — ordered step list (tap/press/release/wait),
   plus a recorder.
 - **Tap Dance** (0x28, v14+) — runtime `&ftd` dances with a wizard.
-- **Shift Keys** (0x16, v14+) — `flask_csk` custom shift keys.
+- **Mod Morph** (tab id `zmk-shift`, 0x16, v14+) — `flask_csk` mod-morph table: per-slot trigger set (any of ⌃⇧⌥⌘, matched exactly), base key, replacement, keep-mods. Needs MORPH_CAPS (0x03) for non-Shift triggers; older firmware shows the Shift-only editor.
 - **Leader** (0x19, v10+) — `&fled` sequences with typed outputs,
   F-key preset.
 - **Hold timing** (0x2A, Totem v17) — per-key and virtual-slot hold-tap timing.

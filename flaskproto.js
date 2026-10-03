@@ -42,7 +42,8 @@ export const V = {
     gesturesEnabled: 0x03, gesturesSetCount: 0x04,
     gesturesSlot: 0x50,
     // custom shift keys (v14): slot frame [slot, base u32 BE, shifted u32 BE]
-    cskEnabled: 0x01, cskSlotCount: 0x02,
+    // + (morph firmware) [trigger mods, flags]; cskMorphCaps RO u16 = 1 there
+    cskEnabled: 0x01, cskSlotCount: 0x02, cskMorphCaps: 0x03,
     cskSlot: 0x50,
     // leader (flask_leader v10): typed-output sequence frames at 0x50
     leaderTimeout: 0x01,

@@ -4,12 +4,12 @@
 // id has its §1.3 group.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { zmkCapabilities } from '../zmk.js?v=65';
-import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js?v=65';
+import { zmkCapabilities } from '../zmk.js?v=66';
+import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js?v=66';
 
 const before = JSON.parse(readFileSync(new URL('./fixtures/tabs-before-wp0.json', import.meta.url)));
 // Deliberate changes from §1.3; anything else differing is a regression.
-const RELABEL = { 'zmk-shift': 'Shift Keys' };
+const RELABEL = { 'zmk-shift': 'Mod Morph' };
 // WP7 added Behaviour › Hold timing on ZMK boards with flask_holdtap (caps.holdtap).
 const WP7_NEW = new Set(['zmk-holdtiming']);
 let checks = 0;
@@ -75,7 +75,7 @@ for (const ws of Object.keys(before)) {
     const beh = (fam, ak) => tabsFor({ family: fam, caps: { ...zmkCapabilities(fam, 18), adaptive: ak } })
         .filter((t) => t.group === 'behaviour').map((t) => t.id);
     assert.ok(beh('totem', true).includes('zmk-adaptive')); checks++;
-    assert.equal(beh('totem', true)[beh('totem', true).indexOf('zmk-shift') + 1], 'zmk-adaptive', 'right after Shift Keys'); checks++;
+    assert.equal(beh('totem', true)[beh('totem', true).indexOf('zmk-shift') + 1], 'zmk-adaptive', 'right after Mod Morph'); checks++;
     assert.ok(!beh('totem', false).includes('zmk-adaptive')); checks++;
     assert.ok(!beh('imprint', undefined).includes('zmk-adaptive')); checks++;
     assert.ok(!beh('generic', true).includes('zmk-adaptive'), 'never without a ZMK family'); checks++;

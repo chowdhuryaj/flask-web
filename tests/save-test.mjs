@@ -12,8 +12,8 @@ globalThis.localStorage ??= {
     get length() { return this._m.size; },
 };
 
-const { SaveState, discardMessage } = await import('../save-state.js?v=65');
-const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=65');
+const { SaveState, discardMessage } = await import('../save-state.js?v=66');
+const { writeBaseline, isModePayload, addMode, emptyStore, setBaseline, modeSummary } = await import('../zmk-modes.js?v=66');
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -149,8 +149,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- old ZMK export (v2 JSON with `family`) still imports and round-trips ----
 {
-    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js?v=65');
-    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js?v=65');
+    const { createZmkTemplate, attachZmkOffline } = await import('../zmk-offline.js?v=66');
+    const { applyFlaskState, exportFlaskState } = await import('../zmk-export.js?v=66');
     const old = JSON.parse(fixture('zmk-export-v2.json'));
     eq([old.kind, old.version, old.family], ['flask-zmk-keymap', 2, 'imprint'], 'fixture has the v2 header with family');
     ok(isModePayload(old), 'old file is a valid mode payload');
@@ -168,6 +168,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     // Tap dances now export only their live prefix (apply pads the rest with NONE).
     const trimmed = structuredClone(old.flask);
     for (const sl of trimmed.tapDance?.slots ?? []) { const n = sl.taps.findIndex((t) => !t.action); sl.taps = n < 0 ? sl.taps : sl.taps.slice(0, n); }
+    // The sim now has 32 mod-morph slots; a 16-slot fixture leaves the rest empty.
+    while (trimmed.customShift && trimmed.customShift.slots.length < 32) trimmed.customShift.slots.push({ base: 0, shifted: 0 });
     eq(again, trimmed, 'export after import equals the old file byte for byte (as JSON), tap dances trimmed to their live prefix');
     eq(JSON.stringify(again), JSON.stringify(trimmed), 'serialises identically');
 
@@ -178,7 +180,7 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
     const live = await applyFlaskState(app, old.flask, { save: false });
     eq(saved, [], 'save:false never saves');
     ok(live.channels.length > 1, 'channels to save reported');
-    const { saveFlaskChannels } = await import('../zmk-export.js?v=65');
+    const { saveFlaskChannels } = await import('../zmk-export.js?v=66');
     let n = 0;
     app.flask.save = async (ch) => { n++; if (ch === live.channels[1]) throw new Error('nope'); };
     const sr = await saveFlaskChannels(app, live.channels);
@@ -188,8 +190,8 @@ const fixture = (f) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url),
 
 // ---- offline queue count feeds the status bar ----
 {
-    const { createZmkTemplate, ZmkOfflineFlask, offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=65');
-    const { CH, V } = await import('../flaskproto.js?v=65');
+    const { createZmkTemplate, ZmkOfflineFlask, offlineQueued, discardOfflineQueued } = await import('../zmk-offline.js?v=66');
+    const { CH, V } = await import('../flaskproto.js?v=66');
     const ws = createZmkTemplate('imprint');
     eq(offlineQueued(ws), 0);
     await new ZmkOfflineFlask(ws).setU16(CH.scrollSnap, V.snapThreshold, 80);

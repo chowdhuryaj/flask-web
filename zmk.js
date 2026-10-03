@@ -4,9 +4,9 @@
 // the app speaks the Flask frame (flaskproto.js CH/V/CMD) via
 // zmk-flask-modules flask_proto.
 
-import { CH, V } from './flaskproto.js?v=65';
-import { diag } from './diag.js?v=65';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=65';
+import { CH, V } from './flaskproto.js?v=66';
+import { diag } from './diag.js?v=66';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=66';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.

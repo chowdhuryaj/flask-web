@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {
     encodePositional, decodePositional, decodeHoldtapLog, handsOf, triggerPreset,
-} from '../zmk-holdtap-codec.js?v=65';
+} from '../zmk-holdtap-codec.js?v=66';
 import {
     analyzeHoldtap, percentile, readLog, buildPassage, holdPrompts, diffTyped, usageChar, hasFeature, applyRecommendation, startLogPoll, typedEnough,
 } from '../zmk-ht-calibrate.js?v=65';
