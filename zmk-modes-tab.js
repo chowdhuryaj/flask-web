@@ -19,16 +19,16 @@
 // bindings live through Studio and only saveChanges() persists them, so the
 // live/baseline split needs nothing new there.
 
-import { el, card, toast, modal } from './ui.js?v=73';
-import { saveState } from './save-state.js?v=73';
-import { applyFlaskState, saveFlaskChannels } from './zmk-export.js?v=73';
-import { CH } from './flaskproto.js?v=73';
-import { announceSlots } from './zmk-behaviour-common.js?v=73';
-import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=73';
+import { el, card, toast, modal } from './ui.js?v=74';
+import { saveState } from './save-state.js?v=74';
+import { applyFlaskState, saveFlaskChannels } from './zmk-export.js?v=74';
+import { CH } from './flaskproto.js?v=74';
+import { announceSlots } from './zmk-behaviour-common.js?v=74';
+import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=74';
 import {
     modesStoreKey, emptyStore, normalizeStore, addMode, renameMode,
     deleteMode, setBaseline, getMode, writeBaseline, isModePayload, modeSummary,
-} from './zmk-modes.js?v=73';
+} from './zmk-modes.js?v=74';
 
 export class ZmkModesTab {
     constructor(app) {
