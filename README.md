@@ -4,8 +4,8 @@ Browser-based configurator for the **ZMK Flask boards** only: the **TOTEM**
 38-key split (family 6) and the **Cyboard Imprint** (family 4). It talks to
 the board two ways: ZMK Studio RPC over WebSerial for the keymap, and the
 Flask raw-HID frame (zmk-flask-modules) over WebHID for everything else.
-Nothing else is supported; QMK, Vial, Svalboard, GMK70, Nape and other
-keyboards were removed on 2026-10-02.
+Svalboard support is being restored on the `unify` branch (QMK/Vial code was
+removed from this line on 2026-10-02).
 
 **Use it:** https://chowdhuryaj.github.io/flask-web/ — Chrome/Edge/any
 Chromium browser (WebHID; Firefox and Safari don't have it). Plug in the
@@ -20,8 +20,8 @@ and WebSerial work with no Chrome install. See [desktop/README.md](desktop/READM
 
 | Board | Family code (meta 0x03) | Protocol today | Has |
 |---|---|---|---|
-| TOTEM (ZMK) | 6 | **v17** | keys only; flask_holdtap (0x2A) |
-| Cyboard Imprint (ZMK) | 4 | **v16** | two trackballs, RGB strip |
+| TOTEM (ZMK) | 6 | **v19** | keys only; flask_holdtap (0x2A), adaptive (0x2B), auto shift (0x2C) |
+| Cyboard Imprint (ZMK) | 4 | **v16** today, **v19** after its config is rebuilt on the unified modules | two trackballs, RGB strip; Auto Shift appears at v19 |
 
 Both share the stock ZMK USB identity `1d50:615e`, so a VID/PID match is only
 a candidate: `confirmZmkFamily()` reads meta 0x03 after connect, and an
@@ -50,6 +50,7 @@ RPC or Flask-channel editors.
 - **Mod Morph** (tab id `zmk-shift`, 0x16, v14+) — `flask_csk` mod-morph table: per-slot trigger set (any of ⌃⇧⌥⌘, matched exactly), base key, replacement, keep-mods. Needs MORPH_CAPS (0x03) for non-Shift triggers; older firmware shows the Shift-only editor.
 - **Leader** (0x19, v10+) — `&fled` sequences with typed outputs,
   F-key preset.
+- **Auto Shift** (0x2C, v19+, both families) — global auto shift (timeout, key groups, modifiers, keyrepeat) and retro shift; ships off in firmware.
 - **Hold timing** (0x2A, Totem v17) — per-key and virtual-slot hold-tap timing.
 - **Gestures** (0x11, v10+, Imprint) — hold the gesture key, stroke a ball;
   8 sets × 8 directions, typed outputs.
