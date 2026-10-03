@@ -37,7 +37,7 @@ export class CommandPalette {
             // The trainer owns plain keystrokes while it has focus, but not
             // this one — it is modified, so it can never be a lesson character.
             e.preventDefault();
-            this.toggle();
+            if (!document.body.dataset.htDrill) this.toggle();   // a held mod + K from the tap-hold calibrator drills is not a request
         } else if (this.open && e.key === 'Escape') {
             e.preventDefault();
             this.close();

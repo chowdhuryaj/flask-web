@@ -7,11 +7,12 @@
 
 import { el, modal, toast } from './ui.js?v=65';
 import { board } from './board.js?v=65';
+import { saveState } from './save-state.js?v=65';
 import { decode, tapHoldSpecOf, holdTapParts } from './behavior-catalog.js?v=65';
 import { HOLDTAP_FLAVORS, handsOf, triggerPreset, POSITIONAL_MODES, LOG_REASONS, decodeHoldtapSlot, HT_LOG } from './zmk-holdtap-codec.js?v=65';
 import {
-    hasFeature, readLog, readPositional, applyRecommendation, analyzeHoldtap, usageChar,
-    buildPassage, holdPrompts, diffTyped, MIN_TAP_SAMPLES,
+    hasFeature, readPositional, startLogPoll, applyRecommendation, analyzeHoldtap, usageChar,
+    buildPassage, holdPrompts, diffTyped, typedEnough, MIN_TAP_SAMPLES,
 } from './zmk-ht-calibrate.js?v=65';
 
 const CH = 0x2A;
@@ -64,6 +65,24 @@ export function calibratorCard(app) {
     const flask = app.flask;
     const root = el('div', { class: 'ht-cal', 'data-card': 'ht-calibrator' });
     const S = { typing: [], holds: [], retest: null, rows: null, current: {}, running: null, model: null };
+    const aborts = new Set();   // per-drill cleanup, run by root.dispose()
+    let prevLayer = null, disposed = false;
+    // While a drill runs a held mod + letter can fire browser shortcuts: guard unload, mute the command palette.
+    const unloadGuard = (e) => { e.preventDefault(); e.returnValue = ''; };
+    function setRunning(kind) {
+        S.running = kind;
+        if (typeof document === 'undefined') return;
+        if (kind) document.body.dataset.htDrill = '1'; else delete document.body.dataset.htDrill;
+        window[kind ? 'addEventListener' : 'removeEventListener']('beforeunload', unloadGuard);
+    }
+    /** Sheet closed: stop whatever runs, give the board its layer back. */
+    root.dispose = () => {
+        if (disposed) return;
+        disposed = true;
+        for (const f of [...aborts]) f();
+        setRunning(null);
+        if (prevLayer != null) { try { board.setLayer(prevLayer, { keepSelection: true }); } catch { /* board gone */ } }
+    };
 
     if (app.offline) {
         root.append(el('p', { class: 'hint', text: 'The calibrator reads the keyboard’s live decision log. It is not simulated in the offline preview.' }));
@@ -72,7 +91,8 @@ export function calibratorCard(app) {
     root.append(el('p', { class: 'hint', text: 'Reading this keyboard…' }));
     hasFeature(flask, HT_LOG).then((ok) => {
         if (!ok) { root.replaceChildren(el('p', { class: 'hint warn', text: NEEDS_LOG })); return; }
-        try { board.setLayer(0, { keepSelection: true }); } catch { /* no board yet */ }   // drills target the base layer
+        if (disposed) return;
+        try { prevLayer = board.layer; board.setLayer(0, { keepSelection: true }); } catch { /* no board yet */ }   // drills target the base layer
         S.model = readHoldtapKeys();
         if (!S.model.keys.length) { root.replaceChildren(el('p', { class: 'hint warn', text: 'No hold-tap keys (live) on the base layer.' })); return; }
         build();
@@ -80,32 +100,10 @@ export function calibratorCard(app) {
 
     // ------------------------------------------------------------- polling
 
-    /** Poll the log every 100 ms; onEntries(list) per batch. Resolves to stop(). */
-    async function startPolling(onEntries) {
-        app.hid?.pause?.();
-        let cursor = (await readLog(flask, 0)).cursor;   // drop what is already in the ring
-        let busy = false;
-        const tick = async () => {
-            if (busy) return;
-            busy = true;
-            try {
-                const r = await readLog(flask, cursor);
-                cursor = r.cursor;
-                if (r.entries.length) onEntries(r.entries);
-            } catch (e) { toast(`Log read failed: ${e.message}`, true); stop(); }
-            busy = false;
-        };
-        const timer = setInterval(() => { if (!root.isConnected) stop(); else tick(); }, 100);
-        let stopped = false;
-        async function stop() {
-            if (stopped) return;
-            stopped = true;
-            clearInterval(timer);
-            try { await tick(); } catch { /* final drain best effort */ }
-            app.hid?.resume?.();
-        }
-        return stop;
-    }
+    const startPolling = (onEntries, onFail) => startLogPoll(flask, {
+        hid: app.hid, onEntries, alive: () => root.isConnected,
+        onError: (e) => { toast(`Log read failed: ${e.message}`, true); onFail?.(); },
+    });
 
     // ------------------------------------------------------------- sections
 
@@ -135,7 +133,7 @@ export function calibratorCard(app) {
         const start = el('button', { class: 'btn small primary', type: 'button', text: retest ? 'Start re-test' : 'Start typing drill' });
         const stopBtn = el('button', { class: 'btn small', type: 'button', text: 'Finish', disabled: true });
         const entries = [];
-        let stopPoll = null, t0 = 0, timer = null;
+        let stopPoll = null, t0 = 0, timer = null, settle = null, finishing = false, run = 0;
         const label = (s) => keys.find((k) => k.slot === s)?.name ?? `slot ${s}`;
         const paintLive = () => {
             const miss = entries.filter((e) => e.hold);
@@ -143,8 +141,10 @@ export function calibratorCard(app) {
                 text: `Misfire: ${label(e.slot)} became a hold (${LOG_REASONS[e.reason] ?? e.reason}, held ${e.heldMs} ms)` })));
         };
         const finish = async () => {
-            clearInterval(timer);
-            await stopPoll?.(); stopPoll = null; S.running = null;
+            if (S.running !== 'typing' || finishing) return;
+            finishing = true; run++;
+            clearInterval(timer); clearTimeout(settle);
+            await stopPoll?.(); stopPoll = null; setRunning(null); finishing = false;
             field.disabled = true; start.disabled = false; stopBtn.disabled = true;
             const d = diffTyped(gen.expected, field.value);
             result.replaceChildren(
@@ -154,14 +154,22 @@ export function calibratorCard(app) {
             if (retest) S.retest = entries.slice(); else S.typing = entries.slice();
             await analyze();
         };
+        aborts.add(() => {   // sheet closed: no 60 s timer left behind, hand the poller back
+            clearInterval(timer); clearTimeout(settle); run++;
+            const f = stopPoll; stopPoll = null; f?.();
+        });
         start.onclick = async () => {
-            if (S.running) return;
-            S.running = 'typing';
+            if (S.running || disposed) return;
+            setRunning('typing');
+            const mine = ++run;
             entries.length = 0; field.value = ''; result.replaceChildren(); live.replaceChildren();
             start.disabled = true; stopBtn.disabled = false; field.disabled = false;
+            let stop;
             try {
-                stopPoll = await startPolling((list) => { entries.push(...list); paintLive(); });
-            } catch (e) { toast(`Log read failed: ${e.message}`, true); S.running = null; start.disabled = false; return; }
+                stop = await startPolling((list) => { entries.push(...list); paintLive(); }, () => finish());
+            } catch (e) { toast(`Log read failed: ${e.message}`, true); if (mine === run) { setRunning(null); start.disabled = false; stopBtn.disabled = true; field.disabled = true; } return; }
+            if (mine !== run) { stop(); return; }   // finished or closed while the first read was pending
+            stopPoll = stop;
             field.focus();
             t0 = performance.now();
             timer = setInterval(() => {
@@ -171,7 +179,11 @@ export function calibratorCard(app) {
             }, 250);
         };
         stopBtn.onclick = finish;
-        field.addEventListener('input', () => { if (field.value.length >= gen.expected.length && S.running === 'typing') finish(); });
+        // Done when the text is complete, but wait: a trailing ⌫ / ⌦ press is still to be logged.
+        field.addEventListener('input', () => {
+            clearTimeout(settle);
+            if (S.running === 'typing' && typedEnough(field.value, gen.expected)) settle = setTimeout(finish, 1500);
+        });
         // A hold misfire sends Ctrl/Cmd/Alt chords: keep them away from the browser.
         field.addEventListener('keydown', (e) => { if (e.ctrlKey || e.metaKey || e.altKey) e.preventDefault(); });
         typingBox.replaceChildren(
@@ -192,30 +204,38 @@ export function calibratorCard(app) {
         const start = el('button', { class: 'btn small primary', type: 'button', text: 'Start holds drill' });
         const stopBtn = el('button', { class: 'btn small', type: 'button', text: 'Finish', disabled: true });
         const got = [];
-        let i = 0, stopPoll = null;
+        let i = 0, stopPoll = null, finishing = false, run = 0;
         const show = () => {
             prog.textContent = `${Math.min(i + 1, prompts.length)} of ${prompts.length}`;
             cue.textContent = i < prompts.length ? prompts[i].text : 'Done.';
         };
         const finish = async () => {
-            await stopPoll?.(); stopPoll = null; S.running = null;
+            if (S.running !== 'holds' || finishing) return;
+            finishing = true; run++;
+            await stopPoll?.(); stopPoll = null; setRunning(null); finishing = false;
             sink.disabled = true; start.disabled = false; stopBtn.disabled = true;
             S.holds = got.slice();
             cue.textContent = `Done: ${got.length} holds logged.`;
             await analyze();
         };
+        aborts.add(() => { run++; const f = stopPoll; stopPoll = null; f?.(); });
         start.onclick = async () => {
-            if (S.running) return;
-            S.running = 'holds'; i = 0; got.length = 0;
+            if (S.running || disposed) return;
+            setRunning('holds'); i = 0; got.length = 0;
+            const mine = ++run;
             start.disabled = true; stopBtn.disabled = false; sink.disabled = false;
+            let stop;
             try {
-                stopPoll = await startPolling((list) => {
+                stop = await startPolling((list) => {
+                    if (S.running !== 'holds' || mine !== run) return;
                     for (const e of list) {   // entries from the other-hand key (or strays) are not hold intent
                         if (i < prompts.length && e.slot === prompts[i].slot) { got.push(e); i++; }
                     }
                     if (i >= prompts.length) finish(); else show();
-                });
-            } catch (e) { toast(`Log read failed: ${e.message}`, true); S.running = null; start.disabled = false; return; }
+                }, () => finish());
+            } catch (e) { toast(`Log read failed: ${e.message}`, true); if (mine === run) { setRunning(null); start.disabled = false; stopBtn.disabled = true; sink.disabled = true; } return; }
+            if (mine !== run) { stop(); return; }
+            stopPoll = stop;
             sink.focus(); show();
         };
         stopBtn.onclick = finish;
@@ -246,7 +266,8 @@ export function calibratorCard(app) {
         S.rows = analyzeHoldtap({
             typing: S.typing, holds: S.holds, keys: keys.map((k) => ({ ...k, label: k.name })), current: S.current,
             handOfPos: (p) => hands.get(p) ?? null,
-            triggersFor: (hand) => triggerPreset(boardKeys, hand === 'left' ? 'left' : 'right', false),
+            // opposite half + the same-hand hold-tap keys, so same-hand mod chords still hold
+            triggersFor: (hand) => triggerPreset(boardKeys, hand, keys.filter((k) => k.hand === hand).map((k) => k.pos)),
         });
         renderResults();
     }
@@ -275,7 +296,7 @@ export function calibratorCard(app) {
             let rec;
             if (!r.rec) rec = el('td', { class: 'faint', text: `not enough data (${r.tapSamples} of ${MIN_TAP_SAMPLES} taps)` });
             else {
-                rec = el('td', {}, el('div', { class: 'mono', text: `${r.rec.term} ms · idle ${r.rec.idle} ms${r.rec.mode != null ? ' · same hand = tap (on press)' : ''}` }),
+                rec = el('td', {}, el('div', { class: 'mono', text: `${r.rec.term} ms · idle ${r.rec.idle} ms${r.rec.mode != null ? ' · same hand = tap (on press, hold-tap keys excepted)' : ''}` }),
                     el('div', { class: 'note faint', text: ok ? '' : 'already right' }),
                     ...r.rec.notes.map((n) => el('div', { class: 'note warn', text: n })));
             }
@@ -292,10 +313,19 @@ export function calibratorCard(app) {
             apply.disabled = true;
             try {
                 for (const r of todo) await applyRecommendation(flask, r, S.model.boardKeys.length);
+                // The channel save is wholesale: it also persists any earlier unsaved hold-tap edit.
+                // Register through the shared save state, run it, then clean it, so the top bar agrees.
+                const hadEdits = saveState.dirty().some((d) => d.source === CH);
+                saveState.markDirty(CH, 'Hold-tap timing', () => flask.save(CH));
                 await flask.save(CH);
-                toast(`Applied to ${todo.length} key${todo.length === 1 ? '' : 's'} and saved`);
+                saveState.clean(CH);
+                toast(`Applied to ${todo.length} key${todo.length === 1 ? '' : 's'} and saved${hadEdits ? ' (with your earlier unsaved hold-tap edits)' : ''}`);
                 await analyze();
-            } catch (e) { toast(`Apply failed: ${e.message}`, true); }
+            } catch (e) {
+                // Written live but not saved: leave it in the top bar so Save / Discard see it.
+                saveState.markDirty(CH, 'Hold-tap timing', () => flask.save(CH));
+                toast(`Apply failed: ${e.message}. Changes already written stay unsaved: Save is in the top bar.`, true);
+            }
             apply.disabled = false;
         };
         const retest = el('button', { class: 'btn small', type: 'button', text: 'Re-test typing',
@@ -314,11 +344,15 @@ export function calibratorCard(app) {
 
 /** The calibrator in a sheet. */
 export function openCalibrator(app) {
+    document.dispatchEvent(new CustomEvent('ht-calibrator-open'));   // Type-to-assign must not swallow the drill keys
     const card = calibratorCard(app);
     const close = el('button', { class: 'btn', type: 'button', text: 'Close' });
     const back = modal('Calibrate tap-hold', el('div', { class: 'ht-cal-wrap' }, card), [close]);
     back.dataset.sheet = 'ht-calibrate';
     close.onclick = () => back.remove();
+    // The backdrop click removes the sheet too: clean up on any removal.
+    const mo = new MutationObserver(() => { if (!back.isConnected) { mo.disconnect(); card.dispose?.(); } });
+    mo.observe(document.body, { childList: true });
     return back;
 }
 

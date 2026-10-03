@@ -16,12 +16,19 @@ export const MIN_TAP_SAMPLES = 8;
 
 const probes = new WeakMap();   // flask client → Map(id → Promise<boolean>)
 /** Does the firmware answer value `id` (0x53 / 0x54)? Old firmware echoes 0xFF
- * and getBytes throws 'unhandled'. Memoized per flask client. */
+ * and getBytes throws 'unhandled'. Memoized per flask client, but only the
+ * definitive answers: a timeout or other transport error is "don't know" and
+ * is probed again next time. */
 export function hasFeature(flask, id) {
     if (!flask) return Promise.resolve(false);
     if (!probes.has(flask)) probes.set(flask, new Map());
     const m = probes.get(flask);
-    if (!m.has(id)) m.set(id, flask.getBytes(CH, id, id === HT_LOG ? [0, 0] : [0]).then(() => true, () => false));
+    if (!m.has(id)) {
+        m.set(id, flask.getBytes(CH, id, id === HT_LOG ? [0, 0] : [0]).then(() => true, (e) => {
+            if (e?.message !== 'unhandled') m.delete(id);
+            return false;
+        }));
+    }
     return m.get(id);
 }
 
@@ -52,6 +59,45 @@ export async function readLog(flask, since, maxFrames = 64) {
         if (d.entries.length < 3) break;
     }
     return { entries, cursor: cur, dropped };
+}
+
+/**
+ * Poll the log every `intervalMs` from "now" (what is in the ring already is
+ * dropped). onEntries(list) per batch; onError(e) if a read fails mid-run (the
+ * poll stops itself first). `hid` is paused for the run and resumed exactly
+ * once, also when the very first read throws (then this rejects). `alive()`
+ * false stops it (sheet gone). Resolves to stop(): waits for the in-flight
+ * read, drains once more, resumes; nothing reaches onEntries after stop()
+ * resolves. stop() is idempotent and safe to call from onError.
+ */
+export async function startLogPoll(flask, { hid, onEntries, onError, alive = () => true, intervalMs = 100 }) {
+    hid?.pause?.();
+    let resumed = false;
+    const resume = () => { if (!resumed) { resumed = true; hid?.resume?.(); } };
+    let cursor;
+    try { cursor = (await readLog(flask, 0)).cursor; }
+    catch (e) { resume(); throw e; }
+    let inflight = null, stopP = null;
+    const drain = async () => {
+        const r = await readLog(flask, cursor);
+        cursor = r.cursor;
+        if (r.entries.length) onEntries(r.entries);
+    };
+    const tick = () => {
+        if (inflight || stopP) return;
+        inflight = drain().catch((e) => { stop(); onError?.(e); }).finally(() => { inflight = null; });
+    };
+    const timer = setInterval(() => { if (!alive()) stop(); else tick(); }, intervalMs);
+    function stop() {
+        stopP ??= (async () => {
+            clearInterval(timer);
+            await inflight;
+            try { await drain(); } catch { /* final drain best effort */ }
+            resume();
+        })();
+        return stopP;
+    }
+    return stop;
 }
 
 /** Apply a recommendation row ({slot, rec}) to the device: 0x50 term + idle
@@ -97,7 +143,13 @@ const countBy = (list, f) => list.reduce((m, e) => { const k = f(e); m[k] = (m[k
  *
  * Rules (the brief's, with conflicts resolved here):
  *  term  = clamp(round10(tap held_ms p95 + 40), 150, 500). Taps must end
- *          before the timer. Upper bound: when the slot's flavor is
+ *          before the timer. The tap-outcome held_ms are censored at the
+ *          current term (a press held past it is a hold, never logged as a
+ *          tap), so p95 alone could never rise past current + 40. The held_ms
+ *          of HOLD-outcome typing entries (intended taps that misfired) are
+ *          therefore added to the distribution; the 0xFFFF saturated value is
+ *          ignored. The MIN_TAP_SAMPLES gate still counts tap outcomes only.
+ *          Upper bound: when the slot's flavor is
  *          tap-preferred (2) holds are decided ONLY by the timer, so an
  *          intended hold whose other key lands at other_ms < term turns into a
  *          tap; the term must then not exceed p10 hold other_ms (- 10). With
@@ -122,7 +174,7 @@ export function analyzeHoldtap({ typing = [], holds = [], keys, current = {}, ha
         const taps = t.filter((e) => !e.hold);
         const tHold = t.filter((e) => e.hold);              // tap-intent misfires
         const hTap = h.filter((e) => !e.hold);              // hold-intent misfires
-        const heldTap = taps.map((e) => e.heldMs);
+        const heldTap = [...taps, ...tHold.filter((e) => e.heldMs < 0xFFFF)].map((e) => e.heldMs);   // uncensors the tap length
         const otherHold = h.filter((e) => e.hold && e.otherMs != null).map((e) => e.otherMs);
         const typingGap = t.map((e) => e.priorGapMs);
         const holdGap = h.map((e) => e.priorGapMs);
@@ -213,16 +265,20 @@ export function buildPassage({ keys, letters, reps = 10, seed = 1 }) {
     return { text, expected, groups: groups.length };
 }
 
+export const BROWSER_CHORD_LETTERS = 'wtnqkr';   // Cmd/Ctrl + these closes, quits, opens, reloads or opens the palette
+
 /**
  * Drill 2 prompts, key by key: `reps` x "hold K + tap <opposite-hand letter>"
  * then `alone` x "hold K alone". keys = [{slot, hand, name}] (name e.g.
  * "T (Ctrl)"), letters = [{ch, hand}]. Returns [{slot, other: letter|null, text}].
+ * A held Ctrl/Cmd + letter must not hit a browser shortcut, so W T N Q K R
+ * are never the "other" key (the pool may end up empty: only "alone" prompts).
  */
 export function holdPrompts({ keys, letters, reps = 4, alone = 2 }) {
     const out = [];
     let n = 0;
     for (const k of keys) {
-        const pool = letters.filter((l) => l.hand !== k.hand && l.ch !== ' ');
+        const pool = letters.filter((l) => l.hand !== k.hand && l.ch !== ' ' && !BROWSER_CHORD_LETTERS.includes(l.ch));
         for (let i = 0; i < reps && pool.length; i++) {
             const o = pool[n++ % pool.length].ch;
             out.push({ slot: k.slot, other: o, text: `Hold ${k.name}, tap ${o.toUpperCase()} on the other hand, release both` });
@@ -230,6 +286,13 @@ export function holdPrompts({ keys, letters, reps = 4, alone = 2 }) {
         for (let i = 0; i < alone; i++) out.push({ slot: k.slot, other: null, text: `Hold ${k.name} alone for about half a second` });
     }
     return out;
+}
+
+/** Typing drill is complete: at least the expected length and the last typed
+ * character is the expected last one. The caller waits a moment before finishing
+ * so trailing Backspace / Delete presses are still logged. */
+export function typedEnough(typed, expected) {
+    return typed.length >= expected.length && typed.slice(-1) === expected.slice(-1);
 }
 
 /** Edit-distance alignment of what was typed against the expected text.

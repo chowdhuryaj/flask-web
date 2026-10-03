@@ -5,7 +5,7 @@ import {
     encodePositional, decodePositional, decodeHoldtapLog, handsOf, triggerPreset,
 } from '../zmk-holdtap-codec.js?v=65';
 import {
-    analyzeHoldtap, percentile, readLog, buildPassage, holdPrompts, diffTyped, usageChar, hasFeature, applyRecommendation,
+    analyzeHoldtap, percentile, readLog, buildPassage, holdPrompts, diffTyped, usageChar, hasFeature, applyRecommendation, startLogPoll, typedEnough,
 } from '../zmk-ht-calibrate.js?v=65';
 import { TOTEM_LAYOUT } from '../zmk-totem-layout.js?v=65';
 
@@ -37,7 +37,10 @@ const ok = (c, m = '') => { assert.ok(c, m); checks++; };
     eq(keys.filter((k) => hands.get(k.pos) === 'right').map((k) => k.pos), R, 'right half');
     eq(triggerPreset(keys, 'left'), R, 'opposite of left = right half');
     eq(triggerPreset(keys, 'right'), L);
-    eq(triggerPreset(keys, 'left', true), [...range([5, 9], [15, 19], [26, 31], [32, 34], [35, 37])].sort((a, b) => a - b), 'plus own thumbs 32-34');
+    // Totem default: opposite half + same-hand hold-tap keys (left 20 32 33 34, right 31 35 36 37)
+    eq(triggerPreset(keys, 'left', [20, 32, 33, 34]), [...R, 20, 32, 33, 34].sort((a, b) => a - b), 'fht_l = KEYS_R + 20 32 33 34');
+    eq(triggerPreset(keys, 'right', [31, 35, 36, 37]), [...L, 31, 35, 36, 37].sort((a, b) => a - b), 'fht_r = KEYS_L + 31 35 36 37');
+    eq(triggerPreset(keys, 'left', [31, 20]), [...R, 20].sort((a, b) => a - b), 'a hold-tap on the other half is already in the preset, not added twice');
 }
 
 // ---- 0x54 decode, seq wrap ----
@@ -97,7 +100,60 @@ const frame = (firstSeq, entries, next) => {
     const old = { async getBytes() { throw new Error('unhandled'); } };
     const neu = { async getBytes() { return new Array(29).fill(0); } };
     eq(await hasFeature(old, 0x53), false); eq(await hasFeature(neu, 0x53), true);
+    // only the definitive 'unhandled' is cached; a timeout is probed again
+    let calls = 0, fail = 'timeout';
+    const flaky = { async getBytes() { calls++; if (fail) throw new Error(fail); return [0]; } };
+    eq(await hasFeature(flaky, 0x53), false); eq(await hasFeature(flaky, 0x53), false); eq(calls, 2, 'timeout not cached');
+    fail = null; eq(await hasFeature(flaky, 0x53), true, 'recovers after the timeout'); eq(calls, 3);
+    eq(await hasFeature(flaky, 0x53), true); eq(calls, 3, 'definitive answer cached');
+    fail = 'unhandled'; const un = { async getBytes() { calls++; throw new Error('unhandled'); } };
+    calls = 0; await hasFeature(un, 0x54); await hasFeature(un, 0x54); eq(calls, 1, 'unhandled cached');
 }
+
+// ---- startLogPoll: stop() waits for the in-flight read, then drains; hid always resumed ----
+{
+    const E = (slot, n) => ({ slot, hold: false, heldMs: 100, reason: 5 + 0 * n });
+    let nextSeq = 0, ring = [], delay = 0, failFrom = Infinity, reads = 0;
+    const add = (slot) => ring.push({ seq: nextSeq++, ...E(slot) });
+    const flask = { async getBytes(ch, id, p) {
+        reads++;
+        if (reads >= failFrom) throw new Error('boom');
+        const since = (p[0] << 8) | p[1];
+        const take = ring.filter((r) => r.seq >= since).slice(0, 3);
+        const snapshot = frame(take.length ? take[0].seq : nextSeq, take, nextSeq);
+        if (delay) await new Promise((r) => setTimeout(r, delay));   // entry lands while the read is in flight
+        return snapshot;
+    } };
+    const hid = { n: 0, pause() { this.n++; }, resume() { this.n--; } };
+    const got = [];
+    add(1);                                   // already in the ring at start: dropped
+    const stop = await startLogPoll(flask, { hid, onEntries: (l) => got.push(...l.map((e) => e.slot)), intervalMs: 5 });
+    eq(hid.n, 1, 'paused');
+    add(2); delay = 40;
+    await new Promise((r) => setTimeout(r, 15));     // a tick is now in flight, with a snapshot lacking 3
+    add(3);                                          // pressed just before Finish
+    await stop();
+    eq(got, [2, 3], 'in-flight read awaited, then one more drain picks up the last press');
+    eq(hid.n, 0, 'resumed once');
+    add(4); await new Promise((r) => setTimeout(r, 30));
+    eq(got, [2, 3], 'nothing is delivered after stop() resolved');
+    await stop(); eq(hid.n, 0, 'stop is idempotent');
+    // first read fails: poller is resumed, caller sees the error
+    reads = 0; failFrom = 1; delay = 0;
+    await assert.rejects(() => startLogPoll(flask, { hid, onEntries() {} }), /boom/); checks++;
+    eq(hid.n, 0, 'resumed after a failing first read');
+    // a mid-run failure stops the poll and reports once
+    reads = 0; failFrom = 3; let errs = 0;
+    await startLogPoll(flask, { hid, onEntries() {}, onError: () => errs++, intervalMs: 5 });
+    await new Promise((r) => setTimeout(r, 60));
+    eq(errs, 1, 'onError once'); eq(hid.n, 0, 'resumed after a mid-run failure');
+}
+
+// ---- typing drill completion ----
+eq(typedEnough('there', 'there'), true); eq(typedEnough('', 'x'), false);
+eq(typedEnough('thexx', 'there'), false, 'long enough but the last character is wrong');
+eq(typedEnough('ther', 'there'), false, 'one short');
+eq(typedEnough('therx', 'there'), false);
 
 // ---- percentile ----
 eq(percentile([], 50), null);
@@ -175,6 +231,23 @@ const triggersFor = (h) => (h === 'left' ? [20, 21] : [0, 1]);
     eq(analyzeHoldtap({ typing, holds, keys: [key(1)], current: {} })[0].misfires.holds, { count: 2, total: 3, byReason: { 5: 1, 3: 1 } });
 }
 
+{
+    // censoring: every tap-outcome held_ms is below the current term (200), so p95 alone is 190 -> 230.
+    // Misfired intended taps (HOLD outcome in the typing drill) were held 260..300 ms: the term can rise past current + 40.
+    const taps = Array.from({ length: 16 }, (_, i) => tapE(1, 100 + i * 6));
+    const misfires = [holdE(1, 260, 150, 80, 1), holdE(1, 300, 150, 80, 1), { ...holdE(1, 0xFFFF, 150, 80, 1) }];
+    const cur = { 1: { term: 200, idle: 100, flavor: 1, mode: 0 } };
+    const [plain] = analyzeHoldtap({ typing: taps, keys: [key(1)], current: cur });
+    eq(plain.rec.term, 230, 'censored: tap p95 only (190) + 40');
+    const [r] = analyzeHoldtap({ typing: [...taps, ...misfires], keys: [key(1)], current: cur });
+    eq(r.tap.p95, 300, 'p95 sees the misfired taps; saturated 0xFFFF held_ms is ignored');
+    eq(r.rec.term, 340, 'round10(300 + 40) > current + 40');
+    eq(r.tapSamples, 16, 'the sample gate still counts tap outcomes');
+    // hold-intent drill HOLD entries never feed the tap distribution
+    const [h] = analyzeHoldtap({ typing: taps, holds: [holdE(1, 900)], keys: [key(1)], current: cur });
+    eq(h.rec.term, 230);
+}
+
 // ---- apply: 0x50 keeps quick/flavor, 0x53 only when mode is recommended ----
 {
     const sent = [];
@@ -210,6 +283,12 @@ const triggersFor = (h) => (h === 'left' ? [20, 21] : [0, 1]);
     eq(pr.length, 12); eq(pr.filter((x) => x.other === null).length, 4);
     ok(pr.filter((x) => x.slot === 1 && x.other).every((x) => letters.find((l) => l.ch === x.other).hand === 'right'), 'opposite-hand letter');
     ok(/Ctrl/.test(pr[0].text));
+    // a held Ctrl/Cmd + W T N Q K R would close, quit, open, reload or open the palette: never prompted
+    const all = [...'qwertyuiopasdfghjklzxcvbnm'].map((ch, i) => ({ ch, hand: i % 2 ? 'left' : 'right' }));
+    const pr2 = holdPrompts({ keys: [{ slot: 1, hand: 'left', name: 'A (Ctrl)' }, { slot: 2, hand: 'right', name: 'S (Gui)' }], letters: all, reps: 40 });
+    ok(pr2.some((x) => x.other), 'still prompts other keys');
+    ok(pr2.every((x) => !x.other || !'wtnqkr'.includes(x.other)), 'no browser-chord letters');
+    eq(holdPrompts({ keys: [{ slot: 1, hand: 'left', name: 'A' }], letters: [{ ch: 'w', hand: 'right' }, { ch: 'k', hand: 'right' }] }).filter((x) => x.other).length, 0, 'only reserved letters: hold-alone prompts remain');
 }
 
 // ---- typed vs expected ----

@@ -60,14 +60,14 @@ export function handsOf(keys) {
     return new Map(keys.map((k) => [k.pos, k.x < mid ? 'left' : 'right']));
 }
 
-/** Trigger preset for a key on `hand`: the opposite half, plus (withThumbs)
- * that hand's own thumb keys. Thumbs = keys within 0.5 u of the lowest row
- * (keys = [{pos, x, y?}]). */
-export function triggerPreset(keys, hand, withThumbs = false) {
+/** Trigger preset for a key on `hand`: the opposite half, plus `sameHand`
+ * (positions of the hold-tap keys on that hand, so a same-hand mod chord such
+ * as Ctrl+Shift on the thumbs still holds). Positions given in `sameHand` that
+ * are on the other half are ignored. keys = [{pos, x}]. */
+export function triggerPreset(keys, hand, sameHand = []) {
     const hands = handsOf(keys);
-    const ys = keys.map((k) => k.y).filter((y) => y != null);
-    const low = ys.length ? Math.max(...ys) - 0.5 : Infinity;
-    return keys.filter((k) => hands.get(k.pos) !== hand || (withThumbs && k.y != null && k.y >= low))
+    const extra = new Set(sameHand);
+    return keys.filter((k) => hands.get(k.pos) !== hand || extra.has(k.pos))
         .map((k) => k.pos).sort((a, b) => a - b);
 }
 

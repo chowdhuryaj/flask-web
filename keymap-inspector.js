@@ -227,9 +227,10 @@ export function createInspector({ app, dock }) {
         const be = timingBackendNow();
         const live = decode(b, ADAPTER).params.live;
         const isLive = !!(be.runtime && live && live !== 'off');
-        if (timing.pos === pos && timing.el && timing.live === isLive) return timing.el;
+        const fixed = live === 'fixed';   // virtual-slot node: no key position, so no same-hand rule
+        if (timing.pos === pos && timing.el && timing.live === isLive && timing.fixed === fixed) return timing.el;
         const host = el('div', { class: 'ht-host' });
-        timing = { pos, el: host, live: isLive, token: timing.token + 1 };
+        timing = { pos, el: host, live: isLive, fixed, token: timing.token + 1 };
         const token = timing.token;
         if (!isLive) {
             host.append(el('p', { class: 'hint', text: be.runtime
@@ -238,7 +239,7 @@ export function createInspector({ app, dock }) {
             return host;
         }
         host.append(el('p', { class: 'hint', text: 'Reading this key’s timing…' }));
-        keyTimingCard(app, pos).then((card) => {
+        keyTimingCard(app, pos, { positional: !fixed }).then((card) => {
             if (token !== timing.token) return;
             host.replaceChildren(card ?? el('p', { class: 'hint', text: 'This keyboard has no live hold-tap timing.' }));
         }).catch((e) => { if (token === timing.token) host.replaceChildren(el('p', { class: 'hint warn', text: `Timing unavailable: ${e.message}` })); });

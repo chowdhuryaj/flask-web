@@ -114,6 +114,7 @@ export class ZmkKeymapTab {
         this.client.addEventListener('lockstate', (e) => this._onLockState(e.detail), { signal });
         this.client.addEventListener('unsaved', (e) => this._setUnsaved(e.detail), { signal });
         this.client.addEventListener('disconnect', () => this._onSerialDisconnect(), { signal });
+        document.addEventListener?.('ht-calibrator-open', () => this._setCapture(false), { signal });   // its drills need the keys
     }
 
     /** Called when a newer instance replaces this one (main.js rebuilds every

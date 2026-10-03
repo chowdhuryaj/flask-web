@@ -138,7 +138,7 @@ scope, precisely so node can import them — keep it that way.
 
 Every module is imported with one `?v=N` stamp everywhere (`tests/stamps-test.mjs`
 enforces it; "x.js" and "x.js?v=N" are two module instances). When releasing,
-bump the stamp across the tree — GitHub Pages' CDN caches hard. Currently `?v=62`.
+bump the stamp across the tree — GitHub Pages' CDN caches hard.
 
 ## Hard-won rules (do not "simplify" these away)
 
