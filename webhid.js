@@ -77,6 +77,8 @@ export class FlaskHID extends EventTarget {
         dev.oninputreport = (e) => this._onInputReport(e);
         localStorage.setItem('flask-last-device',
             `${dev.vendorId.toString(16).padStart(4, '0')}:${dev.productId.toString(16).padStart(4, '0')}`);
+        if (dev.productName) localStorage.setItem('flask-last-name', dev.productName);
+        else localStorage.removeItem('flask-last-name');
         diag.log('hid-open', `${dev.vendorId.toString(16)}:${dev.productId.toString(16)} ${dev.productName ?? ''}`);
         this.dispatchEvent(new Event('connect'));
     }

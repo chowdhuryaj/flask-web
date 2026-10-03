@@ -1326,4 +1326,20 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     }
 }
 
+// ---- reconnect pick: two boards on one VID:PID (Totem + Imprint)
+{
+    const { pickReconnectDevice } = await import('./zmk.js?v=76');
+    const dev = (productName, pid = 0x615E, vid = 0x1D50) => ({ vendorId: vid, productId: pid, productName });
+    const totem = dev('Totem'), imp = dev('Imprint'), other = dev('Other', 0x1234);
+    const last = '1d50:615e';
+    eq(pickReconnectDevice([totem], { last }).device, totem, 'one match connects');
+    eq(pickReconnectDevice([other], { last }), { device: null, ambiguous: false }, 'no match');
+    eq(pickReconnectDevice([imp, totem], { last, lastName: 'Totem' }).device, totem, 'two boards: last session name wins');
+    eq(pickReconnectDevice([totem, imp], { last, lastName: 'Imprint' }).device, imp, 'order does not matter');
+    eq(pickReconnectDevice([totem, imp], { last }), { device: null, ambiguous: true }, 'no remembered name: chooser');
+    eq(pickReconnectDevice([totem, dev('Totem')], { last, lastName: 'Totem' }), { device: null, ambiguous: true }, 'same name twice: chooser');
+    eq(pickReconnectDevice([totem, imp], { last, lastName: 'Gone' }).ambiguous, true, 'remembered board absent: chooser');
+    eq(pickReconnectDevice([imp, other], { offlineFamily: 'imprint' }).device, imp, 'offline: same-family device connects');
+}
+
 console.log(`zmk-studio-test: ${checks} checks OK`);

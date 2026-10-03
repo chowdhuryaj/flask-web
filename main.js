@@ -7,7 +7,7 @@ import { diag } from './diag.js?v=76';
 import { FlaskHID } from './webhid.js?v=76';
 import { renderPreflight } from './preflight.js?v=76';
 import { FlaskProto, CH, V } from './flaskproto.js?v=76';
-import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
+import { isZmkFamily, pickReconnectDevice, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
          zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=76';
 import { CommandPalette } from './command-palette.js?v=76';
 import { HUD } from './hud.js?v=76';
@@ -129,14 +129,16 @@ async function connectFlow(device) {
 /** Reconnect target: the remembered device, or (while editing offline) any
  * device of the workspace's family — shared by the hotplug event and the
  * poll below. */
+let ambiguousReconnectShown = false;
 function reconnectCandidate(devices) {
-    const last = localStorage.getItem('flask-last-device');
-    return devices.find((d) => {
-        const key = `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}`;
-        const offlineMatch = app.offline
-            && familyOf(d.vendorId, d.productId) === app.offlineWs?.family;
-        return last === key || offlineMatch;
+    const { device, ambiguous } = pickReconnectDevice(devices, {
+        last: localStorage.getItem('flask-last-device'),
+        lastName: localStorage.getItem('flask-last-name'),
+        offlineFamily: app.offline ? app.offlineWs?.family : null,
     });
+    if (ambiguous && !ambiguousReconnectShown) toast('Multiple matching keyboards found, choose one with Connect', true);
+    ambiguousReconnectShown = ambiguous;
+    return device;
 }
 
 async function loadDevice(device) {
@@ -665,11 +667,14 @@ function init() {
         // offline, a plug-in of the SAME family also connects — that's the
         // moment the queued changes apply.
         if (app.hid.connected || connecting || manualSwitch) return;
-        if (reconnectCandidate([e.detail])) {
-            diag.log('reconnect', 'replug event — reattaching');
-            toast('Reconnecting…');
-            await connectFlow(e.detail);
-        }
+        try {
+            const match = reconnectCandidate(await FlaskHID.grantedDevices());   // whole list, so a second board is seen
+            if (match) {
+                diag.log('reconnect', 'replug event — reattaching');
+                toast('Reconnecting…');
+                await connectFlow(match);
+            }
+        } catch (err) { console.warn('Hotplug reconnect failed:', err); }
     });
 
     // Event-independent reconnect: an unclean re-enumeration (keyboard
@@ -768,13 +773,13 @@ function init() {
     renderOfflineList();
     (async () => {
         await refreshDeviceList();
-        const last = localStorage.getItem('flask-last-device');
-        if (!last) return;
-        const granted = await FlaskHID.grantedDevices();
-        const match = granted.find((d) =>
-            `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}` === last);
+        if (!localStorage.getItem('flask-last-device')) return;
+        const match = reconnectCandidate(await FlaskHID.grantedDevices());
         if (match) await connectFlow(match);
-    })();
+    })().catch((e) => {
+        console.error('Startup reconnect failed:', e);
+        toast(`Startup reconnect failed: ${e.message}`, true);
+    });
 }
 
 init();

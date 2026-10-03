@@ -46,6 +46,22 @@ export function familyOf(vid, pid) {
     return zmkFamilyCandidate(vid, pid) ?? 'generic';
 }
 
+const vidpidKey = (d) => `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}`;
+
+/** Reconnect pick among granted devices. Candidates: the last VID:PID, or (while
+ * editing offline) any device of the workspace family. Totem and Imprint share a
+ * VID:PID, so with two candidates the one whose productName (ZMK_KEYBOARD_NAME,
+ * differs per family) matches the last session wins. WebHID exposes no serial.
+ * Returns { device, ambiguous }: still-ambiguous means the caller must show a
+ * chooser instead of guessing. */
+export function pickReconnectDevice(devices, { last, lastName, offlineFamily } = {}) {
+    const matches = devices.filter((d) => last === vidpidKey(d)
+        || (offlineFamily && familyOf(d.vendorId, d.productId) === offlineFamily));
+    if (matches.length <= 1) return { device: matches[0] ?? null, ambiguous: false };
+    const named = lastName ? matches.filter((d) => d.productName === lastName) : [];
+    return named.length === 1 ? { device: named[0], ambiguous: false } : { device: null, ambiguous: true };
+}
+
 export function familyLabel(family) {
     return ZMK_FAMILY_LABELS[family] ?? 'Keyboard';
 }
