@@ -7,7 +7,8 @@
 // device connection; the popup never opens one.
 
 import { el } from './ui.js?v=76';
-import { CH_ZMK, V } from './flaskproto.js?v=76';
+import { CH_ZMK, V, CH_QMK, V_QMK } from './flaskproto.js?v=76';
+import { isQmkFamily } from './boards.js?v=76';
 import { renderKeyboardSVG } from './board.js?v=76';
 import { appearance } from './themes.js?v=76';
 
@@ -265,7 +266,9 @@ export class HUD {
             const now = performance.now();
             if (app.caps.hudLayer && (changed || now - (this._layerAt ?? 0) >= 1000)) {
                 this._layerAt = now;
-                const layer = await app.flask.getU16(CH_ZMK.meta, V.metaActiveLayer);
+                const layer = isQmkFamily(app.family)
+                    ? await app.flask.getU16(CH_QMK.meta, V_QMK.metaActiveLayer)
+                    : await app.flask.getU16(CH_ZMK.meta, V.metaActiveLayer);
                 if (layer !== this.liveLayer) {
                     this.liveLayer = layer;
                     if (!this.peek) this.shownLayer = layer;
@@ -277,7 +280,10 @@ export class HUD {
             // Live-action chips at ~4 Hz (every 4th tick, cheap GETs):
             // autoscroll level (0x1A/0x05 signed)
             // and flask_macros playback (0x25/0x06, ZMK line).
-            if ((tick % 4) === 1 && (app.caps.autoscroll || app.caps.macros || app.caps.ballSwap)) {
+            // ZMK line only: on the Svalboard 0x1A is gone (v26) and 0x25/0x27
+            // mean other things, so the QMK line never polls these.
+            if ((tick % 4) === 1 && !isQmkFamily(app.family)
+                && (app.caps.autoscroll || app.caps.macros || app.caps.ballSwap)) {
                 const status = {};
                 if (app.caps.autoscroll) {
                     status.autoscroll = await app.flask.getI16(CH_ZMK.autoscroll, V.asState);

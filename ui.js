@@ -227,13 +227,14 @@ if (typeof document !== 'undefined' && document.addEventListener) {
  * (CH_ZMK.x) so Save runs channels in ascending order; `save` is what the status
  * bar runs for it, typically `() => flask.save(CH_ZMK.x)`.
  *
- *   reloadBar(channel, {reload, save, label, note})
+ *   reloadBar(channel, {reload, save, label, line, note})
  *     reload   async () => void   re-read this screen from the device
  *     save     async () => void   persist the channel (top bar calls it)
  *     label    name shown in unsaved lists
+ *     line     'qmk'|'zmk'  for the never-register check (save-state.js)
  *
- * Omit `save` for a channel that has none: the bar then never registers and
- * only reloads. State wording is the native one. */
+ * Omit `save` for a channel that has none (Svalboard corner chords 0x28): the
+ * bar then never registers and only reloads. State wording is the native one. */
 export const RELOAD_STATE = {
     null: SAVE_STATE.null,
     live: 'Unsaved — Save is in the top bar',
@@ -241,7 +242,7 @@ export const RELOAD_STATE = {
     saved: 'Saved ✓',
 };
 
-export function reloadBar(channel, { reload, save, label, note } = {}) {
+export function reloadBar(channel, { reload, save, label, line, note } = {}) {
     const btn = el('button', { class: 'btn small', text: 'Reload from device' });
     const state = el('span', { class: 'state', text: RELOAD_STATE.null });
     const bar = el('div', { class: 'savebar', 'data-reload-bar': '' }, btn, state);
@@ -258,7 +259,7 @@ export function reloadBar(channel, { reload, save, label, note } = {}) {
         saveState.markDirty(channel, label || `Channel 0x${Number(channel).toString(16)}`, async () => {
             bar.setState('saving');
             try { await save(); } catch (e) { bar.setState('live'); throw e; }
-        });
+        }, { line });
         bar.setState('live');
     };
     // The top bar's Save cleans the source; reflect it here.

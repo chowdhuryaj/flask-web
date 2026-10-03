@@ -4,7 +4,7 @@
 // caller (tabs, HUD poll) can fire and ordering is preserved.
 
 import { diag, diagHex } from './diag.js?v=76';
-import { ZMK_VIDPID } from './zmk.js?v=76';
+import { HID_IDS } from './boards.js?v=76';
 
 export const USAGE_PAGE = 0xFF60;
 export const USAGE = 0x61;
@@ -22,7 +22,9 @@ function isPollFrame(bytes) {
     return v === null || v === bytes[2];
 }
 
-const isFlaskInterface = (d) => d.vendorId === ZMK_VIDPID.vid && d.productId === ZMK_VIDPID.pid
+// Stock ZMK (Totem, Imprint) and the Svalboard (Vial + Flask frame on the
+// same raw-HID usage page). One list, boards.js HID_IDS.
+const isFlaskInterface = (d) => HID_IDS.some((id) => d.vendorId === id.vid && d.productId === id.pid)
     && d.collections.some((c) => c.usagePage === USAGE_PAGE && c.usage === USAGE);
 
 export class HIDError extends Error {
@@ -49,7 +51,7 @@ export class FlaskHID extends EventTarget {
 
     get connected() { return !!this.device?.opened; }
 
-    /** All previously-granted ZMK Flask raw-HID interfaces (no user gesture needed). */
+    /** All previously-granted Flask raw-HID interfaces (no user gesture needed). */
     static async grantedDevices() {
         if (!navigator.hid) return [];
         // A policy-blocked page rejects here (SecurityError): "none granted".
@@ -59,11 +61,11 @@ export class FlaskHID extends EventTarget {
         } catch { return []; }
     }
 
-    /** User-gesture connect: browser chooser filtered to the ZMK VID/PID's raw HID. */
+    /** User-gesture connect: browser chooser filtered to the known VID/PIDs' raw HID. */
     async requestDevice() {
         const devices = await navigator.hid.requestDevice({
-            filters: [{ vendorId: ZMK_VIDPID.vid, productId: ZMK_VIDPID.pid,
-                        usagePage: USAGE_PAGE, usage: USAGE }],
+            filters: HID_IDS.map((id) => ({ vendorId: id.vid, productId: id.pid,
+                usagePage: USAGE_PAGE, usage: USAGE })),
         });
         const dev = devices.find(isFlaskInterface);
         if (!dev) throw new HIDError('cancelled', 'No device chosen');
@@ -215,5 +217,44 @@ export class FlaskHID extends EventTarget {
         return this._enqueue(() =>
             this._send(prefix, (r) => r[1] === channel && r[2] === valueID
                 && echo.every((b, i) => r[3 + i] === b), opts));
+    }
+
+    /**
+     * VIA-framed command (Vial/VIA on the Svalboard): the response echoes the
+     * command byte, and the first `echoBytes` argument bytes
+     * (dynamic_keymap_get/set_keycode echo layer+row+col; get/set_buffer echo
+     * offset+size). Prefer this over rawCommand wherever the device echoes:
+     * rawCommand matches ANY next report, so a late reply that arrives after
+     * its own request timed out is adopted by whatever is in flight.
+     */
+    viaCommand(prefix, echoBytes = 0) {
+        const cmd = prefix[0];
+        const echo = prefix.slice(1, 1 + echoBytes);
+        return this._enqueue(() =>
+            this._send(prefix, (r) => r[0] === cmd
+                && echo.every((b, i) => r[1 + i] === b)));
+    }
+
+    /**
+     * Raw VIA/Vial command: matches the NEXT report. Correct only because
+     * requests are strictly serialized and QMK answers every report exactly
+     * once. Do not run the Vial GUI alongside; its responses interleave.
+     */
+    rawCommand(prefix) {
+        return this._enqueue(() => this._send(prefix, () => true));
+    }
+
+    /** Run several operations as one uninterruptible sequence (Vial unlock,
+     * bulk fetch). The callback gets direct-send primitives: it already
+     * holds the queue. */
+    transaction(fn) {
+        return this._enqueue(async () => {
+            const direct = {
+                request: (prefix) => this._send(prefix,
+                    (r) => r[1] === (prefix[1] ?? 0) && r[2] === (prefix[2] ?? 0)),
+                rawCommand: (prefix) => this._send(prefix, () => true),
+            };
+            return fn(direct);
+        });
     }
 }

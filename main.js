@@ -1,20 +1,27 @@
 // flask-web boot + app state. Owns the singleton transport and client,
-// runs the post-connect load sequence (handshake, family confirm, offline
-// replay, tabs), drives capability-gated tabs, themes, and the HUD.
+// runs the post-connect load sequence per firmware line (ZMK: handshake,
+// family confirm, offline replay; Svalboard: Vial identity, handshake, board
+// meta, unlock state, tunables replay), drives capability-gated tabs, themes,
+// and the HUD.
 
 import { el, toast, modal } from './ui.js?v=76';
 import { diag } from './diag.js?v=76';
 import { FlaskHID } from './webhid.js?v=76';
 import { renderPreflight } from './preflight.js?v=76';
 import { FlaskProto, CH_ZMK, V } from './flaskproto.js?v=76';
-import { isZmkFamily, pickReconnectDevice, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG, ZMK_EXPECTED_PROTOCOL,
-         zmkReadKeyState, zmkReportResetCause, zmkCapabilities, familyOf, familyLabel } from './zmk.js?v=76';
+import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG,
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=76';
+import { familyOf, familyLabel, capabilities, expectedProtocol, pickReconnectDevice,
+         isQmkFamily, lineOf, qmkProfile, readBoardMeta } from './boards.js?v=76';
+import { VialClient } from './vialclient.js?v=76';
+import { runUnlockFlow } from './unlock.js?v=76';
+import * as vil from './vil.js?v=76';
 import { CommandPalette } from './command-palette.js?v=76';
 import { HUD } from './hud.js?v=76';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
          zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
          seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=76';
-import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace } from './offline.js?v=76';
+import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace, OfflineFlask } from './offline.js?v=76';
 import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=76';
 import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=76';
 import { shell } from './app-shell.js?v=76';
@@ -39,7 +46,7 @@ const app = {
     flask: null,
     family: 'generic',
     protocolVersion: null,
-    caps: zmkCapabilities('generic', null),
+    caps: capabilities('generic', null),
     profile: null,
     layerCount: 0,
     keymap: null,
@@ -143,12 +150,60 @@ function reconnectCandidate(devices) {
 
 async function loadDevice(device) {
     app.family = familyOf(device.vendorId, device.productId);
-    // Only ZMK Flask boards (Totem, Imprint). The chooser is filtered to the
-    // ZMK VID/PID; this catches a stale grant for anything else.
-    if (!isZmkFamily(app.family)) {
-        throw new Error('not a ZMK Flask keyboard (Totem or Imprint)');
+    // Route by family. The chooser is filtered to the known VID/PIDs
+    // (boards.js HID_IDS); 'generic' is only reachable from a stale grant.
+    if (isZmkFamily(app.family)) return loadZmkDevice(device);
+    if (isQmkFamily(app.family)) return loadQmkDevice(device);
+    throw new Error(`not a supported keyboard (${familyLabel(app.family)})`);
+}
+
+/** QMK line (Svalboard): Vial identity, then the Flask handshake on the same
+ * raw-HID interface. The VID/PID is the Svalboard's own; the meta channel
+ * answering the handshake confirms the Flask firmware. Vial writes are
+ * immediate (no Save step); Flask tunables save per channel, and corner
+ * chords (0x28) never save. */
+async function loadQmkDevice(device) {
+    app.keymap = null;      // Phase B: the QMK keymap tab publishes it
+    app.readKeyState = null;
+    const gen = connectGen;
+    const stale = () => gen !== connectGen || !app.hid.connected;
+
+    app.flask = new FlaskProto(app.hid);
+    app.flask.line = 'qmk';
+    app.vial = new VialClient(app.hid);
+    app.viaVersion = await app.vial.viaProtocolVersion();
+    app.vialVersion = (await app.vial.vialKeyboardID()).version;
+    app.layerCount = await app.vial.layerCount();
+    if (stale()) return;
+
+    app.protocolVersion = await app.flask.handshake();
+    if (stale()) return;
+    app.familyUnresolved = false;   // 303a:4044 is unique to the Svalboard
+    if (app.protocolVersion == null) toast('No Flask protocol on this Svalboard (stock firmware?): Vial tabs only', true);
+    app.caps = capabilities(app.family, app.protocolVersion);
+    app.profile = qmkProfile(app.family, app.layerCount);
+    app.board = await readBoardMeta(app.flask, app.caps);
+    try { app.unlocked = (await app.vial.unlockStatus()).unlocked; }
+    catch { app.unlocked = false; }
+    app.onHudLockClick = () => runUnlockFlow(app, (u) => { app.unlocked = u; });
+    if (stale()) return;
+
+    // Unplugged queue (tunables only) → device.
+    if (app.caps.flask) {
+        await maybeSyncOffline(app, device);
+        if (stale()) return;
     }
-    return loadZmkDevice(device);
+
+    setMode('device');
+    $('layout-save').style.display = $('layout-load').style.display = '';
+    updateStatus(device);
+    buildTabs();
+    if (TABS.length) await showTab(TABS[0].id);
+    // Refresh the tunables snapshot the Unplugged workspace shows, after the
+    // first tab so its reads do not queue behind ~240 GETs.
+    if (!stale() && app.caps.flask) {
+        vil.snapshotQmkWorkspace(app).then(renderOfflineList, (e) => console.warn('snapshot failed:', e));
+    }
 }
 
 /** Load: Flask handshake only. The keymap lives in ZMK Studio, so every
@@ -158,8 +213,12 @@ async function loadZmkDevice(device) {
     const gen = connectGen;
     const stale = () => gen !== connectGen || !app.hid.connected;
 
+    app.vial = null;    // no Vial surface on the ZMK line
+    app.board = null;
+    app.unlocked = false;
     // Fresh client per connection: slot counts and hold-tap probes are memoized per client.
     app.flask = new FlaskProto(app.hid);
+    app.flask.line = 'zmk';   // 0x28 is tap dance here: SAVE allowed
     app.protocolVersion = await app.flask.handshake();
     if (stale()) return;
     if (app.protocolVersion == null) {
@@ -174,7 +233,7 @@ async function loadZmkDevice(device) {
     if (app.familyUnresolved) toast(ZMK_FAMILY_UNRESOLVED_MSG, true);
     else app.family = confirmed;
 
-    app.caps = zmkCapabilities(app.family, app.protocolVersion);
+    app.caps = capabilities(app.family, app.protocolVersion);
     app.profile = zmkProfile(app.family);
     app.layerCount = app.profile.layerNames.length;
     // HUD press highlight rides the key-state bitmap (hud.js polls this
@@ -226,13 +285,14 @@ function updateStatus(device) {
     pill.classList.remove('offline');
     pill.classList.add('connected');
     const fam = familyLabel(app.family);
-    const proto = app.protocolVersion != null ? ` · Flask v${app.protocolVersion}` : '';
+    const proto = app.protocolVersion != null ? ` · Flask v${app.protocolVersion}` : (app.vial ? ' · plain Vial' : '');
+    saveState.setLine?.(lineOf(app.family));   // 0x28 never registers on the QMK line
     $('device-name').textContent = app.profile?.name ?? device.productName ?? 'Keyboard';
     $('status-text').textContent = 'Connected';
     pill.title = `${fam}${proto} — ${device.vendorId.toString(16)}:${device.productId.toString(16)}`;
 
     const warn = $('proto-warn');
-    const expected = ZMK_EXPECTED_PROTOCOL[app.family];
+    const expected = expectedProtocol(app.family);
     if (app.protocolVersion != null && expected && app.protocolVersion !== expected) {
         warn.style.display = '';
         warn.textContent = `protocol v${app.protocolVersion} ≠ app v${expected} — reflash`;
@@ -247,6 +307,9 @@ function disconnectUI() {
     app.hud.close();
     app.protocolVersion = null;
     app.profile = null;
+    app.vial = null;
+    app.board = null;
+    app.unlocked = false;
     app.trainerOnly = false;
     saveState.reset?.();    // drop dirty sources
     $('status-pill').classList.remove('connected', 'offline');
@@ -267,6 +330,7 @@ function disconnectUI() {
 // ---------- offline mode ----------
 
 async function startOffline(key, family) {
+    if (isQmkFamily(family)) return startQmkOffline(key);
     app.trainerOnly = false;    // same trap as connectFlow's
     // No real keymap captured yet? Seed from a stored keymap snapshot of a
     // keyboard of this family (a template stays the fallback).
@@ -294,6 +358,39 @@ async function startOffline(key, family) {
     showTab('zmk-keymap');
 }
 
+/** Svalboard Unplugged: the tunables journal only (offline.js core). No Vial
+ * surface (no keymap, macros, entries or QMK settings) and no corner chords
+ * (0x28 is read-only offline). Edits replay on the next connect. */
+async function startQmkOffline(key) {
+    const ws = loadWorkspace(key);
+    if (!ws) { toast('Connect the Svalboard once first: Unplugged starts from its last read', true); return; }
+    app.trainerOnly = false;
+    ws._notify = updateOfflineBanner;
+    app.offline = true;
+    app.offlineWs = ws;
+    app.family = ws.family;
+    app.flask = new OfflineFlask(ws);
+    app.vial = null;
+    app.board = null;
+    app.keymap = null;
+    app.protocolVersion = ws.protocolVersion;
+    app.layerCount = ws.layerCount;
+    app.caps = { ...capabilities(ws.family, ws.protocolVersion), vial: false, cornerCombos: false };
+    app.profile = qmkProfile(ws.family, ws.layerCount);
+
+    setMode('offline');
+    $('layout-save').style.display = $('layout-load').style.display = 'none';
+    $('proto-warn').style.display = 'none';
+    $('status-pill').classList.remove('connected');
+    $('status-pill').classList.add('offline');
+    $('status-text').textContent = 'Unplugged';
+    $('device-name').textContent = ws.label;
+    $('offline-seg').style.display = '';
+    updateOfflineBanner();
+    buildTabs();
+    if (TABS.length) await showTab(TABS[0].id);
+}
+
 function updateOfflineBanner() {
     if (!app.offline || !app.offlineWs) return;
     const n = offlineQueued(app.offlineWs);
@@ -308,6 +405,7 @@ function exitOffline() {
     app.offlineWs = null;
     app.flask = new FlaskProto(app.hid);
     app.zmkStudioSim = null;    // keymap tab falls back to the real serial client
+    app.vial = null;
     app.readKeyState = null;
     disconnectUI();
 }
@@ -329,12 +427,13 @@ function renderOfflineList() {
     }
     list.replaceChildren(...entries.map((e) => el('button', {
         class: 'dev-item', onclick: () => startOffline(e.key, e.family),
-        title: e.fromDevice ? 'Your keymap, as last read from the keyboard' : 'Firmware template, not your keymap',
+        title: isQmkFamily(e.family) ? 'Tunables as last read from the Svalboard (no keymap offline)'
+            : e.fromDevice ? 'Your keymap, as last read from the keyboard' : 'Firmware template, not your keymap',
     },
         `✈️ ${e.label}`,
         e.pending ? el('span', { class: 'badge', text: `${e.pending} queued` }) : null,
         el('span', { class: 'badge faint', text: e.fromDevice
-            ? `your keymap · ${new Date(e.savedAt).toLocaleDateString()}` : 'template' }),
+            ? `${isQmkFamily(e.family) ? 'tunables' : 'your keymap'} · ${new Date(e.savedAt).toLocaleDateString()}` : 'template' }),
         e.saved ? el('span', {
             class: 'badge', text: '✕', title: 'Delete this unplugged workspace',
             onclick: (ev) => {
@@ -410,7 +509,7 @@ async function startTrainer() {
     // way out the trainer is a dead end that only a page reload escapes.
     app.exitTrainer = () => { app.trainerOnly = false; disconnectUI(); };
     app.family = 'generic';
-    app.caps = zmkCapabilities('generic', null);
+    app.caps = capabilities('generic', null);
     app.profile = null;
     app.keymap = null;
     setMode('trainer');
@@ -622,8 +721,14 @@ function init() {
         });
         refresh();
     };
-    // Save layout / Load: the ZMK keymap tab names and downloads its own file.
+    // Save layout / Load: the ZMK keymap tab names and downloads its own file;
+    // the Svalboard writes/reads a .vil (vil.js).
     $('layout-save').addEventListener('click', async () => {
+        if (isQmkFamily(app.family)) {
+            try { const r = await vil.saveLayoutFile(app); toast(`Saved ${r.filename}`); }
+            catch (e) { toast(`Export failed: ${e.message}`, true); }
+            return;
+        }
         try {
             const kt = zmkLiveKeymapTab();
             if (!kt?.keymap) throw new Error('the keymap is still loading');
@@ -635,6 +740,15 @@ function init() {
         const file = $('layout-file').files[0];
         $('layout-file').value = '';
         if (!file) return;
+        if (isQmkFamily(app.family)) {
+            try {
+                const r = await vil.loadLayoutFile(app, file);
+                toast(r.message, r.warn);
+                buildTabs();
+                if (TABS.length) await showTab(TABS[0].id);
+            } catch (e) { toast(`Import failed: ${e.message}`, true); }
+            return;
+        }
         try {
             const kt = zmkLiveKeymapTab();
             if (!kt?.keymap) throw new Error('the keymap is still loading');
@@ -653,7 +767,7 @@ function init() {
         discardOfflineQueued(ws);
         toast('Queued changes discarded');
         buildTabs();    // tabs re-read the restored workspace
-        showTab('zmk-keymap');
+        showTab(isQmkFamily(app.family) ? TABS[0]?.id : 'zmk-keymap');
         updateOfflineBanner();
     });
 

@@ -10,7 +10,7 @@ import { TOTEM_GEOM } from './zmk-totem-layout.js?v=76';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
-// The app only connects to this identity (webhid.js filters on it).
+// webhid.js filters on it (plus the Svalboard's, boards.js).
 export const ZMK_VIDPID = { vid: 0x1D50, pid: 0x615E };
 
 // meta 0x03 family codes on the ZMK line.
@@ -41,30 +41,8 @@ export function zmkFamilyCandidate(vid, pid) {
 
 export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)', totem: 'TOTEM (ZMK)' };
 
-/** Family for a VID/PID: the ZMK candidate, else 'generic' (not a Flask board). */
-export function familyOf(vid, pid) {
-    return zmkFamilyCandidate(vid, pid) ?? 'generic';
-}
-
-const vidpidKey = (d) => `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}`;
-
-/** Reconnect pick among granted devices. Candidates: the last VID:PID, or (while
- * editing offline) any device of the workspace family. Totem and Imprint share a
- * VID:PID, so with two candidates the one whose productName (ZMK_KEYBOARD_NAME,
- * differs per family) matches the last session wins. WebHID exposes no serial.
- * Returns { device, ambiguous }: still-ambiguous means the caller must show a
- * chooser instead of guessing. */
-export function pickReconnectDevice(devices, { last, lastName, offlineFamily } = {}) {
-    const matches = devices.filter((d) => last === vidpidKey(d)
-        || (offlineFamily && familyOf(d.vendorId, d.productId) === offlineFamily));
-    if (matches.length <= 1) return { device: matches[0] ?? null, ambiguous: false };
-    const named = lastName ? matches.filter((d) => d.productName === lastName) : [];
-    return named.length === 1 ? { device: named[0], ambiguous: false } : { device: null, ambiguous: true };
-}
-
-export function familyLabel(family) {
-    return ZMK_FAMILY_LABELS[family] ?? 'Keyboard';
-}
+// familyOf / familyLabel / pickReconnectDevice moved to boards.js (one
+// identity layer for both firmware lines).
 
 // Per-family expected protocol versions. imprint: v2 added autoscroll
 // (0x1A); v3 dropped dragscroll (0x15 answers unhandled — the Imprint runs

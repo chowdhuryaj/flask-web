@@ -1,5 +1,12 @@
-// Flask raw-HID tuning protocol constants + typed operations (ZMK line:
-// zmk-flask-modules flask_proto; family identity and versions live in zmk.js).
+// Flask raw-HID tuning protocol constants + typed operations, for BOTH
+// firmware lines: ZMK (zmk-flask-modules flask_proto; CH_ZMK / V) and QMK
+// (the Svalboard's mad_hid.c; CH_QMK / V_QMK). Family identity and expected
+// versions live in boards.js (QMK) and zmk.js (ZMK).
+//
+// The two lines allocated channel numbers independently: 0x23-0x29 mean
+// different features on each, and 0x00/0x04, 0x16, 0x19 and 0x1B carry
+// different payloads. Never read a channel through the other line's map —
+// a connection is one family, and every call site names its line.
 //
 // Frame shape: [cmd, channel, value_id, payload...]. u16 payloads are
 // BIG-endian at bytes [3],[4]. Setters CLAMP firmware-side and echo the
@@ -132,6 +139,125 @@ export const V = {
     ashRepeat: 0x05, ashNoAutoRepeat: 0x06, ashRetro: 0x07, ashRetroLimit: 0x08,
 };
 
+// ---------- QMK line (Svalboard, mad_hid.c protocol v27) ----------
+
+export const VIDPID = { svalboard: { vid: 0x303A, pid: 0x4044 } };
+
+// Per-family protocol version lines: INDEPENDENT, never compare across.
+// ZMK families answer from zmk.js ZMK_EXPECTED_PROTOCOL. v24-v27: corner
+// reference layer + retired thumb chords, auto-mouse ball mask, board
+// variant / cluster keys / drops on meta, half on meta, Centre + North.
+export const EXPECTED_PROTOCOL = { svalboard: 27 };
+
+// Channels the Svalboard serves at v27 (mad_hid.c enum flask_hid_channel).
+// Removed and deliberately absent: accel 0x10 / smoothing 0x13 / snippets
+// 0x24 / teleport 0x26 (v18), gestures 0x11 (v15), wiggle 0x12 / autoscroll
+// 0x1A / ball gestures 0x1C + 0x27 (v26). They answer id_unhandled.
+export const CH_QMK = {
+    meta: 0x00,
+    dpi: 0x14, dragScroll: 0x15,
+    customShift: 0x16, selectWord: 0x17, sentenceCase: 0x18, leader: 0x19,
+    autoMouse: 0x1B, os: 0x1D, numWord: 0x1E, diag: 0x1F, comboLayers: 0x20,
+    cyclotab: 0x23,     // v12+: Alt-Tab / Cmd-Tab modifier swapper
+    altRepeat: 0x25,    // v13+: alt-repeat chaining + stale-input default
+    corner: 0x28,       // v17+: positional corner chords. NEVER SAVE (see FlaskProto.save)
+    mouseButtons: 0x29, // v20+: double-click gap + click-lock latch
+};
+
+export const V_QMK = {
+    // meta (0x03 is metaFamily on the ZMK line: never read it here)
+    metaProtocolVersion: 0x01,
+    metaActiveLayer: 0x02,  // v10 RO: highest active layer (HUD feed)
+    metaBoardVariant: 0x04, // v25 RW: 0 unknown / 1 six-key / 2 five-key (TOLD, persisted by SAVE 0x00)
+    metaClusterKeys: 0x05,  // v25 RO: 6 or 5 (unknown answers 6)
+    metaAbsentDrops: 0x06,  // v25 RO: events the absent-key mask dropped
+    metaHalf: 0x07,         // v26 RO: 1 left / 2 right
+    // dpi: per-side table index, v10 raw per-side CPI (0 = index mode)
+    dpiLeft: 0x02, dpiRight: 0x03, dpiLeftCpi: 0x04, dpiRightCpi: 0x05,
+    // drag scroll (left ball)
+    dragDivisor: 0x01, dragInverted: 0x03, dragInterval: 0x06, dragMaxNotches: 0x07,
+    dragHiresMode: 0x08,   // v21: 0 off / 1 on / 2 follow OS
+    dragHiresActive: 0x09, // v21 RO: what follow resolves to now
+    // custom shift keys: u16 pair tables (0x10+i base, 0x30+i shifted)
+    cskEnabled: 0x01, cskSlotCount: 0x02,
+    selectWordMac: 0x01,
+    sentenceCaseEnabled: 0x01,
+    // Super Leader (v12+): 16 sequences, stride 8, pos 5 kind, pos 6 output
+    slTimeout: 0x01, slLiveCount: 0x02,
+    // auto-mouse: timeout is an INDEX into SVAL_AUTOMOUSE_TIMEOUTS
+    amEnabled: 0x01, amTimeout: 0x02, amThreshold: 0x03, amLayer: 0x04,
+    amSources: 0x05, // v24: ball mask bit0 left, bit1 right (ZMK 0x05 means something else)
+    osFollow: 0x01, osMac: 0x02, osDetected: 0x03,
+    nwTimeout: 0x01, nwLayer: 0x02, nwActive: 0x03,
+    diagMaxGap: 0x01, diagUptime: 0x02,
+    clCount: 0x01,
+    cycEnabled: 0x01, cycTimeout: 0x02,
+    arepChain: 0x01, arepStaleMs: 0x02, arepDefaultOut: 0x03,
+    // corner chords: u16 values, then PAYLOAD-ADDRESSED def/out/layers frames
+    ccEnabled: 0x01, ccTerm: 0x02, ccDefCount: 0x03, ccOutCount: 0x04,
+    ccMisfires: 0x05, ccCapture: 0x06, ccFires: 0x07, ccCaptureBase: 0x08,
+    ccUnplaced: 0x0B, ccSlotsUsed: 0x0C, // v23
+    ccRefLayer: 0x0D,                    // v24 RO: layer chord members resolve through
+    ccDef: 0x10, ccOut: 0x11, ccLayers: 0x12,
+    // mouse buttons: gap persisted; lock mask LIVE (any SET releases all)
+    mbDoubleGap: 0x01, mbLockMask: 0x02,
+};
+
+// Slot value-id helpers (append-only wire ids).
+export const slot = {
+    cskKey(i) { return 0x10 + i; },
+    cskShift(i) { return 0x30 + i; },
+    superLeader(seq, pos) { return 0x10 + seq * 8 + pos; }, // pos 0-4 keys, 5 kind, 6 output
+    comboMask(i) { return 0x10 + i; },
+    cyclotabKey(i) { return 0x10 + i; },
+};
+
+export const CSK_SLOTS = 16;
+export const SL_SEQS = 16;
+export const SL_KEYS = 5;
+export const SL_KIND_POS = 5;
+export const SL_OUT_POS = 6;
+export const CYCLOTAB_KEYS = 4;
+
+// Corner-chord def index layout (corner_seed.h). A WIRE CONTRACT shared with
+// .vil files: never reorder. v24 retired the thumb block 48-59 (reserved,
+// never reissued); v27 revived slot +5 of each finger cluster as Centre +
+// North. 48 live chords: 8 clusters x 6.
+export const CC = {
+    maxKeys: 2,
+    fingerClusters: 8, fingerChords: 6,
+    retiredBase: 48, retiredCount: 12,
+    total: 60,
+    posNone: 0xFF,
+    clusterNames: ['L index', 'L middle', 'L ring', 'L pinky',
+        'R index', 'R middle', 'R ring', 'R pinky'],
+    fingerChordNames: ['North + East', 'East + South', 'South + West',
+        'West + North', 'Centre + South', 'Centre + North'],
+};
+export const ccRetired = (def) => def >= CC.retiredBase && def < CC.retiredBase + CC.retiredCount;
+
+/** Switch positions pack as (row << 3) | col on the wire. */
+export const ccRow = (p) => p >> 3;
+export const ccCol = (p) => p & 0x07;
+
+/** "L index · North + East"; retired defs say so. */
+export function ccDefName(def) {
+    if (ccRetired(def)) return `Chord ${def} (retired)`;
+    const cluster = Math.floor(def / CC.fingerChords), chord = def % CC.fingerChords;
+    if (cluster >= CC.clusterNames.length) return `Chord ${def}`;
+    return `${CC.clusterNames[cluster]} · ${CC.fingerChordNames[chord]}`;
+}
+
+// Mirrors dpi_choices[] (keyboards/svalboard/svalboard.c).
+export const SVAL_DPI_OPTIONS = [200, 400, 600, 800, 1200, 1600, 2400, 3200, 4800, 6400, 12000];
+// Mirrors mh_timer_choices[] (svalboard.c); -1 = never.
+export const SVAL_AUTOMOUSE_TIMEOUTS = [200, 300, 400, 500, 800, -1];
+export const CPI_MAX = 4000, CPI_STEP = 50;
+
+export function osName(raw) {
+    return { 1: 'Linux', 2: 'Windows', 3: 'macOS', 4: 'iOS' }[raw] || 'not detected yet';
+}
+
 // ---------- typed operations over a FlaskHID ----------
 
 export class FlaskProto {
@@ -158,8 +284,10 @@ export class FlaskProto {
         const v = Math.max(0, Math.min(0xFFFF, Math.round(value))) & 0xFFFF;
         // Live actions (macro play, autoscroll force-stop) must not be re-sent
         // on a slow echo: the retry would fire the action twice.
-        const live = (channel === CH_ZMK.macros && valueID === V.macrosState)
-            || (channel === CH_ZMK.autoscroll && valueID === V.asState);
+        // `line` is set per connect (main.js); the ids are ZMK-line ids.
+        const live = this.line !== 'qmk'
+            && ((channel === CH_ZMK.macros && valueID === V.macrosState)
+                || (channel === CH_ZMK.autoscroll && valueID === V.asState));
         const r = await this.hid.request([CMD.set, channel, valueID, v >> 8, v & 0xFF], 0,
             live ? { retries: 0 } : undefined);
         if (r[0] !== CMD.set) throw new Error('unhandled');
@@ -175,6 +303,14 @@ export class FlaskProto {
     }
 
     async save(channel) {
+        // QMK line: 0x28 is the corner-chord block. Its SETs persist
+        // themselves and a channel SAVE rewrites ~1.9 KB with XIP off, which
+        // hard-wedged the Svalboard (2026-08-14). Only the ZMK line (0x28 =
+        // tapDance) may save it; `line` is set per connect in main.js and an
+        // unset line refuses too (fail-safe).
+        if (channel === CH_QMK.corner && this.line !== 'zmk') {
+            throw new Error('refused: never SAVE channel 0x28 on the QMK line');
+        }
         // Saves run flash writes device-side and the echo arrives only when
         // they land — a mass slot delete can legitimately take seconds
         // (bench 5: the 500 ms timeout fired, the RETRY then bounced off

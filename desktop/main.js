@@ -42,6 +42,7 @@ const ROOT = app.isPackaged ? path.join(process.resourcesPath, 'web') : path.joi
 // Keyboards this app may talk to (vendor:product, lower-case hex).
 const HID_ALLOW = new Set([
     '1d50:615e', // stock ZMK (Totem, Imprint)
+    '303a:4044', // Svalboard (QMK/Vial, raw HID only; no serial)
 ]);
 const SERIAL_ALLOW = new Set(['1d50:615e']); // ZMK Studio RPC (CDC)
 // HID ids arrive as numbers, serial ids as decimal strings ('7504') — Number() takes both.

@@ -1328,7 +1328,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
 // ---- reconnect pick: two boards on one VID:PID (Totem + Imprint)
 {
-    const { pickReconnectDevice } = await import('./zmk.js?v=76');
+    const { pickReconnectDevice } = await import('./boards.js?v=76');
     const dev = (productName, pid = 0x615E, vid = 0x1D50) => ({ vendorId: vid, productId: pid, productName });
     const totem = dev('Totem'), imp = dev('Imprint'), other = dev('Other', 0x1234);
     const last = '1d50:615e';

@@ -6,8 +6,9 @@
 //
 // Contract (stable for Phase 1; WP0 shapes kept, new members are additive):
 //   saveState.markDirty(source, label, saveFn, opts?)  register or refresh a source
-//       opts: {discard: async fn}. `discard` makes the source discardable
-//       (Studio keymap).
+//       opts: {discard: async fn, line: 'qmk'|'zmk'}. `discard` makes the
+//       source discardable (Studio keymap). `line` overrides setLine() for
+//       the never-register check.
 //   saveState.clean(source)                      drop it (saved or discarded)
 //   saveState.dirty() → [{source, label, canDiscard}]  in save order
 //   saveState.saveAll() → {saved: source[], failed: {source, error} | null}
@@ -23,12 +24,26 @@
 //   saveState.addDiscardHook(fn) → remove fn     fn() → number of entries dropped
 //   saveState.summary() → 'Save 3 unsaved' | ''  the status bar text
 //   saveState.reset()                            drop everything (disconnect)
+//   saveState.setLine(line)                      firmware line of the connected
+//       board ('qmk' | 'zmk' | null); main.js calls it on connect
+//   assertRegistrable(line, source)              the never-register check, exported
 //   saveState.addEventListener('change', …)      fires on every change
 //
 // source: 'studio-keymap', or a Flask channel id (number). Save order is
 // 'studio-keymap' first, then channels ascending, then any other string
 // alphabetically. saveAll stops at the first failure and leaves it and
 // everything after it dirty.
+
+// Never-register: channels with no save step. Svalboard (QMK line) corner
+// chords 0x28: a channel SAVE wedged the board (2026-08-14). 0x28 is
+// double-booked (ZMK tap dance is 0x28 and does save), so the check is per
+// firmware line, never per number alone. A line that is not set is not checked.
+export const NEVER_REGISTER = { qmk: new Set([0x28]) };
+
+export function assertRegistrable(line, source) {
+    if (line && NEVER_REGISTER[line]?.has(source))
+        throw new Error(`channel 0x${source.toString(16)} has no save step on the ${line} line; never register it`);
+}
 
 const rank = (s) => (s === 'studio-keymap' ? [0, 0, ''] : typeof s === 'number' ? [1, s, ''] : [2, 0, String(s)]);
 const order = (a, b) => {
@@ -39,9 +54,13 @@ const order = (a, b) => {
 class SaveState extends EventTarget {
     #sources = new Map();   // source → {label, save, discard}
     #hooks = new Set();     // discardAll extras (offline queue)
+    #line = null;
+
+    setLine(line) { this.#line = line || null; }
 
     markDirty(source, label, saveFn, opts = {}) {
         if (typeof saveFn !== 'function') throw new Error(`markDirty(${source}): saveFn required`);
+        assertRegistrable(opts.line ?? this.#line, source);
         this.#sources.set(source, { label, save: saveFn, discard: opts.discard || null });
         this.#changed();
     }

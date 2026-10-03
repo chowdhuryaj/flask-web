@@ -56,7 +56,7 @@ assert.equal(pendingCount(ws), before, 'asState force-stop is not journaled'); c
 // 4. FlaskProto.save sends a SAVE frame for 0x28 (tap dance) on the ZMK line.
 const frames = [];
 const hid = { request: async (frame) => { frames.push(frame); return [CMD.save, frame[1], 0]; } };
-await new FlaskProto(hid).save(CH_ZMK.tapDance);
+{ const zp = new FlaskProto(hid); zp.line = 'zmk'; await zp.save(CH_ZMK.tapDance); }
 assert.deepEqual(frames.map((x) => x[1]), [CH_ZMK.tapDance]); checks++;
 
 // 5. Only ZMK workspaces are listed; stored workspaces of other families are ignored.

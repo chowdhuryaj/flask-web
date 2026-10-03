@@ -19,7 +19,7 @@
 import { setCaption, bindCaptionBar } from './caption.js?v=76';
 import { board } from './board.js?v=76';
 import { el } from './ui.js?v=76';
-import { familyLabel } from './zmk.js?v=76';
+import { familyLabel } from './boards.js?v=76';
 import { THEMES, TEXT_SCALE, appearance, applyTheme, applyTextScale, applyBoardZoom,
          currentTheme, currentTextScale, modeOf } from './themes.js?v=76';
 import { comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=76';

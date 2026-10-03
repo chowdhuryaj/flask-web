@@ -10,11 +10,14 @@
 //
 // This file is the shared core: storage, the tunable/RGB journal and its
 // replay. Everything ZMK-shaped (keymap, combo/macro slots, templates) is in
-// zmk-offline.js.
+// zmk-offline.js. The Svalboard (QMK line) uses this core alone: tunables
+// journal, no keymap simulator. Its corner chords (0x28) are read-only
+// offline and never SAVEd on replay (a 0x28 SAVE wedged the board).
 
 import { el, modal, toast } from './ui.js?v=76';
-import { CH_ZMK, V } from './flaskproto.js?v=76';
+import { CH_ZMK, CH_QMK, V, V_QMK } from './flaskproto.js?v=76';
 import { isZmkFamily } from './zmk.js?v=76';
+import { isQmkFamily } from './boards.js?v=76';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';
@@ -23,10 +26,20 @@ const AUTO_KEY = 'flask-offline-autoapply';
 export const BASE_PREFIX = 'flask-offline-base:';
 
 // Live-state value ids (SET is a transient action, not a setting) — never
-// journal these offline. '<ch>:<id>' decimal.
-const LIVE_SET = new Set([
-    `${CH_ZMK.autoscroll}:5`,   // asState force-stop
-]);
+// journal these offline. '<ch>:<id>' decimal, per firmware line (the
+// channel numbers are double-booked across lines).
+const LIVE_SET = {
+    zmk: new Set([
+        `${CH_ZMK.autoscroll}:5`,   // asState force-stop
+    ]),
+    qmk: new Set([
+        `${CH_QMK.mouseButtons}:${V_QMK.mbLockMask}`, // any SET releases latched buttons
+        `${CH_QMK.numWord}:${V_QMK.nwActive}`,        // SET forces num word off
+        `${CH_QMK.diag}:${V_QMK.diagMaxGap}`,         // SET resets the watermark
+        `${CH_QMK.corner}:${V_QMK.ccMisfires}`,       // SET resets the counter
+    ]),
+};
+const lineOfWs = (ws) => (isQmkFamily(ws?.family) ? 'qmk' : 'zmk');
 
 // ---------- storage ----------
 
@@ -63,14 +76,14 @@ export function deleteWorkspace(key) {
     localStorage.removeItem(BASE_PREFIX + key);
 }
 
-/** Saved workspaces for ZMK boards (anything else in storage is ignored). */
+/** Saved workspaces for ZMK boards and the Svalboard (anything else in storage is ignored). */
 export function listWorkspaces() {
     const out = [];
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k?.startsWith(LS_PREFIX) && k !== AUTO_KEY) {
             const ws = loadWorkspace(k.slice(LS_PREFIX.length));
-            if (ws?.key && isZmkFamily(ws.family)) out.push(ws);
+            if (ws?.key && (isZmkFamily(ws.family) || isQmkFamily(ws.family))) out.push(ws);
         }
     }
     return out;
@@ -113,7 +126,9 @@ export class OfflineFlask {
 
     _journal(ch, id, op, val) {
         const k = tk(ch, id);
-        if (LIVE_SET.has(k) || ch === CH_ZMK.meta) return; // transient — drop
+        const line = lineOfWs(this.ws);
+        if (line === 'qmk' && ch === CH_QMK.corner) throw new Error('corner chords (0x28) are read-only offline');
+        if (LIVE_SET[line].has(k) || ch === CH_ZMK.meta) return; // transient — drop
         this.ws.tunables[k] = { op, val };
         this.ws.dirty.tun[k] = { op, val };
         saveWorkspace(this.ws);
@@ -126,19 +141,31 @@ export class OfflineFlask {
         }
     }
 
+    // Payload-addressed frames have no journal in the core (zmk-offline.js
+    // simulates the ZMK ones). A Svalboard's corner chords are read-only.
+    async getBytes() { throw new Error('unhandled'); }
+    async setBytes(ch) {
+        if (lineOfWs(this.ws) === 'qmk' && ch === CH_QMK.corner) throw new Error('corner chords (0x28) are read-only offline');
+        throw new Error('unhandled');
+    }
+
     async handshake() { return this.ws.protocolVersion; }
 }
 
 // ---------- sync: replay the journal onto a real device ----------
 
-const CH_NAMES = Object.fromEntries(Object.entries(CH_ZMK).map(([k, v]) => [v, k]));
+const CH_NAMES = {
+    zmk: Object.fromEntries(Object.entries(CH_ZMK).map(([k, v]) => [v, k])),
+    qmk: Object.fromEntries(Object.entries(CH_QMK).map(([k, v]) => [v, k])),
+};
 
 /** Human-readable change list for the confirm modal. */
 export function describeChanges(ws) {
+    const names = CH_NAMES[lineOfWs(ws)];
     const lines = [];
     for (const [k, t] of Object.entries(ws.dirty.tun)) {
         const [ch, id] = k.split(':').map(Number);
-        lines.push(`${CH_NAMES[ch] ?? `ch ${ch}`} value 0x${id.toString(16)} = ${t.val}`);
+        lines.push(`${names[ch] ?? `ch ${ch}`} value 0x${id.toString(16)} = ${t.val}`);
     }
     for (const k of Object.keys(ws.dirty.rgb)) {
         const [l, led] = k.split(',');
@@ -161,7 +188,13 @@ export async function syncWorkspace(app, ws) {
     // the journal after its channel's SAVE lands, never before.
     const pending = new Map();      // ch → [journal keys SET but not yet saved]
     const clampedKeys = new Set();
-    const label = (ch, id) => `${CH_NAMES[ch] ?? ch}/0x${id.toString(16)}`;
+    const names = CH_NAMES[lineOfWs(ws)];
+    const label = (ch, id) => `${names[ch] ?? ch}/0x${id.toString(16)}`;
+    // QMK line: corner chords persist on SET; their channel SAVE wedged the
+    // Svalboard. The device's own line wins; an unset line falls back to the
+    // workspace family (fail-safe for old workspaces that journaled 0x28).
+    const line = app.flask?.line ?? lineOfWs(ws);
+    const noSave = (ch) => line !== 'zmk' && ch === CH_QMK.corner;
 
     for (const [k, t] of Object.entries(ws.dirty.tun)) {
         const [ch, id] = k.split(':').map(Number);
@@ -193,15 +226,15 @@ export async function syncWorkspace(app, ws) {
     for (const ch of new Set([...ws.dirty.saves, ...pending.keys()])) {
         const keys = pending.get(ch) ?? [];
         try {
-            await app.flask.save(ch);
+            if (!noSave(ch)) await app.flask.save(ch);
         } catch (e) {
             // A channel with no persistence answers unhandled: nothing to
             // lose, treat as saved. Anything else (timeout, transport) means
             // the values are RAM-only: keep them queued and say so.
             if (e.message !== 'unhandled') {
                 keepSaves.push(ch);
-                for (const k of keys) fail.push(`${CH_NAMES[ch] ?? ch} ${k}: SAVE failed (${e.message})`);
-                if (!keys.length) fail.push(`${CH_NAMES[ch] ?? ch}: SAVE failed (${e.message})`);
+                for (const k of keys) fail.push(`${names[ch] ?? ch} ${k}: SAVE failed (${e.message})`);
+                if (!keys.length) fail.push(`${names[ch] ?? ch}: SAVE failed (${e.message})`);
                 continue;
             }
         }
