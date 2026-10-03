@@ -6,10 +6,10 @@
 // state, status chips every 4th tick. All data comes over the page's own
 // device connection; the popup never opens one.
 
-import { el } from './ui.js?v=74';
-import { CH, V } from './flaskproto.js?v=74';
-import { renderKeyboardSVG } from './board.js?v=74';
-import { appearance } from './themes.js?v=74';
+import { el } from './ui.js?v=75';
+import { CH, V } from './flaskproto.js?v=75';
+import { renderKeyboardSVG } from './board.js?v=75';
+import { appearance } from './themes.js?v=75';
 
 const SNAP = 32;   // px — snap-to-corner distance (HUDController parity)
 const MARGIN = 12;

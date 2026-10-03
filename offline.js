@@ -12,9 +12,9 @@
 // replay. Everything ZMK-shaped (keymap, combo/macro slots, templates) is in
 // zmk-offline.js.
 
-import { el, modal, toast } from './ui.js?v=74';
-import { CH, V } from './flaskproto.js?v=74';
-import { isZmkFamily } from './zmk.js?v=74';
+import { el, modal, toast } from './ui.js?v=75';
+import { CH, V } from './flaskproto.js?v=75';
+import { isZmkFamily } from './zmk.js?v=75';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';

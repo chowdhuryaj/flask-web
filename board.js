@@ -18,12 +18,12 @@
 // Also exports renderKeyboardSVG, baseUnit, layoutOf, splitCap for the HUD,
 // trainer, RGB and tests.
 //
-// Import this file ONLY as './board.js?v=74': x.js and x.js?v=74 are two
+// Import this file ONLY as './board.js?v=75': x.js and x.js?v=75 are two
 // module instances and the singleton would split.
 
-import { el, svgEl, toast as uiToast } from './ui.js?v=74';
-import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=74';
-import { legendOf } from './legend.js?v=74';
+import { el, svgEl, toast as uiToast } from './ui.js?v=75';
+import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=75';
+import { legendOf } from './legend.js?v=75';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 /** dataTransfer type a palette tile drags: JSON of an adapter binding. */
@@ -150,7 +150,7 @@ export function fitText(text, maxW, fs, { minScale = 0.45, maxLines = 2 } = {}) 
         }
     }
     const f = Math.max(fs * minScale, maxW / (0.58 * s.length));
-    if (wide(s, f) <= maxW) return { lines: [s], fs: f };
+    if (wide(s, f) <= maxW + 1e-6) return { lines: [s], fs: f };   // f = maxW / (0.58·len) can land 1 ulp over
     const keep = Math.max(1, Math.floor(maxW / (0.58 * f)) - 1);
     return { lines: [s.slice(0, keep) + '…'], fs: f };
 }
@@ -176,21 +176,35 @@ function drawLegend(g, f, lg, { mid, innerW, k }) {
         const two = fitText(lg.main, innerW, u * 0.27 * k, { minScale: 0.6, maxLines: 2 });
         if (two.lines.length === 2) main = two;
     }
-    const sub = lg.sub ? fitText(lg.sub, innerW, subFs, { minScale: 0.6, maxLines: 1 }) : null;
+    let sub = lg.sub ? fitText(lg.sub, innerW, subFs, { minScale: 0.6, maxLines: 1 }) : null;
+    // A long hold ("Scroll Slow" under F18) wraps to two lines instead of "Scroll S…".
+    // The tap then fits one smaller line ("Super Del"), or the hold keeps its single line.
+    if (sub && (sub.lines[0].endsWith('…') || sub.fs < subFs * 0.8)) {
+        const two = fitText(lg.sub, innerW, u * 0.22 * k, { minScale: 0.7, maxLines: 2 });
+        const one = fitText(lg.main, innerW, u * 0.32 * k, { minScale: 0.5, maxLines: 1 });
+        if (two.lines.length === 2 && !one.lines[0].endsWith('…')) { sub = two; main = one; }
+    }
+    const sub2 = sub?.lines.length === 2;
     g.classList.add('k-' + lg.kind);
     const mainY = !lg.sub ? f.y + f.h / 2 + main.fs * 0.34 - (main.lines.length - 1) * main.fs * 0.55
-        : main.lines.length === 2 ? f.y + f.h * 0.58 - main.fs * 1.1 : f.y + f.h * 0.46;
+        : main.lines.length === 2 ? f.y + f.h * 0.58 - main.fs * 1.1 : f.y + f.h * (sub2 ? 0.42 : 0.46);
     main.lines.forEach((line, i) => g.append(svgEl('text', {
         class: 'cap-main', x: mid, y: mainY + i * main.fs * 1.1, 'text-anchor': 'middle',
         style: `font-size:${main.fs}px`, text: line,
     })));
     if (sub) {
-        g.append(svgEl('text', {
+        // One <text> per sub-label (two <tspan>s when wrapped), so tests count one per key.
+        const t = svgEl('text', {
             class: 'cap-sub s-' + (lg.subKind || 'dim'), x: mid, y: f.y + f.h * 0.82, 'text-anchor': 'middle',
             // never under SUB_MIN_PX on screen: the SVG is scaled by fit × zoom (CSS vars)
             style: `font-size:max(${sub.fs}px, calc(${SUB_MIN_PX}px / (var(--board-fit, 1) * var(${BOARD_ZOOM_VAR}, 1))))`,
-            text: sub.lines[0], 'data-hold': lg.sub,
-        }));
+            'data-hold': lg.sub, ...(sub2 ? {} : { text: sub.lines[0] }),
+        });
+        if (sub2) {
+            const y0 = f.y + f.h * 0.88 - sub.fs * 1.05;
+            sub.lines.forEach((line, i) => t.append(svgEl('tspan', { x: mid, y: y0 + i * sub.fs * 1.05, text: line })));
+        }
+        g.append(t);
     }
 }
 

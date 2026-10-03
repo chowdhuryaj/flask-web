@@ -2,10 +2,10 @@
 // selection, auto-advance, undo/redo, position-pick mode. The drawn SVG and
 // popover are covered by tests/browser/board.py.
 import assert from 'node:assert/strict';
-import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText, DRAG_TYPE } from '../board.js?v=74';
-import { setZmkContext, bindingCap, bindingHover, isZmkBinding } from '../zmk-keycodes.js?v=74';
-import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=74';
-import { TOTEM_GEOM } from '../zmk-totem-layout.js?v=74';
+import { Board, baseUnit, keyCorners, layoutOf, frameCentre, splitCap, capPartsOf, fitText, DRAG_TYPE } from '../board.js?v=75';
+import { setZmkContext, bindingCap, bindingHover, isZmkBinding } from '../zmk-keycodes.js?v=75';
+import { TOTEM_DEFAULT } from '../zmk-totem-default.js?v=75';
+import { TOTEM_GEOM } from '../zmk-totem-layout.js?v=75';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -80,6 +80,8 @@ eq(baseUnit(40), 48, 'unit never below 48');
     ok(fitText('Backspace', 30, 12).fs < 12, 'long labels shrink');
     eq(fitText('Left Click', 40, 12, { maxLines: 2 }).lines, ['Left', 'Click']);
     ok(fitText('Averyveryverylongword', 30, 12, { minScale: 0.45, maxLines: 1 }).lines[0].endsWith('…'), 'still too long: ellipsis');
+    // shrunk to exactly the width: float rounding must not truncate it ("Mous…")
+    eq(fitText('Mouse', 63.96551724137932 - 6, 0.38 * 63.96551724137932, { minScale: 0.5, maxLines: 2 }).lines, ['Mouse'], 'exact fit is not truncated');
 }
 
 // ---- selection, assign, auto-advance, undo/redo on a fake keymap ----
