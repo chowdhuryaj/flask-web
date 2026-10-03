@@ -15,6 +15,11 @@
 //   board.setZoom(f)                      writes --board-zoom (1 = 100 %);
 //                         the rail may also just set the CSS var
 //   events: 'select' 'layer' 'change' 'history'
+// Svalboard corner chords (Phase B):
+//   board.setChordBoxes(boxes|null, onClick)   boxes: [{id, label, caption?,
+//                         keys:[{row,col}]}]; a small box between the member
+//                         keys, click = onClick(box)
+//   board.setLayerBarNote(node|null)      a hint / warning under the layer chips
 // Also exports renderKeyboardSVG, baseUnit, layoutOf, splitCap for the HUD,
 // trainer, RGB and tests.
 //
@@ -223,6 +228,7 @@ const textScale = () => {
  *         onSelect(sel, evt)?, onContext(sel)?, fillFor(key)?,
  *         pressed?: Set<"row,col">, marked?: Set<"row,col">, scale?,
  *         names?: 'sel'|'all', tooltips?: bool, zoomable?: bool,
+ *         chords?: [{id, keys:[{row,col}], label, caption?}], onChord?(chord, evt),
  *         partsFor?(value) → {top, main} }
  * Keys may carry r/rx/ry (degrees, key units); they draw and hit-test
  * rotated. fillFor / onContext are the RGB painter's generic hooks.
@@ -324,6 +330,25 @@ export function renderKeyboardSVG(opts) {
         svg.append(g);
     }
 
+    // Chord boxes (Svalboard corner chords): a pill centred between the member keys.
+    const centres = new Map(profile.keys.map((k) => [`${k.row},${k.col}`, frameCentre(L.frame(k))]));
+    for (const chord of opts.chords ?? []) {
+        const pts = chord.keys.map((k) => centres.get(`${k.row},${k.col}`)).filter(Boolean);
+        if (pts.length < 2) continue;
+        const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+        const bw = Math.max(28, L.unit * 0.62), bh = Math.max(16, L.unit * 0.3);
+        const fit = fitText(chord.label ?? '', bw - 4, bh * 0.62, { minScale: 0.6, maxLines: 1 });
+        const g = svgEl('g', {
+            class: 'chord-box', 'data-chord': chord.id, 'data-caption': chord.caption ?? `Chord · ${chord.label ?? ''}`,
+            role: opts.onChord ? 'button' : null, tabindex: opts.onChord ? 0 : null, 'aria-label': chord.caption ?? chord.label,
+            onclick: opts.onChord ? (e) => { e.stopPropagation(); opts.onChord(chord, e); } : null,
+            onkeydown: opts.onChord ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opts.onChord(chord, e); } } : null,
+        });
+        g.append(svgEl('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: bh / 2 }),
+            svgEl('text', { x: cx, y: cy + fit.fs * 0.34, 'text-anchor': 'middle', style: `font-size:${fit.fs}px`, text: fit.lines[0] }));
+        svg.append(g);
+    }
+
     // Decorations: physical features that are not keys (the Imprint's two
     // trackballs). `decorationLabel(d)` supplies a live caption.
     const decoLabel = opts.decorationLabel ?? profile.decorationLabel ?? (() => '');
@@ -384,6 +409,8 @@ class Board extends EventTarget {
     #barEl = null;
     #boardEl = null;
     #bannerEl = null;
+    #chords = null;     // {boxes, onClick} while the Chords tab shows
+    #note = null;
     // Edits run one at a time, in call order. Fast type-to-assign used to be
     // refused ("Still writing the last key") and lose keystrokes (WC-20).
     #queue = Promise.resolve();
@@ -560,6 +587,18 @@ class Board extends EventTarget {
     undo() { return this.#serial(() => this.#step(this.#undo, this.#redo, 'before')); }
     redo() { return this.#serial(() => this.#step(this.#redo, this.#undo, 'after')); }
 
+    /** Svalboard chords on the board: null clears. See the header. */
+    setChordBoxes(boxes, onClick) {
+        this.#chords = boxes ? { boxes, onClick } : null;
+        this.#renderBoard();
+    }
+
+    /** A note under the layer chips (chord count / warning); null clears. */
+    setLayerBarNote(node) {
+        this.#note = node ?? null;
+        this.#renderBar();
+    }
+
     setZoom(f) {
         if (hasDom()) document.documentElement.style.setProperty(BOARD_ZOOM_VAR, String(f));
     }
@@ -589,6 +628,7 @@ class Board extends EventTarget {
             this.#sel = null;
             this.#undo = []; this.#redo = [];
             this.#renaming = null;
+            this.#chords = null; this.#note = null;
             const n = adapter.layers().length;
             if (this.#layer >= n) this.#layer = 0;
             this.dispatchEvent(new Event('history'));
@@ -781,6 +821,7 @@ class Board extends EventTarget {
                     'data-caption': `Bring back removed layer "${ops.restoreLabel}"`, onclick: () => ops.restore(),
                 }) : null);
         }
+        if (this.#note) kids.push(this.#note);
         this.#barEl.replaceChildren(...kids.filter(Boolean));
     }
 
@@ -796,10 +837,14 @@ class Board extends EventTarget {
         }).filter(Boolean)) : null;
         const svg = renderKeyboardSVG({
             profile: a.profile, zoomable: true, tooltips: false,
-            names: pick ? 'all' : 'sel',
+            names: pick || this.#chords ? 'all' : 'sel',
             keycodeAt: (row, col) => a.bindingAt(layer, { kind: 'key', row, col }),
             selected: pick || a.readOnly ? null : this.#sel,
             marked,
+            ...(this.#chords ? {
+                chords: this.#chords.boxes,
+                onChord: (c, e) => this.#chords?.onClick?.(c, e),
+            } : {}),
             onSelect: (sel) => this.#click(sel),
             onDrop: a.readOnly ? null : (sel, text) => this.dropOn(sel, text),
         });

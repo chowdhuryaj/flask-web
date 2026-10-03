@@ -16,14 +16,19 @@
 // FlaskProto.save and save-state refuse it too. Enabled and the chord window
 // therefore apply live only (their persistence path is that SAVE).
 //
-// Phase B: chord boxes on the board (board.setChordBoxes) and the layer-bar
-// note; this tab is the table view until then.
+// While this tab shows, every bound chord is also a box on the board between
+// its two keys (board.setChordBoxes; click = the picker) and the layer rail
+// carries a count / warning note.
 
 import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=76';
 import { CH_QMK, V_QMK, CC, ccDefName, ccRow, ccCol, ccRetired } from './flaskproto.js?v=76';
 import { bindingCell, bindingText, pickKey, reloadRow } from './qmk-ui.js?v=76';
+import { board } from './board.js?v=76';
+import { legendOf } from './legend.js?v=76';
 
 const KC_TRNS = 0x0001;
+/** Box text: the key legend, with its hold after a slash ("T/⇧"). */
+const chipText = (kc) => { const lg = legendOf(kc, 'qmk'); return lg.sub ? `${lg.main}/${lg.sub}` : lg.main; };
 
 /** The layer byte of the [def, layer] frames; ignored by v19+ firmware. */
 const UNIVERSAL_LAYER = 0;
@@ -32,6 +37,41 @@ export class CornerTab {
     constructor(app) {
         this.app = app;
         this.root = el('div');
+    }
+
+    /** Boxes follow the panel: shown while it is active, cleared when it is not. */
+    _watch() {
+        const panel = this.root.parentElement;
+        if (this._obs || !panel || typeof MutationObserver !== 'function') return;
+        this._obs = new MutationObserver(() => this._board());
+        this._obs.observe(panel, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    _active() {
+        const p = this.root.parentElement;
+        return !!p?.isConnected && (!p.classList.contains('panel') || p.classList.contains('active'));
+    }
+
+    _board() {
+        if (!this.root.isConnected) { this._obs?.disconnect(); this._obs = null; }
+        if (!this._active() || !this.defs) {
+            if (this._shown) { board.setChordBoxes(null); board.setLayerBarNote(null); this._shown = false; }
+            return;
+        }
+        const boxes = [];
+        for (let def = 0; def < this.defCount; def++) {
+            const members = this.defs[def] ?? [];
+            const kc = this.outputs[def] ?? 0;
+            if (members.length < 2 || !kc || kc === KC_TRNS) continue;
+            boxes.push({
+                id: def, label: chipText(kc), keys: members.map((p) => ({ row: ccRow(p), col: ccCol(p) })),
+                caption: `Chord ${ccDefName(def)} → ${bindingText(kc)}. Click to change.`,
+            });
+        }
+        board.setChordBoxes(boxes, (b) => this._pick(b.id));
+        const warn = this.unplaced ? `${this.unplaced} chord(s) will not fire` : '';
+        board.setLayerBarNote(el('span', { class: warn ? 'bd-note warn' : 'bd-note', text: warn || `${boxes.length} chords · click a box to change it` }));
+        this._shown = true;
     }
 
     async load() {
@@ -165,5 +205,7 @@ export class CornerTab {
             this._grid(),
             reloadRow(() => this.load(), 'Assignments are durable the moment they are written. This channel has no Save.'));
         this.root.replaceChildren(c);
+        this._watch();
+        this._board();
     }
 }

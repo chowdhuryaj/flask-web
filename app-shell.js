@@ -19,7 +19,7 @@
 import { setCaption, bindCaptionBar } from './caption.js?v=76';
 import { board } from './board.js?v=76';
 import { el } from './ui.js?v=76';
-import { familyLabel } from './boards.js?v=76';
+import { familyLabel, isQmkFamily } from './boards.js?v=76';
 import { THEMES, TEXT_SCALE, appearance, applyTheme, applyTextScale, applyBoardZoom,
          currentTheme, currentTextScale, modeOf } from './themes.js?v=76';
 import { comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=76';
@@ -97,12 +97,14 @@ function wireChrome() {
     paintSel();
 }
 
-/** Keyboard chip sub-line: "38 keys · split" (mono). */
+/** Keyboard chip sub-line: "38 keys · split" (mono); the Svalboard says
+ * its name ("60 keys · Svalboard"). */
 export function syncDeviceChip() {
     const sub = $('device-sub');
     if (!sub) return;
-    const n = board.adapter?.profile?.keys?.length;
-    sub.textContent = n ? `${n} keys · split` : '';
+    const profile = board.adapter?.profile;
+    const n = profile?.keys?.length;
+    sub.textContent = n ? `${n} keys · ${isQmkFamily(profile.family) ? familyLabel(profile.family) : 'split'}` : '';
 }
 
 // ---------- top-level tab row ----------

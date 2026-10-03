@@ -89,3 +89,11 @@
 @media (prefers-reduced-motion: reduce) {
   .kb-svg .keycap { transition: none; }
 }
+
+/* Svalboard corner chords: a pill between the two member keys (board.setChordBoxes). */
+.kb-svg .chord-box { cursor: pointer; outline: none; }
+.kb-svg .chord-box rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.kb-svg .chord-box:hover rect, .kb-svg .chord-box:focus-visible rect { fill: var(--accent-bg); }
+.kb-svg .chord-box text { fill: var(--accent-text); font-family: var(--font-mono); }
+.bd-note { font-size: var(--fs-xs); color: var(--muted); padding: 4px 2px; max-width: 160px; }
+.bd-note.warn { color: var(--danger); }

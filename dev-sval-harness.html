@@ -188,6 +188,8 @@ async function drive(label, fn) {
     catch (e) { lines.push(`FAIL ${label}: ${e.message}`); console.error(label, e); }
 }
 const tick = () => new Promise((r) => setTimeout(r, 30));
+// Like the app, only one board tab shows at a time: Chords draws its boxes only while active.
+document.querySelector('[data-tab-mount="qmk-chords"]').classList.remove('active');
 await drive('keymap: legends for MT / LT / MO / M n / TD(n) / custom', async () => {
     const txt = document.getElementById('board-slot').textContent.replace(/\s/g, '');   // a long legend wraps to two lines
     for (const t of ['T', '⇧', 'R', 'NavNas', 'M0', 'TD1', 'LeftDPI+']) if (!txt.includes(t)) throw new Error(`no "${t}" on the board`);
@@ -196,6 +198,8 @@ await drive('keymap: select a key, pick B, Vial setKeycode lands, legend updates
     const sel = { kind: 'key', row: 1, col: 0 };   // l1s
     board.select(sel);
     await tick();
+    const insp = document.getElementById('side').textContent;
+    if (!insp.includes('Left index · South') || !/0x00[0-9A-F]{2}/.test(insp)) throw new Error(`inspector: ${insp.slice(0, 80)}`);
     const n = vial.writes.length;
     document.querySelector('#panels [data-tile="key:letters:5:0"]').click();
     await tick();
@@ -219,6 +223,15 @@ await drive('chords: bind def 0 writes one 0x28 output, no save', async () => {
     const w = flask.writes.slice(n);
     if (w.length !== 1 || w[0][0] !== CH_QMK.corner) throw new Error(`writes ${JSON.stringify(w)}`);
     if (saveState.dirty().some((d) => d.source === CH_QMK.corner)) throw new Error('0x28 registered with Save');
+});
+await drive('chords: boxes on the board while the tab shows, gone when it hides', async () => {
+    document.querySelector('[data-tab-mount="qmk-chords"]').classList.add('active');
+    await tick();
+    const n = document.querySelectorAll('#board-slot .chord-box').length;
+    if (n < 2) throw new Error(`${n} chord boxes`);
+    document.querySelector('[data-tab-mount="qmk-chords"]').classList.remove('active');
+    await tick();
+    if (document.querySelector('#board-slot .chord-box')) throw new Error('boxes stayed after the tab hid');
 });
 await drive('chords: Centre + North column and no retired defs', async () => {
     const root = mounted['qmk-chords'].root;

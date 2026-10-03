@@ -11,9 +11,10 @@
 // WP3) is offered by name.
 
 import { el } from './ui.js?v=76';
-import { openPicker } from './binding-picker.js?v=76';
+import { openPicker, SURFACES } from './binding-picker.js?v=76';
 import { catalogFor, encode } from './behavior-catalog.js?v=76';
 import { isZmkFamily } from './zmk.js?v=76';
+import { isQmkFamily, keySurfaceOf } from './boards.js?v=76';
 import { applyTheme, applyBoardZoom, currentTheme, modeOf } from './themes.js?v=76';
 
 const MAX_RESULTS = 40;
@@ -160,10 +161,12 @@ export class CommandPalette {
         const { app } = this;
         const sel = app.shell?.selectedKey?.();
         if (!sel) return [];
-        const where = `key ${typeof sel.pos === 'number' ? sel.pos : ''}${sel.layer != null ? ` · layer ${sel.layer}` : ''}`.trim();
-        if (!isZmkFamily(app.family)) return [];
-        const adapter = 'zmk-studio';
-        const surface = 'zmk.key';
+        const named = app.shell.board?.adapter?.keyTitle?.(sel.pos);   // QMK keys have names
+        const where = named ? `${named}${sel.layer != null ? ` · layer ${sel.layer}` : ''}`
+            : `key ${typeof sel.pos === 'number' ? sel.pos : ''}${sel.layer != null ? ` · layer ${sel.layer}` : ''}`.trim();
+        if (!isZmkFamily(app.family) && !isQmkFamily(app.family)) return [];
+        const surface = keySurfaceOf(app);          // 'zmk.key' | 'qmk.key' (Svalboard)
+        const adapter = SURFACES[surface].adapter;
         const assign = (v) => app.shell.board.assign(v);
         const pick = (title) => openPicker({ surface, app, host: 'sheet', title, onPick: assign });
         const out = [{
@@ -171,7 +174,7 @@ export class CommandPalette {
             subtitle: where,
             run: () => pick(`Assign to ${where}`),
         }];
-        for (const entry of catalogFor(app)) {
+        for (const entry of catalogFor({ ...app, adapter })) {
             out.push({
                 title: `Assign ${entry.name}`,
                 subtitle: `${entry.group} · ${entry.desc}`,

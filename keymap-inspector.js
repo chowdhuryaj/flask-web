@@ -17,7 +17,7 @@ import { legendOf } from './legend.js?v=76';
 import { layerIndex } from './keymap-layers.js?v=76';
 import { SURFACES, surfaceEntries } from './binding-picker.js?v=76';
 import { keySurfaceOf } from './boards.js?v=76';
-import { describe as qmkDescribe, hex } from './keycodes.js?v=76';
+import { describe as qmkDescribe, hex as qmkHex } from './keycodes.js?v=76';
 import { keyTimingCard } from './zmk-holdtiming-card.js?v=76';
 import { zmkBehaviors } from './zmk-keycodes.js?v=76';
 import { timingBackendNow, TIMING_PARAM, HOLDTAP, decode, encode, composeTapHold, tapHoldSpecOf,
@@ -223,7 +223,7 @@ export function createInspector({ app, dock }) {
     }
 
     function source(b) {
-        if (qmk) return b == null ? '' : `${qmkDescribe(b)} · ${hex(b)}`;
+        if (qmk) return b == null ? '' : `${qmkDescribe(b)} · ${qmkHex(b)}`;
         if (!b) return '';
         const name = zmkBehaviors().get(b.behaviorId)?.displayName ?? `behavior #${b.behaviorId}`;
         const hex = (n) => `0x${(n >>> 0).toString(16).toUpperCase()}`;

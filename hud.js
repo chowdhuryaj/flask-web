@@ -257,9 +257,10 @@ export class HUD {
             // the layer GET only follows a changed bitmap, plus once a second
             // for timed changes (one-shot, combo, tap dance). Halves the wire.
             let changed = true;
-            if (app.readKeyState) {
-                // ZMK key-state bitmap, polled whenever the device offers it.
-                const next = await app.readKeyState();
+            const readKeys = this._keyFeed();
+            if (readKeys) {
+                // ZMK key-state bitmap, or the Svalboard's Vial matrix (unlocked only).
+                const next = await readKeys();
                 changed = this._pressedDiffers(next);
                 if (changed) { this.pressed = next; dirty = true; }
             }
@@ -311,6 +312,21 @@ export class HUD {
             }
         }
         this._busy = false;
+    }
+
+    /** The press feed: ZMK's key-state bitmap, else on the QMK line Vial's
+     * switch matrix, which answers only while the board is unlocked. */
+    _keyFeed() {
+        const { app } = this;
+        if (app.readKeyState) return app.readKeyState;
+        if (!isQmkFamily(app.family) || !app.vial || !app.unlocked || !app.profile) return null;
+        return async () => {
+            const { matrixRows: rows, matrixCols: cols } = app.profile;
+            const bits = await app.vial.matrixState(rows, cols);
+            const out = new Set();
+            bits.forEach((b, row) => { for (let col = 0; col < cols; col++) if ((b >> BigInt(col)) & 1n) out.add(`${row},${col}`); });
+            return out;
+        };
     }
 
     _pressedDiffers(next) {
@@ -384,7 +400,7 @@ export class HUD {
                 : undefined,
             scale: 0.62,
         }));
-        this.hintEl.textContent = app.readKeyState
+        this.hintEl.textContent = this._keyFeed()
             ? 'Live: layer follows the board; keys light on press.'
             : (app.caps.hudLayer ? 'Live: layer follows the board.' : '');
     }
