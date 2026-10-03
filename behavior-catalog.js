@@ -752,7 +752,7 @@ const pointing = (word, arrows, dy) => (p1) => {
     const a = arrows[y + 1][x + 1];
     return { top: '', main: a ? `${word} ${a}` : word };
 };
-const holdLayer = (tap) => (p1) => ({ top: layerNameNow(p1), main: tap, hold: true });
+const holdLayer = (tap) => (p1) => ({ top: layerNameNow(p1), main: tap, hold: 'layer' });
 const MOD_WORD = { 0: '⌃ Ctrl', 1: '⇧ Shift', 2: '⌥ Opt', 3: '⌘ Cmd' };   // HID E0-E7, left and right alike
 const holdMod = (p1) => { const id = p1 & 0xFFFF; return id >= 0xE0 && id <= 0xE7 && !(p1 >>> 24) ? MOD_WORD[(id - 0xE0) % 4] : usageCap(p1); };
 const ARROWS = [['↖', '↑', '↗'], ['←', '', '→'], ['↙', '↓', '↘']];   // [y -1 up..+1 down][x -1..+1]
@@ -765,17 +765,17 @@ const FW_LEGEND = new Map([
     ['mouse_scroll', pointing('Scroll', ARROWS, -1)],  // SCRL_UP = +y
     ['Mouse Layer', (p1) => ({ top: 'tog/hold', main: layerNameNow(p1) })],
     // Totem Flask hold-taps (param1 = hold, param2 = tap): tap is the big label,
-    // the hold (layer or modifier) the sub-label, flagged `hold` so legend.js colours it.
+    // the hold (layer or modifier) the sub-label, `hold` ('layer' | 'mod') sets legend.js's colour.
     ['Super Delete / Layer', holdLayer('Super Del')],
     ['Repeat / Layer', holdLayer('Repeat')],
     ['Adaptive Key / Layer', holdLayer('Adaptive')],
     ['Mouse Hold / Super Delete', holdLayer('Super Del')],
     ['Mouse Hold / Repeat', holdLayer('Repeat')],
     ['Mouse Hold / Adaptive Key', holdLayer('Adaptive')],
-    ['Mouse Layer-Tap', (p1, p2) => ({ top: layerNameNow(p1), main: usageCap(p2), hold: true })],
-    ['Leader / Shift', (p1) => ({ top: holdMod(p1), main: 'Leader', hold: true })],
-    ['Mod / Neru Hints', (p1) => ({ top: holdMod(p1), main: 'Neru Hints', hold: true })],
-    ['Mod / Neru Menu Key', (p1, p2) => ({ top: holdMod(p1), main: `Neru ${neruKey(p2).main.replace(/^Neru /, '')}`, hold: true })],
+    ['Mouse Layer-Tap', (p1, p2) => ({ top: layerNameNow(p1), main: usageCap(p2), hold: 'layer' })],
+    ['Leader / Shift', (p1) => ({ top: holdMod(p1), main: 'Leader', hold: 'mod' })],
+    ['Mod / Neru Hints', (p1) => ({ top: holdMod(p1), main: 'Neru Hints', hold: 'mod' })],
+    ['Mod / Neru Menu Key', (p1, p2) => ({ top: holdMod(p1), main: `Neru ${neruKey(p2).main.replace(/^Neru /, '')}`, hold: 'mod' })],
 ]);
 const MOUSE_BUTTON = { 1: 'Click', 2: 'Right click', 4: 'Middle click', 8: 'Back', 16: 'Forward' };   // pointing.h MB1..MB5 bits
 const fwLegend = (raw) => FW_LEGEND.get(behaviorsNow().get(raw?.behaviorId)?.displayName)?.(raw.param1 >>> 0, raw.param2 >>> 0);

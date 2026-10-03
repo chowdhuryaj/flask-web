@@ -39,8 +39,8 @@ export function legendOf(value, adapter = 'zmk-studio') {
     if (id === 'one-shot-mod') return { main: cp.main, sub: 'osm', kind: 'hold', subKind: 'dim' };
     if (id === 'key-toggle') return { main: cp.main, sub: 'tog', kind: 'hold', subKind: 'dim' };
     if (MACRO_LIKE.has(id)) return { main: cp.main, sub: id === 'tap-dance' ? 'tap dance' : id === 'macro' ? 'macro' : id === 'adaptive' ? 'adaptive' : '', kind: 'macro', subKind: 'dim' };
-    // Firmware hold-taps (Totem): the hold, layer or modifier, reads blue like a layer-tap's.
-    if (id === 'advanced' && cp.hold) return { main: cp.main, sub: cp.top, kind: 'hold', subKind: 'layer' };
+    // Firmware hold-taps (Totem): a layer hold reads blue, a modifier hold amber, like the catalog's layer-taps / mod-taps.
+    if (id === 'advanced' && cp.hold) return { main: cp.main, sub: cp.top, kind: 'hold', subKind: cp.hold === 'mod' ? 'hold' : 'layer' };
     let main = cp.main;
     // Unnamed firmware behaviours read "#28"; the catalog's `node` (e.g. fht_l) is the better name when it exists.
     if (id === 'advanced' && /^#\d+$/.test(main)) {
