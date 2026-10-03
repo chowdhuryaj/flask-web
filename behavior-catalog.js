@@ -16,12 +16,12 @@
 //   code   a code from the entry's option list (media, mouse, lighting).
 //   timing ms (TIMING_PARAM).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=75';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=76';
 import {
     zmkBehaviors, zmkLayers, layerNameIn, layerLabel, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
-} from './zmk-keycodes.js?v=75';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=75';
+} from './zmk-keycodes.js?v=76';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=76';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [
@@ -744,8 +744,15 @@ function zmkConstName(binding, adapter) {
 // binding's params and returns {top, main}; `top` shows as the small sub-legend.
 // ZMK pointing.h packs x into the high 16 bits and y into the low 16 (int16
 // each); the magnitude follows the keymap's MOVE_VAL/SCRL_VAL, so only signs are read.
-const NERU_MENU = { G: 'Grid', R: 'R-grid', S: 'Scroll mode', B: 'Bisect', D: 'Drag', 2: 'Double', C: 'Right-click hint',
+export const NERU_MENU = { G: 'Grid', R: 'R-grid', S: 'Scroll mode', B: 'Bisect', D: 'Drag', 2: 'Double', C: 'Right-click hint',
     M: 'Monitor pick', N: 'Next mon', P: 'Prev mon', X: 'Save pos', Z: 'Restore pos', W: 'Screen hints', V: 'Vision hints' };
+/** What each Neru menu letter does (~/.config/neru/config.toml [modes.neru.hotkeys]); key picker descriptions. */
+export const NERU_DESC = { G: 'grid overlay: type a cell to click', R: 'recursive grid: narrow by 3×3 cells, then click',
+    S: 'scroll mode: scroll with keys', B: 'bisect: halve the screen toward the target, Return clicks',
+    D: 'hints that press and hold the mouse (drag)', 2: 'hints that double-click', C: 'hints that right-click',
+    M: 'pick a monitor', N: 'cursor to the next monitor', P: 'cursor to the previous monitor',
+    X: 'save the cursor position', Z: 'restore the saved cursor position', W: 'hints across the whole screen',
+    V: 'OCR hints for custom-drawn UI (needs Screen Recording)' };
 const neruKey = (p1) => { const c = usageCap((p1 >>> 0) & 0xFFFFFF); return { top: 'Neru', main: NERU_MENU[c] ?? `Neru ${c}` }; };
 const pointing = (word, arrows, dy) => (p1) => {
     const x = Math.sign((p1 >> 16) << 16 >> 16), y = Math.sign(p1 << 16 >> 16) * dy;   // y: +1 = down

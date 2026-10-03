@@ -15,16 +15,16 @@
 // Playback stops at the first empty step, so the editor keeps live steps
 // compacted: deleting a row shifts the tail up and rewrites the suffix.
 
-import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=75';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=75';
-import { CH, V } from './flaskproto.js?v=75';
-import { usagesToText } from './zmk-adaptive-codec.js?v=75';   // macroSummary text
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary, onSlotsChanged, draftSlots, dim } from './zmk-behaviour-common.js?v=75';
-import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=75';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=76';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=76';
+import { CH, V } from './flaskproto.js?v=76';
+import { usagesToText } from './zmk-adaptive-codec.js?v=76';   // macroSummary text
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary, onSlotsChanged, draftSlots, dim } from './zmk-behaviour-common.js?v=76';
+import { armCapture, bareUsage, isModifierUsage } from './zmk-capture.js?v=76';
 import {
     MACRO_ACTION, MACRO_ACTION_LABELS,
     decodeMacroStep, encodeMacroStep, macroIsEmpty, macroLiveSteps,
-} from './zmk-macros-codec.js?v=75';
+} from './zmk-macros-codec.js?v=76';
 
 /** Short text for the picker's slot chips: "types 'hello'" or "3 steps". */
 export function macroSummary(steps) {

@@ -11,13 +11,13 @@
 //        binding?             (kind 'binding': ready to write),
 //        build?(tap)          (layer-tap / toggle: rebuilt around the key's tap)}
 
-import { el } from './ui.js?v=75';
-import { board, DRAG_TYPE } from './board.js?v=75';
-import { surfaceEntries } from './binding-picker.js?v=75';
-import { captureOneKey } from './zmk-capture.js?v=75';
-import { usageParts, kpParam } from './zmk-keycodes.js?v=75';
-import { legendOf } from './legend.js?v=75';
-import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText } from './behavior-catalog.js?v=75';
+import { el } from './ui.js?v=76';
+import { board, DRAG_TYPE } from './board.js?v=76';
+import { surfaceEntries } from './binding-picker.js?v=76';
+import { captureOneKey } from './zmk-capture.js?v=76';
+import { usageParts, kpParam } from './zmk-keycodes.js?v=76';
+import { legendOf } from './legend.js?v=76';
+import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText, NERU_MENU, NERU_DESC } from './behavior-catalog.js?v=76';
 
 const ADAPTER = 'zmk-studio';
 const KEY_A = 0x04;
@@ -45,7 +45,7 @@ const ENTRY_CATEGORY = {
     macro: 'Macros & run', 'tap-dance': 'Macros & run', adaptive: 'Macros & run', leader: 'Macros & run',
     advanced: 'Other',
 };
-const BEHAVIOUR_ORDER = ['Layers', 'Key behaviours', 'Bluetooth & output', 'Mouse', 'Lighting', 'System', 'Macros & run', 'Other'];
+const BEHAVIOUR_ORDER = ['Layers', 'Key behaviours', 'Bluetooth & output', 'Mouse', 'Neru', 'Lighting', 'System', 'Macros & run', 'Other'];
 // pointing.h packs x into the high int16, y into the low. Magnitudes are the compiled
 // MOVE_VAL / SCRL_VAL of config/totem.keymap (1800 * MOUSE_SPEED_PCT/100, 20 * SCROLL_SPEED_PCT/100);
 // the app cannot read them from the device. Up is -y for move, +y for scroll.
@@ -53,6 +53,13 @@ const POINTING = {
     mouse_move: { word: 'Mouse', val: 1800, dirs: [['left', -1, 0], ['down', 0, 1], ['up', 0, -1], ['right', 1, 0]] },
     mouse_scroll: { word: 'Scroll', val: 20, dirs: [['left', -1, 0], ['down', 0, -1], ['up', 0, 1], ['right', 1, 0]] },
 };
+// Totem firmware behaviors the picker expands by name (Totem-ZMK config/totem.keymap).
+// Neru menu letters are HID keyboard usages; hold modifiers are the four left mods.
+const NERU_USAGE = (c) => kpParam(c === '2' ? 0x1F : 0x04 + c.charCodeAt(0) - 65);
+const HOLD_MODS = [['⌃ Ctrl', 0xE0], ['⇧ Shift', 0xE1], ['⌥ Opt', 0xE2], ['⌘ Cmd', 0xE3]];
+const NERU_KEY = { 'Neru Menu + Key (stay)': 'stays on this layer', 'Neru Menu + Key (to base)': 'then back to Base' };
+const NERU_PLAIN = { 'Neru Hints': 'Neru Hints: label every clickable target, type one to click', 'Neru Menu': 'Neru menu: opens the letter menu (g grid, r rgrid, b bisect …)' };
+const MOD_HOLD = { 'Mod / Neru Hints': 'Neru Hints', 'Leader / Shift': 'Leader' };   // param1 = the held key, param2 unused
 const LAYER_SHORT = { 'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl' };
 const TONE = { layer: 'layer', hold: 'hold', mod: 'hold', macro: 'macro', dim: 'dim', plain: '' };
 
@@ -176,10 +183,40 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
         const mk = (d, id, label, cap, sub, b) => {
             return tile({ id: `adv:${d.id}:${id}`, label, desc: 'Other firmware behavior', cap, sub }, b, adapter);
         };
+        const neru = [];
+        const desc = 'Totem firmware behavior';
         for (const d of adv.behaviors) {
             const [p1, p2] = [kinds(d, 'param1'), kinds(d, 'param2')];
             const short = d.displayName.replace(/\s*\/\s*Layer$/, '');
-            if (!p1.length && POINTING[d.displayName]) {
+            const n = d.displayName;
+            if (NERU_PLAIN[n]) {
+                neru.push(tile({ id: `adv:${d.id}`, label: NERU_PLAIN[n], desc }, { behaviorId: d.id, param1: 0, param2: 0 }, adapter));
+            } else if (NERU_KEY[n]) {
+                for (const [c, name] of Object.entries(NERU_MENU)) {
+                    neru.push(tile({ id: `adv:${d.id}:${c}`, label: `Neru ${name}: ${NERU_DESC[c]}, ${NERU_KEY[n]}`, desc },
+                        { behaviorId: d.id, param1: NERU_USAGE(c), param2: 0 }, adapter));
+                }
+            } else if (n === 'Mod / Neru Menu Key') {
+                for (const [c, name] of Object.entries(NERU_MENU)) for (const [m, u] of HOLD_MODS) {
+                    neru.push(tile({ id: `adv:${d.id}:${c}:${u}`, label: `Neru ${name} (tap), ${m} (hold): ${NERU_DESC[c]}`, desc },
+                        { behaviorId: d.id, param1: kpParam(u), param2: NERU_USAGE(c) }, adapter));
+                }
+            } else if (MOD_HOLD[n]) {
+                const to = n.includes('Neru') ? neru : out;
+                for (const [m, u] of HOLD_MODS) {
+                    to.push(tile({ id: `adv:${d.id}:${u}`, label: `${MOD_HOLD[n]} (tap), ${m} (hold)`, desc },
+                        { behaviorId: d.id, param1: kpParam(u), param2: 0 }, adapter));
+                }
+            } else if (n === 'Mouse Layer-Tap') {
+                // Like Layer-tap: hold = the layer, tap = the selected key's tap (default A).
+                for (const id of layerIds) {
+                    const build = (tap = { key: KEY_A, mods: 0 }) => ({ behaviorId: d.id, param1: id,
+                        param2: ((((tap.mods ?? 0) & 0xFF) << 24) | kpParam(tap.key & 0xFFFF)) >>> 0 });
+                    const t = tile({ id: `adv:${d.id}:${id}`, label: `Mouse Layer-Tap: tap a key, hold for ${lname(id)}`, desc }, build(), adapter);
+                    t.build = build;
+                    out.push(t);
+                }
+            } else if (!p1.length && POINTING[d.displayName]) {
                 // Param-0 would be a no-op; offer the four directions instead.
                 const { word, val, dirs } = POINTING[d.displayName];
                 for (const [dir, x, y] of dirs) {
@@ -207,6 +244,8 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
         }
         for (const t of out) t.search += ' advanced other';
         add('Other', out);
+        for (const t of neru) t.search += ' neru';
+        add('Neru', neru);
     }
     const behaviours = BEHAVIOUR_ORDER.filter((l) => cats.has(l)).map((label) => ({ id: label, label, tiles: cats.get(label) }));
     return { keys, behaviours, pinned };
