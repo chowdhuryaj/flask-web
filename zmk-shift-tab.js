@@ -20,14 +20,14 @@
 // trigger and replacement mods matter), and count keymap mods. The "Mac
 // shortcuts on Windows" pack (zmk-os-pack.js) loads ⌘→⌃ and its exceptions.
 
-import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=71';
-import { CH, V } from './flaskproto.js?v=71';
-import { usageFromName, usageCap } from './zmk-keycodes.js?v=71';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=71';
+import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=72';
+import { CH, V } from './flaskproto.js?v=72';
+import { usageFromName, usageCap } from './zmk-keycodes.js?v=72';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=72';
 import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty, cskMorphCaps, cskNeedsMorph, cskDuplicateOf,
     cskSummary, trigText, TRIGGER_MODS, MOD_CTL, MOD_SFT, MOD_ALT, MOD_SHIFT_ONLY,
-    cskNeedsOs, cskOskCaps, cskOsMode, cskClash, cskWildShadow, OS_ANY, OS_MAC, OS_PC, OS_NAMES, WILD_KEY } from './zmk-csk-codec.js?v=71';
-import { OS_PACK, OS_PACK_LABEL } from './zmk-os-pack.js?v=71';
+    cskNeedsOs, cskOskCaps, cskOsMode, cskClash, cskWildShadow, OS_ANY, OS_MAC, OS_PC, OS_NAMES, WILD_KEY } from './zmk-csk-codec.js?v=72';
+import { OS_PACK, OS_PACK_LABEL } from './zmk-os-pack.js?v=72';
 
 // One-click starters. Encodings ride usageFromName so the table stays data —
 // names must exist in zmk-keycodes.js. shiftedMods = implicit-modifier bits

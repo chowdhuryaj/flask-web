@@ -9,23 +9,23 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=71';
-import { zmkBehaviors } from './zmk-keycodes.js?v=71';
-import { isRecursiveOutput } from './behavior-catalog.js?v=71';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=71';
+import { CH, V } from './flaskproto.js?v=72';
+import { zmkBehaviors } from './zmk-keycodes.js?v=72';
+import { isRecursiveOutput } from './behavior-catalog.js?v=72';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=72';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=71';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=71';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=71';
+         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=72';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=72';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=72';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=71';
-import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=71';
+    from './zmk-output-codec.js?v=72';
+import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=72';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=71';
+    from './zmk-tapdance-codec.js?v=72';
 import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
-    from './zmk-adaptive-codec.js?v=71';
+    from './zmk-adaptive-codec.js?v=72';
 
 /** Behavior ids shift between firmware builds and differ from the offline sim,
  * so a behavior output (action 3) is exported with its display name beside the
@@ -587,4 +587,4 @@ export async function saveFlaskChannels(app, channels) {
 }
 
 // window.flaskExportKeymap / window.flaskPrintLayers (side-effect import; see zmk-extras.js)
-import './zmk-extras.js?v=71';
+import './zmk-extras.js?v=72';

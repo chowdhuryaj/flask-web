@@ -16,12 +16,12 @@
 //   code   a code from the entry's option list (media, mouse, lighting).
 //   timing ms (TIMING_PARAM).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=71';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=72';
 import {
     zmkBehaviors, zmkLayers, layerNameIn, layerLabel, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
-} from './zmk-keycodes.js?v=71';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=71';
+} from './zmk-keycodes.js?v=72';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=72';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [
@@ -718,7 +718,8 @@ export function capParts(binding, adapter = adapterOf(binding)) {
         case 'gesture': return { top: 'Gesture', main: p.slot === GESTURE_ACTIVE ? 'Active' : String(p.slot) };
         case 'media-key':
             return { top: '', main: usageCap(((HID_PAGE_CONSUMER << 16) | p.code) >>> 0) };
-        case 'mouse-key': case 'lighting':
+        case 'mouse-key': return { top: e.tag, main: MOUSE_BUTTON[p.code] ?? zmkConstName(binding, adapter) ?? String(p.code) };
+        case 'lighting':
             return { top: e.tag, main: zmkConstName(binding, adapter) ?? String(p.code) };
         case 'bluetooth': {
             const n = zmkConstName(binding, adapter) ?? String(p.code);
@@ -726,7 +727,7 @@ export function capParts(binding, adapter = adapterOf(binding)) {
         }
         case 'autoscroll': case 'ball-swap': case 'underglow': case 'output': case 'power':
             return { top: e.tag, main: zmkConstName(binding, adapter) ?? String(p.code) };
-        case 'advanced': return { top: '', main: advancedCap(p.raw, adapter) };
+        case 'advanced': return fwLegend(p.raw) ?? { top: '', main: advancedCap(p.raw, adapter) };
         default: return { top: '', main: e?.tag || e?.name || '?' };
     }
 }
@@ -737,6 +738,32 @@ function zmkConstName(binding, adapter) {
     const n = constantsOf(d).find((c) => c.constant === (binding.param1 >>> 0))?.name;
     return n ? n.replace(/\s*\(.*?\)/g, '') : null;   // caps never carry "(x" fragments
 }
+
+// Firmware behaviours the live device names but the catalog has no entry for
+// (Totem Mouse layer). Matched by displayName, never by id. Each row gets the
+// binding's params and returns {top, main}; `top` shows as the small sub-legend.
+// ZMK pointing.h packs x into the high 16 bits and y into the low 16 (int16
+// each); the magnitude follows the keymap's MOVE_VAL/SCRL_VAL, so only signs are read.
+const NERU_MENU = { G: 'Grid', R: 'R-grid', S: 'Scroll mode', B: 'Bisect', D: 'Drag', 2: 'Double', C: 'Right-click hint',
+    M: 'Monitor pick', N: 'Next mon', P: 'Prev mon', X: 'Save pos', Z: 'Restore pos', W: 'Screen hints', V: 'Vision hints' };
+const neruKey = (p1) => { const c = usageCap((p1 >>> 0) & 0xFFFFFF); return { top: 'Neru', main: NERU_MENU[c] ?? `Neru ${c}` }; };
+const pointing = (word, arrows, dy) => (p1) => {
+    const x = Math.sign((p1 >> 16) << 16 >> 16), y = Math.sign(p1 << 16 >> 16) * dy;   // y: +1 = down
+    const a = arrows[y + 1][x + 1];
+    return { top: '', main: a ? `${word} ${a}` : word };
+};
+const ARROWS = [['↖', '↑', '↗'], ['←', '', '→'], ['↙', '↓', '↘']];   // [y -1 up..+1 down][x -1..+1]
+const FW_LEGEND = new Map([
+    ['Neru Hints', () => ({ top: 'Neru', main: 'Hints' })],
+    ['Neru Menu', () => ({ top: 'Neru', main: 'Neru menu' })],
+    ['Neru Menu + Key (to base)', neruKey],
+    ['Neru Menu + Key (stay)', neruKey],
+    ['mouse_move', pointing('Mouse', ARROWS, 1)],      // MOVE_DOWN = +y
+    ['mouse_scroll', pointing('Scroll', ARROWS, -1)],  // SCRL_UP = +y
+    ['Mouse Layer', (p1) => ({ top: 'tog/hold', main: layerNameNow(p1) })],
+]);
+const MOUSE_BUTTON = { 1: 'Click', 2: 'Right click', 4: 'Middle click', 8: 'Back', 16: 'Forward' };   // pointing.h MB1..MB5 bits
+const fwLegend = (raw) => FW_LEGEND.get(behaviorsNow().get(raw?.behaviorId)?.displayName)?.(raw.param1 >>> 0, raw.param2 >>> 0);
 
 function advancedCap(raw, adapter) {
     if (adapter === 'zmk-typed' && raw?.action === 1) return usageCap(raw.param1);
@@ -753,6 +780,8 @@ export function describeBinding(binding, adapter = adapterOf(binding)) {
     if (entryId === 'advanced') {
         if (adapter === 'zmk-typed' && binding?.action === 1) return usageLabel(binding.param1);
         const d = behaviorsNow().get(binding?.behaviorId);
+        const fw = fwLegend(binding);
+        if (fw && d?.displayName?.startsWith('Neru Menu + ')) return `${d.displayName}: ${fw.main}`;
         return d?.displayName || `Unnamed behavior #${binding?.behaviorId}`;
     }
     const e = entryById(entryId);

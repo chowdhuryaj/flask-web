@@ -36,13 +36,13 @@ globalThis.localStorage ??= {
     get length() { return mem.size; },
 };
 
-const { syncWorkspace, maybeSyncOffline, pendingCount, saveWorkspace, loadWorkspace } = await import('../offline.js?v=71');
-const { CH, V } = await import('../flaskproto.js?v=71');
+const { syncWorkspace, maybeSyncOffline, pendingCount, saveWorkspace, loadWorkspace } = await import('../offline.js?v=72');
+const { CH, V } = await import('../flaskproto.js?v=72');
 const { createZmkTemplate, ZmkOfflineFlask, zmkSyncExtras, zmkPendingCount, zmkDescribeChanges, dropJournals,
-        seedWorkspaceFromDevice, OfflineStudioClient, attachZmkOffline } = await import('../zmk-offline.js?v=71');
-const { zmkCapabilities } = await import('../zmk.js?v=71');
-const { encodeComboSlotV3, decodeComboSlotV3, COMBO_ACTION } = await import('../zmk-combos-codec.js?v=71');
-const { encodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=71');
+        seedWorkspaceFromDevice, OfflineStudioClient, attachZmkOffline } = await import('../zmk-offline.js?v=72');
+const { zmkCapabilities } = await import('../zmk.js?v=72');
+const { encodeComboSlotV3, decodeComboSlotV3, COMBO_ACTION } = await import('../zmk-combos-codec.js?v=72');
+const { encodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=72');
 
 let checks = 0;
 const ok = (c, m) => { assert.ok(c, m); checks++; };

@@ -2,10 +2,10 @@
 // Neru Menu + Key) get tiles under Behaviours > Other, and search finds them.
 // Names and kinds are the Totem's live behavior list (Totem-ZMK keymap-after.json).
 import assert from 'node:assert/strict';
-import { setZmkContext } from '../zmk-keycodes.js?v=71';
-import { surfaceEntries } from '../binding-picker.js?v=71';
-import { dockModel, searchTiles } from '../keymap-dock.js?v=71';
-import { tapHoldSpecOf } from '../behavior-catalog.js?v=71';
+import { setZmkContext } from '../zmk-keycodes.js?v=72';
+import { surfaceEntries } from '../binding-picker.js?v=72';
+import { dockModel, searchTiles } from '../keymap-dock.js?v=72';
+import { tapHoldSpecOf } from '../behavior-catalog.js?v=72';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };

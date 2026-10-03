@@ -2,9 +2,9 @@
 // through the Studio sim, resolves device-only behaviors, queues a diff-only
 // pendingKeymap on save, and is never reseeded over unsynced edits.
 import assert from 'node:assert/strict';
-import { loadWorkspace } from '../offline.js?v=71';
+import { loadWorkspace } from '../offline.js?v=72';
 import { seedWorkspaceFromDevice, seedWorkspaceFromSnapshot, zmkSyncExtras, createZmkTemplate,
-         OfflineStudioClient } from '../zmk-offline.js?v=71';
+         OfflineStudioClient } from '../zmk-offline.js?v=72';
 
 const mem = new Map();
 globalThis.localStorage ??= {
@@ -40,7 +40,7 @@ assert.equal(weird.displayName, 'Weird Thing'); assert.ok((await c.listAllBehavi
 
 // Real firmware refuses behaviors with no get_parameter_metadata (-ENODEV); the sim mirrors it.
 {
-    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=71');
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=72');
     const sw = TOTEM_DEFAULT.behaviors.find((b) => b.node === 'sw_layout');
     await assert.rejects(c.setLayerBinding(0, 3, { behaviorId: sw.id, param1: 0, param2: 0 }), /INVALID_PARAMETERS/); checks++;
 }

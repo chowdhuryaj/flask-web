@@ -9,11 +9,11 @@ globalThis.localStorage ??= {
     removeItem: (k) => mem.delete(k), key: (i) => [...mem.keys()][i] ?? null,
     get length() { return mem.size; },
 };
-const { saveState } = await import('../save-state.js?v=71');
+const { saveState } = await import('../save-state.js?v=72');
 const { createZmkTemplate, attachZmkOffline, ZmkOfflineFlask, offlineQueued, discardOfflineQueued }
-    = await import('../zmk-offline.js?v=71');
-const { CH, V } = await import('../flaskproto.js?v=71');
-const { encodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=71');
+    = await import('../zmk-offline.js?v=72');
+const { CH, V } = await import('../flaskproto.js?v=72');
+const { encodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=72');
 
 let checks = 0;
 const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
