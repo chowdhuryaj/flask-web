@@ -35,9 +35,9 @@ const { text, notExported } = exportKeymapText(data, {
 eq(text.split('{').length, text.split('}').length, 'braces balance');
 ok(text.includes('compatible = "zmk,keymap";'), 'keymap node');
 ok(text.includes('#include <dt-bindings/zmk/keys.h>'), 'keys.h');
-for (const n of ['L_BASE', 'L_CONTROL', 'L_FN', 'L_SYM', 'L_NUM']) ok(text.includes(`#define ${n}`), `define ${n}`);
-ok(/&kp Q\s+&kp W\s+&kp E/.test(text), 'base row 1 keys appear');
-ok(text.includes('&fht_l LCTRL T') && text.includes('&fht_r RSHFT R'), 'flask hold-taps keep hold/tap args');
+for (const n of T.layers.map((l) => `L_${l.name.toUpperCase().replace(/\W+/g, '_')}`)) ok(text.includes(`#define ${n}`), `define ${n}`);
+ok(/&kp F\s+&kp X\s+&kp L/.test(text), 'base row 1 keys appear');
+ok(text.includes('&fht_l LCTRL N') && text.includes('&fht_r RCTRL I'), 'flask hold-taps keep hold/tap args');
 ok(text.includes('&kp LS(TAB)'), 'modifier wrapper');
 ok(text.includes('&bt BT_SEL 3') && text.includes('&bt BT_CLR'), 'bluetooth symbols');
 ok(text.includes('&sw_layout OS_NEXT') && text.includes('#define OS_NEXT ZMK_SWITCH_LAYOUT_NEXT'), 'switch-layout param kept');
@@ -121,21 +121,33 @@ if (existsSync(real)) {
         PIPE: 'LS(BSLH)', COLON: 'LS(SEMI)', DQT: 'LS(SQT)', TILDE: 'LS(GRAVE)', LT: 'LS(COMMA)', GT: 'LS(DOT)', QMARK: 'LS(FSLH)' };
     const norm = (cell) => cell.trim().replace(/\s+/g, ' ').replace(/\b[A-Z_]+\b/g, (w) => ALIAS[w] ?? w)
         .replace(/\b[A-Z]+\b/g, (w) => SHIFTED[w] ?? w);
-    const cellsOf = (bindingsText) => bindingsText.replace(/[<>]/g, ' ').split('&').slice(1).map(norm).map((c) => `&${c}`);
+    // Layer constants compare by number (the firmware says L_NAV, the export derives L_NAVIGATION
+    // from the display name); a trailing dummy `0` cell is dropped (metadata carries no param for it).
+    const layerDefs = (t) => Object.fromEntries([...t.matchAll(/^#define\s+(L_\w+)\s+(\d+)/gm)].map((m) => [m[1], m[2]]));
+    const realDefs = layerDefs(readFileSync(real, 'utf8')), ourDefs = layerDefs(text);
+    const cellsFor = (defs) => (bindingsText) => bindingsText.replace(/[<>]/g, ' ').split('&').slice(1).map(norm)
+        .map((c) => c.replace(/\bL_[A-Z0-9_]+\b/g, (w) => `layer${defs[w] ?? w}`).replace(/ 0$/, '')).map((c) => `&${c}`);
+    // pointing.h names -> the MOVE_X/MOVE_Y/MBn form the export writes (steps from the keymap's tuning block).
+    const pct = (n) => Number(src.match(new RegExp(`#define\\s+${n}\\s+(\\d+)`))?.[1] ?? 100);
+    const mv = Math.trunc(1800 * pct('MOUSE_SPEED_PCT') / 100), sc = Math.trunc(20 * pct('SCROLL_SPEED_PCT') / 100);
+    const PTR = { LCLK: 'MB1', RCLK: 'MB2', MCLK: 'MB3', MOVE_UP: `MOVE_Y(${-mv})`, MOVE_DOWN: `MOVE_Y(${mv})`,
+        MOVE_LEFT: `MOVE_X(${-mv})`, MOVE_RIGHT: `MOVE_X(${mv})`, SCRL_UP: `MOVE_Y(${sc})`, SCRL_DOWN: `MOVE_Y(${-sc})`,
+        SCRL_LEFT: `MOVE_X(${-sc})`, SCRL_RIGHT: `MOVE_X(${sc})` };
+    const cellsOf = (t) => cellsFor(realDefs)(t).map((c) => c.replace(/\b[A-Z_]+\b/g, (w) => PTR[w] ?? w));
+    const ourCellsOf = cellsFor(ourDefs);
     const km = src.slice(src.indexOf('keymap {'));
     const layerNames = [...km.matchAll(/(\w+)\s*\{\s*(?:display-name[^;]*;\s*)?bindings\s*=\s*<([^>]*)>/g)];
     eq(layerNames.length, T.layers.length, 'real file has the same layer count');
     const outLayers = [...text.slice(text.indexOf('keymap {')).matchAll(/(\w+)\s*\{\s*display-name[^;]*;\s*bindings\s*=\s*<([^>]*)>/g)];
     layerNames.forEach((m, i) => {
         const want = cellsOf(m[2]).map((c) => c.replace(/^&(\w+)/, (_, n) => `&${n}`));
-        const got = cellsOf(outLayers[i][1] ? outLayers[i][2] : '');
-        // L_* defines are the same names the real file uses.
+        const got = ourCellsOf(outLayers[i][1] ? outLayers[i][2] : '');
         eq(got, want, `layer ${i} (${m[1]}) matches the firmware keymap cell by cell`);
     });
     const realCombos = [...src.matchAll(/(\w+)\s*\{\s*bindings\s*=\s*<([^>]*)>;\s*key-positions\s*=\s*<([^>]*)>/g)]
         .filter((m) => !['base'].includes(m[1])).map((m) => ({ b: cellsOf(m[2]).join(' '), p: m[3].trim().replace(/\s+/g, ' ') }));
     const ourCombos = [...text.matchAll(/(\w+) \{\s*bindings\s*=\s*<([^>]*)>;\s*key-positions\s*=\s*<([^>]*)>/g)]
-        .map((m) => ({ b: cellsOf(m[2]).join(' '), p: m[3].trim() }));
+        .map((m) => ({ b: ourCellsOf(m[2]).join(' '), p: m[3].trim() }));
     const comboSet = (l) => l.map((c) => `${c.p} -> ${c.b}`).sort();
     const realTail = comboSet(realCombos).filter((c) => comboSet(ourCombos).includes(c));
     eq(comboSet(ourCombos).length, T.combos.length, 'every default combo exported');

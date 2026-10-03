@@ -1,7 +1,7 @@
 // Layer labels: binding params carry layer IDs (stable), the rail / HUD /
 // combo dropdown number layers by INDEX. After a reorder (Studio move_layer,
 // CONFIG_ZMK_KEYMAP_LAYER_REORDERING) the two differ, and every view must still
-// name the same layer. Also guards the Totem default (fn = 2, sym = 3).
+// name the same layer. Also guards the Totem default (Function = 2, Number = 3).
 import assert from 'node:assert/strict';
 
 const node = () => ({ setAttribute() {}, addEventListener() {}, append() {}, remove() {} });
@@ -22,24 +22,21 @@ const idOf = (n) => TOTEM_DEFAULT.behaviors.find((d) => d.displayName === n).id;
 const MO = idOf('Momentary Layer');
 const mo = (layerId) => ({ behaviorId: MO, param1: layerId, param2: 0 });
 
-// 1. Totem default: index == id, fn = 2, sym = 3 (a swap fails here).
+// 1. Totem default: index == id, Function = 2, Number = 3 (a swap fails here).
 const names = TOTEM_DEFAULT.layers.map((l) => l.name);
-eq(names.slice(0, 5), ['base', 'control', 'fn', 'sym', 'num']);
+eq(names.slice(0, 5), ['Base', 'Navigation', 'Function', 'Number', 'Numpad']);
 setZmkContext({ behaviors, layers: names.map((name, id) => ({ id, name })) });
-eq([bindingCap(mo(2)), bindingCap(mo(3))].map((s) => s.replace(/^\S+ /, '')), ['fn', 'sym'], 'mo legend by id, default order');
-const combo = (n) => TOTEM_DEFAULT.combos.find((c) => c.name === n);
-eq([combo('z'), combo('x'), combo('sym')].map((c) => layerName(c.param1)), ['control', 'fn', 'sym'],
-    'firmware combos 32+33 / 33+34 / 35+36 name control / fn / sym');
+eq([bindingCap(mo(2)), bindingCap(mo(3))].map((s) => s.replace(/^\S+ /, '')), ['Function', 'Number'], 'mo legend by id, default order');
 
 // 2. Reordered device: index order base, control, sym(id 3), fn(id 2), num.
 const reordered = (nm) => [
     { id: 0, name: nm.base }, { id: 1, name: nm.control }, { id: 3, name: nm.sym }, { id: 2, name: nm.fn }, { id: 4, name: nm.num },
 ];
-const named = { base: 'base', control: 'control', fn: 'fn', sym: 'sym', num: 'num' };
+const named = { base: 'Base', control: 'Navigation', fn: 'Function', sym: 'Number', num: 'Numpad' };
 const unnamed = { base: '', control: '', fn: '', sym: '', num: '' };
 
 setZmkContext({ behaviors, layers: reordered(named) });
-eq([layerName(2), layerName(3)], ['fn', 'sym'], 'named: params resolve by id, not index');
+eq([layerName(2), layerName(3)], ['Function', 'Number'], 'named: params resolve by id, not index');
 
 // Unnamed layers (firmware without display-name): the label number is the
 // INDEX, the same one the rail and HUD show. id 2 now sits at index 3.
@@ -55,7 +52,7 @@ eq(encode('hold-layer', { layer: 2 }, 'zmk-studio').param1, 2, 'encode keeps the
 eq(decode(mo(3), 'zmk-studio').params.layer, 3, 'decode returns the id');
 
 // 4. HUD strip: names by index; the firmware's active-layer value is an index.
-for (const [nm, want] of [[named, ['base', 'control', 'sym', 'fn', 'num']], [unnamed, ['Layer 0', 'Layer 1', 'Layer 2', 'Layer 3', 'Layer 4']]]) {
+for (const [nm, want] of [[named, ['Base', 'Navigation', 'Number', 'Function', 'Numpad']], [unnamed, ['Layer 0', 'Layer 1', 'Layer 2', 'Layer 3', 'Layer 4']]]) {
     const t = Object.create(ZmkKeymapTab.prototype);
     t.app = { profile: {} };
     t.geomKeys = [];
@@ -71,7 +68,7 @@ for (const [nm, want] of [[named, ['base', 'control', 'sym', 'fn', 'num']], [unn
     t.geomKeys = [];
     t.keymap = { layers: reordered(named).map((l) => ({ ...l, bindings: [] })) };
     t._publishToApp();
-    eq(t.app.profile.layerNames[3], 'fn', 'active-layer index 3 is fn after the swap');
+    eq(t.app.profile.layerNames[3], 'Function', 'active-layer index 3 is Function after the swap');
 }
 
 // 5. A reorder done in another tool, then restore / import: pair by layer id.

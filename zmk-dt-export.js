@@ -84,7 +84,7 @@ const STOCK = {
     'Sticky Key': ['sk', 'u'], 'Key Toggle': ['kt', 'u'], 'Caps Word': ['caps_word'],
     'Key Repeat': ['key_repeat'], 'Reset': ['sys_reset'], 'Bootloader': ['bootloader'],
     'Output Selection': ['out', 'out'], 'Bluetooth': ['bt', 'bt', 'n'], 'Studio Unlock': ['studio_unlock'],
-    'Mouse Key Press': ['mkp', 'mb'],
+    'Mouse Key Press': ['mkp', 'mb'], 'Mouse Move': ['mmv', 'mv'], 'Mouse Scroll': ['msc', 'mv'],
 };
 // Flask / Totem firmware nodes whose display name is stable (Totem-ZMK config/totem.keymap).
 const FIRMWARE = {
@@ -169,6 +169,10 @@ export function exportKeymapText(data, opts = {}) {
         if (kind === 'out') return OUT[v] ?? String(v);
         if (kind === 'mb') return v && !(v & (v - 1)) ? `MB${Math.log2(v) + 1}` : hex(v);
         if (kind === 'bt') return BT[v] ?? String(v);
+        if (kind === 'mv') {   // pointing.h: x in the high half, y in the low half, signed 16 bit
+            const x = (v >>> 16) << 16 >> 16, y = v << 16 >> 16;
+            return x && y ? `MOVE(${x}, ${y})` : x ? `MOVE_X(${x})` : y ? `MOVE_Y(${y})` : '0';
+        }
         if (kind === 'raw' && v === 0xFFFF) { usesSwitchLayout = true; return 'OS_NEXT'; }
         return kind === 'raw' ? hex(v) : String(v);
     };
@@ -195,7 +199,7 @@ export function exportKeymapText(data, opts = {}) {
             kinds = kindsFromMeta(meta?.metadata);
             firmwareRefs.set(node, name || 'firmware-defined, no display name');
         }
-        if (node === 'mkp') usesPointing = true;
+        if (['mkp', 'mmv', 'msc'].includes(node)) usesPointing = true;
         const args = [];
         let k1 = kinds[0] ?? '-', k2 = kinds[1] ?? '-';
         // A parameter the app has no metadata for must not vanish: print it raw.

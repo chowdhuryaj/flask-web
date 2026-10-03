@@ -69,6 +69,9 @@ const KEYS = (() => {
         TILDE: 'GRAVE', LT: 'COMMA', GT: 'DOT', QMARK: 'FSLH',
     };
     for (const [n, base] of Object.entries(shifted)) m[n] = [KB, m[base][1], MODS.S];
+    // Keypad (usage page 7).
+    Object.assign(m, { KP_DIVIDE: [KB, 0x54], KP_MULTIPLY: [KB, 0x55], KP_MINUS: [KB, 0x56],
+        KP_PLUS: [KB, 0x57], KP_EQUAL: [KB, 0x67] });
     // Consumer page.
     Object.assign(m, {
         C_VOL_UP: [CONSUMER, 0xE9], C_VOL_DN: [CONSUMER, 0xEA], C_MUTE: [CONSUMER, 0xE2],
@@ -83,7 +86,11 @@ const KEYS = (() => {
 // OS_NEXT = ZMK_SWITCH_LAYOUT_NEXT: the header lives in the zmk-switch-layout
 // module (not vendored here); the value is cosmetic since &sw_layout lists
 // with no metadata.
+// dt-bindings/zmk/pointing.h: MOVE_*/SCRL_* depend on the keymap's own
+// ZMK_POINTING_DEFAULT_{MOVE,SCRL}_VAL (resolved in parseKeymap).
+const MB = { MB1: 1, LCLK: 1, MB2: 2, RCLK: 2, MB3: 4, MCLK: 4, MB4: 8, MB5: 16 };
 const SYMBOLS = {
+    ...MB,
     BT_CLR: 0, BT_NXT: 1, BT_PRV: 2, BT_SEL: 3, BT_CLR_ALL: 4, BT_DISC: 5,
     OUT_TOG: 0, OUT_USB: 1, OUT_BLE: 2, ZMK_SWITCH_LAYOUT_NEXT: 0xFFFF,
 };
@@ -108,6 +115,10 @@ const STOCK = {
     bt: ['Bluetooth', meta(consts([['Clear', 0], ['Next', 1], ['Previous', 2], ['Select', 3]]),
         range('Profile', 0, 4))],
     studio_unlock: ['Studio Unlock', meta()],
+    // ZMK pointing behaviors (zmk,behavior-mouse-key-press / -input-two-axis).
+    // ASSUMPTION like the rest of this table: the constants mirror pointing.h.
+    mkp: ['Mouse Key Press', meta(consts([['Left click', 1], ['Right click', 2], ['Middle click', 4], ['Button 4', 8], ['Button 5', 16]]))],
+    mmv: ['Mouse Move', meta()], msc: ['Mouse Scroll', meta()],
 };
 // Slot capacities the sim seeds for the flask-* range metadata (Kconfig on
 // hardware); keep equal to zmk-offline.js IMPRINT.macroSlots/tdSlots.
@@ -211,7 +222,17 @@ const sha = (s) => createHash('sha256').update(s).digest('hex');
 // ------------------------------------------------------------- keymap ---
 export function parseKeymap(src) {
     const defines = {};
-    for (const m of src.matchAll(/^#define\s+(\w+)\s+(\S+)\s*$/gm)) defines[m[1]] = m[2];
+    for (const m of clean(src).matchAll(/^#define\s+(\w+)\s+(\S+)\s*$/gm)) defines[m[1]] = m[2];
+    // Pointing step sizes: the keymap redefines them as expressions of other defines.
+    const num = (name, dflt) => {
+        const d = src.match(new RegExp(`^#define\\s+${name}\\s+(.+?)\\s*(?:/\\*.*)?$`, 'm'))?.[1];
+        const e = d?.replace(/\b[A-Z_]+\b/g, (w) => defines[w] ?? w);
+        return e && /^[\d\s()*\/+-]+$/.test(e) ? Math.trunc(Function(`return (${e})`)()) : dflt;
+    };
+    const mv = num('ZMK_POINTING_DEFAULT_MOVE_VAL', 600), sc = num('ZMK_POINTING_DEFAULT_SCRL_VAL', 10);
+    const Y = (v) => v & 0xFFFF, X = (v) => (v & 0xFFFF) << 16;
+    Object.assign(SYMBOLS, { MOVE_UP: Y(-mv), MOVE_DOWN: Y(mv), MOVE_LEFT: X(-mv), MOVE_RIGHT: X(mv),
+        SCRL_UP: Y(sc), SCRL_DOWN: Y(-sc), SCRL_LEFT: X(-sc), SCRL_RIGHT: X(sc) });
     const root = parseDt(clean(src));
     const unsupported = new Set();
 
@@ -229,6 +250,9 @@ export function parseKeymap(src) {
         const r = ref?.replace(/^&/, '');
         if (['kp', 'sk', 'skm', 'kt', 'shift'].includes(r)) return usage;
         if (['mo', 'sl', 'tog', 'to', 'skl'].includes(r)) return layer;
+        // a flask hold-tap wrapping a one-param macro (&nmod_m -> &neru_m) forwards that param
+        const c = customs.find((n) => (n.label ?? n.name) === r);
+        if (str(c?.props.compatible) === 'zmk,behavior-macro-one-param') return usage;
         return () => [];
     };
     const customs = [];

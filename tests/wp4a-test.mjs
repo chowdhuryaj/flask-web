@@ -35,7 +35,9 @@ const { holdtapBackend } = await import('../behavior-catalog.js?v=76');
     eq(findDuplicateCombo(slots, 9, [3, 13, 14]), null, 'superset is not an exact duplicate');
     eq(findDuplicateCombo(slots, 9, [5, 6]), null, 'a non-live twin does not count');
     eq(findDuplicateCombo(slots, 9, [3]), null, 'one key is never a combo');
-    eq(findDuplicateCombo([], 0, [3, 13], TOTEM_DEFAULT.combos), { kind: 'default', index: 7 },
+    const entIdx = TOTEM_DEFAULT.combos.findIndex((c) => c.name === 'ent');
+    ok(entIdx >= 0, 'default has the "ent" combo');
+    eq(findDuplicateCombo([], 0, [3, 13], TOTEM_DEFAULT.combos), { kind: 'default', index: entIdx },
         'compiled devicetree default "ent" (3+13) is caught when it is not a runtime slot');
     eq(findDuplicateCombo([], 0, [3, 14], TOTEM_DEFAULT.combos), null, '3+14 is free');
 }
