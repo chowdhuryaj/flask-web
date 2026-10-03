@@ -37,6 +37,10 @@ const SPEC_1_3 = {
     'zmk-shift': 'behaviour', 'zmk-leader': 'behaviour', 'zmk-modes': 'device', 'zmk-test': 'device',
     keyboard: 'device',
     'zmk-holdtiming': 'behaviour', 'zmk-adaptive': 'behaviour', 'zmk-autoshift': 'behaviour',
+    // Svalboard (QMK line), restored 2026-10-03.
+    'qmk-combos': 'behaviour', 'qmk-chords': 'behaviour', 'qmk-tapdance': 'behaviour',
+    'qmk-overrides': 'behaviour', 'qmk-leader': 'behaviour', 'qmk-shift': 'behaviour',
+    'qmk-macros': 'behaviour', 'qmk-typing': 'device', 'qmk-mouse': 'device', 'qmk-settings': 'device',
 };
 const groupIds = new Set(TAB_GROUPS.map((g) => g.id));
 for (const [id, group] of Object.entries(SPEC_1_3)) {

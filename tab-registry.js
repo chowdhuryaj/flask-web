@@ -16,6 +16,7 @@
 // `new ctor(app)` by main.js; nothing here touches the DOM.
 
 import { isZmkFamily } from './zmk.js?v=76';
+import { isQmkFamily } from './boards.js?v=76';
 import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=76';
 import { ZmkRgbTab } from './zmk-rgb-tab.js?v=76';
 import { ZmkCombosTab } from './zmk-combos-tab.js?v=76';
@@ -32,6 +33,16 @@ import { ZmkModesTab } from './zmk-modes-tab.js?v=76';
 import { MouseTab } from './mouse-tab.js?v=76';
 import { TrainerTab } from './trainer-tab.js?v=76';
 import { KeyboardTab } from './app-shell.js?v=76';
+// Svalboard (QMK line). Caps come from boards.js qmkCapabilities, whose keys
+// never overlap the ZMK rows' caps; every row also gates on the family.
+import { SettingsTab } from './settings-tab.js?v=76';
+import { MacrosTab } from './macros-tab.js?v=76';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=76';
+import { QmkLeaderTab } from './qmk-leader-tab.js?v=76';
+import { QmkShiftTab } from './qmk-shift-tab.js?v=76';
+import { TypingTab } from './typing-tab.js?v=76';
+import { CornerTab } from './corner-tab.js?v=76';
+import { QmkMouseTab } from './qmk-mouse-tab.js?v=76';
 
 /**
  * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the
@@ -47,13 +58,30 @@ export const TAB_GROUPS = [
 ];
 
 const zmk = (app) => isZmkFamily(app.family);
+const qmk = (app) => isQmkFamily(app.family);
 
 // Order = tab order (the first visible row is the landing tab). No Build /
 // Bench / bake / Tap Calibrator / Teleport rows; those stay native-only.
 export const TAB_TABLE = [
+    // Svalboard rows first: TABS[0] is the landing tab, and the QMK keymap
+    // row (Phase B) goes above them. None of them can appear on a ZMK board.
+    // ---- Svalboard (QMK line). Vial rows need the live Vial surface
+    // (caps.vial is false while Unplugged); Flask rows need the handshake.
+    // Positional chords are "Chords", not "Combos": Vial's combos match
+    // keycodes, these match switch positions.
+    { id: 'qmk-combos', label: 'Combos', group: 'behaviour', screen: 'combos', when: (a) => qmk(a) && !!a.caps.vial, ctor: ComboTab },
+    { id: 'qmk-chords', label: 'Chords', group: 'behaviour', screen: 'combos', when: (a) => qmk(a) && !!a.caps.cornerCombos, ctor: CornerTab },
+    { id: 'qmk-tapdance', label: 'Tap Dance', group: 'behaviour', screen: 'behaviours', when: (a) => qmk(a) && !!a.caps.vial, ctor: TapDanceTab },
+    { id: 'qmk-overrides', label: 'Key Overrides', group: 'behaviour', screen: 'behaviours', when: (a) => qmk(a) && !!a.caps.vial, ctor: KeyOverrideTab },
+    { id: 'qmk-leader', label: 'Leader', group: 'behaviour', screen: 'behaviours', when: (a) => qmk(a) && !!a.caps.typing, ctor: QmkLeaderTab },
+    { id: 'qmk-shift', label: 'Shift Keys', group: 'behaviour', screen: 'behaviours', when: (a) => qmk(a) && !!a.caps.typing, ctor: QmkShiftTab },
+    { id: 'qmk-macros', label: 'Macros', group: 'behaviour', screen: 'macros', when: (a) => qmk(a) && !!a.caps.vial, ctor: MacrosTab },
+    { id: 'qmk-typing', label: 'Typing', group: 'device', screen: 'device', when: (a) => qmk(a) && !!a.caps.typing, ctor: TypingTab },
+    { id: 'qmk-mouse', label: 'Mouse', group: 'device', screen: 'device', when: (a) => qmk(a) && !!a.caps.mouse, ctor: QmkMouseTab },
+    { id: 'qmk-settings', label: 'Settings', group: 'device', screen: 'device', when: (a) => qmk(a) && !!a.caps.vial, ctor: SettingsTab },
     { id: 'zmk-keymap', label: 'Keymap', group: 'keys', screen: 'keymap', when: (a) => a.caps.zmkStudio, ctor: ZmkKeymapTab },
     { id: 'gestures', label: 'Gestures', group: 'device', screen: 'device', when: (a) => a.caps.gestures, ctor: ZmkGesturesTab },
-    { id: 'mouse', label: 'Mouse', group: 'device', screen: 'device', when: (a) => a.caps.mouse, ctor: MouseTab },
+    { id: 'mouse', label: 'Mouse', group: 'device', screen: 'device', when: (a) => zmk(a) && a.caps.mouse, ctor: MouseTab },
     // Needs no capability: it runs on browser key events.
     { id: 'trainer', label: 'Trainer', group: 'trainer', screen: 'trainer', when: () => true, ctor: TrainerTab },
     { id: 'rgb', label: 'RGB', group: 'device', screen: 'device', when: (a) => a.caps.rgbMap, ctor: ZmkRgbTab },
