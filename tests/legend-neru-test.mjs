@@ -8,7 +8,8 @@ import { legendOf } from '../legend.js?v=73';
 
 const eq = (a, b, m = '') => assert.deepEqual(a, b, m);
 const NAMES = ['mouse_move', 'mouse_scroll', 'Neru Hints', 'Neru Menu', 'Neru Menu + Key (to base)', 'Neru Menu + Key (stay)',
-    'Mouse Layer', 'Mouse Key Press', 'Momentary Layer'];
+    'Mouse Layer', 'Mouse Key Press', 'Momentary Layer', 'Super Delete / Layer', 'Repeat / Layer', 'Adaptive Key / Layer',
+    'Mouse Hold / Super Delete', 'Mouse Layer-Tap', 'Leader / Shift', 'Mod / Neru Hints', 'Mod / Neru Menu Key'];
 const KINDS = { 'Neru Menu + Key (to base)': ['u'], 'Neru Menu + Key (stay)': ['u'], 'Mouse Layer': ['l', 'l'],
     'Mouse Key Press': ['n'], 'Momentary Layer': ['l'] };
 const K = { l: 'layer_id', u: 'hid_usage', n: 'range' };
@@ -51,4 +52,18 @@ eq(lg('Mouse Key Press', 8)[0], 'Back');
 eq(lg('Mouse Key Press', 16)[0], 'Forward');
 for (const { id: l, name } of layers) if (l > 1) eq(lg("Momentary Layer", l), [name, "mo"], `mo ${name}`);
 eq(lg('Mouse Layer', 1, 1), ['Mouse', 'tog/hold']);
+
+// Firmware hold-taps: tap big, hold (layer or modifier) as a blue sub-label.
+const full = (n, p1, p2 = 0) => { const l = legendOf({ behaviorId: id(n), param1: p1, param2: p2 }); return [l.main, l.sub, l.kind, l.subKind]; };
+const KP = (u) => 0x070000 | u;
+eq(full('Super Delete / Layer', 2), ['Super Del', 'Scroll Slow', 'hold', 'layer']);
+eq(full('Repeat / Layer', 3), ['Repeat', 'Scroll Fast', 'hold', 'layer']);
+eq(full('Adaptive Key / Layer', 4), ['Adaptive', 'Mouse Slow', 'hold', 'layer']);
+eq(full('Mouse Hold / Super Delete', 5), ['Super Del', 'Speed Up x5', 'hold', 'layer']);
+eq(full('Mouse Layer-Tap', 4, KP(0x2C)), ['Spc', 'Mouse Slow', 'hold', 'layer']);
+eq(full('Leader / Shift', KP(0xE1)), ['Leader', '⇧ Shift', 'hold', 'layer']);
+eq(full('Mod / Neru Hints', KP(0xE0)), ['Neru Hints', '⌃ Ctrl', 'hold', 'layer']);
+eq(full('Mod / Neru Menu Key', KP(0xE2), KP(0x0A)), ['Neru Grid', '⌥ Opt', 'hold', 'layer']);
+eq(full('Mod / Neru Menu Key', KP(0xE3), KP(0x15)), ['Neru R-grid', '⌘ Cmd', 'hold', 'layer']);
+eq(full('Mod / Neru Menu Key', KP(0xE1), KP(0x16)), ['Neru Scroll mode', '⇧ Shift', 'hold', 'layer']);
 console.log('legend-neru-test ok');

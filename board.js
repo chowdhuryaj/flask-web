@@ -170,10 +170,16 @@ const SUB_MIN_PX = 10;
 function drawLegend(g, f, lg, { mid, innerW, k }) {
     const u = Math.min(f.w, f.h);
     const mainFs = u * 0.38 * k, subFs = u * 0.27 * k;
-    const main = fitText(lg.main, innerW, mainFs, { minScale: 0.5, maxLines: lg.sub ? 1 : 2 });
+    let main = fitText(lg.main, innerW, mainFs, { minScale: 0.5, maxLines: lg.sub ? 1 : 2 });
+    // With a sub-label, a long tap label ("Right-click hint") wraps to two smaller lines instead of "Right c…".
+    if (lg.sub && main.fs < mainFs * 0.75) {
+        const two = fitText(lg.main, innerW, u * 0.27 * k, { minScale: 0.6, maxLines: 2 });
+        if (two.lines.length === 2) main = two;
+    }
     const sub = lg.sub ? fitText(lg.sub, innerW, subFs, { minScale: 0.6, maxLines: 1 }) : null;
     g.classList.add('k-' + lg.kind);
-    const mainY = lg.sub ? f.y + f.h * 0.46 : f.y + f.h / 2 + main.fs * 0.34 - (main.lines.length - 1) * main.fs * 0.55;
+    const mainY = !lg.sub ? f.y + f.h / 2 + main.fs * 0.34 - (main.lines.length - 1) * main.fs * 0.55
+        : main.lines.length === 2 ? f.y + f.h * 0.58 - main.fs * 1.1 : f.y + f.h * 0.46;
     main.lines.forEach((line, i) => g.append(svgEl('text', {
         class: 'cap-main', x: mid, y: mainY + i * main.fs * 1.1, 'text-anchor': 'middle',
         style: `font-size:${main.fs}px`, text: line,
