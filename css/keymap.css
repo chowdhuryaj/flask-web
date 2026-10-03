@@ -194,3 +194,21 @@ kbd {
 
 .insp-mods .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
 .insp-mods .chip.big { justify-content: center; padding: 6px 4px; }
+
+/* Tap-hold calibrator sheet + same-hand control */
+.modal:has(.ht-cal-wrap) { max-width: 960px; }
+.ht-cal-wrap { max-height: 70vh; overflow: auto; }
+.ht-cal { display: flex; flex-direction: column; gap: 14px; }
+.ht-cal-sec { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface2); }
+.ht-cal-sec h4 { margin: 0; font-size: var(--fs-base); font-weight: var(--fw-sb); }
+.ht-cal-passage { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); line-height: 1.7; word-break: break-word; user-select: none; }
+.ht-cal-field { width: 100%; box-sizing: border-box; }
+.ht-cal-cue { font-size: var(--fs-base); font-weight: var(--fw-sb); padding: 8px 0; }
+.ht-cal-scroll { overflow-x: auto; }
+.ht-cal-table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
+.ht-cal-table th, .ht-cal-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ht-d-wrong { background: color-mix(in srgb, var(--danger, #d33) 30%, transparent); }
+.ht-d-missing { text-decoration: underline wavy var(--danger, #d33); }
+.ht-sub { display: flex; flex-direction: column; gap: 8px; }
+.ht-sub h5 { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: var(--fw-sb); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.ht-card h5 { margin: 4px 0 0; }

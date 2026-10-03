@@ -1,0 +1,330 @@
+// "Calibrate tap-hold" sheet: a typing drill (tap intent) and a holds drill
+// (hold intent) read the keyboard's decision log (flask_holdtap 0x54), then
+// zmk-ht-calibrate.js turns the log into a term / prior-idle / same-hand
+// recommendation per hold-tap key. Apply writes 0x50 (+0x53) and SAVE.
+// Opened from Behaviour › Hold timing, the Keymap per-key timing card and the
+// Test tab. Needs firmware with 0x54; otherwise it says so.
+
+import { el, modal, toast } from './ui.js?v=65';
+import { board } from './board.js?v=65';
+import { decode, tapHoldSpecOf, holdTapParts } from './behavior-catalog.js?v=65';
+import { HOLDTAP_FLAVORS, handsOf, triggerPreset, POSITIONAL_MODES, LOG_REASONS, decodeHoldtapSlot, HT_LOG } from './zmk-holdtap-codec.js?v=65';
+import {
+    hasFeature, readLog, readPositional, applyRecommendation, analyzeHoldtap, usageChar,
+    buildPassage, holdPrompts, diffTyped, MIN_TAP_SAMPLES,
+} from './zmk-ht-calibrate.js?v=65';
+
+const CH = 0x2A;
+const ADAPTER = 'zmk-studio';
+export const NEEDS_LOG = 'Needs Totem firmware with the hold-tap decision log (flask_holdtap 0x54).';
+const MOD_NAMES = [[0x01, 'Ctrl'], [0x02, 'Shift'], [0x04, 'Alt'], [0x08, 'Gui']];
+const modName = (mask) => {
+    const m = (mask & 0xF) || ((mask >> 4) & 0xF);
+    return MOD_NAMES.filter(([b]) => m & b).map(([, n]) => n).join('+') || 'mod';
+};
+
+/**
+ * The layer shown on the board, as the calibrator's key model.
+ * keys    = keys bound to a flask hold-tap (slot = key position):
+ *           {slot, pos, hand, ch (tap char or null), holdName, name}
+ * letters = every plain or hold-tap key that types a letter / Space: {ch, hand, ht}
+ * boardKeys = [{pos, x, y}] for the hand split and trigger presets
+ */
+export function readHoldtapKeys() {
+    const all = board.positions();
+    const hands = handsOf(all);
+    const keys = [], letters = [];
+    for (const p of all) {
+        let d, spec;
+        try { d = decode(p.binding, ADAPTER); spec = tapHoldSpecOf(p.binding, ADAPTER); } catch { continue; }
+        if (!spec) continue;
+        const hand = hands.get(p.pos);
+        const ch = spec.tap?.mods ? null : usageChar(spec.tap?.key);
+        const live = d.params?.live;
+        const isHt = (d.entryId === 'mod-tap' || d.entryId === 'layer-tap') && live && live !== 'off' && live !== 'fixed';
+        if (ch && ch !== '⌫' && ch !== '⌦') letters.push({ ch, hand, ht: isHt });
+        if (!isHt) continue;
+        const h = spec.hold;
+        const holdName = h?.kind === 'mods' ? modName(h.mods) : h?.kind === 'layer' ? (holdTapParts(p.binding, ADAPTER)?.hold ?? 'layer') : 'hold';
+        const tapName = ch === ' ' ? 'Space' : ch === '⌫' ? 'Backspace' : ch === '⌦' ? 'Delete' : ch ? ch.toUpperCase() : `key ${p.pos}`;
+        keys.push({ slot: p.pos, pos: p.pos, hand, ch, holdName, name: `${tapName} (${holdName}, key ${p.pos})` });
+    }
+    return { keys, letters, boardKeys: all.map((p) => ({ pos: p.pos, x: p.x, y: p.y })) };
+}
+
+const REASON_SHORT = ['other key', 'timer', 'same-hand tap', 'prior idle', 'quick-tap', 'released early'];
+const reasonText = (by) => Object.entries(by).map(([r, n]) => `${n}× ${REASON_SHORT[r] ?? r}`).join(', ');
+
+function fmtPositional(p) {
+    if (!p) return '';
+    return POSITIONAL_MODES[p.mode]?.label.replace(/ \(.*\)/, '') ?? `mode ${p.mode}`;
+}
+
+export function calibratorCard(app) {
+    const flask = app.flask;
+    const root = el('div', { class: 'ht-cal', 'data-card': 'ht-calibrator' });
+    const S = { typing: [], holds: [], retest: null, rows: null, current: {}, running: null, model: null };
+
+    if (app.offline) {
+        root.append(el('p', { class: 'hint', text: 'The calibrator reads the keyboard’s live decision log. It is not simulated in the offline preview.' }));
+        return root;
+    }
+    root.append(el('p', { class: 'hint', text: 'Reading this keyboard…' }));
+    hasFeature(flask, HT_LOG).then((ok) => {
+        if (!ok) { root.replaceChildren(el('p', { class: 'hint warn', text: NEEDS_LOG })); return; }
+        try { board.setLayer(0, { keepSelection: true }); } catch { /* no board yet */ }   // drills target the base layer
+        S.model = readHoldtapKeys();
+        if (!S.model.keys.length) { root.replaceChildren(el('p', { class: 'hint warn', text: 'No hold-tap keys (live) on the base layer.' })); return; }
+        build();
+    });
+
+    // ------------------------------------------------------------- polling
+
+    /** Poll the log every 100 ms; onEntries(list) per batch. Resolves to stop(). */
+    async function startPolling(onEntries) {
+        app.hid?.pause?.();
+        let cursor = (await readLog(flask, 0)).cursor;   // drop what is already in the ring
+        let busy = false;
+        const tick = async () => {
+            if (busy) return;
+            busy = true;
+            try {
+                const r = await readLog(flask, cursor);
+                cursor = r.cursor;
+                if (r.entries.length) onEntries(r.entries);
+            } catch (e) { toast(`Log read failed: ${e.message}`, true); stop(); }
+            busy = false;
+        };
+        const timer = setInterval(() => { if (!root.isConnected) stop(); else tick(); }, 100);
+        let stopped = false;
+        async function stop() {
+            if (stopped) return;
+            stopped = true;
+            clearInterval(timer);
+            try { await tick(); } catch { /* final drain best effort */ }
+            app.hid?.resume?.();
+        }
+        return stop;
+    }
+
+    // ------------------------------------------------------------- sections
+
+    const typingBox = el('div', { class: 'ht-cal-sec' });
+    const holdsBox = el('div', { class: 'ht-cal-sec' });
+    const resultsBox = el('div', { class: 'ht-cal-sec' });
+
+    function build() {
+        root.replaceChildren(
+            el('p', { class: 'hint', text: `Two short drills, then a recommendation per hold-tap key. Needs ${MIN_TAP_SAMPLES}+ taps per key. Nothing is written until you press Apply.` }),
+            typingBox, holdsBox, resultsBox);
+        typingDrill(); holdsDrill(); renderResults();
+    }
+
+    // ---- Drill 1: typing (tap intent)
+
+    function typingDrill({ retest = false } = {}) {
+        const { keys, letters } = S.model;
+        const drillKeys = keys.filter((k) => k.ch);
+        const gen = buildPassage({ keys: drillKeys, letters, reps: 10, seed: retest ? 7 : 1 });
+        const passage = el('div', { class: 'ht-cal-passage mono', 'aria-label': 'Passage to type', text: gen.text });
+        const field = el('textarea', { class: 'ht-cal-field mono', rows: 3, spellcheck: 'false', autocomplete: 'off',
+            placeholder: 'Click Start, then type the passage here at your normal speed.', 'aria-label': 'Type the passage', disabled: true });
+        const prog = el('div', { class: 'note faint', text: '' });
+        const live = el('div', { class: 'ht-cal-live' });
+        const result = el('div', { class: 'ht-cal-result' });
+        const start = el('button', { class: 'btn small primary', type: 'button', text: retest ? 'Start re-test' : 'Start typing drill' });
+        const stopBtn = el('button', { class: 'btn small', type: 'button', text: 'Finish', disabled: true });
+        const entries = [];
+        let stopPoll = null, t0 = 0, timer = null;
+        const label = (s) => keys.find((k) => k.slot === s)?.name ?? `slot ${s}`;
+        const paintLive = () => {
+            const miss = entries.filter((e) => e.hold);
+            live.replaceChildren(...miss.slice(-5).map((e) => el('div', { class: 'note warn',
+                text: `Misfire: ${label(e.slot)} became a hold (${LOG_REASONS[e.reason] ?? e.reason}, held ${e.heldMs} ms)` })));
+        };
+        const finish = async () => {
+            clearInterval(timer);
+            await stopPoll?.(); stopPoll = null; S.running = null;
+            field.disabled = true; start.disabled = false; stopBtn.disabled = true;
+            const d = diffTyped(gen.expected, field.value);
+            result.replaceChildren(
+                el('div', { class: 'note', text: `${entries.length} hold-tap presses logged, ${entries.filter((e) => e.hold).length} became holds. Typed text: ${d.errors} character error(s).` }),
+                el('div', { class: 'ht-cal-passage mono', 'aria-label': 'Typed vs expected' },
+                    ...[...gen.expected].map((c, i) => el('span', { class: `ht-d-${d.marks[i]}`, text: c === ' ' ? '·' : c }))));
+            if (retest) S.retest = entries.slice(); else S.typing = entries.slice();
+            await analyze();
+        };
+        start.onclick = async () => {
+            if (S.running) return;
+            S.running = 'typing';
+            entries.length = 0; field.value = ''; result.replaceChildren(); live.replaceChildren();
+            start.disabled = true; stopBtn.disabled = false; field.disabled = false;
+            try {
+                stopPoll = await startPolling((list) => { entries.push(...list); paintLive(); });
+            } catch (e) { toast(`Log read failed: ${e.message}`, true); S.running = null; start.disabled = false; return; }
+            field.focus();
+            t0 = performance.now();
+            timer = setInterval(() => {
+                const s = (performance.now() - t0) / 1000;
+                prog.textContent = `${Math.round(s)} s of 60 · ${field.value.length} of ${gen.expected.length} characters`;
+                if (s >= 60) finish();
+            }, 250);
+        };
+        stopBtn.onclick = finish;
+        field.addEventListener('input', () => { if (field.value.length >= gen.expected.length && S.running === 'typing') finish(); });
+        // A hold misfire sends Ctrl/Cmd/Alt chords: keep them away from the browser.
+        field.addEventListener('keydown', (e) => { if (e.ctrlKey || e.metaKey || e.altKey) e.preventDefault(); });
+        typingBox.replaceChildren(
+            el('h4', { text: retest ? 'Re-test: typing' : '1. Typing drill (about 60 s)' }),
+            el('p', { class: 'hint', text: 'Type it as you normally would. ⌫ = tap Backspace, ⌦ = tap Delete (nothing happens at the end). Every press of a hold-tap key here counts as a tap; a hold is a misfire.' }),
+            passage, field, el('div', { class: 'row', style: 'gap:8px' }, start, stopBtn), prog, live, result);
+    }
+
+    // ---- Drill 2: holds (hold intent)
+
+    function holdsDrill() {
+        const { keys, letters } = S.model;
+        const plain = letters.filter((l) => !l.ht);
+        const prompts = holdPrompts({ keys: keys.map((k) => ({ slot: k.slot, hand: k.hand, name: k.name })), letters: plain.length ? plain : letters });
+        const cue = el('div', { class: 'ht-cal-cue', 'aria-live': 'polite', text: `${prompts.length} prompts.` });
+        const prog = el('div', { class: 'note faint' });
+        const sink = el('input', { class: 'ht-cal-field mono', type: 'text', readonly: true, disabled: true, 'aria-label': 'Hold drill input (keys are swallowed)', placeholder: 'Keys go here and are discarded' });
+        const start = el('button', { class: 'btn small primary', type: 'button', text: 'Start holds drill' });
+        const stopBtn = el('button', { class: 'btn small', type: 'button', text: 'Finish', disabled: true });
+        const got = [];
+        let i = 0, stopPoll = null;
+        const show = () => {
+            prog.textContent = `${Math.min(i + 1, prompts.length)} of ${prompts.length}`;
+            cue.textContent = i < prompts.length ? prompts[i].text : 'Done.';
+        };
+        const finish = async () => {
+            await stopPoll?.(); stopPoll = null; S.running = null;
+            sink.disabled = true; start.disabled = false; stopBtn.disabled = true;
+            S.holds = got.slice();
+            cue.textContent = `Done: ${got.length} holds logged.`;
+            await analyze();
+        };
+        start.onclick = async () => {
+            if (S.running) return;
+            S.running = 'holds'; i = 0; got.length = 0;
+            start.disabled = true; stopBtn.disabled = false; sink.disabled = false;
+            try {
+                stopPoll = await startPolling((list) => {
+                    for (const e of list) {   // entries from the other-hand key (or strays) are not hold intent
+                        if (i < prompts.length && e.slot === prompts[i].slot) { got.push(e); i++; }
+                    }
+                    if (i >= prompts.length) finish(); else show();
+                });
+            } catch (e) { toast(`Log read failed: ${e.message}`, true); S.running = null; start.disabled = false; return; }
+            sink.focus(); show();
+        };
+        stopBtn.onclick = finish;
+        sink.addEventListener('keydown', (e) => { if (e.key !== 'Tab' && e.key !== 'Escape') e.preventDefault(); });
+        holdsBox.replaceChildren(
+            el('h4', { text: '2. Holds drill (about 1 min)' }),
+            el('p', { class: 'hint', text: 'Follow the prompts. Each one counts as a hold; a tap is a misfire. Optional, but it protects your holds from the new timing.' }),
+            cue, sink, el('div', { class: 'row', style: 'gap:8px' }, start, stopBtn), prog);
+    }
+
+    // ---- Analysis + results
+
+    async function readCurrent() {
+        const posOk = await hasFeature(flask, 0x53);
+        const cur = {};
+        for (const k of S.model.keys) {
+            const s = decodeHoldtapSlot(await flask.getBytes(CH, 0x50, [k.slot], 1));
+            cur[k.slot] = { ...s };
+            if (posOk) { try { Object.assign(cur[k.slot], await readPositional(flask, k.slot, S.model.boardKeys.length)); } catch { /* keep timing only */ } }
+        }
+        return cur;
+    }
+
+    async function analyze() {
+        try { S.current = await readCurrent(); } catch (e) { toast(`Could not read current timing: ${e.message}`, true); return; }
+        const { keys, boardKeys } = S.model;
+        const hands = handsOf(boardKeys);
+        S.rows = analyzeHoldtap({
+            typing: S.typing, holds: S.holds, keys: keys.map((k) => ({ ...k, label: k.name })), current: S.current,
+            handOfPos: (p) => hands.get(p) ?? null,
+            triggersFor: (hand) => triggerPreset(boardKeys, hand === 'left' ? 'left' : 'right', false),
+        });
+        renderResults();
+    }
+
+    function afterCell(slot) {
+        if (!S.retest) return '';
+        const n = S.retest.filter((e) => e.slot === slot);
+        return `${n.filter((e) => e.hold).length}/${n.length}`;
+    }
+
+    function renderResults() {
+        const hasData = S.typing.length || S.holds.length;
+        if (!S.rows || !hasData) {
+            resultsBox.replaceChildren(el('h4', { text: '3. Results' }), el('p', { class: 'hint', text: 'Run a drill to see recommendations.' }));
+            return;
+        }
+        const checks = new Map();
+        const head = el('tr', {}, ...['', 'Key', 'Now', 'Recommended', 'Typing misfires', 'Hold misfires', S.retest ? 'After re-test' : null]
+            .filter((h) => h != null).map((h) => el('th', { text: h })));
+        const body = S.rows.map((r) => {
+            const c = S.current[r.slot] ?? {};
+            const now = `${c.term ?? '?'} ms · idle ${c.idle ?? '?'} ms · ${HOLDTAP_FLAVORS[c.flavor] ?? '?'}${c.mode != null ? ' · ' + fmtPositional(c) : ''}`;
+            const ok = !!r.rec && (r.rec.changed.term || r.rec.changed.idle || r.rec.changed.positional);
+            const cb = el('input', { type: 'checkbox', checked: ok, disabled: !ok, 'aria-label': `Apply to ${r.label}` });
+            checks.set(r.slot, cb);
+            let rec;
+            if (!r.rec) rec = el('td', { class: 'faint', text: `not enough data (${r.tapSamples} of ${MIN_TAP_SAMPLES} taps)` });
+            else {
+                rec = el('td', {}, el('div', { class: 'mono', text: `${r.rec.term} ms · idle ${r.rec.idle} ms${r.rec.mode != null ? ' · same hand = tap (on press)' : ''}` }),
+                    el('div', { class: 'note faint', text: ok ? '' : 'already right' }),
+                    ...r.rec.notes.map((n) => el('div', { class: 'note warn', text: n })));
+            }
+            const mf = (m) => el('td', { title: reasonText(m.byReason) },
+                `${m.count}/${m.total}`, m.count ? el('div', { class: 'note faint', text: reasonText(m.byReason) }) : null);
+            return el('tr', { 'data-slot': r.slot },
+                el('td', {}, cb), el('td', { text: r.label }), el('td', { class: 'mono', text: now }), rec,
+                mf(r.misfires.typing), mf(r.misfires.holds), S.retest ? el('td', { text: afterCell(r.slot) }) : null);
+        });
+        const apply = el('button', { class: 'btn small primary', type: 'button', text: 'Apply checked and save' });
+        apply.onclick = async () => {
+            const todo = S.rows.filter((r) => checks.get(r.slot)?.checked && r.rec);
+            if (!todo.length) { toast('Nothing checked'); return; }
+            apply.disabled = true;
+            try {
+                for (const r of todo) await applyRecommendation(flask, r, S.model.boardKeys.length);
+                await flask.save(CH);
+                toast(`Applied to ${todo.length} key${todo.length === 1 ? '' : 's'} and saved`);
+                await analyze();
+            } catch (e) { toast(`Apply failed: ${e.message}`, true); }
+            apply.disabled = false;
+        };
+        const retest = el('button', { class: 'btn small', type: 'button', text: 'Re-test typing',
+            'data-caption': 'Run the typing drill again and compare misfires before and after.',
+            onclick: () => { if (!S.running) typingDrillRetest(); } });
+        resultsBox.replaceChildren(el('h4', { text: '3. Results' }),
+            el('div', { class: 'ht-cal-scroll' }, el('table', { class: 'ht-cal-table' }, el('thead', {}, head), el('tbody', {}, ...body))),
+            el('div', { class: 'row', style: 'gap:8px' }, apply, retest),
+            el('p', { class: 'hint', text: 'Quick-tap and flavour are never changed here.' }));
+    }
+
+    function typingDrillRetest() { typingDrill({ retest: true }); typingBox.scrollIntoView?.({ block: 'start' }); }
+
+    return root;
+}
+
+/** The calibrator in a sheet. */
+export function openCalibrator(app) {
+    const card = calibratorCard(app);
+    const close = el('button', { class: 'btn', type: 'button', text: 'Close' });
+    const back = modal('Calibrate tap-hold', el('div', { class: 'ht-cal-wrap' }, card), [close]);
+    back.dataset.sheet = 'ht-calibrate';
+    close.onclick = () => back.remove();
+    return back;
+}
+
+/** A button that opens the calibrator (shared by the hold timing UI and the Test tab). */
+export function calibrateButton(app, { primary = false } = {}) {
+    return el('button', { class: 'btn small' + (primary ? ' primary' : ''), type: 'button', text: 'Calibrate tap-hold…',
+        'data-act': 'ht-calibrate', 'data-caption': 'Measure your typing and holds, then get a timing recommendation for each hold-tap key.',
+        onclick: () => openCalibrator(app) });
+}

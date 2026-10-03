@@ -18,12 +18,12 @@
 // Also exports renderKeyboardSVG, baseUnit, layoutOf, splitCap for the HUD,
 // trainer, RGB and tests.
 //
-// Import this file ONLY as './board.js?v=64': x.js and x.js?v=64 are two
+// Import this file ONLY as './board.js?v=65': x.js and x.js?v=65 are two
 // module instances and the singleton would split.
 
-import { el, svgEl, toast as uiToast } from './ui.js?v=64';
-import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=64';
-import { legendOf } from './legend.js?v=64';
+import { el, svgEl, toast as uiToast } from './ui.js?v=65';
+import { capParts as catalogCapParts, holdTapParts } from './behavior-catalog.js?v=65';
+import { legendOf } from './legend.js?v=65';
 
 export const BOARD_ZOOM_VAR = '--board-zoom';
 /** dataTransfer type a palette tile drags: JSON of an adapter binding. */
@@ -80,6 +80,12 @@ export function layoutOf(items, scale = 1) {
 function frameCentreUnits(k) {
     const c = keyCorners(k);
     return c.reduce((s, p) => s + p[0], 0) / c.length;
+}
+
+/** A key's centre y in key units, rotation included. */
+function frameCentreYUnits(k) {
+    const c = keyCorners(k);
+    return c.reduce((s, p) => s + p[1], 0) / c.length;
 }
 
 /** Where the centre of a frame ends up after its rotation. */
@@ -445,13 +451,13 @@ class Board extends EventTarget {
         return cx(k) < (Math.min(...xs) + Math.max(...xs)) / 2 ? 'left' : 'right';
     }
 
-    /** Every key on the shown layer: [{pos, x, binding}] (x in key units). */
+    /** Every key on the shown layer: [{pos, x, y, binding}] (centre in key units). */
     positions() {
         const a = this.#a;
         if (!a) return [];
         return a.profile.keys.map((k) => {
             const sel = { kind: 'key', row: k.row, col: k.col };
-            return { pos: a.posOf(sel), x: frameCentreUnits(k), binding: a.bindingAt(this.#layer, sel) };
+            return { pos: a.posOf(sel), x: frameCentreUnits(k), y: frameCentreYUnits(k), binding: a.bindingAt(this.#layer, sel) };
         });
     }
 

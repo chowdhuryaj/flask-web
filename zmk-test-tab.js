@@ -3,24 +3,25 @@
 // keyboard/trackballs, so it works identically online and in the offline
 // preview:
 //   - Typing tester: live per-key hold times + rollover view.
-//   - Tap-hold calibrator: measures natural tap vs hold durations and
-//     recommends a tapping-term. ZMK hold-tap timing is const DT (not
-//     runtime-tunable) — the output is a keymap snippet, not a live write.
+//   - Tap-hold calibrator (browser events): rough tap vs hold durations. The
+//     real calibrator reads the firmware's decision log (flask_holdtap 0x54)
+//     and writes the timing: "Calibrate tap-hold" (zmk-ht-calibrate-card.js).
 //   - Combo calibrator: measures how tightly combo keys land together and
 //     recommends the flask_combos global timeout (0x24/0x03) — one click
 //     writes it (runtime-tunable, unlike tap-hold).
 //   - Mouse + scroll tester: pointer speed/peak, buttons, wheel notches and
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
-import { el, card, toast } from './ui.js?v=64';
-import { CH, V } from './flaskproto.js?v=64';
-import { diag } from './diag.js?v=64';
+import { el, card, toast } from './ui.js?v=65';
+import { CH, V } from './flaskproto.js?v=65';
+import { diag } from './diag.js?v=65';
+import { calibrateButton } from './zmk-ht-calibrate-card.js?v=65';
 import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION,
          encodeComboSlotV3, decodeComboSlotV3 }
-    from './zmk-combos-codec.js?v=64';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=64';
+    from './zmk-combos-codec.js?v=65';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=65';
 import { TD_ACTION, encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=64';
+    from './zmk-tapdance-codec.js?v=65';
 
 const now = () => performance.now();
 
@@ -405,7 +406,9 @@ export class ZmkTestTab {
                 const rec = Math.round(hp > tp ? (tp + hp) / 2 : tp + 30);
                 snippet.textContent = `Recommended: tapping-term-ms = <${rec}>;`
                     + (hp <= tp ? '  ⚠ your holds overlap your taps — retrain or use balanced flavor' : '')
-                    + '\n(const DT — edit the hold-tap node in imprint.keymap; not runtime-tunable)';
+                    + (this.app.caps?.holdtap
+                        ? '\nRough, from browser key events. "Calibrate tap-hold" above reads the keyboard\'s own decisions and writes the timing live.'
+                        : '\nThis board has no live hold-tap timing: edit tapping-term-ms in the keymap.');
             } else {
                 snippet.textContent = 'Record ≥5 taps and ≥3 holds for a recommendation.';
             }
@@ -427,6 +430,7 @@ export class ZmkTestTab {
             el('button', { text: 'Reset', onclick: () => { taps.length = 0; holds.length = 0; render(); } }));
         render();
         return card('Tap-hold calibrator', 'measures your natural tap vs hold — recommends tapping-term',
+            this.app.caps?.holdtap ? el('div', { style: 'margin-bottom:8px' }, calibrateButton(this.app, { primary: true })) : null,
             btnRow, box, stats, snippet);
     }
 

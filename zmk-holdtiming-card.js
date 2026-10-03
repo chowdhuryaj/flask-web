@@ -7,13 +7,16 @@
 // holdTimingCard(app) resolves to the card, or null when the board has no
 // flask_holdtap (proto < 17, or 0x2A answers 0xFF).
 
-import { el, card, toast, reloadBar } from './ui.js?v=64';
-import { attachHoldtap, HOLDTAP, describeBinding } from './behavior-catalog.js?v=64';
-import { saveState } from './save-state.js?v=64';
-import { board } from './board.js?v=64';
+import { el, card, toast, reloadBar } from './ui.js?v=65';
+import { attachHoldtap, HOLDTAP, describeBinding } from './behavior-catalog.js?v=65';
+import { saveState } from './save-state.js?v=65';
+import { board } from './board.js?v=65';
 import {
     HOLDTAP_FLAVORS, HOLDTAP_TERM, decodeHoldtapSlot, encodeHoldtapSlot, clampTerm,
-} from './zmk-holdtap-codec.js?v=64';
+    HT_POSITIONAL, POSITIONAL_MODES, triggerPreset,
+} from './zmk-holdtap-codec.js?v=65';
+import { hasFeature, readPositional, writePositional } from './zmk-ht-calibrate.js?v=65';
+import { readHoldtapKeys, calibrateButton } from './zmk-ht-calibrate-card.js?v=65';
 
 const ch = HOLDTAP.channel;
 
@@ -39,6 +42,89 @@ export function flavorPicker(value, onChange, { compact = false } = {}) {
     }, el('b', { text: f.label }), compact ? null : el('span', { text: f.info }))));
     paint(value);
     wrap.set = paint;
+    return wrap;
+}
+
+export const NEEDS_POSITIONAL = 'Needs Totem firmware with positional hold-tap (flask_holdtap 0x53).';
+
+/**
+ * "Same-hand keys" control (flask_holdtap 0x53): whether pressing a key on the
+ * same hand turns a hold-tap into a tap, and which keys count as the other
+ * hand. `slot` = the key this sits under (the keymap inspector), null in the
+ * Hold timing tab. Apply writes one key or every hold-tap key on the base
+ * layer; the top bar's Save (or the reload bar's) persists it.
+ * Offline preview models hold timing but not 0x53: shown disabled with a note.
+ */
+export async function positionalControl(app, { slot = null, onApplied } = {}) {
+    const flask = app.flask;
+    const wrap = el('section', { class: slot == null ? 'ht-card' : 'ht-sub', 'data-card': 'positional' }, el('h5', { text: 'Same-hand keys' }));
+    if (app.offline) {
+        wrap.append(el('p', { class: 'hint', text: 'Not simulated in the offline preview. Connect the keyboard to set it.' }));
+        return wrap;
+    }
+    if (!(await hasFeature(flask, HT_POSITIONAL))) {
+        wrap.append(el('p', { class: 'hint', 'data-note': 'needs-positional', text: NEEDS_POSITIONAL }));
+        return wrap;
+    }
+    const { keys, boardKeys } = readHoldtapKeys();
+    const ref = slot ?? keys[0]?.slot;
+    if (ref == null) { wrap.append(el('p', { class: 'hint', text: 'No hold-tap keys on the layer shown.' })); return wrap; }
+    const handOf = (s) => keys.find((k) => k.slot === s)?.hand ?? 'left';
+    const cur = await readPositional(flask, ref, boardKeys.length);
+    const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+    const kindOf = (positions) => same(positions, triggerPreset(boardKeys, handOf(ref), false)) ? 'opposite'
+        : same(positions, triggerPreset(boardKeys, handOf(ref), true)) ? 'thumbs' : 'custom';
+    const draft = { mode: cur.mode, kind: kindOf(cur.positions), custom: cur.positions };
+    let stopPick = null;
+
+    const select = el('select', { 'aria-label': 'Same-hand keys', 'data-act': 'positional-mode' },
+        ...POSITIONAL_MODES.map((m) => el('option', { value: m.mode, text: m.label })));
+    select.value = String(draft.mode);
+    const info = el('p', { class: 'hint', text: 'On press stops same-hand rolls from turning into holds, even when a key is held long. On release lets you chord same-hand mods.' });
+    const DEFAULT_NOTE = ' Firmware default: the left and right live hold-tap keys use the opposite hand, on press; other hold-taps have no rule (older images: on release).';
+    const count = el('span', { class: 'note faint' });
+    const kinds = [['opposite', 'Opposite hand'], ['thumbs', 'Opposite hand + same-hand thumbs']];
+    const kindBtns = kinds.map(([k, label]) => el('button', { class: 'btn small', type: 'button', text: label, 'data-kind': k,
+        onclick: () => { stopPick?.(); stopPick = null; draft.kind = k; paint(); } }));
+    const pickBtn = el('button', { class: 'btn small', type: 'button', 'data-kind': 'custom', text: 'Pick keys on the board',
+        'data-caption': 'Click keys on the board to toggle which ones count as the other hand.',
+        onclick: () => {
+            if (stopPick) { stopPick(); stopPick = null; paint(); return; }
+            draft.kind = 'custom';
+            stopPick = board.pickPositions({ initial: draft.custom, label: 'Click the keys that count as the other hand',
+                onChange: (p) => { draft.custom = p.filter((x) => Number.isInteger(x)).sort((a, b) => a - b); paint(); } });
+            paint();
+        } });
+    const trig = el('div', { class: 'insp-row', style: 'flex-wrap:wrap; gap:6px; align-items:center' },
+        el('span', { class: 'insp-lbl', text: 'Trigger keys' }), ...kindBtns, pickBtn, count);
+    const positionsFor = (s) => draft.mode < 2 ? [] : draft.kind === 'custom' ? draft.custom
+        : triggerPreset(boardKeys, handOf(s), draft.kind === 'thumbs');
+    function paint() {
+        trig.style.display = draft.mode >= 2 ? '' : 'none';
+        for (const b of kindBtns) b.classList.toggle('on', b.dataset.kind === draft.kind && !stopPick);
+        pickBtn.classList.toggle('on', draft.kind === 'custom' || !!stopPick);
+        pickBtn.textContent = stopPick ? 'Done picking' : 'Pick keys on the board';
+        count.textContent = `${positionsFor(ref).length} keys`;
+        info.textContent = info.textContent.replace(DEFAULT_NOTE, '') + (draft.mode === 0 ? DEFAULT_NOTE : '');
+    }
+    select.addEventListener('change', () => { draft.mode = Number(select.value); paint(); });
+
+    const applyTo = async (slots) => {
+        stopPick?.(); stopPick = null; paint();
+        try {
+            for (const s of slots) await writePositional(flask, s, draft.mode, positionsFor(s), boardKeys.length);
+            saveState.markDirty(ch, 'Hold-tap timing', () => flask.save(ch));
+            onApplied?.();
+            toast(`Same-hand rule set on ${slots.length} key${slots.length === 1 ? '' : 's'}. Save to keep it.`);
+        } catch (e) { toast(`Same-hand write failed: ${e.message}`, true); }
+    };
+    const actions = el('div', { class: 'insp-actions', style: 'display:flex; gap:6px; flex-wrap:wrap' },
+        slot != null ? el('button', { class: 'btn small', type: 'button', text: 'Apply to this key', 'data-act': 'positional-one', onclick: () => applyTo([slot]) }) : null,
+        el('button', { class: 'btn small primary', type: 'button', text: 'Apply to all hold-tap keys', 'data-act': 'positional-all',
+            'data-caption': 'Every key on the layer shown that is bound to a live hold-tap. Nothing else.',
+            onclick: () => applyTo(keys.map((k) => k.slot)) }));
+    paint();
+    wrap.append(el('div', { class: 'insp-row' }, el('span', { class: 'insp-lbl', text: 'Rule' }), select), info, trig, actions);
     return wrap;
 }
 
@@ -97,6 +183,7 @@ export async function keyTimingCard(app, pos) {
             try { await be.reset(pos); s = await be.readSlot(pos); slider.value = s.term; termVal.textContent = `${s.term} ms`; paintBar(s.term); flavors.set(s.flavor); }
             catch (e) { toast(`Reset failed: ${e.message}`, true); }
         } });
+    const positional = await positionalControl(app, { slot: pos });
     return el('section', { class: 'ht-card', 'data-card': 'key-timing' },
         el('h4', { text: 'Timing' }),
         el('div', { class: 'ht-term-row' }, slider, termVal),
@@ -105,7 +192,8 @@ export async function keyTimingCard(app, pos) {
         el('details', { class: 'ht-adv' }, el('summary', { text: 'Advanced' }),
             num('quick', 'Quick-tap', 'Pressing again within this time of a tap repeats the tap, never a hold. 0 = off. Good for key repeat.'),
             num('idle', 'Prior idle', 'A hold only counts if no other key was typed in the last this-many ms. 0 = off. Good for home-row mods.')),
-        el('div', { class: 'ht-foot' }, reset));
+        positional,
+        el('div', { class: 'ht-foot' }, reset, calibrateButton(app)));
 }
 
 export async function holdTimingCard(app) {
@@ -235,8 +323,11 @@ export async function holdTimingCard(app) {
     const reload = async () => { rows = await readAll(); fill(); };
     await reload();
 
+    const posCtl = await positionalControl(app, { onApplied: () => announce(body) });
     body.append(
-        el('div', { class: 'note faint', text: 'Slot = key position. Values apply from the next press. Compiled per key and not editable here: hold/tap behaviors, retro-tap, hold-trigger positions.' }),
+        el('div', { class: 'row', style: 'gap:8px' }, calibrateButton(app, { primary: true })),
+        posCtl,
+        el('div', { class: 'note faint', text: 'Slot = key position. Values apply from the next press. Compiled per key and not editable here: hold/tap behaviors and retro-tap. Same-hand rules are set above.' }),
         list,
         reloadBar(ch, { label: 'Hold-tap timing', save: () => be.save(), reload }));
     return body;
