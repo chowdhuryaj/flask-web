@@ -21,7 +21,7 @@ import { saveState } from './save-state.js?v=65';
 import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=65';
 import { zmkApplyPendingKeymap, queuedLayersMatch, seedWorkspaceFromDevice } from './zmk-offline.js?v=65';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=65';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=65';
+import { keymapLayersData, diffKeymapLayers, pairLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=65';
 import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=65';
 import { TOTEM_GEOM } from './zmk-totem-layout.js?v=65';
 import {
@@ -397,9 +397,9 @@ export class ZmkKeymapTab {
             };
             for (const c of d.changed) {
                 const rows = c.positions.map((p) => el('div', { class: 'mono' },
-                    `key ${p}: keyboard ${label(live[c.layer]?.bindings?.[p])} · saved ${label(snap.layers[c.layer]?.bindings?.[p])}`));
+                    `key ${p}: keyboard ${label(live[c.layer]?.bindings?.[p])} · saved ${label(snap.layers[c.snapLayer ?? c.layer]?.bindings?.[p])}`));
                 list.append(el('div', { style: 'margin-top:6px' },
-                    el('b', { text: `${c.name}${c.renamed ? ` (saved name: ${snap.layers[c.layer]?.name || '—'})` : ''}` }), ...rows));
+                    el('b', { text: `${c.name}${c.renamed ? ` (saved name: ${snap.layers[c.snapLayer ?? c.layer]?.name || '—'})` : ''}` }), ...rows));
             }
             let back = null;
             const done = (choice) => {
@@ -870,11 +870,11 @@ export class ZmkKeymapTab {
         const resolve = (fb) => byName.get(fb.behavior)
             ?? (behaviors.has(fb.behaviorId) ? fb.behaviorId : null);
 
-        const layerCount = Math.min(data.layers.length, this.keymap.layers.length);
         let wrote = 0, skipped = 0, renamed = 0, stopped = false;
         try {
-            for (let li = 0; li < layerCount; li++) {
-                const src = data.layers[li];
+            // By layer id when the file carries ids (a reorder elsewhere keeps ids).
+            for (const { si, li } of pairLayers(data.layers, this.keymap.layers)) {
+                const src = data.layers[si];
                 const dst = this.keymap.layers[li];
                 const n = Math.min(src.bindings?.length ?? 0, dst.bindings.length);
                 for (let pos = 0; pos < n; pos++) {

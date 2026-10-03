@@ -74,4 +74,39 @@ for (const [nm, want] of [[named, ['base', 'control', 'sym', 'fn', 'num']], [unn
     eq(t.app.profile.layerNames[3], 'fn', 'active-layer index 3 is fn after the swap');
 }
 
+// 5. A reorder done in another tool, then restore / import: pair by layer id.
+{
+    const { keymapLayersData, diffKeymapLayers, pairLayers } = await import('../zmk-keymap-sync.js?v=65');
+    const KP = idOf('Key Press');
+    const kp = (u) => ({ behaviorId: KP, param1: u, param2: 0 });
+    // saved order base, control, fn(2), sym(3); device now base, control, sym(3), fn(2)
+    const mk = (ids) => ids.map((id) => ({ id, name: `L${id}`, bindings: [kp(0x70004 + id), kp(0x70010 + id)] }));
+    const saved = mk([0, 1, 2, 3]);
+    const device = mk([0, 1, 3, 2]);
+    eq(pairLayers(saved, device), [{ si: 0, li: 0 }, { si: 1, li: 1 }, { si: 2, li: 3 }, { si: 3, li: 2 }], 'ids pair across a reorder');
+    eq(pairLayers(saved.map(({ id, ...l }) => l), device), [0, 1, 2, 3].map((i) => ({ si: i, li: i })), 'no ids in the source: by index');
+    eq(pairLayers(saved, device.slice(0, 3)).length, 3, 'a layer the device lacks is dropped');
+    setZmkContext({ behaviors, layers: device.map(({ id, name }) => ({ id, name })) });
+    const snap = keymapLayersData({ layers: saved }, behaviors);
+    eq(snap.map((l) => l.id), [0, 1, 2, 3], 'snapshot carries ids');
+    eq(diffKeymapLayers(snap, keymapLayersData({ layers: device }, behaviors)).keys, 0, 'same layers in another order: no diff');
+    const edited = mk([0, 1, 3, 2]); edited[3].bindings[0] = kp(0x70099);   // fn (id 2) key 0 changed
+    const d = diffKeymapLayers(snap, keymapLayersData({ layers: edited }, behaviors));
+    eq([d.keys, d.changed.map((c) => [c.layer, c.snapLayer])], [1, [[3, 2]]], 'diff names the fn layer at its live index');
+
+    // applyKeymapData writes each saved layer to the device layer with the same id.
+    const writes = [];
+    const t = Object.create(ZmkKeymapTab.prototype);
+    t.app = { profile: { family: 'totem' } };
+    t.geomKeys = [];
+    t.keymap = { layers: device.map((l) => ({ ...l, bindings: l.bindings.map(() => kp(0x70001)) })), maxLayerNameLength: 20 };
+    t.client = { setLayerBinding: async (id, pos, b) => { writes.push([id, pos, b.param1]); }, setLayerProps: async () => {} };
+    t._familyBlocked = () => false; t._setUnsaved = () => {}; t.render = () => {};
+    const r = await t.applyKeymapData({ kind: 'flask-zmk-keymap', version: 2, family: 'totem', layers: snap }, { quiet: true });
+    eq(r.stopped, false);
+    eq(writes.filter(([id]) => id === 2).map(([, pos, u]) => [pos, u]), [[0, 0x70006], [1, 0x70012]], 'saved fn bindings land on device layer id 2');
+    eq(writes.filter(([id]) => id === 3).map(([, pos, u]) => [pos, u]), [[0, 0x70007], [1, 0x70013]], 'saved sym bindings land on device layer id 3');
+    eq(t.keymap.layers.map((l) => l.name), ['L0', 'L1', 'L3', 'L2'], 'names follow ids');
+}
+
 console.log(`layer-ids-test: ${checks} checks OK`);

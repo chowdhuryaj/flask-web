@@ -1353,6 +1353,7 @@ export class OfflineStudioClient extends EventTarget {
                 const base = this.ws.zmk.seedBase?.layers[i];
                 const same = base && base.id === l.id && base.bindings.length === l.bindings.length;
                 return {
+                    id: l.id,
                     name: same && base.name === l.name ? '' : l.name,
                     bindings: l.bindings.map((b, p) => {
                         const o = same && base.bindings[p];

@@ -24,6 +24,7 @@ import {
     comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
 } from './zmk-combos-codec.js?v=65';
 import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=65';
+import { zmkLayers, layerLabel } from './zmk-keycodes.js?v=65';
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=65';
 
 /** A key position's legend on the BASE layer ("Q", "Esc", a tap-hold's tap),
@@ -348,17 +349,23 @@ export class ZmkCombosTab {
             placeholder, title, 'aria-label': title, style: 'width:72px',
             onchange: (e) => onCommit(Math.max(0, Math.min(2000, Number(e.target.value) || 0))),
         });
-        const layerNames = this.app.profile?.layerNames ?? [];
-        const layerCount = Math.max(layerNames.length, 6);
+        // The firmware compares the combo's layer to the layer ID (stable across
+        // reorders), so the option VALUE is the id; the label shows the rail's
+        // index. Without a loaded keymap: ids = indexes.
+        const known = zmkLayers();
+        const layerOpts = known.length
+            ? known.map((l, i) => ({ id: l.id, text: `${i}: ${layerLabel(l.name, i)}` }))
+            : Array.from({ length: Math.max((this.app.profile?.layerNames ?? []).length, 6) }, (_, l) => ({
+                id: l, text: this.app.profile?.layerNames?.[l] ? `${l}: ${this.app.profile.layerNames[l]}` : `Layer ${l}` }));
+        if (s.layer !== COMBO_LAYER_ANY && !layerOpts.some((o) => o.id === s.layer)) {
+            layerOpts.push({ id: s.layer, text: `Layer#${s.layer}` });
+        }
         const layerSel = el('select', {
             title: 'layer this combo fires on', 'aria-label': 'Only on layer',
             onchange: (e) => commit({ layer: Number(e.target.value) }),
         },
             el('option', { value: COMBO_LAYER_ANY, text: 'All layers', selected: s.layer === COMBO_LAYER_ANY }),
-            ...Array.from({ length: layerCount }, (_, l) => el('option', {
-                value: l, text: layerNames[l] ? `${l}: ${layerNames[l]}` : `Layer ${l}`,
-                selected: s.layer === l,
-            })));
+            ...layerOpts.map((o) => el('option', { value: o.id, text: o.text, selected: s.layer === o.id })));
         return el('div', {
             style: 'display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px',
         },
