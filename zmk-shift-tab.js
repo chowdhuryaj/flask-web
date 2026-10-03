@@ -26,7 +26,7 @@ import { usageFromName, usageCap } from './zmk-keycodes.js?v=68';
 import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=68';
 import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty, cskMorphCaps, cskNeedsMorph, cskDuplicateOf,
     cskSummary, trigText, TRIGGER_MODS, MOD_CTL, MOD_SFT, MOD_ALT, MOD_SHIFT_ONLY,
-    cskNeedsOs, cskOskCaps, cskOsMode, cskClash, OS_ANY, OS_MAC, OS_PC, OS_NAMES, WILD_KEY } from './zmk-csk-codec.js?v=68';
+    cskNeedsOs, cskOskCaps, cskOsMode, cskClash, cskWildShadow, OS_ANY, OS_MAC, OS_PC, OS_NAMES, WILD_KEY } from './zmk-csk-codec.js?v=68';
 import { OS_PACK, OS_PACK_LABEL } from './zmk-os-pack.js?v=68';
 
 // One-click starters. Encodings ride usageFromName so the table stays data —
@@ -150,6 +150,17 @@ export class ZmkShiftTab {
         if (rows.length > free) {
             toast(`${OS_PACK_LABEL} needs ${rows.length} free slots, only ${free} free. Delete some slots and load it again`, true);
             return;
+        }
+        // All wildcards are one tier in slot order, so an existing one that shadows (or is shadowed by) the pack's would silently win/lose.
+        const pw = rows.find((r) => r.wild);
+        if (pw) {
+            const pos = this.slots.map((s, idx) => (cskSlotIsEmpty(s) && !this.drafts.has(idx) ? idx : -1)).filter((x) => x >= 0)[rows.length - 1];
+            const blocker = this.slots.findIndex((w, j) => w.wild && w.shifted && !cskSlotIsEmpty(w)
+                && cskWildShadow(j < pos ? [w, pw] : [pw, w], 1) >= 0);
+            if (blocker >= 0) {
+                toast(`${OS_PACK_LABEL}: slot ${blocker} (${cskSummary(this.slots[blocker], usageCap)}) is an any-key rule that would shadow the pack's. Delete or change it, then load again`, true);
+                return;
+            }
         }
         let added = 0;
         for (const { src, ...row } of rows) {

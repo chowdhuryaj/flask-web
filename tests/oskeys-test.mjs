@@ -86,9 +86,18 @@ eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), SP(MOD_GUI, OS_PC, A)], 0), -1, 'differen
 eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), SP(MOD_GUI, OS_PC)], 0), -1, 'wildcard and specific never clash (specific wins)');
 eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), WD(MOD_GUI, OS_PC)], 1), 0, 'two wildcards on one trigger+OS clash');
 eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), WD(MOD_GUI, OS_MAC)], 1), -1, 'wildcards on different OS are fine');
-eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), WD(MOD_GUI | MOD_SFT, OS_PC)], 1), -1, 'wildcards on different triggers are fine');
+eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), WD(MOD_GUI | MOD_SFT, OS_PC)], 1), 0, 'earlier ⌘ wildcard shadows a later ⌘⇧ one');
+eq(cskDuplicateOf([WD(MOD_CTL, OS_PC), WD(MOD_GUI, OS_PC)], 1), -1, 'wildcards on unrelated triggers are fine');
 eq(cskDuplicateOf([{ base: Q, shifted: F4, mods: MOD_GUI, os: OS_PC, wild: true }, { base: A, shifted: F4, mods: MOD_GUI, os: OS_PC, wild: true }], 1), 0,
     'wildcard base is not compared');
+
+// wildcards are one tier in slot order, whatever the OS
+eq(cskDuplicateOf([WD(MOD_GUI, 0), WD(MOD_GUI, OS_PC)], 1), 0, 'earlier Any-OS wildcard shadows a later Windows one');
+eq(cskDuplicateOf([WD(MOD_GUI, OS_PC), WD(MOD_GUI, 0)], 1), 0, 'earlier Windows wildcard overlaps a later Any-OS one');
+eq(cskDuplicateOf([WD(MOD_GUI, OS_MAC), WD(MOD_GUI, OS_PC)], 1), -1, 'Mac and Windows wildcards do not overlap');
+eq(cskDuplicateOf([WD(MOD_GUI, 0), WD(MOD_GUI | MOD_SFT, OS_PC)], 1), 0, 'earlier ⌘ wildcard matches whenever a later ⌘⇧ one would');
+eq(cskDuplicateOf([WD(MOD_GUI | MOD_SFT, OS_PC), WD(MOD_GUI, 0)], 1), -1, 'a narrower later wildcard is not shadowed');
+eq(cskDuplicateOf([SP(MOD_GUI, OS_PC), WD(MOD_GUI, OS_PC)], 1), -1, 'a specific row earlier does not shadow a wildcard');
 
 // ---- caps probes ----
 const flaskWith = (fn) => ({ getU16: async (ch, id) => { assert.equal(ch, CH.customShift); return fn(id); } });

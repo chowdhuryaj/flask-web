@@ -115,13 +115,29 @@ export function cskClash(a, b) {
     return a.wild || (a.base & 0xFFFFFF) === (b.base & 0xFFFFFF);
 }
 
-/** Index of another live slot that clashes with slot i (see cskClash), or -1.
- * Empty/incomplete slots never clash; a wildcard's base is not compared. */
+/** Index of an EARLIER live wildcard that shadows wildcard slot i, or -1. The
+ * firmware treats all wildcards as one tier in slot order whatever their OS, so
+ * an earlier wildcard whose trigger set is within this one's (it matches
+ * whenever this one would) and whose OS condition can hold together (Any overlaps
+ * both) wins first. */
+export function cskWildShadow(slots, i) {
+    const s = slots[i];
+    if (!s?.wild || !s.shifted) return -1;
+    const sm = s.mods || MOD_SHIFT_ONLY;
+    return slots.findIndex((o, oi) => oi < i && o.wild && o.shifted && !cskSlotIsEmpty(o)
+        && (((o.mods || MOD_SHIFT_ONLY) & ~sm) === 0)
+        && (!(o.os || 0) || !(s.os || 0) || o.os === s.os));
+}
+
+/** Index of another live slot that clashes with slot i (see cskClash) or, for a
+ * wildcard, shadows it (cskWildShadow), or -1. Empty/incomplete slots never
+ * clash; a wildcard's base is not compared. */
 export function cskDuplicateOf(slots, i) {
     const s = slots[i];
     const live = (x) => x && x.shifted && (x.wild || (x.base & 0xFFFFFF));
     if (!live(s)) return -1;   // incomplete slot (no replacement) never clashes
-    return slots.findIndex((o, oi) => oi !== i && !cskSlotIsEmpty(o) && live(o) && cskClash(s, o));
+    const d = slots.findIndex((o, oi) => oi !== i && !cskSlotIsEmpty(o) && live(o) && cskClash(s, o));
+    return d >= 0 ? d : cskWildShadow(slots, i);
 }
 
 /** true when the firmware has the trigger/flags bytes (MORPH_CAPS == 1).

@@ -222,6 +222,20 @@ def main():
         check('22/32 slots used' in panel.inner_text(), 'loading the pack twice adds nothing')
         check(not errors, f'page errors after the pack: {errors}')
 
+        # An existing Any-OS ⌘ any-key rule shadows the pack's wildcard: the pack refuses.
+        ctx.close()
+        ctx, page, errors = H.new_context(browser, seeds=())
+        H.open_workspace(page, 'TOTEM (ZMK)')
+        go(page, 'Behaviour', 'Mod Morph')
+        page.locator('button', has_text='＋ New slot').first.click()
+        g = page.locator('[aria-label$="trigger modifiers"]').first
+        g.locator('button.chip').nth(3).click(); page.wait_for_timeout(200)
+        page.locator('[aria-label$="trigger modifiers"]').first.locator('button.chip').nth(1).click(); page.wait_for_timeout(200)
+        page.locator('label', has_text='any key').first.locator('input').check(); page.wait_for_timeout(300)
+        page.locator('button[data-os-pack]').click(); page.wait_for_timeout(500)
+        check('any-key rule' in page.locator('.toast').inner_text(), f'pack refuses behind an existing wildcard: {page.locator(".toast").all_inner_texts()}')
+        check('1/32 slots used' in page.locator('#panels .panel.active').inner_text(), 'nothing was added')
+
         go(page, 'Behaviour', 'Tap Dance')
         page.locator('button', has_text='New tap dance').first.click()
         page.locator('.modal button', has_text='Create').click()
