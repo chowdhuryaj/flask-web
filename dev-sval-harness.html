@@ -1,0 +1,207 @@
+<!doctype html>
+<!--
+  Dev harness for the Svalboard (QMK line, protocol v27) tabs: renders every
+  Svalboard tab row from tab-registry.js against a FAKE device, with no
+  hardware and no WebHID, in the app's own stylesheets (os-keys shell).
+
+  This proves the tabs BUILD, read the channels they claim, and that a write
+  path runs. It proves nothing about the wire format: the fake answers
+  whatever the shape suggests. Real values still need hardware.
+
+  Open /dev-sval-harness.html on the dev server (python3 serve.py); the
+  console line and the banner at the top are the pass/fail. window.harness
+  exposes the fake device and the mounted tabs for driving them by hand.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Svalboard tab harness</title>
+<link rel="stylesheet" href="styles.css?v=76">
+<link rel="stylesheet" href="css/shell.css?v=76">
+<link rel="stylesheet" href="css/board.css?v=76">
+<link rel="stylesheet" href="css/picker.css?v=76">
+<link rel="stylesheet" href="css/keymap.css?v=76">
+<link rel="stylesheet" href="css/extras.css?v=76">
+<style>
+  body { padding: 12px; }
+  h2 { margin: 18px 0 6px; font-size: 14px; }
+  #result { position: sticky; top: 0; padding: 8px; font: 12px/1.4 monospace; white-space: pre;
+            background: var(--surface2, #222); border: 1px solid var(--border, #444); z-index: 9; }
+</style>
+</head>
+<body>
+<div id="result">running…</div>
+<div id="mounts"></div>
+
+<script type="module">
+import { capabilities, qmkProfile } from './boards.js?v=76';
+import { CH_QMK, V_QMK, CC } from './flaskproto.js?v=76';
+import { TapDance, Combo, KeyOverride, QMK_SETTINGS } from './vialproto.js?v=76';
+import { tabsFor } from './tab-registry.js?v=76';
+import { saveState } from './save-state.js?v=76';
+
+const VERSION = 27;
+
+/** Plausible-but-fake Flask surface. Answers every id the v27 tabs read;
+ * channels removed from the firmware answer unhandled, so a tab that still
+ * reads one fails loudly here. */
+class FakeFlask {
+    constructor() { this.reads = new Set(); this.writes = []; this.saves = []; this.line = 'qmk'; }
+    _served(ch) { return Object.values(CH_QMK).includes(ch); }
+    async getU16(ch, id) {
+        if (!this._served(ch)) throw new Error('unhandled');
+        this.reads.add(`${ch.toString(16)}.${id.toString(16)}`);
+        const C = CH_QMK, Vq = V_QMK;
+        if (ch === C.meta && id === Vq.metaProtocolVersion) return VERSION;
+        if (ch === C.meta && id === Vq.metaBoardVariant) return 1;
+        if (ch === C.meta && id === Vq.metaClusterKeys) return 6;
+        if (ch === C.meta && id === Vq.metaHalf) return 1;
+        if (ch === C.meta) return 0;
+        if (ch === C.corner && id === Vq.ccDefCount) return CC.total;
+        if (ch === C.corner && id === Vq.ccUnplaced) return 0;
+        if (ch === C.corner && id === Vq.ccSlotsUsed) return 44;
+        if (ch === C.corner && id === Vq.ccRefLayer) return 0;
+        if (ch === C.leader && id === Vq.slLiveCount) return 1;
+        if (ch === C.leader && id === Vq.slTimeout) return 1200;
+        if (ch === C.leader && id === 0x10) return 0x0004;        // seq 1 key 1 = A
+        if (ch === C.leader && id === 0x16) return 0x0029;        // seq 1 output = Esc
+        if (ch === C.leader && id >= 0x10) return 0;
+        if (ch === C.dragScroll && id === Vq.dragHiresMode) return 2;
+        if (ch === C.autoMouse && id === Vq.amTimeout) return 2;
+        if (ch === C.autoMouse && id === Vq.amSources) return 3;
+        if (ch === C.autoMouse && id === Vq.amLayer) return 3;
+        if (ch === C.dpi && (id === Vq.dpiLeft || id === Vq.dpiRight)) return 3;
+        if (ch === C.customShift && id === 0x10) return 0x002A;  // Bspc
+        if (ch === C.customShift && id === 0x30) return 0x004C;  // → Del
+        if (ch === C.customShift && id >= 0x10) return 0;
+        if (ch === C.cyclotab && id >= 0x10) return 0x042B;      // A(Tab)
+        if (ch === C.os && id === Vq.osDetected) return 3;
+        if (ch === C.numWord && id === Vq.nwLayer) return 2;
+        if (id === 0x01) return 1;
+        return 100;
+    }
+    async getI16(ch, id) { return this.getU16(ch, id); }
+    async setU16(ch, id, v) { if (!this._served(ch)) throw new Error('unhandled'); this.writes.push([ch, id, v]); return v; }
+    async setI16(ch, id, v) { return this.setU16(ch, id, v); }
+    async save(ch) {
+        if (ch === CH_QMK.corner) throw new Error('refused: never SAVE channel 0x28 on the QMK line');
+        this.saves.push(ch);
+    }
+    async getBytes(ch, id, payload) {
+        if (ch !== CH_QMK.corner) throw new Error('unhandled');
+        const def = payload[0];
+        if (id === V_QMK.ccDef) {
+            if (def >= CC.retiredBase) return [def, CC.posNone, CC.posNone, 0];
+            const row = [1, 2, 3, 4, 6, 7, 8, 9][Math.floor(def / 6)];
+            return [def, (row << 3) | 1, (row << 3) | 2, 0];
+        }
+        if (id === V_QMK.ccOut) return [def, payload[1], 0x00, def % 6 === 5 ? 0x28 : def < 4 ? 0x29 : 0x00];
+        return [...payload, 0, 0];
+    }
+    async setBytes(ch, id, payload) { this.writes.push([ch, id, payload]); return payload; }
+    async handshake() { return VERSION; }
+}
+
+/** Fake Vial client: the API the Svalboard tabs call. */
+class FakeVial {
+    constructor() { this.writes = []; this.macroBuf = new Uint8Array(64); }
+    async qmkSettingsQSIDs() { return QMK_SETTINGS.slice(0, 6).map((d) => d.qsid); }
+    async qmkSettingGet() { return 1; }
+    async qmkSettingSet(...a) { this.writes.push(['qs', ...a]); }
+    async qmkSettingsReset() {}
+    async dynamicEntryCounts() { return { tapDance: 4, combo: 4, keyOverride: 2, altRepeat: 0 }; }
+    async tapDanceGet(i) { return i === 0 ? { ...TapDance.empty(), onTap: 0x0004, onHold: 0x00E0 } : TapDance.empty(); }
+    async tapDanceSet(i, e) { this.writes.push(['td', i, e]); }
+    async comboGet(i) { return i === 0 ? { inputs: [0x0007, 0x0009, 0, 0], output: 0x0029 } : Combo.empty(); }
+    async comboSet(i, e) { this.writes.push(['combo', i, e]); }
+    async keyOverrideGet(i) { return i === 0 ? { ...KeyOverride.empty(), trigger: 0x002A, replacement: 0x004C, triggerMods: 0x02 } : KeyOverride.empty(); }
+    async keyOverrideSet(i, e) { this.writes.push(['ko', i, e]); }
+    async macroCount() { return 4; }
+    async macroBufferSize() { return this.macroBuf.length; }
+    async readMacroBuffer(n) { return Array.from(this.macroBuf.slice(0, n)); }
+    async writeMacroBuffer(buf) { this.macroBuf.set(buf); this.writes.push(['macro', buf.length]); }
+    async unlockStatus() { return { unlocked: false, inProgress: false, keys: [{ row: 0, col: 0 }] }; }
+    async lock() {}
+}
+
+const flask = new FakeFlask();
+const vial = new FakeVial();
+const caps = capabilities('svalboard', VERSION);
+const app = {
+    flask, vial, family: 'svalboard', protocolVersion: VERSION, caps,
+    layerCount: 8, profile: qmkProfile('svalboard', 8), board: null, unlocked: true,
+    showTab: (id) => document.querySelector(`[data-tab-mount="${id}"]`)?.scrollIntoView(),
+};
+saveState.setLine('qmk');
+
+const lines = [];
+const mounts = document.getElementById('mounts');
+const tabs = tabsFor(app).filter((t) => t.id.startsWith('qmk-'));
+const mounted = {};
+for (const t of tabs) {
+    mounts.append(Object.assign(document.createElement('h2'), { textContent: `${t.label} (${t.id}, screen ${t.screen})` }));
+    const panel = Object.assign(document.createElement('div'), { className: 'panel active' });
+    panel.dataset.tabMount = t.id;
+    mounts.append(panel);
+    try {
+        const tab = new t.ctor(app);
+        panel.append(tab.root);
+        await tab.load();
+        mounted[t.id] = tab;
+        lines.push(`OK   ${t.id}: ${tab.root.querySelectorAll('.card').length} card(s)`);
+    } catch (e) {
+        lines.push(`FAIL ${t.id}: ${e.message}`);
+        console.error(t.id, e);
+    }
+}
+
+// Drive a few write paths. A 0x28 SAVE must be impossible from the UI.
+async function drive(label, fn) {
+    try { await fn(); lines.push(`OK   ${label}`); }
+    catch (e) { lines.push(`FAIL ${label}: ${e.message}`); console.error(label, e); }
+}
+await drive('chords: bind def 0 writes one 0x28 output, no save', async () => {
+    const n = flask.writes.length;
+    await mounted['qmk-chords']._set(0, 0x0004);
+    const w = flask.writes.slice(n);
+    if (w.length !== 1 || w[0][0] !== CH_QMK.corner) throw new Error(`writes ${JSON.stringify(w)}`);
+    if (saveState.dirty().some((d) => d.source === CH_QMK.corner)) throw new Error('0x28 registered with Save');
+});
+await drive('chords: Centre + North column and no retired defs', async () => {
+    const root = mounted['qmk-chords'].root;
+    if (!root.textContent.includes('Centre + North')) throw new Error('index 5 label missing');
+    if (root.querySelector('[data-def="48"]')) throw new Error('retired def 48 shown');
+});
+await drive('mouse: toggle auto-mouse right ball registers 0x1B with Save', async () => {
+    const before = flask.writes.length;
+    const row = [...mounted['qmk-mouse'].root.querySelectorAll('.row')].find((r) => r.textContent.includes('Right ball opens it'));
+    row.querySelector('.toggle').click();
+    await new Promise((r) => setTimeout(r, 50));
+    const w = flask.writes.slice(before).find((x) => x[0] === CH_QMK.autoMouse && x[1] === V_QMK.amSources);
+    if (!w || w[2] !== 1) throw new Error(`0x1B/0x05 write ${JSON.stringify(w)}`);
+    if (!saveState.dirty().some((d) => d.source === CH_QMK.autoMouse)) throw new Error('not registered');
+    await saveState.saveAll();
+    if (!flask.saves.includes(CH_QMK.autoMouse)) throw new Error('no SAVE 0x1B');
+});
+await drive('settings: board half + variant shown', async () => {
+    const t = mounted['qmk-settings'].root.textContent;
+    if (!t.includes('Left') || !t.includes('Six-key clusters')) throw new Error('board record missing');
+});
+await drive('typing: no snippets card', async () => {
+    if (/snippet/i.test(mounted['qmk-typing'].root.textContent.replace(/snippet pool/i, ''))) throw new Error('snippets card rendered');
+});
+await drive('removed channels never read', async () => {
+    const bad = [...flask.reads].filter((k) => ['10', '11', '12', '13', '1a', '1c', '24', '26', '27'].includes(k.split('.')[0]));
+    if (bad.length) throw new Error(bad.join(', '));
+});
+
+const failed = lines.filter((l) => l.startsWith('FAIL'));
+const res = document.getElementById('result');
+res.textContent = `${failed.length ? 'FAILURES' : 'all Svalboard tabs rendered'} (v${VERSION}, ${tabs.length} tabs)\n${lines.join('\n')}`;
+res.style.color = failed.length ? 'var(--danger, red)' : 'var(--ok, green)';
+window.harness = { app, flask, vial, tabs: mounted, lines, failed: failed.length };
+console.log(`dev-sval-harness: ${failed.length ? 'FAIL' : 'PASS'}\n${lines.join('\n')}`);
+</script>
+</body>
+</html>
