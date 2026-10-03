@@ -312,6 +312,7 @@ function disconnectUI() {
     app.unlocked = false;
     app.trainerOnly = false;
     saveState.reset?.();    // drop dirty sources
+    saveState.setLine?.(null);
     $('status-pill').classList.remove('connected', 'offline');
     $('status-text').textContent = 'Disconnected';
     $('device-name').textContent = 'Flask';
@@ -342,7 +343,7 @@ async function startOffline(key, family) {
     app.offline = true;
     app.offlineWs = ws;
     attachZmkOffline(app, ws);      // flask sim + Studio sim + caps/profile
-
+    saveState.setLine?.('zmk');
     setMode('offline');   // no HUD: it is live device state
     $('layout-save').style.display = $('layout-load').style.display = '';
     $('proto-warn').style.display = 'none';
@@ -377,6 +378,7 @@ async function startQmkOffline(key) {
     app.layerCount = ws.layerCount;
     app.caps = { ...capabilities(ws.family, ws.protocolVersion), vial: false, cornerCombos: false };
     app.profile = qmkProfile(ws.family, ws.layerCount);
+    saveState.setLine?.('qmk');
 
     setMode('offline');
     $('layout-save').style.display = $('layout-load').style.display = 'none';
