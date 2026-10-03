@@ -18,7 +18,7 @@
 // MORPH_CAPS (RO u16 0x03) = 1 on firmware with the two extra bytes; older
 // firmware answers 0xFF (the client throws 'unhandled').
 
-import { CH, V } from './flaskproto.js?v=66';
+import { CH, V } from './flaskproto.js?v=67';
 
 export const MOD_CTL = 1, MOD_SFT = 2, MOD_ALT = 4, MOD_GUI = 8;
 export const MOD_SHIFT_ONLY = MOD_SFT;

@@ -11,24 +11,24 @@
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
-import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=66';
-import { board } from './board.js?v=66';
-import { createDock } from './keymap-dock.js?v=66';
-import { createInspector } from './keymap-inspector.js?v=66';
-import { encode } from './behavior-catalog.js?v=66';
-import { shell } from './app-shell.js?v=66';
-import { saveState } from './save-state.js?v=66';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=66';
-import { zmkApplyPendingKeymap, queuedLayersMatch, seedWorkspaceFromDevice } from './zmk-offline.js?v=66';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=66';
-import { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=66';
-import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=66';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=66';
+import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=67';
+import { board } from './board.js?v=67';
+import { createDock } from './keymap-dock.js?v=67';
+import { createInspector } from './keymap-inspector.js?v=67';
+import { encode } from './behavior-catalog.js?v=67';
+import { shell } from './app-shell.js?v=67';
+import { saveState } from './save-state.js?v=67';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=67';
+import { zmkApplyPendingKeymap, queuedLayersMatch, seedWorkspaceFromDevice } from './zmk-offline.js?v=67';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=67';
+import { keymapLayersData, diffKeymapLayers, pairLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=67';
+import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=67';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=67';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
-    setZmkContext, zmkBehaviors, zmkLayers, layerName, isZmkBinding,
+    setZmkContext, zmkBehaviors, zmkLayers, layerName, layerLabel, isZmkBinding,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=66';
+} from './zmk-keycodes.js?v=67';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so
@@ -398,9 +398,9 @@ export class ZmkKeymapTab {
             };
             for (const c of d.changed) {
                 const rows = c.positions.map((p) => el('div', { class: 'mono' },
-                    `key ${p}: keyboard ${label(live[c.layer]?.bindings?.[p])} · saved ${label(snap.layers[c.layer]?.bindings?.[p])}`));
+                    `key ${p}: keyboard ${label(live[c.layer]?.bindings?.[p])} · saved ${label(snap.layers[c.snapLayer ?? c.layer]?.bindings?.[p])}`));
                 list.append(el('div', { style: 'margin-top:6px' },
-                    el('b', { text: `${c.name}${c.renamed ? ` (saved name: ${snap.layers[c.layer]?.name || '—'})` : ''}` }), ...rows));
+                    el('b', { text: `${c.name}${c.renamed ? ` (saved name: ${snap.layers[c.snapLayer ?? c.layer]?.name || '—'})` : ''}` }), ...rows));
             }
             let back = null;
             const done = (choice) => {
@@ -469,7 +469,7 @@ export class ZmkKeymapTab {
         app.profile.labelFor = bindingCap;
         app.profile.hoverFor = bindingHover;
         app.profile.keyName = (k) => String(k.pos);
-        app.profile.layerNames = this.keymap.layers.map((l, i) => l.name || `Layer ${i}`);
+        app.profile.layerNames = this.keymap.layers.map((l, i) => layerLabel(l.name, i));
         app.layerCount = this.keymap.layers.length;
         // HUD reads [layer][row][col]; our rows collapse to row 0.
         app.keymap = this.keymap.layers.map((l) => [l.bindings]);
@@ -639,7 +639,7 @@ export class ZmkKeymapTab {
                 };
             },
             layers: () => tab.keymap.layers.map((l, index) => ({
-                index, id: l.id, name: l.name || `Layer ${index}`, empty: l.bindings.every(emptyBinding),
+                index, id: l.id, name: layerLabel(l.name, index), empty: l.bindings.every(emptyBinding),
             })),
             bindingAt: (layer, sel) => tab.keymap.layers[layer]?.bindings[sel.col] ?? null,
             write: (layer, sel, binding) => tab._writeBinding(layer, sel.col, binding),
@@ -871,11 +871,11 @@ export class ZmkKeymapTab {
         const resolve = (fb) => byName.get(fb.behavior)
             ?? (behaviors.has(fb.behaviorId) ? fb.behaviorId : null);
 
-        const layerCount = Math.min(data.layers.length, this.keymap.layers.length);
         let wrote = 0, skipped = 0, renamed = 0, stopped = false;
         try {
-            for (let li = 0; li < layerCount; li++) {
-                const src = data.layers[li];
+            // By layer id when the file carries ids (a reorder elsewhere keeps ids).
+            for (const { si, li } of pairLayers(data.layers, this.keymap.layers)) {
+                const src = data.layers[si];
                 const dst = this.keymap.layers[li];
                 const n = Math.min(src.bindings?.length ?? 0, dst.bindings.length);
                 for (let pos = 0; pos < n; pos++) {

@@ -6,7 +6,7 @@
 import {
     HT_POSITIONAL, HT_LOG, decodeHoldtapLog, decodeHoldtapSlot, encodeHoldtapSlot,
     encodePositional, decodePositional,
-} from './zmk-holdtap-codec.js?v=66';
+} from './zmk-holdtap-codec.js?v=67';
 
 const CH = 0x2A;
 const SLOT = 0x50;
@@ -137,7 +137,7 @@ const countBy = (list, f) => list.reduce((m, e) => { const k = f(e); m[k] = (m[k
  * Returns one row per key: {slot, label, hand, tapSamples, tap:{p50,p95},
  * holdOther:{p10}, gap:{typingP90, holdP10}, misfires:{typing:{count,total,
  * byReason}, holds:{...}, sameHand}, rec} where rec is null ("not enough
- * data": fewer than MIN_TAP_SAMPLES tap-outcome typing entries) or
+ * data": fewer than MIN_TAP_SAMPLES typing-drill entries, tap and HOLD outcomes alike) or
  * {term, idle, mode, positions, notes[], changed}. mode/positions are null
  * when the positional rule stays as it is.
  *
@@ -148,7 +148,8 @@ const countBy = (list, f) => list.reduce((m, e) => { const k = f(e); m[k] = (m[k
  *          tap), so p95 alone could never rise past current + 40. The held_ms
  *          of HOLD-outcome typing entries (intended taps that misfired) are
  *          therefore added to the distribution; the 0xFFFF saturated value is
- *          ignored. The MIN_TAP_SAMPLES gate still counts tap outcomes only.
+ *          ignored. The MIN_TAP_SAMPLES gate counts every
+ *          typing entry (tapSamples), so a key that misfires a lot still gets a recommendation.
  *          Upper bound: when the slot's flavor is
  *          tap-preferred (2) holds are decided ONLY by the timer, so an
  *          intended hold whose other key lands at other_ms < term turns into a
@@ -180,7 +181,7 @@ export function analyzeHoldtap({ typing = [], holds = [], keys, current = {}, ha
         const holdGap = h.map((e) => e.priorGapMs);
         const sameHand = tHold.filter((e) => e.otherPos != null && handOfPos(e.otherPos) === k.hand).length;
         const row = {
-            slot: k.slot, label: k.label, hand: k.hand, tapSamples: taps.length,
+            slot: k.slot, label: k.label, hand: k.hand, tapSamples: t.length,
             tap: { p50: percentile(heldTap, 50), p95: percentile(heldTap, 95) },
             holdOther: { p10: percentile(otherHold, 10) },
             gap: { typingP90: percentile(typingGap, 90), holdP10: percentile(holdGap, 10) },
@@ -191,7 +192,7 @@ export function analyzeHoldtap({ typing = [], holds = [], keys, current = {}, ha
             },
             rec: null,
         };
-        if (taps.length < MIN_TAP_SAMPLES) return row;
+        if (t.length < MIN_TAP_SAMPLES || !heldTap.length) return row;   // all-saturated misfires leave no tap length to size the term from
 
         const notes = [];
         const term = clamp(round10(row.tap.p95 + 40), 150, 500);
@@ -265,7 +266,7 @@ export function buildPassage({ keys, letters, reps = 10, seed = 1 }) {
     return { text, expected, groups: groups.length };
 }
 
-export const BROWSER_CHORD_LETTERS = 'wtnqkr';   // Cmd/Ctrl + these closes, quits, opens, reloads or opens the palette
+export const BROWSER_CHORD_LETTERS = 'wtnqkrhm';   // Cmd/Ctrl + these closes, quits, opens, reloads, opens the palette, hides (H) or minimizes (M)
 
 /**
  * Drill 2 prompts, key by key: `reps` x "hold K + tap <opposite-hand letter>"

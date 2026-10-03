@@ -5,15 +5,15 @@
 // Opened from Behaviour › Hold timing, the Keymap per-key timing card and the
 // Test tab. Needs firmware with 0x54; otherwise it says so.
 
-import { el, modal, toast } from './ui.js?v=65';
-import { board } from './board.js?v=65';
-import { saveState } from './save-state.js?v=65';
-import { decode, tapHoldSpecOf, holdTapParts } from './behavior-catalog.js?v=65';
-import { HOLDTAP_FLAVORS, handsOf, triggerPreset, POSITIONAL_MODES, LOG_REASONS, decodeHoldtapSlot, HT_LOG } from './zmk-holdtap-codec.js?v=65';
+import { el, modal, toast } from './ui.js?v=67';
+import { board } from './board.js?v=67';
+import { saveState } from './save-state.js?v=67';
+import { decode, tapHoldSpecOf, holdTapParts } from './behavior-catalog.js?v=67';
+import { HOLDTAP_FLAVORS, handsOf, triggerPreset, POSITIONAL_MODES, LOG_REASONS, decodeHoldtapSlot, HT_LOG } from './zmk-holdtap-codec.js?v=67';
 import {
     hasFeature, readPositional, startLogPoll, applyRecommendation, analyzeHoldtap, usageChar,
     buildPassage, holdPrompts, diffTyped, typedEnough, MIN_TAP_SAMPLES,
-} from './zmk-ht-calibrate.js?v=65';
+} from './zmk-ht-calibrate.js?v=67';
 
 const CH = 0x2A;
 const ADAPTER = 'zmk-studio';
@@ -113,7 +113,7 @@ export function calibratorCard(app) {
 
     function build() {
         root.replaceChildren(
-            el('p', { class: 'hint', text: `Two short drills, then a recommendation per hold-tap key. Needs ${MIN_TAP_SAMPLES}+ taps per key. Nothing is written until you press Apply.` }),
+            el('p', { class: 'hint', text: `Two short drills, then a recommendation per hold-tap key. Needs ${MIN_TAP_SAMPLES}+ typing presses per key. Nothing is written until you press Apply.` }),
             typingBox, holdsBox, resultsBox);
         typingDrill(); holdsDrill(); renderResults();
     }
@@ -294,7 +294,7 @@ export function calibratorCard(app) {
             const cb = el('input', { type: 'checkbox', checked: ok, disabled: !ok, 'aria-label': `Apply to ${r.label}` });
             checks.set(r.slot, cb);
             let rec;
-            if (!r.rec) rec = el('td', { class: 'faint', text: `not enough data (${r.tapSamples} of ${MIN_TAP_SAMPLES} taps)` });
+            if (!r.rec) rec = el('td', { class: 'faint', text: `not enough data (${r.tapSamples} of ${MIN_TAP_SAMPLES} presses)` });
             else {
                 rec = el('td', {}, el('div', { class: 'mono', text: `${r.rec.term} ms · idle ${r.rec.idle} ms${r.rec.mode != null ? ' · same hand = tap (on press, hold-tap keys excepted)' : ''}` }),
                     el('div', { class: 'note faint', text: ok ? '' : 'already right' }),

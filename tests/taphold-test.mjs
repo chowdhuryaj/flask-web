@@ -2,8 +2,8 @@
 // preset, hold/tap labels.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import * as C from '../behavior-catalog.js?v=66';
-import { setZmkContext } from '../zmk-keycodes.js?v=66';
+import * as C from '../behavior-catalog.js?v=67';
+import { setZmkContext } from '../zmk-keycodes.js?v=67';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };

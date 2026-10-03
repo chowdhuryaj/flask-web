@@ -4,8 +4,8 @@
 // Import stamps match binding-picker.js so module state is shared.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import * as C from '../behavior-catalog.js?v=66';
-import { setZmkContext } from '../zmk-keycodes.js?v=66';
+import * as C from '../behavior-catalog.js?v=67';
+import { setZmkContext } from '../zmk-keycodes.js?v=67';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };
@@ -127,7 +127,7 @@ for (const family of ['totem', 'imprint']) {
     }
     // every binding in the shipped keymap decodes and re-encodes to itself
     if (family === 'totem') {
-        const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=66');
+        const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=67');
         for (const layer of TOTEM_DEFAULT.layers) for (const [behaviorId, param1, param2] of layer.bindings) {
             const b = { behaviorId, param1, param2 };
             const d = C.decode(b, 'zmk-studio');

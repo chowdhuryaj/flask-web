@@ -18,29 +18,29 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=66';
+import { CH, V } from './flaskproto.js?v=67';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=66';
-import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=66';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=66';
-import { isUnassignable } from './behavior-catalog.js?v=66';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=67';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=67';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=67';
+import { isUnassignable } from './behavior-catalog.js?v=67';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
-         describeChanges, BASE_PREFIX } from './offline.js?v=66';
-import { saveState } from './save-state.js?v=66';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=66';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=66';
+         describeChanges, BASE_PREFIX } from './offline.js?v=67';
+import { saveState } from './save-state.js?v=67';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=67';
+import { kpParam, cpParam, usageFromName, layerLabel } from './zmk-keycodes.js?v=67';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=66';
-import { decodeCskSlot, encodeCskSlot, cskMorphCaps, cskNeedsMorph } from './zmk-csk-codec.js?v=66';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=67';
+import { decodeCskSlot, encodeCskSlot, cskMorphCaps, cskNeedsMorph } from './zmk-csk-codec.js?v=67';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=66';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=66';
+    from './zmk-tapdance-codec.js?v=67';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=67';
 import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
-         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=66';
+         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=67';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=66';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=67';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 
@@ -584,7 +584,7 @@ export function createZmkTemplate(family) {
                 row: 0, col: i, pos: i, label: `Key ${i}`,
                 x: k.x, y: k.y, w: k.w ?? 1, h: k.h ?? 1,
             })),
-            layerNames: layers.map((l) => l.name),
+            layerNames: layers.map((l, i) => layerLabel(l.name, i)),
             decorations: ZMK_TRACKBALLS[family] ?? [],
         },
         tunables: tun,
@@ -1354,6 +1354,7 @@ export class OfflineStudioClient extends EventTarget {
                 const base = this.ws.zmk.seedBase?.layers[i];
                 const same = base && base.id === l.id && base.bindings.length === l.bindings.length;
                 return {
+                    id: l.id,
                     name: same && base.name === l.name ? '' : l.name,
                     bindings: l.bindings.map((b, p) => {
                         const o = same && base.bindings[p];
@@ -1505,7 +1506,7 @@ export function seedWorkspaceFromDevice(family, { layers, behaviors, availableLa
     ws.deviceName = deviceName ?? ws.deviceName;
     ws.savedAt = Date.now();
     ws.layerCount = out.length;
-    ws.profile.layerNames = out.map((l) => l.name);
+    ws.profile.layerNames = out.map((l, i) => layerLabel(l.name, i));
     Object.assign(ws.zmk, {
         keymap, keymapSaved: structuredClone(keymap), seedBase: structuredClone(keymap),
         extraBehaviors: Object.keys(extra).length ? extra : undefined,

@@ -15,22 +15,22 @@
 // `app` needs only {trainerOnly, family, caps}. Constructors are called as
 // `new ctor(app)` by main.js; nothing here touches the DOM.
 
-import { isZmkFamily } from './zmk.js?v=66';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=66';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=66';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=66';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=66';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=66';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=66';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=66';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=66';
-import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=66';
-import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=66';
-import { ZmkTestTab } from './zmk-test-tab.js?v=66';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=66';
-import { MouseTab } from './mouse-tab.js?v=66';
-import { TrainerTab } from './trainer-tab.js?v=66';
-import { KeyboardTab } from './app-shell.js?v=66';
+import { isZmkFamily } from './zmk.js?v=67';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=67';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=67';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=67';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=67';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=67';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=67';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=67';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=67';
+import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=67';
+import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=67';
+import { ZmkTestTab } from './zmk-test-tab.js?v=67';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=67';
+import { MouseTab } from './mouse-tab.js?v=67';
+import { TrainerTab } from './trainer-tab.js?v=67';
+import { KeyboardTab } from './app-shell.js?v=67';
 
 /**
  * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the

@@ -11,20 +11,21 @@
 //
 // Also hosts the "Hold timing" card (flask_holdtap, proto 17).
 
-import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=66';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=66';
-import { CH, V } from './flaskproto.js?v=66';
-import { board, capPartsOf, htPartsOf } from './board.js?v=66';
-import { saveState } from './save-state.js?v=66';
+import { el, card, sliderRow, toggleRow, toast, renameLabel, reloadBar } from './ui.js?v=67';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=67';
+import { CH, V } from './flaskproto.js?v=67';
+import { board, capPartsOf, htPartsOf } from './board.js?v=67';
+import { saveState } from './save-state.js?v=67';
 import {
     COMBO_POS_NONE, COMBO_MAX_KEYS, COMBO_ACTION, COMBO_LAYER_ANY,
     decodeComboSlot, encodeComboSlot,
     decodeComboSlotV2, encodeComboSlotV2, comboSlotV2IsEmpty,
     decodeComboSlotV3, encodeComboSlotV3,
     comboSlotToTyped, comboTypedToLegacy, findDuplicateCombo, comboPosKey,
-} from './zmk-combos-codec.js?v=66';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=66';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=66';
+} from './zmk-combos-codec.js?v=67';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=67';
+import { zmkLayers, layerLabel } from './zmk-keycodes.js?v=67';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=67';
 
 /** A key position's legend on the BASE layer ("Q", "Esc", a tap-hold's tap),
  * or the raw index when the board has no keymap bound yet. */
@@ -348,17 +349,23 @@ export class ZmkCombosTab {
             placeholder, title, 'aria-label': title, style: 'width:72px',
             onchange: (e) => onCommit(Math.max(0, Math.min(2000, Number(e.target.value) || 0))),
         });
-        const layerNames = this.app.profile?.layerNames ?? [];
-        const layerCount = Math.max(layerNames.length, 6);
+        // The firmware compares the combo's layer to the layer ID (stable across
+        // reorders), so the option VALUE is the id; the label shows the rail's
+        // index. Without a loaded keymap: ids = indexes.
+        const known = zmkLayers();
+        const layerOpts = known.length
+            ? known.map((l, i) => ({ id: l.id, text: `${i}: ${layerLabel(l.name, i)}` }))
+            : Array.from({ length: Math.max((this.app.profile?.layerNames ?? []).length, 6) }, (_, l) => ({
+                id: l, text: this.app.profile?.layerNames?.[l] ? `${l}: ${this.app.profile.layerNames[l]}` : `Layer ${l}` }));
+        if (s.layer !== COMBO_LAYER_ANY && !layerOpts.some((o) => o.id === s.layer)) {
+            layerOpts.push({ id: s.layer, text: `Layer#${s.layer}` });
+        }
         const layerSel = el('select', {
             title: 'layer this combo fires on', 'aria-label': 'Only on layer',
             onchange: (e) => commit({ layer: Number(e.target.value) }),
         },
             el('option', { value: COMBO_LAYER_ANY, text: 'All layers', selected: s.layer === COMBO_LAYER_ANY }),
-            ...Array.from({ length: layerCount }, (_, l) => el('option', {
-                value: l, text: layerNames[l] ? `${l}: ${layerNames[l]}` : `Layer ${l}`,
-                selected: s.layer === l,
-            })));
+            ...layerOpts.map((o) => el('option', { value: o.id, text: o.text, selected: s.layer === o.id })));
         return el('div', {
             style: 'display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px',
         },

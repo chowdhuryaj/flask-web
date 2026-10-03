@@ -3,11 +3,11 @@
 import assert from 'node:assert/strict';
 import {
     encodePositional, decodePositional, decodeHoldtapLog, handsOf, triggerPreset,
-} from '../zmk-holdtap-codec.js?v=66';
+} from '../zmk-holdtap-codec.js?v=67';
 import {
     analyzeHoldtap, percentile, readLog, buildPassage, holdPrompts, diffTyped, usageChar, hasFeature, applyRecommendation, startLogPoll, typedEnough,
-} from '../zmk-ht-calibrate.js?v=65';
-import { TOTEM_LAYOUT } from '../zmk-totem-layout.js?v=65';
+} from '../zmk-ht-calibrate.js?v=67';
+import { TOTEM_LAYOUT } from '../zmk-totem-layout.js?v=67';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -208,10 +208,17 @@ const triggersFor = (h) => (h === 'left' ? [20, 21] : [0, 1]);
     eq(r2.rec.notes, [], 'balanced flavor: other_ms does not bound the term');
 }
 {
-    // not enough data: < 8 tap-outcome typing entries
-    const typing = [...Array.from({ length: 7 }, () => tapE(1, 100)), holdE(1, 400)];
+    // not enough data: < 8 typing entries (tap and HOLD outcomes both count)
+    const typing = Array.from({ length: 7 }, () => tapE(1, 100));
     const [r] = analyzeHoldtap({ typing, keys: [key(1)], current: {} });
     eq(r.rec, null); eq(r.tapSamples, 7);
+    const [r8] = analyzeHoldtap({ typing: [...typing, holdE(1, 400)], keys: [key(1)], current: {} });
+    ok(r8.rec, '7 taps + 1 misfire = 8 entries: gate passes'); eq(r8.tapSamples, 8);
+    // a key that misfires on every press still gets a recommendation (term from the misfired hold lengths)
+    const [mis] = analyzeHoldtap({ typing: Array.from({ length: 8 }, (_, i) => holdE(1, 300 + i * 10, 150, 80, 1)), keys: [key(1)], current: {} });
+    eq(mis.rec.term, 410, 'all-misfire key: round10(p95 370 + 40)'); eq(mis.tapSamples, 8);
+    // all misfires saturated (0xFFFF): no usable tap length, no recommendation
+    eq(analyzeHoldtap({ typing: Array.from({ length: 8 }, () => holdE(1, 0xFFFF, 150, 80, 1)), keys: [key(1)], current: {} })[0].rec, null);
     eq(analyzeHoldtap({ keys: [key(1)], current: {} })[0].rec, null, 'no entries at all');
 }
 {
@@ -242,7 +249,7 @@ const triggersFor = (h) => (h === 'left' ? [20, 21] : [0, 1]);
     const [r] = analyzeHoldtap({ typing: [...taps, ...misfires], keys: [key(1)], current: cur });
     eq(r.tap.p95, 300, 'p95 sees the misfired taps; saturated 0xFFFF held_ms is ignored');
     eq(r.rec.term, 340, 'round10(300 + 40) > current + 40');
-    eq(r.tapSamples, 16, 'the sample gate still counts tap outcomes');
+    eq(r.tapSamples, 19, 'the sample gate counts every typing entry');
     // hold-intent drill HOLD entries never feed the tap distribution
     const [h] = analyzeHoldtap({ typing: taps, holds: [holdE(1, 900)], keys: [key(1)], current: cur });
     eq(h.rec.term, 230);
@@ -283,12 +290,12 @@ const triggersFor = (h) => (h === 'left' ? [20, 21] : [0, 1]);
     eq(pr.length, 12); eq(pr.filter((x) => x.other === null).length, 4);
     ok(pr.filter((x) => x.slot === 1 && x.other).every((x) => letters.find((l) => l.ch === x.other).hand === 'right'), 'opposite-hand letter');
     ok(/Ctrl/.test(pr[0].text));
-    // a held Ctrl/Cmd + W T N Q K R would close, quit, open, reload or open the palette: never prompted
+    // a held Ctrl/Cmd + W T N Q K R H M would close, quit, open, reload, open the palette, hide or minimize: never prompted
     const all = [...'qwertyuiopasdfghjklzxcvbnm'].map((ch, i) => ({ ch, hand: i % 2 ? 'left' : 'right' }));
     const pr2 = holdPrompts({ keys: [{ slot: 1, hand: 'left', name: 'A (Ctrl)' }, { slot: 2, hand: 'right', name: 'S (Gui)' }], letters: all, reps: 40 });
     ok(pr2.some((x) => x.other), 'still prompts other keys');
-    ok(pr2.every((x) => !x.other || !'wtnqkr'.includes(x.other)), 'no browser-chord letters');
-    eq(holdPrompts({ keys: [{ slot: 1, hand: 'left', name: 'A' }], letters: [{ ch: 'w', hand: 'right' }, { ch: 'k', hand: 'right' }] }).filter((x) => x.other).length, 0, 'only reserved letters: hold-alone prompts remain');
+    ok(pr2.every((x) => !x.other || !'wtnqkrhm'.includes(x.other)), 'no browser-chord letters');
+    eq(holdPrompts({ keys: [{ slot: 1, hand: 'left', name: 'A' }], letters: [{ ch: 'w', hand: 'right' }, { ch: 'k', hand: 'right' }, { ch: 'h', hand: 'right' }, { ch: 'm', hand: 'right' }] }).filter((x) => x.other).length, 0, 'only reserved letters: hold-alone prompts remain');
 }
 
 // ---- typed vs expected ----

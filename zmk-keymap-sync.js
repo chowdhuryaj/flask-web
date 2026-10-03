@@ -15,6 +15,7 @@
  * v2 keymap export file so applyKeymapData consumes it unchanged. */
 export function keymapLayersData(keymap, behaviors) {
     return keymap.layers.map((l) => ({
+        id: l.id,
         name: l.name,
         bindings: l.bindings.map((b) => ({
             behavior: behaviors.get(b.behaviorId)?.displayName ?? null,
@@ -23,6 +24,19 @@ export function keymapLayersData(keymap, behaviors) {
             param2: b.param2,
         })),
     }));
+}
+
+/** Pair source layers with live layers: [{si, li}] (indexes). By layer ID when
+ * both sides carry ids (a reorder done elsewhere moves a layer's index, never
+ * its id; a source layer the device no longer has is dropped), by index for
+ * sources without ids (old snapshots, templates). */
+export function pairLayers(src, live) {
+    const ided = (ls) => ls.length > 0 && ls.every((l) => Number.isInteger(l?.id));
+    if (!ided(src) || !ided(live)) {
+        return Array.from({ length: Math.min(src.length, live.length) }, (_, i) => ({ si: i, li: i }));
+    }
+    const at = new Map(live.map((l, i) => [l.id, i]));
+    return src.flatMap((l, si) => (at.has(l.id) ? [{ si, li: at.get(l.id) }] : []));
 }
 
 /** Position-wise diff of two layers sections (snapshot vs live device).
@@ -42,9 +56,8 @@ export function diffKeymapLayers(a, b) {
     let keys = 0;
     let names = 0;
     const changed = [];     // per layer: {layer, name, positions, renamed}
-    const layers = Math.min(a.length, b.length);
-    for (let li = 0; li < layers; li++) {
-        const av = a[li].bindings ?? [];
+    for (const { si, li } of pairLayers(a, b)) {
+        const av = a[si].bindings ?? [];
         const bv = b[li].bindings ?? [];
         const n = Math.min(av.length, bv.length);
         const positions = [];
@@ -52,9 +65,9 @@ export function diffKeymapLayers(a, b) {
             if (!sameBinding(av[p], bv[p])) positions.push(p);
         }
         keys += positions.length;
-        const renamed = (a[li].name || '') !== (b[li].name || '');
+        const renamed = (a[si].name || '') !== (b[li].name || '');
         if (renamed) names++;
-        if (positions.length || renamed) changed.push({ layer: li, name: b[li].name || a[li].name || `Layer ${li}`, positions, renamed });
+        if (positions.length || renamed) changed.push({ layer: li, snapLayer: si, name: b[li].name || a[si].name || `Layer ${li}`, positions, renamed });
     }
     return { keys, names, layersA: a.length, layersB: b.length, changed,
         layersChanged: changed.filter((c) => c.positions.length).length };

@@ -7,10 +7,10 @@
 // vocabulary is HID usages: param = (page << 16) | id, with implicit
 // modifier bits at >= bit 24 (ZMK LS(x) etc).
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=66';
+import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys } from './keycodes.js?v=67';
 // Circular with behavior-catalog.js (it imports this file's tables and
 // context). Safe: neither side calls the other at module-evaluation time.
-import { capParts, describeBinding, decode, entryById, withZmkContext } from './behavior-catalog.js?v=66';
+import { capParts, describeBinding, decode, entryById, withZmkContext } from './behavior-catalog.js?v=67';
 
 export const HID_PAGE_KEYBOARD = 0x07;
 export const HID_PAGE_CONSUMER = 0x0C;
@@ -165,10 +165,18 @@ export function isZmkBinding(b, catalog = ctx.behaviors) {
 }
 export function zmkLayers() { return ctx.layers; }
 
-/** Layer display name by STABLE layer id (not index). */
-export function layerName(layerId) {
-    return ctx.layers.find((l) => l.id === layerId)?.name ?? `Layer#${layerId}`;
+/** THE label for a layer. An unnamed layer (firmware without display-name)
+ * is "Layer <index>": the number the layer rail and HUD strip show. */
+export const layerLabel = (name, index) => name || `Layer ${index}`;
+
+/** Layer display name by STABLE layer id (what binding params carry; it
+ * differs from the index once layers are reordered). `layers` is in index
+ * order, so a layer's position there is its index. */
+export function layerNameIn(layers, layerId) {
+    const i = layers.findIndex((l) => l.id === layerId);
+    return i < 0 ? `Layer#${layerId}` : layerLabel(layers[i].name, i);
 }
+export function layerName(layerId) { return layerNameIn(ctx.layers, layerId); }
 
 /** Short keycap text for a binding: the catalog's capParts on one line
  * ("Mod-tap ⌃ · live T"). Boards that draw two lines call capParts. */

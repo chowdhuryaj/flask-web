@@ -15,12 +15,12 @@
 // firmware). Firmware without MORPH_CAPS is Shift-only: the same UI minus the
 // trigger chips and keep toggle. Same slot-list pattern as the Leader tab.
 
-import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=66';
-import { CH, V } from './flaskproto.js?v=66';
-import { usageFromName } from './zmk-keycodes.js?v=66';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=66';
+import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=67';
+import { CH, V } from './flaskproto.js?v=67';
+import { usageFromName } from './zmk-keycodes.js?v=67';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=67';
 import { decodeCskSlot, encodeCskSlot, cskSlotIsEmpty, cskMorphCaps, cskNeedsMorph, cskDuplicateOf,
-    cskSummary, trigText, TRIGGER_MODS, MOD_CTL, MOD_SFT, MOD_ALT, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=66';
+    cskSummary, trigText, TRIGGER_MODS, MOD_CTL, MOD_SFT, MOD_ALT, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=67';
 
 // One-click starters. Encodings ride usageFromName so the table stays data —
 // names must exist in zmk-keycodes.js. shiftedMods = implicit-modifier bits
