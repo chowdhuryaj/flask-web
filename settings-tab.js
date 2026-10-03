@@ -7,7 +7,8 @@
 import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=76';
 import { QMK_SETTINGS } from './vialproto.js?v=76';
 import { CH_QMK, V_QMK } from './flaskproto.js?v=76';
-import { BOARD_VARIANTS, readBoardMeta } from './boards.js?v=76';
+import { BOARD_VARIANTS, readBoardMeta, svalboardKeys } from './boards.js?v=76';
+import { board } from './board.js?v=76';
 import { runUnlockFlow, lockKeyboard } from './unlock.js?v=76';
 
 export class SettingsTab {
@@ -105,6 +106,8 @@ export class SettingsTab {
                 onChange: async (v) => {
                     const echoed = await flask.setU16(CH_QMK.meta, V_QMK.metaBoardVariant, Number(v));
                     app.board = await readBoardMeta(flask, caps);
+                    // The layout follows the variant: five-key hides the finger Double South keys.
+                    if (app.profile) { app.profile.keys = svalboardKeys(app.board.fiveKey); board.refresh(); }
                     if (echoed !== Number(v)) toast(`Board kept variant ${echoed}`, true);
                 },
             }),

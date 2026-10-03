@@ -181,8 +181,8 @@ async function loadQmkDevice(device) {
     app.familyUnresolved = false;   // 303a:4044 is unique to the Svalboard
     if (app.protocolVersion == null) toast('No Flask protocol on this Svalboard (stock firmware?): Vial tabs only', true);
     app.caps = capabilities(app.family, app.protocolVersion);
-    app.profile = qmkProfile(app.family, app.layerCount);
     app.board = await readBoardMeta(app.flask, app.caps);
+    app.profile = qmkProfile(app.family, app.layerCount, app.board);
     try { app.unlocked = (await app.vial.unlockStatus()).unlocked; }
     catch { app.unlocked = false; }
     app.onHudLockClick = () => runUnlockFlow(app, (u) => { app.unlocked = u; });

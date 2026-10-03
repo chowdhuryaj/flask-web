@@ -9,6 +9,7 @@
 // confirmed by meta 0x03 in zmk.js confirmZmkFamily).
 
 import { VIDPID, EXPECTED_PROTOCOL, CH_QMK, V_QMK } from './flaskproto.js?v=76';
+import { SVALBOARD_LAYOUT } from './svalboard-layout.js?v=76';
 import { ZMK_VIDPID, ZMK_FAMILY_LABELS, ZMK_EXPECTED_PROTOCOL, isZmkFamily,
          zmkFamilyCandidate, zmkCapabilities } from './zmk.js?v=76';
 
@@ -82,21 +83,40 @@ export function qmkCapabilities(family, version) {
     };
 }
 
-// Svalboard matrix (keyboards/svalboard/keymaps/flask/vial.json: 10 rows x
-// 6 cols). Key geometry is Phase B (static layout baked from vial.json);
-// until then the profile carries no keys and keyName falls back to (r,c).
-export const SVALBOARD_MATRIX = { rows: 10, cols: 6 };
+// Svalboard matrix and key geometry: svalboard-layout.js, generated from the
+// firmware's vial.json by gen-svalboard-layout.mjs (no Vial definition read).
+export const SVALBOARD_MATRIX = SVALBOARD_LAYOUT.matrix;
+const isThumbRow = (row) => row === 0 || row === 5;
 
-/** Editor profile for a QMK board. layerCount comes from Vial. */
-export function qmkProfile(family, layerCount) {
+/** The Svalboard's keys for its variant. A five-key board has no Double
+ * South (column 5) on the eight finger clusters; the thumbs keep their
+ * sixth key (Double Down). Fresh copies: callers may annotate them. */
+export function svalboardKeys(fiveKey = false) {
+    return SVALBOARD_LAYOUT.keys.filter((k) => !(fiveKey && k.col === 5 && !isThumbRow(k.row))).map((k) => ({ ...k }));
+}
+
+/** Default layer names, from keyboards/svalboard/keymaps/flask/keymap.c
+ * (enum layer): NORMAL, NAVNAS, FUNC, and the last two (BOARD_CONFIG,
+ * MBO = MH_AUTO_BUTTONS_LAYER = layer count - 1). The rest are numbered. */
+export function svalboardLayerNames(count) {
+    const names = Array.from({ length: Math.max(count, 1) }, (_, i) => `Layer ${i}`);
+    Object.assign(names, ['Normal', 'NavNas', 'Func'].slice(0, names.length));
+    if (names.length >= 5) { names[names.length - 2] = 'Board config'; names[names.length - 1] = 'Mouse buttons'; }
+    return names;
+}
+
+/** Editor profile for a QMK board. layerCount comes from Vial, `board`
+ * from readBoardMeta (fiveKey hides the finger Double South keys). */
+export function qmkProfile(family, layerCount, board = null) {
     const profile = {
         family,
         name: familyLabel(family),
         matrixRows: SVALBOARD_MATRIX.rows,
         matrixCols: SVALBOARD_MATRIX.cols,
-        keys: [],
+        keys: svalboardKeys(!!board?.fiveKey),
         encoderKeys: [],
-        layerNames: Array.from({ length: Math.max(layerCount, 1) }, (_, i) => `Layer ${i}`),
+        keyName: (k) => k.short,
+        layerNames: svalboardLayerNames(layerCount),
         decorations: [],
     };
     profile.defaultLayerNames = [...profile.layerNames];
@@ -107,7 +127,7 @@ export function qmkProfile(family, layerCount) {
 /** Board variants (meta 0x04, v25). TOLD by the user, not detected: both
  * boards enumerate identically and an absent finger switch reads like an
  * unpressed one. Five-key boards have no DoubleSouth (column 5) on the
- * finger clusters; Phase B's static layout hides those keys from this. */
+ * finger clusters; svalboardKeys(fiveKey) hides those keys. */
 export const BOARD_VARIANTS = { 0: 'Not set', 1: 'Six-key clusters', 2: 'Five-key clusters (no DoubleSouth)' };
 
 /** Device record from the QMK meta channel (v25 0x04-0x06, v26 0x07).
@@ -125,8 +145,11 @@ export async function readBoardMeta(flask, caps) {
     return rec;
 }
 
+/** Full key name ("Left thumb · Pad") for a matrix position; a key the
+ * variant hides still has its name. */
 export function keyName(profile, row, col) {
-    return profile?.keys?.find((k) => k.row === row && k.col === col)?.label ?? `(${row},${col})`;
+    const at = (keys) => keys?.find((k) => k.row === row && k.col === col)?.label;
+    return at(profile?.keys) ?? (profile?.family === 'svalboard' ? at(SVALBOARD_LAYOUT.keys) : null) ?? `(${row},${col})`;
 }
 
 // QMK has no device-side layer names, so a rename lives in the app, per family.

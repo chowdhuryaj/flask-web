@@ -239,7 +239,7 @@ export function renderKeyboardSVG(opts) {
     const ts = textScale() * Math.min(1, Math.max(scale, 0.7));
     const mainFs = 12 * ts, topFs = 9 * ts;
     const legendK = Math.min(1.3, Math.max(0.8, textScale() / 1.15));
-    const radius = (profile.family && /^(totem|imprint)/.test(profile.family) ? 5 : 6) * Math.min(1, scale + 0.2);
+    const radius = (profile.family && /^(totem|imprint|svalboard)/.test(profile.family) ? 5 : 6) * Math.min(1, scale + 0.2);
     const svg = svgEl('svg', {
         class: 'kb-svg', width: L.width, height: L.height, viewBox: `0 0 ${L.width} ${L.height}`,
         // zoom is relative to "fits the pane": 1 never overflows, 1.5 may be 50 % wider.
