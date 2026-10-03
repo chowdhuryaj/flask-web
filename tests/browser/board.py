@@ -37,7 +37,7 @@ def cap(page, i):
 
 
 def selected(page):
-    return page.evaluate("""async () => (await import('/board.js?v=72')).board.selectedKey()""")
+    return page.evaluate("""async () => (await import('/board.js?v=73')).board.selectedKey()""")
 
 
 def pick_zmk_key(page, name):
@@ -79,19 +79,19 @@ def totem(browser):
     check(selected(page) == {'layer': 0, 'pos': 2}, 'totem: plain pick advances')
 
     # Undo restores both keys, in order; redo reapplies.
-    page.evaluate("async () => (await import('/board.js?v=72')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=73')).board.undo()")
     check(cap(page, 1) == 'W', f'totem: undo restores key 1, got {cap(page, 1)}')
-    page.evaluate("async () => (await import('/board.js?v=72')).board.undo()")
+    page.evaluate("async () => (await import('/board.js?v=73')).board.undo()")
     check(cap(page, 0) == 'Q', f'totem: undo restores key 0, got {cap(page, 0)}')
-    page.evaluate("async () => (await import('/board.js?v=72')).board.redo()")
+    page.evaluate("async () => (await import('/board.js?v=73')).board.redo()")
     check(cap(page, 0) == 'A', f'totem: redo reapplies key 0, got {cap(page, 0)}')
 
     # Save-state: the edit registered; discard clears it and restores the device keymap.
-    n = page.evaluate("async () => (await import('/save-state.js?v=72')).saveState.dirty().map(d => d.source)")
+    n = page.evaluate("async () => (await import('/save-state.js?v=73')).saveState.dirty().map(d => d.source)")
     check(n == ['studio-keymap'], f'totem: studio-keymap registered with save-state, got {n}')
-    page.evaluate("""async () => { const t = (await import('/zmk-keymap-tab.js?v=72')).zmkLiveKeymapTab(); await t.discardChanges(); }""")
+    page.evaluate("""async () => { const t = (await import('/zmk-keymap-tab.js?v=73')).zmkLiveKeymapTab(); await t.discardChanges(); }""")
     check(cap(page, 0) == 'Q', f'totem: discard restores key 0, got {cap(page, 0)}')
-    check(page.evaluate("async () => (await import('/save-state.js?v=72')).saveState.dirty().length") == 0,
+    check(page.evaluate("async () => (await import('/save-state.js?v=73')).saveState.dirty().length") == 0,
           'totem: discard cleans save-state')
 
     # Layer switch + rename + remove/add.
@@ -116,7 +116,7 @@ def totem(browser):
 
     # Position-pick mode.
     page.locator('.bd-chip', has_text='base').first.click()
-    page.evaluate("""async () => { const { board } = await import('/board.js?v=72');
+    page.evaluate("""async () => { const { board } = await import('/board.js?v=73');
         window.__picks = []; window.__stop = board.pickPositions({ initial: [3], max: 2, label: 'Pick positions for Combo 1', onChange: (p) => { window.__picks = p; } }); }""")
     key(page, 4).click()
     check(page.evaluate('window.__picks') == [3, 4], f'totem: pick mode reports click order, got {page.evaluate("window.__picks")}')
@@ -128,7 +128,7 @@ def totem(browser):
     page.evaluate('window.__stop()')
     check(page.locator('.bd-banner').count() == 0, 'totem: stop() leaves pick mode')
     # WP7 allowRepeat (leader): a picked key appends again
-    page.evaluate("""async () => { const { board } = await import('/board.js?v=72');
+    page.evaluate("""async () => { const { board } = await import('/board.js?v=73');
         window.__picks = []; window.__stop = board.pickPositions({ max: 4, allowRepeat: true, onChange: (p) => { window.__picks = p; } }); }""")
     key(page, 3).click()
     key(page, 3).click()
@@ -177,9 +177,9 @@ def imprint(browser):
 
 
 RESTORE_ASK = """async () => {
-  const t = (await import('/zmk-keymap-tab.js?v=72')).zmkLiveKeymapTab();
-  const { keymapLayersData } = await import('/zmk-keymap-sync.js?v=72');
-  const { zmkBehaviors } = await import('/zmk-keycodes.js?v=72');
+  const t = (await import('/zmk-keymap-tab.js?v=73')).zmkLiveKeymapTab();
+  const { keymapLayersData } = await import('/zmk-keymap-sync.js?v=73');
+  const { zmkBehaviors } = await import('/zmk-keycodes.js?v=73');
   const live = keymapLayersData(t.keymap, zmkBehaviors());
   const snap = JSON.parse(JSON.stringify(live));
   snap[0].bindings[0].param1 = 0x70005;   // B
@@ -188,7 +188,7 @@ RESTORE_ASK = """async () => {
   window.__choice = undefined;
   t._askRestore({ savedAt: '2026-09-30T12:00:00Z', layers: snap }, live).then((c) => { window.__choice = c; });
 }"""
-DIRTY = "async () => (await import('/save-state.js?v=72')).saveState.dirty().map(d => d.source)"
+DIRTY = "async () => (await import('/save-state.js?v=73')).saveState.dirty().map(d => d.source)"
 
 
 def restore_dialog(browser):
@@ -216,7 +216,7 @@ def restore_dialog(browser):
     page.wait_for_timeout(500)
     check(cap(page, 0) == 'B', f'restore: saved copy written live, key 0 = {cap(page, 0)}')
     check(page.evaluate(DIRTY) == ['studio-keymap'], f'restore: left unsaved for the status bar Save, dirty {page.evaluate(DIRTY)}')
-    check(page.evaluate("async () => (await import('/zmk-keymap-tab.js?v=72')).zmkLiveKeymapTab().unsaved") is True, 'restore: never auto-saved')
+    check(page.evaluate("async () => (await import('/zmk-keymap-tab.js?v=73')).zmkLiveKeymapTab().unsaved") is True, 'restore: never auto-saved')
     check(not errors, f'restore: page errors {errors}')
     ctx.close()
 

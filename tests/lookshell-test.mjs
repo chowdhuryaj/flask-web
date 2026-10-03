@@ -3,14 +3,14 @@
 // four hold-tap flavour lines. All pure: no DOM.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import * as C from '../behavior-catalog.js?v=72';
-import { setZmkContext } from '../zmk-keycodes.js?v=72';
-import { legendOf, layerCodeOf } from '../legend.js?v=72';
-import { layerIndex } from '../keymap-layers.js?v=72';
-import { dockModel, searchTiles, modNames, MOD_CHIPS } from '../keymap-dock.js?v=72';
-import { inspectorModel, SHORTCUTS } from '../keymap-inspector.js?v=72';
-import { surfaceEntries } from '../binding-picker.js?v=72';
-import { FLAVOR_INFO } from '../zmk-holdtiming-card.js?v=72';
+import * as C from '../behavior-catalog.js?v=73';
+import { setZmkContext } from '../zmk-keycodes.js?v=73';
+import { legendOf, layerCodeOf } from '../legend.js?v=73';
+import { layerIndex } from '../keymap-layers.js?v=73';
+import { dockModel, searchTiles, modNames, MOD_CHIPS } from '../keymap-dock.js?v=73';
+import { inspectorModel, SHORTCUTS } from '../keymap-inspector.js?v=73';
+import { surfaceEntries } from '../binding-picker.js?v=73';
+import { FLAVOR_INFO } from '../zmk-holdtiming-card.js?v=73';
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };

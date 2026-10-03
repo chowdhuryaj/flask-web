@@ -15,9 +15,9 @@
 
 import {
     Filter, findWords, makeRNG, randomSample, weightedSample, SPACE,
-} from './trainer-model.js?v=72';
-import { WORDS } from './trainer-words.js?v=72';
-import { speedToTime, wpmToCpm } from './trainer-stats.js?v=72';
+} from './trainer-model.js?v=73';
+import { WORDS } from './trainer-words.js?v=73';
+import { speedToTime, wpmToCpm } from './trainer-stats.js?v=73';
 
 /** Letters always in play, however badly they are going. keybr's floor. */
 const MIN_ALPHABET = 6;

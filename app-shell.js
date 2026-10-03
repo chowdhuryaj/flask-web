@@ -16,14 +16,14 @@
 // Also exported: KeyboardTab (Device › Keyboard, spec §1.3 "Device ›
 // Keyboard"): appearance, diagnostics, device info.
 
-import { setCaption, bindCaptionBar } from './caption.js?v=72';
-import { board } from './board.js?v=72';
-import { el } from './ui.js?v=72';
-import { familyLabel } from './zmk.js?v=72';
+import { setCaption, bindCaptionBar } from './caption.js?v=73';
+import { board } from './board.js?v=73';
+import { el } from './ui.js?v=73';
+import { familyLabel } from './zmk.js?v=73';
 import { THEMES, TEXT_SCALE, appearance, applyTheme, applyTextScale, applyBoardZoom,
-         currentTheme, currentTextScale, modeOf } from './themes.js?v=72';
-import { comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=72';
-import { MACRO_ACTION } from './zmk-macros-codec.js?v=72';
+         currentTheme, currentTextScale, modeOf } from './themes.js?v=73';
+import { comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=73';
+import { MACRO_ACTION } from './zmk-macros-codec.js?v=73';
 
 const $ = (id) => (typeof document === 'undefined' ? null : document.getElementById(id));
 

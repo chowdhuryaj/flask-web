@@ -11,13 +11,13 @@
 //        binding?             (kind 'binding': ready to write),
 //        build?(tap)          (layer-tap / toggle: rebuilt around the key's tap)}
 
-import { el } from './ui.js?v=72';
-import { board, DRAG_TYPE } from './board.js?v=72';
-import { surfaceEntries } from './binding-picker.js?v=72';
-import { captureOneKey } from './zmk-capture.js?v=72';
-import { usageParts, kpParam } from './zmk-keycodes.js?v=72';
-import { legendOf } from './legend.js?v=72';
-import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText } from './behavior-catalog.js?v=72';
+import { el } from './ui.js?v=73';
+import { board, DRAG_TYPE } from './board.js?v=73';
+import { surfaceEntries } from './binding-picker.js?v=73';
+import { captureOneKey } from './zmk-capture.js?v=73';
+import { usageParts, kpParam } from './zmk-keycodes.js?v=73';
+import { legendOf } from './legend.js?v=73';
+import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText } from './behavior-catalog.js?v=73';
 
 const ADAPTER = 'zmk-studio';
 const KEY_A = 0x04;
@@ -46,6 +46,13 @@ const ENTRY_CATEGORY = {
     advanced: 'Other',
 };
 const BEHAVIOUR_ORDER = ['Layers', 'Key behaviours', 'Bluetooth & output', 'Mouse', 'Lighting', 'System', 'Macros & run', 'Other'];
+// pointing.h packs x into the high int16, y into the low. Magnitudes are the compiled
+// MOVE_VAL / SCRL_VAL of config/totem.keymap (1800 * MOUSE_SPEED_PCT/100, 20 * SCROLL_SPEED_PCT/100);
+// the app cannot read them from the device. Up is -y for move, +y for scroll.
+const POINTING = {
+    mouse_move: { word: 'Mouse', val: 1800, dirs: [['left', -1, 0], ['down', 0, 1], ['up', 0, -1], ['right', 1, 0]] },
+    mouse_scroll: { word: 'Scroll', val: 20, dirs: [['left', -1, 0], ['down', 0, -1], ['up', 0, 1], ['right', 1, 0]] },
+};
 const LAYER_SHORT = { 'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl' };
 const TONE = { layer: 'layer', hold: 'hold', mod: 'hold', macro: 'macro', dim: 'dim', plain: '' };
 
@@ -172,7 +179,14 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
         for (const d of adv.behaviors) {
             const [p1, p2] = [kinds(d, 'param1'), kinds(d, 'param2')];
             const short = d.displayName.replace(/\s*\/\s*Layer$/, '');
-            if (!p1.length) {
+            if (!p1.length && POINTING[d.displayName]) {
+                // Param-0 would be a no-op; offer the four directions instead.
+                const { word, val, dirs } = POINTING[d.displayName];
+                for (const [dir, x, y] of dirs) {
+                    out.push(tile({ id: `adv:${d.id}:${dir}`, label: `${word} ${dir}`, desc: 'Other firmware behavior', sub: '' },
+                        { behaviorId: d.id, param1: (((x * val & 0xFFFF) << 16) + (y * val & 0xFFFF)) >>> 0, param2: 0 }, adapter));
+                }
+            } else if (!p1.length) {
                 out.push(tile({ id: `adv:${d.id}`, label: d.displayName, desc: 'Other firmware behavior', sub: '' },
                     { behaviorId: d.id, param1: 0, param2: 0 }, adapter));
             } else if (p1.some((x) => x.kind === 'layer_id')) {

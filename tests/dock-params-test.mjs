@@ -2,10 +2,10 @@
 // Neru Menu + Key) get tiles under Behaviours > Other, and search finds them.
 // Names and kinds are the Totem's live behavior list (Totem-ZMK keymap-after.json).
 import assert from 'node:assert/strict';
-import { setZmkContext } from '../zmk-keycodes.js?v=72';
-import { surfaceEntries } from '../binding-picker.js?v=72';
-import { dockModel, searchTiles } from '../keymap-dock.js?v=72';
-import { tapHoldSpecOf } from '../behavior-catalog.js?v=72';
+import { setZmkContext } from '../zmk-keycodes.js?v=73';
+import { surfaceEntries } from '../binding-picker.js?v=73';
+import { dockModel, searchTiles } from '../keymap-dock.js?v=73';
+import { tapHoldSpecOf } from '../behavior-catalog.js?v=73';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -17,6 +17,7 @@ const LIVE = [
     [4, 'Momentary Layer', 'l', null], [80, 'Super Delete', null, null], [57, 'Key Repeat', null, null], [93, 'Neru Menu', null, null],
     [85, 'Adaptive Key / Layer', 'l', 'n'], [86, 'Mouse Layer', 'l', 'l'], [87, 'Repeat / Layer', 'l', null],
     [88, 'Super Delete / Layer', 'l', null], [92, 'Neru Menu + Key (to base)', 'u', null], [94, 'Neru Menu + Key (stay)', 'u', null],
+    [89, 'mouse_move', null, null], [90, 'mouse_scroll', null, null],
 ].map(([id, displayName, a, b]) => ({ id, displayName, metadata: [{ param1: set(a), param2: set(b) }] }));
 const NAMES = ['base', 'control', 'nav'];
 setZmkContext({ behaviors: new Map(LIVE.map((d) => [d.id, d])), layers: NAMES.map((name, id) => ({ id, name })) });
@@ -40,6 +41,17 @@ eq(tapHoldSpecOf(neru[0].binding, 'zmk-studio'), null);
 // Plain leftovers keep their one tile; nothing else is dropped or doubled.
 ok(other.some((t) => t.id === 'adv:93'), 'Neru Menu keeps its one tile');
 eq(new Set(other.map((t) => t.id)).size, other.length, 'tile ids are unique');
+
+// Mouse move / scroll: four direction tiles each, no param-0 tile. pointing.h: x high int16, y low;
+// magnitudes are the keymap's compiled MOVE_VAL 1800 / SCRL_VAL 20; move up = -y, scroll up = +y.
+const dirs = (id) => other.filter((t) => t.id.startsWith(`adv:${id}:`));
+eq(other.some((t) => t.id === 'adv:89' || t.id === 'adv:90'), false, 'no no-op param-0 tiles');
+eq(dirs(89).map((t) => [t.label, t.cap, t.binding.param1]),
+    [['Mouse left', 'Mouse ←', (-1800 & 0xFFFF) * 65536], ['Mouse down', 'Mouse ↓', 1800], ['Mouse up', 'Mouse ↑', (-1800) & 0xFFFF], ['Mouse right', 'Mouse →', 1800 * 65536]]);
+eq(dirs(90).map((t) => [t.label, t.cap, t.binding.param1]),
+    [['Scroll left', 'Scroll ←', (-20 & 0xFFFF) * 65536], ['Scroll down', 'Scroll ↓', (-20) & 0xFFFF], ['Scroll up', 'Scroll ↑', 20], ['Scroll right', 'Scroll →', 20 * 65536]]);
+ok(searchTiles(model, 'mouse left').some((t) => t.id === 'adv:89:left'), '"mouse left" finds it');
+ok(searchTiles(model, 'scroll up').some((t) => t.id === 'adv:90:up'), '"scroll up" finds it');
 
 // Search.
 eq(searchTiles(model, 'super delete').filter((t) => t.id.startsWith('adv:88:')).length, NAMES.length, '"super delete" finds the layered tiles');

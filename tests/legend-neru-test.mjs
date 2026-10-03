@@ -3,8 +3,8 @@
 // never hard-coded numbers; pointing params follow ZMK pointing.h (x high 16, y low 16).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { setZmkContext } from '../zmk-keycodes.js?v=72';
-import { legendOf } from '../legend.js?v=72';
+import { setZmkContext } from '../zmk-keycodes.js?v=73';
+import { legendOf } from '../legend.js?v=73';
 
 const eq = (a, b, m = '') => assert.deepEqual(a, b, m);
 const NAMES = ['mouse_move', 'mouse_scroll', 'Neru Hints', 'Neru Menu', 'Neru Menu + Key (to base)', 'Neru Menu + Key (stay)',
