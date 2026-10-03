@@ -3,11 +3,11 @@
 import assert from 'node:assert/strict';
 import {
     encodePositional, decodePositional, decodeHoldtapLog, handsOf, triggerPreset,
-} from '../zmk-holdtap-codec.js?v=68';
+} from '../zmk-holdtap-codec.js?v=69';
 import {
     analyzeHoldtap, percentile, readLog, buildPassage, holdPrompts, diffTyped, usageChar, hasFeature, applyRecommendation, startLogPoll, typedEnough,
-} from '../zmk-ht-calibrate.js?v=68';
-import { TOTEM_LAYOUT } from '../zmk-totem-layout.js?v=68';
+} from '../zmk-ht-calibrate.js?v=69';
+import { TOTEM_LAYOUT } from '../zmk-totem-layout.js?v=69';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };

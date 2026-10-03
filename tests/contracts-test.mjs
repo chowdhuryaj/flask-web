@@ -1,18 +1,18 @@
 // WP0 contracts: the shared APIs Phase 1 builds against exist with the
-// Import stamps matter: "x.js" and "x.js?v=68" are two module instances in
+// Import stamps matter: "x.js" and "x.js?v=69" are two module instances in
 // Node and the browser alike. Import a module with the same ?v= as the code
 // under test does, or singletons (caption, board, zmk context) split.
 // agreed shapes, and the parts with logic (save order, timing seam) work.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SaveState, saveState } from '../save-state.js?v=68';
-import * as catalog from '../behavior-catalog.js?v=68';
-import { SURFACES, openPicker, typedFromStudio } from '../binding-picker.js?v=68';
-import { board } from '../board.js?v=68';
-import { shell } from '../app-shell.js?v=68';
-import * as caption from '../caption.js?v=68';
-import { CATALOG_GROUPS } from '../behavior-catalog.js?v=68';
-import { setZmkContext } from '../zmk-keycodes.js?v=68';   // same stamp as binding-picker: one module instance
+import { SaveState, saveState } from '../save-state.js?v=69';
+import * as catalog from '../behavior-catalog.js?v=69';
+import { SURFACES, openPicker, typedFromStudio } from '../binding-picker.js?v=69';
+import { board } from '../board.js?v=69';
+import { shell } from '../app-shell.js?v=69';
+import * as caption from '../caption.js?v=69';
+import { CATALOG_GROUPS } from '../behavior-catalog.js?v=69';
+import { setZmkContext } from '../zmk-keycodes.js?v=69';   // same stamp as binding-picker: one module instance
 
 let checks = 0;
 const ok = (c, m = '') => { assert.ok(c, m); checks++; };

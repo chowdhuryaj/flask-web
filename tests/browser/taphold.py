@@ -70,7 +70,7 @@ def totem(browser):
     page.wait_for_timeout(400)
     term = page.evaluate("JSON.parse(localStorage.getItem('flask-offline-totem')).zmk.holdtap[13].term")
     check(term == 330, f'slider wrote the key slot (term {term})')
-    dirty = page.evaluate("async () => (await import('/save-state.js?v=68')).saveState.dirty().map(d => d.label)")
+    dirty = page.evaluate("async () => (await import('/save-state.js?v=69')).saveState.dirty().map(d => d.label)")
     check('Hold-tap timing' in dirty, f'timing edit is in the one Save: {dirty}')
     page.locator('.ht-card .flavor').nth(2).click()
     page.wait_for_timeout(300)

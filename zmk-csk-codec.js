@@ -25,7 +25,7 @@
 // OSK_CAPS (RO u16 0x05) = 1 on firmware that takes them; OS_MODE (RO u16
 // 0x04) = the board's current OS (0 PC, 1 Mac, 0xFFFF no switch-layout module).
 
-import { CH, V } from './flaskproto.js?v=68';
+import { CH, V } from './flaskproto.js?v=69';
 
 export const MOD_CTL = 1, MOD_SFT = 2, MOD_ALT = 4, MOD_GUI = 8;
 export const MOD_SHIFT_ONLY = MOD_SFT;

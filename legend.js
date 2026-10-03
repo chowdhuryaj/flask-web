@@ -9,8 +9,8 @@
 //
 // Pure (catalog only), so node tests can pin it.
 
-import { decode, capParts, holdTapParts } from './behavior-catalog.js?v=68';
-import { zmkBehaviors } from './zmk-keycodes.js?v=68';
+import { decode, capParts, holdTapParts } from './behavior-catalog.js?v=69';
+import { zmkBehaviors } from './zmk-keycodes.js?v=69';
 
 const LAYER_CODE = {
     'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl',

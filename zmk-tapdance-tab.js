@@ -9,14 +9,14 @@
 // tapping term ("behavior modification settings" — timing, AJ 2026-07-12);
 // term 0 = the firmware default 200 ms.
 
-import { el, card, toggleRow, modal, toast, reloadBar } from './ui.js?v=68';
-import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=68';
-import { CH, V } from './flaskproto.js?v=68';
-import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary, onSlotsChanged, dim, isRecursiveOutput } from './zmk-behaviour-common.js?v=68';
+import { el, card, toggleRow, modal, toast, reloadBar } from './ui.js?v=69';
+import { zmkSlotName, zmkSetSlotName } from './zmk.js?v=69';
+import { CH, V } from './flaskproto.js?v=69';
+import { blurClicks, pickOutput, outText, outCell, installSlotSummary, registerSummary, onSlotsChanged, dim, isRecursiveOutput } from './zmk-behaviour-common.js?v=69';
 import {
     TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg,
     tdDanceLength, tdSlotIsEmpty,
-} from './zmk-tapdance-codec.js?v=68';
+} from './zmk-tapdance-codec.js?v=69';
 
 const TAP_WORDS = ['1 tap', '2 taps', '3 taps', '4 taps', '5 taps', '6 taps', '7 taps', '8 taps'];
 

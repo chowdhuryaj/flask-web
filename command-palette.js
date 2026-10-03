@@ -10,11 +10,11 @@
 // key…" opens the picker, and every catalog entry (behavior-catalog.js,
 // WP3) is offered by name.
 
-import { el } from './ui.js?v=68';
-import { openPicker } from './binding-picker.js?v=68';
-import { catalogFor, encode } from './behavior-catalog.js?v=68';
-import { isZmkFamily } from './zmk.js?v=68';
-import { applyTheme, applyBoardZoom, currentTheme, modeOf } from './themes.js?v=68';
+import { el } from './ui.js?v=69';
+import { openPicker } from './binding-picker.js?v=69';
+import { catalogFor, encode } from './behavior-catalog.js?v=69';
+import { isZmkFamily } from './zmk.js?v=69';
+import { applyTheme, applyBoardZoom, currentTheme, modeOf } from './themes.js?v=69';
 
 const MAX_RESULTS = 40;
 

@@ -9,11 +9,11 @@ globalThis.document = { createElement: node, createTextNode: (t) => ({ t }), que
 const mem = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
 
-const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=68');
-const { setZmkContext, bindingCap, layerName } = await import('../zmk-keycodes.js?v=68');
-const { encode, decode, capParts } = await import('../behavior-catalog.js?v=68');
-const { surfaceEntries } = await import('../binding-picker.js?v=68');
-const { ZmkKeymapTab } = await import('../zmk-keymap-tab.js?v=68');
+const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=69');
+const { setZmkContext, bindingCap, layerName } = await import('../zmk-keycodes.js?v=69');
+const { encode, decode, capParts } = await import('../behavior-catalog.js?v=69');
+const { surfaceEntries } = await import('../binding-picker.js?v=69');
+const { ZmkKeymapTab } = await import('../zmk-keymap-tab.js?v=69');
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -76,7 +76,7 @@ for (const [nm, want] of [[named, ['base', 'control', 'sym', 'fn', 'num']], [unn
 
 // 5. A reorder done in another tool, then restore / import: pair by layer id.
 {
-    const { keymapLayersData, diffKeymapLayers, pairLayers } = await import('../zmk-keymap-sync.js?v=68');
+    const { keymapLayersData, diffKeymapLayers, pairLayers } = await import('../zmk-keymap-sync.js?v=69');
     const KP = idOf('Key Press');
     const kp = (u) => ({ behaviorId: KP, param1: u, param2: 0 });
     // saved order base, control, fn(2), sym(3); device now base, control, sym(3), fn(2)

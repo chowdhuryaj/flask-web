@@ -4,8 +4,8 @@
 // id has its §1.3 group.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { zmkCapabilities } from '../zmk.js?v=68';
-import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js?v=68';
+import { zmkCapabilities } from '../zmk.js?v=69';
+import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js?v=69';
 
 const before = JSON.parse(readFileSync(new URL('./fixtures/tabs-before-wp0.json', import.meta.url)));
 // Deliberate changes from §1.3; anything else differing is a regression.

@@ -9,16 +9,16 @@
 //                0 none, 1 usage, 2 macro slot, 3 behavior). Leader and
 //                gesture codecs call param1 `param`.
 
-import { el } from './ui.js?v=68';
-import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=68';
-import { captureOneKey } from './zmk-capture.js?v=68';
-import { saveState } from './save-state.js?v=68';
-import { board } from './board.js?v=68';
+import { el } from './ui.js?v=69';
+import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=69';
+import { captureOneKey } from './zmk-capture.js?v=69';
+import { saveState } from './save-state.js?v=69';
+import { board } from './board.js?v=69';
 import {
     CATALOG_GROUPS, catalogFor, decode, encode, capParts, describeBinding, keySections, modsText,
     resolveTiming, timingBackendNow, attachHoldtap, HOLDTAP, TIMING_PARAM, adapterOf,
     composeTapHold, tapHoldSpecOf, holdTapParts, homeRowPlan,
-} from './behavior-catalog.js?v=68';
+} from './behavior-catalog.js?v=69';
 
 /**
  * Every surface a picker can serve (spec §4.7). `hide` lists catalog group
@@ -357,6 +357,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
             }
         }
         const rows = entries.filter((e) => e.id !== 'key' && (e.name.toLowerCase().includes(q) || e.desc.toLowerCase().includes(q)
+            || e.behaviors?.some((d) => d.displayName.toLowerCase().includes(q))
             || (e.params.find((p) => p.key === 'code')?.labels && Object.values(e.params.find((p) => p.key === 'code').labels).some((l) => String(l).toLowerCase().includes(q)))));
         for (const e of rows) bodyEl.append(entryRow(e, q));
         if (!bodyEl.children.length) bodyEl.append(el('div', { class: 'bp-note', text: `Nothing matches "${search.value}".` }));
@@ -396,7 +397,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
             row.append(el('button', { class: 'btn small primary', text: isCur ? 'Assigned' : 'Assign', onclick: () => assign(e.id, {}) }));
             return row;
         }
-        if (e.id === 'advanced') { row.append(advancedComposer(e)); return row; }
+        if (e.id === 'advanced') { row.append(advancedComposer(e, q)); return row; }
         // One chip-able param: chips assign on click.
         const only = visible.length === 1 ? visible[0] : null;
         if (only && (only.kind === 'layer' || only.kind === 'slot' || only.kind === 'choice')) {
@@ -801,10 +802,12 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     }
 
     // ---- Advanced: device leftovers with metadata-driven params ----
-    function advancedComposer(e) {
+    function advancedComposer(e, q = '') {
         const wrap = el('div', { class: 'bp-params' });
         const list = e.behaviors ?? [];
         const sel = el('select', { 'aria-label': 'Behavior' }, ...list.map((d) => el('option', { value: d.id, text: d.displayName })));
+        const hit = q && list.find((d) => d.displayName.toLowerCase().includes(q));
+        if (hit) sel.value = String(hit.id);
         const ps = el('span', { class: 'bp-ctl' });
         let read = () => [0, 0];
         const build = () => {

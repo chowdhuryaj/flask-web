@@ -11,13 +11,13 @@
 //        binding?             (kind 'binding': ready to write),
 //        build?(tap)          (layer-tap / toggle: rebuilt around the key's tap)}
 
-import { el } from './ui.js?v=68';
-import { board, DRAG_TYPE } from './board.js?v=68';
-import { surfaceEntries } from './binding-picker.js?v=68';
-import { captureOneKey } from './zmk-capture.js?v=68';
-import { usageParts } from './zmk-keycodes.js?v=68';
-import { legendOf } from './legend.js?v=68';
-import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText } from './behavior-catalog.js?v=68';
+import { el } from './ui.js?v=69';
+import { board, DRAG_TYPE } from './board.js?v=69';
+import { surfaceEntries } from './binding-picker.js?v=69';
+import { captureOneKey } from './zmk-capture.js?v=69';
+import { usageParts, kpParam } from './zmk-keycodes.js?v=69';
+import { legendOf } from './legend.js?v=69';
+import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText } from './behavior-catalog.js?v=69';
 
 const ADAPTER = 'zmk-studio';
 const KEY_A = 0x04;
@@ -160,9 +160,39 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
     }
     const adv = byId.get('advanced');
     if (adv?.behaviors?.length) {
-        add('Other', adv.behaviors.filter((d) => !(d.metadata?.[0]?.param1?.some((x) => x.kind !== 'nil')))
-            .map((d) => tile({ id: `adv:${d.id}`, label: d.displayName, desc: 'Other firmware behavior', sub: '' },
-                { behaviorId: d.id, param1: 0, param2: 0 }, adapter)));
+        // Leftover firmware behaviors: plain ones as one tile; layer / key params expanded.
+        const kinds = (d, w) => (d.metadata?.[0]?.[w] ?? []).filter((x) => x.kind !== 'nil');
+        const defOf = (ds) => ds.find((x) => x.kind === 'constant')?.constant ?? ds.find((x) => x.kind === 'range')?.min ?? 0;
+        const layerIds = lp?.options ?? [];
+        const lname = (id) => lp?.labels?.[id] ?? `Layer ${id}`;
+        const out = [];
+        const mk = (d, id, label, cap, sub, b) => {
+            return tile({ id: `adv:${d.id}:${id}`, label, desc: 'Other firmware behavior', cap, sub }, b, adapter);
+        };
+        for (const d of adv.behaviors) {
+            const [p1, p2] = [kinds(d, 'param1'), kinds(d, 'param2')];
+            const short = d.displayName.replace(/\s*\/\s*Layer$/, '');
+            if (!p1.length) {
+                out.push(tile({ id: `adv:${d.id}`, label: d.displayName, desc: 'Other firmware behavior', sub: '' },
+                    { behaviorId: d.id, param1: 0, param2: 0 }, adapter));
+            } else if (p1.some((x) => x.kind === 'layer_id')) {
+                const both = p2.some((x) => x.kind === 'layer_id');
+                for (const id of layerIds) {
+                    out.push(mk(d, id, `${d.displayName}: ${lname(id)}`, lname(id), short,
+                        { behaviorId: d.id, param1: id, param2: both ? id : defOf(p2) }));
+                }
+            } else if (p1.some((x) => x.kind === 'hid_usage') && !p2.length) {
+                // Key param: like Key toggle, a tile that takes the selected key's tap (default A).
+                const build = (tap = { key: KEY_A, mods: 0 }) => ({ behaviorId: d.id, param2: 0,
+                    param1: ((((tap.mods ?? 0) & 0xFF) << 24) | kpParam(tap.key & 0xFFFF)) >>> 0 });
+                const t = mk(d, 'key', `${d.displayName}: sends the selected key`, short, 'key', build());
+                t.build = build;
+                out.push(t);
+            }
+            // Other shapes (constants, ranges): no tile; the picker's "Other behavior" row covers them.
+        }
+        for (const t of out) t.search += ' advanced other';
+        add('Other', out);
     }
     const behaviours = BEHAVIOUR_ORDER.filter((l) => cats.has(l)).map((label) => ({ id: label, label, tiles: cats.get(label) }));
     return { keys, behaviours, pinned };

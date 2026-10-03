@@ -153,7 +153,7 @@ def main():
         page.wait_for_timeout(400)
         check(ws(page, 'totem')['zmk']['holdtap'][33]['term'] == 330, 'slot 33 term written to the sim')
         check('unsaved' in save_text(page), f'status bar SAVE dirty after slot 33: {save_text(page)!r}')
-        check('Hold-tap timing' in page.evaluate("import('./save-state.js?v=68').then(m => m.saveState.dirty().map(d => d.label).join('|'))"), 'Hold-tap timing is a registered source')
+        check('Hold-tap timing' in page.evaluate("import('./save-state.js?v=69').then(m => m.saveState.dirty().map(d => d.label).join('|'))"), 'Hold-tap timing is a registered source')
         row.locator('.flavor[data-flavor="2"]').click()
         page.wait_for_timeout(300)
         check(ws(page, 'totem')['zmk']['holdtap'][33]['flavor'] == 2, 'flavor written')

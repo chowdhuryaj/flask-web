@@ -2,11 +2,11 @@
 // journal on the sim, replay saves every touched channel (0x28 = tap dance
 // saves like any other), unhandled ids are dropped, failures stay queued.
 import assert from 'node:assert/strict';
-import { syncWorkspace, pendingCount, listWorkspaces, saveWorkspace } from '../offline.js?v=68';
-import { FlaskProto, CH, V, CMD } from '../flaskproto.js?v=68';
-import { ZmkOfflineFlask, createZmkTemplate, zmkSyncExtras, zmkPendingCount } from '../zmk-offline.js?v=68';
-import { encodeCskSlot } from '../zmk-csk-codec.js?v=68';
-import { encodeTdStep, encodeTdCfg, TD_ACTION } from '../zmk-tapdance-codec.js?v=68';
+import { syncWorkspace, pendingCount, listWorkspaces, saveWorkspace } from '../offline.js?v=69';
+import { FlaskProto, CH, V, CMD } from '../flaskproto.js?v=69';
+import { ZmkOfflineFlask, createZmkTemplate, zmkSyncExtras, zmkPendingCount } from '../zmk-offline.js?v=69';
+import { encodeCskSlot } from '../zmk-csk-codec.js?v=69';
+import { encodeTdStep, encodeTdCfg, TD_ACTION } from '../zmk-tapdance-codec.js?v=69';
 
 let checks = 0;
 const mem = new Map();
