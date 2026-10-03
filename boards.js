@@ -10,6 +10,7 @@
 
 import { VIDPID, EXPECTED_PROTOCOL, CH_QMK, V_QMK } from './flaskproto.js?v=76';
 import { SVALBOARD_LAYOUT } from './svalboard-layout.js?v=76';
+import { capLabel, hoverText } from './keycodes.js?v=76';
 import { ZMK_VIDPID, ZMK_FAMILY_LABELS, ZMK_EXPECTED_PROTOCOL, isZmkFamily,
          zmkFamilyCandidate, zmkCapabilities } from './zmk.js?v=76';
 
@@ -25,6 +26,11 @@ export function lineOf(family) {
     if (isQmkFamily(family)) return 'qmk';
     return null;
 }
+
+/** The board picker surface for a keymap key: 'qmk.key' (u16 keycodes) on
+ * the QMK line, else 'zmk.key' (Studio bindings). Its adapter is
+ * SURFACES[surface].adapter in binding-picker.js. */
+export const keySurfaceOf = (app) => (lineOf(app?.family) === 'qmk' ? 'qmk.key' : 'zmk.key');
 
 /** Family for a VID/PID: 'svalboard', a ZMK candidate, else 'generic'. */
 export function familyOf(vid, pid) {
@@ -116,6 +122,8 @@ export function qmkProfile(family, layerCount, board = null) {
         keys: svalboardKeys(!!board?.fiveKey),
         encoderKeys: [],
         keyName: (k) => k.short,
+        // Legends through the 'qmk' adapter (legend.js), the same tokens as ZMK.
+        capAdapter: 'qmk', labelFor: capLabel, hoverFor: hoverText,
         layerNames: svalboardLayerNames(layerCount),
         decorations: [],
     };

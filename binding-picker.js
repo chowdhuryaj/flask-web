@@ -8,6 +8,8 @@
 //                shared slot vocabulary (zmk-tapdance-codec TD_ACTION:
 //                0 none, 1 usage, 2 macro slot, 3 behavior). Leader and
 //                gesture codecs call param1 `param`.
+//   'qmk'        number, a QMK u16 keycode (Svalboard: Vial keymap, Vial
+//                entries, Flask corner / leader / shift slots).
 
 import { el } from './ui.js?v=76';
 import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=76';
@@ -25,9 +27,18 @@ import {
  * ids or entry ids (behavior-catalog.js) the surface cannot store, plus
  * 'mods-row' (no held-modifier row on the Keys grid). Callers pass the key,
  * e.g. `openPicker({ surface: 'zmk.comboOutput', … })`.
- * @type {Record<string, {adapter: 'zmk-studio'|'zmk-typed', stores: string, hide: string[]}>}
+ * @type {Record<string, {adapter: 'zmk-studio'|'zmk-typed'|'qmk', stores: string, hide: string[]}>}
  */
 export const SURFACES = {
+    'qmk.key': { adapter: 'qmk', stores: 'u16 keycode', hide: [] },
+    'qmk.comboOutput': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader'] },
+    'qmk.tapDanceStep': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader', 'tap-dance'] },
+    'qmk.keyOverride': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader'] },
+    'qmk.cornerChord': { adapter: 'qmk', stores: 'u16 keycode', hide: ['leader'] },
+    'qmk.macroKey': { adapter: 'qmk', stores: 'basic keycode', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced', 'mods-row'] },
+    'qmk.leaderKey': { adapter: 'qmk', stores: 'basic keycode', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced'] },
+    'qmk.cskBase': { adapter: 'qmk', stores: 'basic keycode', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced', 'mods-row'] },
+    'qmk.cskShifted': { adapter: 'qmk', stores: 'basic keycode + mods', hide: ['modifiers', 'layers', 'mouse', 'media', 'run', 'advanced'] },
     'zmk.key': { adapter: 'zmk-studio', stores: 'Studio binding', hide: [] },
     'zmk.comboOutput': { adapter: 'zmk-typed', stores: 'usage / macro / behavior', hide: ['leader', 'advanced'] },
     // A tap-dance step or adaptive step/fallback that runs Tap Dance or Adaptive Key recurses in the firmware (F01).
@@ -46,8 +57,10 @@ const STORES = {
     'usage / macro': ['key', 'media-key', 'macro', 'none'],
     usage: ['key', 'media-key', 'none'],
     'usage + mods': ['key', 'media-key', 'none'],
+    'basic keycode': ['key', 'none'],
+    'basic keycode + mods': ['key', 'none'],
 };
-const KEYMAP_SURFACES = new Set(['zmk.key']);
+const KEYMAP_SURFACES = new Set(['zmk.key', 'qmk.key']);
 const GROUP_REASON = {
     modifiers: 'Modifier behaviors', layers: 'Layer keys', mouse: 'Mouse keys', media: 'Media and system keys',
     run: 'Macros and tap dances', advanced: 'Raw behaviors',
@@ -58,7 +71,7 @@ const GROUP_REASON = {
 export function surfaceEntries(surface, app) {
     const spec = SURFACES[surface];
     if (!spec) throw new Error(`unknown surface ${surface}`);
-    const all = catalogFor({ ...app, adapter: 'zmk-studio' });
+    const all = catalogFor({ ...app, adapter: spec.adapter === 'qmk' ? 'qmk' : 'zmk-studio' });
     const storable = STORES[spec.stores] ?? null;
     const entries = all.filter((e) => !spec.hide.includes(e.group) && !spec.hide.includes(e.id)
         && (!storable || storable.includes(e.id))
@@ -695,7 +708,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         const kinds = [];
         if (htIds().includes('mod-tap')) kinds.push(['mods', 'Modifiers']);
         if (htIds().includes('layer-tap')) kinds.push(['layer', 'Layer']);
-        if (htIds().includes('mod-tap')) kinds.push(['key', 'Key']);
+        if (htIds().includes('mod-tap') && adapter !== 'qmk') kinds.push(['key', 'Key']);   // QMK holds mods or a layer only
         return el('span', { class: 'bp-ctl bp-seg', role: 'radiogroup', 'aria-label': 'Hold does' },
             el('label', { text: 'Hold does' }),
             ...kinds.map(([k, label]) => el('button', { class: 'chip' + (th.holdKind === k ? ' on' : ''), role: 'radio',
@@ -719,6 +732,7 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     }
 
     function timingRow(r) {
+        if (adapter === 'qmk') return el('div', { class: 'bp-note', text: 'Tapping term: global (Device › Settings).' });
         const be = timingBackendNow();
         const live = r.ok && r.params.live && r.params.live !== 'off';
         const pos = posNow();
@@ -804,6 +818,17 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     // ---- Advanced: device leftovers with metadata-driven params ----
     function advancedComposer(e, q = '') {
         const wrap = el('div', { class: 'bp-params' });
+        if (adapter === 'qmk') {   // any raw QMK keycode, by hex
+            const input = el('input', { type: 'text', placeholder: '0x0000', size: 8, 'aria-label': 'Raw keycode (hex)',
+                value: current?.entryId === 'advanced' ? '0x' + (current.params.raw >>> 0).toString(16).toUpperCase().padStart(4, '0') : '' });
+            const go = el('button', { class: 'btn small primary', text: 'Assign', onclick: () => {
+                const v = parseInt(input.value.trim().replace(/^0x/i, ''), 16);
+                if (!(v >= 0 && v <= 0xFFFF)) { setCap('Type a hex keycode, 0x0000–0xFFFF.'); return; }
+                current = decode(v, adapter); currentValue = v; onPick(v);
+            } });
+            wrap.append(el('span', { class: 'bp-ctl' }, el('label', { text: 'Keycode' }), input), go);
+            return wrap;
+        }
         const list = e.behaviors ?? [];
         const sel = el('select', { 'aria-label': 'Behavior' }, ...list.map((d) => el('option', { value: d.id, text: d.displayName })));
         const hit = q && list.find((d) => d.displayName.toLowerCase().includes(q));
@@ -890,7 +915,7 @@ export function valueLabel(value, surface) {
  * A binding as a small inline cell for row / tile outputs (combo, macro,
  * leader, tap dance). Dual-role bindings show labelled HOLD and TAP parts;
  * anything else is the one-line description. For WP4a / WP4b.
- * @param {*} binding  adapter-typed value (Studio or typed ZMK)
+ * @param {*} binding  adapter-typed value (Studio, typed ZMK or a QMK u16)
  * @param {string} [surfaceOrAdapter]  a SURFACES key or an adapter name;
  *        default: guessed from the value
  * @returns {HTMLSpanElement}

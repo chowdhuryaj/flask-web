@@ -9,7 +9,7 @@
 
 import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=76';
 import { CH_QMK, V_QMK, slot, osName, CYCLOTAB_KEYS } from './flaskproto.js?v=76';
-import { announceEdit, kcCell, pickKeycode, layerOptions } from './qmk-ui.js?v=76';
+import { announceEdit, bindingCell, pickKey, layerOptions } from './qmk-ui.js?v=76';
 
 export class TypingTab {
     constructor(app) {
@@ -63,15 +63,12 @@ export class TypingTab {
 
     /** Keycode cell: opens the picker, writes the pick, announces the edit, re-renders. */
     _kc(kc, title, write) {
-        const cell = kcCell(kc, () => pickKeycode({
-            value: kc, title,
-            onPick: async (picked) => {
-                try {
-                    await write(picked);
-                    announceEdit(cell);
-                    this.render();
-                } catch (e) { toast(`Write failed: ${e.message}`, true); }
-            },
+        const cell = bindingCell(kc, () => pickKey(this.app, 'qmk.key', kc, title, async (picked) => {
+            try {
+                await write(picked);
+                announceEdit(cell);
+                this.render();
+            } catch (e) { toast(`Write failed: ${e.message}`, true); }
         }));
         return cell;
     }

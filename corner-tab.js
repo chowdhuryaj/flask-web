@@ -21,7 +21,9 @@
 
 import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=76';
 import { CH_QMK, V_QMK, CC, ccDefName, ccRow, ccCol, ccRetired } from './flaskproto.js?v=76';
-import { kcCell, kcText, pickKeycode, reloadRow, KC_TRNS } from './qmk-ui.js?v=76';
+import { bindingCell, bindingText, pickKey, reloadRow } from './qmk-ui.js?v=76';
+
+const KC_TRNS = 0x0001;
 
 /** The layer byte of the [def, layer] frames; ignored by v19+ firmware. */
 const UNIVERSAL_LAYER = 0;
@@ -61,11 +63,7 @@ export class CornerTab {
     }
 
     _pick(def) {
-        pickKeycode({
-            value: this.outputs[def] ?? 0,
-            title: `Chord: ${ccDefName(def)}`,
-            onPick: (kc) => this._set(def, kc),
-        });
+        pickKey(this.app, 'qmk.cornerChord', this.outputs[def] ?? 0, `Chord: ${ccDefName(def)}`, (kc) => this._set(def, kc));
     }
 
     /** Bind a chord. KC_TRNS (or Clear) unbinds it. The SET persists itself. */
@@ -92,8 +90,8 @@ export class CornerTab {
         const kc = this.outputs[def] ?? 0;
         const unbound = !kc || kc === KC_TRNS;
         const where = members.map((p) => `r${ccRow(p)}c${ccCol(p)}`).join(' + ');
-        const cell = kcCell(unbound ? 0 : kc, () => this._pick(def),
-            `${ccDefName(def)} (${where})${unbound ? ': unassigned, click to bind' : ` → ${kcText(kc)}`}`);
+        const cell = bindingCell(unbound ? 0 : kc, () => this._pick(def),
+            `${ccDefName(def)} (${where})${unbound ? ': unassigned, click to bind' : ` → ${bindingText(kc)}`}`);
         cell.style.width = '64px';
         cell.dataset.def = String(def);
         if (unbound) { cell.textContent = '+'; cell.style.opacity = '0.4'; }

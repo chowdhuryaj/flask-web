@@ -2,21 +2,29 @@
 // parameters (spec §4.3–4.4). Device behaviors map onto entries; variants
 // (timing, smart mode, live hold-tap) become parameters.
 //
-// Two adapters speak the same entries (binding-picker.js SURFACES):
+// Three adapters speak the same entries (binding-picker.js SURFACES):
 //   'zmk-studio' {behaviorId, param1, param2}, a Studio binding
 //   'zmk-typed'  {action, param1, behaviorId?, param2?} slot vocabulary
 //                (0 none · 1 usage · 2 macro slot · 3 behavior)
+//   'qmk'        number, a QMK u16 keycode (Svalboard, Vial)
 //
 // Param value spaces:
-//   key    HID keyboard usage id (0x04…0xE7). A usage on another page keeps
-//          its page: (page << 16) | id.
+//   key    HID keyboard usage id (0x04…0xE7), the same number QMK uses for
+//          basic keycodes. A ZMK usage on another page keeps its page:
+//          (page << 16) | id.
 //   mods   8-bit mask, ZMK layout: L ⌃⇧⌥⌘ = 0x01 0x02 0x04 0x08, R = << 4.
-//   layer  the stable Studio layer id.
+//          QMK stores 5 bits (4 mods + a right-hand flag); mixing left and
+//          right there keeps the right-hand set.
+//   layer  ZMK: the stable Studio layer id. QMK: the layer index.
 //   slot   macro / tap-dance slot index.
 //   code   a code from the entry's option list (media, mouse, lighting).
-//   timing ms (TIMING_PARAM).
+//   timing ms (TIMING_PARAM). ZMK only; QMK uses the global tapping term.
 
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=76';
+import {
+    basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols,
+    R, mediaKeys, mouseKeys, rgbKeys, deviceCustoms, macroKeys, lookup, capLabel, describe,
+} from './keycodes.js?v=76';
+import { isQmkFamily } from './boards.js?v=76';
 import {
     zmkBehaviors, zmkLayers, layerNameIn, layerLabel, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
@@ -244,6 +252,7 @@ export const CATALOG = [
         ['Sticky Key', { name: 'Sticky Mod (smart)', set: { mode: 'smart' } }], { tag: 'One-shot' }),
     E('caps-word', 'modifiers', 'Caps word', 'Caps until a non-letter.', [], ['Caps Word'], { tag: 'Caps word' }),
     E('repeat', 'modifiers', 'Repeat key', 'Repeats the last key.', [], ['Key Repeat'], { tag: 'Repeat' }),
+    E('alt-repeat', 'modifiers', 'Alt repeat', "Repeats the last key's opposite.", [], [], { tag: 'Alt rep' }),
     E('key-toggle', 'modifiers', 'Key toggle', 'Holds a key down until pressed again.',
         [{ key: 'key', kind: 'key' }, { key: 'mods', kind: 'mods', default: 0 }], ['Key Toggle'], { tag: 'Toggle' }),
     E('swapper', 'modifiers', 'Swapper', 'Hold to cycle windows (⌘-Tab style).', [], ['Swapper'], { tag: 'Swapper' }),
@@ -257,9 +266,12 @@ export const CATALOG = [
         [{ key: 'layer', kind: 'layer', default: 1 }, { key: 'tap', kind: 'key' }, { ...TIMING_PARAM }], ['Layer-Tap', 'Layer Tap'], { tag: 'Layer-tap' }),
     E('to-layer', 'layers', 'Switch to layer', 'Turns this layer on, others off.', [{ key: 'layer', kind: 'layer' }], ['To Layer'], { tag: 'Switch' }),
     E('toggle-layer', 'layers', 'Toggle layer', 'Layer on/off with each press.', [{ key: 'layer', kind: 'layer' }], ['Toggle Layer'], { tag: 'Toggle' }),
+    E('tap-toggle', 'layers', 'Tap-toggle layer', 'Hold = on while held; tap ×5 = toggle.', [{ key: 'layer', kind: 'layer' }], [], { tag: 'Tap-toggle' }),
     E('one-shot-layer', 'layers', 'One-shot layer', 'Next key comes from the layer.',
         [{ key: 'layer', kind: 'layer' }, MODE_PARAM], ['Sticky Layer', { name: 'Sticky Layer (smart)', set: { mode: 'smart' } }], { tag: 'One-shot' }),
     E('smart-layer', 'layers', 'Smart layer', 'Hold = one-shot layer, tap = toggle.', [{ key: 'layer', kind: 'layer' }], ['Smart Layer'], { tag: 'Smart' }),
+    E('default-layer', 'layers', 'Default layer', 'Sets the base layer.', [{ key: 'layer', kind: 'layer' }], [], { tag: 'Default' }),
+    E('layer-lock', 'layers', 'Layer lock', 'Keeps the current layer on.', [], [], { tag: 'Lock layer' }),
     E('num-word', 'layers', 'Num word', 'Number layer until a non-number.', [{ key: 'layer', kind: 'layer' }], ['Num Word'], { tag: 'Num word' }),
 
     E('mouse-key', 'mouse', 'Mouse button / move / wheel', 'Mouse keys.', [{ key: 'code', kind: 'choice' }],
@@ -271,6 +283,7 @@ export const CATALOG = [
     E('media-key', 'media', 'Media key', 'Play, volume, brightness…', [{ key: 'code', kind: 'choice' }], [], { tag: '', rides: 'key' }),
     E('lighting', 'media', 'Lighting', 'RGB controls.', [{ key: 'code', kind: 'choice' }], ['Flask RGB'], { tag: 'RGB' }),
     E('underglow', 'media', 'Underglow', 'Underglow lighting controls.', [{ key: 'code', kind: 'choice' }], ['RGB Underglow', 'Underglow'], { tag: 'Underglow' }),
+    E('device-key', 'media', 'Device keys', 'Keys this firmware adds: DPI, drag scroll, select word…', [{ key: 'code', kind: 'choice' }], [], { tag: '' }),
     E('bluetooth', 'media', 'Bluetooth', 'Pick, clear or step through Bluetooth hosts.',
         [{ key: 'code', kind: 'choice' }, { key: 'profile', kind: 'num', min: 0, max: 4, default: 0 }], ['Bluetooth'], { tag: 'BT' }),
     E('output', 'media', 'Output', 'Send keys over USB or Bluetooth.', [{ key: 'code', kind: 'choice' }], ['Output Selection'], { tag: 'Output' }),
@@ -290,6 +303,12 @@ export const CATALOG = [
 const BY_ID = new Map(CATALOG.map((e) => [e.id, e]));
 export const entryById = (id) => BY_ID.get(id) ?? null;
 
+// Entries a QMK keycode can store at all (before device narrowing).
+const QMK_IDS = new Set(['key', 'trans', 'none', 'mod-tap', 'one-shot-mod', 'caps-word', 'repeat', 'alt-repeat',
+    'grave-escape', 'hold-layer', 'layer-tap', 'to-layer', 'toggle-layer', 'tap-toggle', 'one-shot-layer',
+    'default-layer', 'layer-lock', 'mouse-key', 'media-key', 'lighting', 'device-key', 'reset', 'bootloader',
+    'macro', 'tap-dance', 'leader', 'advanced']);
+
 // ---------------------------------------------------------------------------
 // Mods
 
@@ -300,6 +319,9 @@ export function modsText(mask) {
     const l = side(mask & 0xF), r = side((mask >> 4) & 0xF);
     return l + (r ? 'R' + r : '');
 }
+// QMK 5-bit mods (bit 4 = right hand) <-> the 8-bit mask.
+const q5ToMask = (b) => ((b & 0x10) ? (b & 0xF) << 4 : b & 0xF);
+const maskToQ5 = (m) => ((m & 0xF0) ? ((m >> 4) & 0xF) | 0x10 : m & 0xF);
 
 // ZMK: a mods mask as one usage — lowest mod as the key, the rest as
 // implicit-modifier bits.
@@ -397,7 +419,7 @@ const rangeOf = (d, which = 'param1') => md(d, which).find((x) => x.kind === 'ra
 // catalogFor
 
 function adapterForApp(app) {
-    return app?.adapter ?? 'zmk-studio';
+    return app?.adapter ?? (isQmkFamily(app?.family) ? 'qmk' : 'zmk-studio');
 }
 
 const choice = (key, options, labels, def = options[0]) => ({ key, kind: 'choice', options, labels, default: def });
@@ -414,8 +436,49 @@ const codeChoices = (list) => choice('code', list.map((k) => k.code), Object.fro
  */
 export function catalogFor(app) {
     const adapter = adapterForApp(app);
-    const out = zmkCatalog(app);
+    const out = adapter === 'qmk' ? qmkCatalog(app) : zmkCatalog(app);
     out.adapter = adapter;
+    return out;
+}
+
+// QMK layer names (the Svalboard keymap tab sets them, like setZmkContext).
+let qmkNames = [];
+/** Layer names the 'qmk' legends and pickers show ('' / missing = "L3"). */
+export function setQmkLayerNames(names) { qmkNames = [...(names ?? [])]; }
+const qmkLayerName = (l) => qmkNames[l] || `L${l}`;
+
+function qmkCatalog(app) {
+    const layers = Math.max(1, app?.layerCount || 16);
+    const names = app?.profile?.layerNames ?? qmkNames;
+    const layerParam = (p, n) => {
+        const ids = Array.from({ length: n }, (_, i) => i);
+        return { ...p, min: 0, max: n - 1, options: ids, labels: Object.fromEntries(ids.map((i) => [i, names[i] || `Layer ${i}`])) };
+    };
+    const out = [];
+    for (const e of CATALOG) {
+        if (!QMK_IDS.has(e.id)) continue;
+        let params = e.params.filter((p) => !['timing', 'mode', 'live'].includes(p.key));
+        // LT() holds a 4-bit layer; the others 5 bits.
+        params = params.map((p) => (p.kind === 'layer' ? layerParam(p, Math.min(layers, e.id === 'layer-tap' ? 16 : 32)) : p));
+        if (e.id === 'mouse-key') params = [codeChoices(mouseKeys)];
+        if (e.id === 'media-key') params = [codeChoices(mediaKeys)];
+        if (e.id === 'lighting') params = [codeChoices(rgbKeys)];
+        if (e.id === 'device-key') params = [codeChoices(deviceCustoms())];
+        if (e.id === 'macro') {
+            const n = macroKeys(app?.macroCount ?? 0).length;
+            if (!n) continue;
+            params = [{ key: 'slot', kind: 'slot', min: 0, max: n - 1, default: 0 }];
+        }
+        if (e.id === 'tap-dance') {
+            const n = app?.tapDanceCount ?? 0;
+            if (!n) continue;
+            params = [{ key: 'slot', kind: 'slot', min: 0, max: n - 1, default: 0 }];
+        }
+        const extra = (e.id === 'mod-tap' || e.id === 'layer-tap') ? { note: 'Tapping term: global (Device › Settings).' }
+            : e.id === 'advanced' ? { name: 'Raw keycode', desc: 'Any QMK keycode, by its hex value.' } : {};
+        out.push({ ...e, params, ...extra });
+    }
+    out.hidden = 0;
     return out;
 }
 
@@ -483,7 +546,7 @@ function zmkCatalog(app) {
 /** Which adapter a raw binding belongs to, when the caller does not say. */
 export function adapterOf(binding) {
     if (typeof binding === 'object' && binding) return 'behaviorId' in binding && !('action' in binding) ? 'zmk-studio' : 'zmk-typed';
-    return 'zmk-studio';
+    return typeof binding === 'number' ? 'qmk' : 'zmk-studio';
 }
 
 const adv = (raw, adapter) => ({ entryId: 'advanced', params: { raw, adapter } });
@@ -494,6 +557,7 @@ const adv = (raw, adapter) => ({ entryId: 'advanced', params: { raw, adapter } }
  * @returns {Decoded}
  */
 export function decode(binding, adapter = adapterOf(binding)) {
+    if (adapter === 'qmk') return decodeQmk((binding >>> 0) & 0xFFFF);
     if (adapter === 'zmk-typed') return decodeTyped(binding);
     return decodeStudio(binding);
 }
@@ -514,6 +578,7 @@ export function isRecursiveOutput(o) {
  * this adapter or device (e.g. Tap-toggle on ZMK). */
 export function encode(entryId, params = {}, adapter) {
     if (entryId === 'advanced') return params.raw;
+    if (adapter === 'qmk') return encodeQmk(entryId, params);
     if (adapter === 'zmk-typed') return encodeTyped(entryId, params);
     if (adapter === 'zmk-studio') return encodeStudio(entryId, params);
     throw new Error(`encode: unknown adapter ${adapter}`);
@@ -525,6 +590,65 @@ const P = (id, params) => {   // params with entry defaults filled in
     for (const p of entryById(id)?.params ?? []) if (p.default !== undefined) out[p.key] = p.default;
     return { ...out, ...params };
 };
+
+// ---- QMK ----
+// Every u16 decodes, and encode(decode(kc)) === kc for all 65536 (anything
+// the entries cannot express is 'advanced' with the raw keycode).
+
+const QMK_FIXED = new Map([
+    [0x0000, 'none'], [0x0001, 'trans'], [R.boot, 'bootloader'], [0x7C01, 'reset'], [0x7C16, 'grave-escape'],
+    [0x7C73, 'caps-word'], [0x7C79, 'repeat'], [0x7C7A, 'alt-repeat'], [0x7C7B, 'layer-lock'], [0x7C58, 'leader'],
+]);
+const QMK_FIXED_BY_ID = new Map([...QMK_FIXED].map(([k, v]) => [v, k]));
+const inSet = (list, kc) => list.some((k) => k.code === kc);
+
+function decodeQmk(kc) {
+    if (QMK_FIXED.has(kc)) return { entryId: QMK_FIXED.get(kc), params: {} };
+    if (kc <= 0xFF) {
+        if (inSet(mediaKeys, kc)) return { entryId: 'media-key', params: { code: kc } };
+        if (kc >= 0xCD && kc <= 0xDF) return { entryId: 'mouse-key', params: { code: kc } };
+        return { entryId: 'key', params: { key: kc, mods: 0 } };
+    }
+    const q5ok = (b) => (b & 0xF) !== 0;   // a right-hand flag with no mods is not a key we can show
+    if (kc <= 0x1FFF && (!(kc & 0xFF) || !q5ok(kc >> 8))) return adv(kc, 'qmk');
+    if (kc >= 0x2000 && kc <= 0x3FFF && !q5ok(kc >> 8)) return adv(kc, 'qmk');
+    if (kc >= R.oneShotModBase && kc < R.oneShotModBase + 0x20 && !q5ok(kc)) return adv(kc, 'qmk');
+    if (kc <= 0x1FFF) return { entryId: 'key', params: { key: kc & 0xFF, mods: q5ToMask((kc >> 8) & 0x1F) } };
+    if (kc <= 0x3FFF) return { entryId: 'mod-tap', params: { hold: q5ToMask((kc >> 8) & 0x1F), tap: kc & 0xFF } };
+    if (kc <= 0x4FFF) return { entryId: 'layer-tap', params: { layer: (kc >> 8) & 0xF, tap: kc & 0xFF } };
+    const L = (base, id) => (kc >= base && kc < base + 0x20 ? { entryId: id, params: { layer: kc - base } } : null);
+    const r = L(R.toBase, 'to-layer') ?? L(R.momentaryBase, 'hold-layer') ?? L(R.defLayerBase, 'default-layer')
+        ?? L(R.toggleLayerBase, 'toggle-layer') ?? L(R.oneShotLayerBase, 'one-shot-layer') ?? L(R.layerTapToggleBase, 'tap-toggle');
+    if (r) return r;
+    if (kc >= R.oneShotModBase && kc < R.oneShotModBase + 0x20) return { entryId: 'one-shot-mod', params: { mods: q5ToMask(kc & 0x1F) } };
+    if (kc >= R.tapDanceBase && kc <= R.tapDanceBase + 0xFF) return { entryId: 'tap-dance', params: { slot: kc & 0xFF } };
+    if (kc >= R.macroBase && kc <= R.macroMax) return { entryId: 'macro', params: { slot: kc - R.macroBase } };
+    if (inSet(rgbKeys, kc)) return { entryId: 'lighting', params: { code: kc } };
+    if (kc >= R.kbBase && kc <= R.kbBase + 0xFF) return { entryId: 'device-key', params: { code: kc } };
+    return adv(kc, 'qmk');
+}
+
+function encodeQmk(id, params) {
+    const p = P(id, params);
+    if (QMK_FIXED_BY_ID.has(id)) return QMK_FIXED_BY_ID.get(id);
+    const key = (k) => (k ?? 0) & 0xFF;
+    switch (id) {
+        case 'key': return p.mods ? ((maskToQ5(p.mods) << 8) | key(p.key)) : key(p.key);
+        case 'mod-tap': return R.modTapBase | (maskToQ5(p.hold) << 8) | key(p.tap);
+        case 'layer-tap': return R.layerTapBase | ((p.layer & 0xF) << 8) | key(p.tap);
+        case 'to-layer': return R.toBase | (p.layer & 0x1F);
+        case 'hold-layer': return R.momentaryBase | (p.layer & 0x1F);
+        case 'default-layer': return R.defLayerBase | (p.layer & 0x1F);
+        case 'toggle-layer': return R.toggleLayerBase | (p.layer & 0x1F);
+        case 'one-shot-layer': return R.oneShotLayerBase | (p.layer & 0x1F);
+        case 'tap-toggle': return R.layerTapToggleBase | (p.layer & 0x1F);
+        case 'one-shot-mod': return R.oneShotModBase | maskToQ5(p.mods);
+        case 'tap-dance': return R.tapDanceBase | (p.slot & 0xFF);
+        case 'macro': return R.macroBase + (p.slot & 0x7F);
+        case 'media-key': case 'mouse-key': case 'lighting': case 'device-key': return p.code;
+        default: return fail(id, 'qmk');
+    }
+}
 
 // ---- ZMK Studio ----
 
@@ -675,8 +799,13 @@ function encodeTyped(id, params) {
 // ---------------------------------------------------------------------------
 // Labels
 
-const layerText = (adapter, l) => layerNameNow(l);
+const layerText = (adapter, l) => (adapter === 'qmk' ? qmkLayerName(l) : layerNameNow(l));
 function keyCap(adapter, key, mods = 0) {
+    if (adapter === 'qmk') {
+        const kc = mods ? ((maskToQ5(mods) << 8) | (key & 0xFF)) : key;
+        if (lookup(kc)) return { top: '', main: capLabel(kc) };            // shifted symbols: '!'
+        return { top: modsText(mods), main: key ? capLabel(key & 0xFF) : '·' };
+    }
     return { top: modsText(mods), main: usageCap(keyToUsage(key, 0)) };
 }
 const codeLabel = (entry, code) => entry?.params?.find((p) => p.key === 'code')?.labels?.[code];
@@ -717,9 +846,14 @@ export function capParts(binding, adapter = adapterOf(binding)) {
         case 'adaptive': return { top: '', main: `AK${p.slot}` };
         case 'gesture': return { top: 'Gesture', main: p.slot === GESTURE_ACTIVE ? 'Active' : String(p.slot) };
         case 'media-key':
+            if (adapter === 'qmk') return { top: '', main: capLabel(p.code) };
             return { top: '', main: usageCap(((HID_PAGE_CONSUMER << 16) | p.code) >>> 0) };
-        case 'mouse-key': return { top: e.tag, main: MOUSE_BUTTON[p.code] ?? zmkConstName(binding, adapter) ?? String(p.code) };
+        case 'device-key': return { top: '', main: capLabel(p.code) };
+        case 'mouse-key':
+            if (adapter === 'qmk') return { top: '', main: capLabel(p.code) };
+            return { top: e.tag, main: MOUSE_BUTTON[p.code] ?? zmkConstName(binding, adapter) ?? String(p.code) };
         case 'lighting':
+            if (adapter === 'qmk') return { top: '', main: capLabel(p.code) };
             return { top: e.tag, main: zmkConstName(binding, adapter) ?? String(p.code) };
         case 'bluetooth': {
             const n = zmkConstName(binding, adapter) ?? String(p.code);
@@ -788,6 +922,7 @@ const MOUSE_BUTTON = { 1: 'Click', 2: 'Right click', 4: 'Middle click', 8: 'Back
 const fwLegend = (raw) => FW_LEGEND.get(behaviorsNow().get(raw?.behaviorId)?.displayName)?.(raw.param1 >>> 0, raw.param2 >>> 0);
 
 function advancedCap(raw, adapter) {
+    if (adapter === 'qmk') return capLabel(raw);
     if (adapter === 'zmk-typed' && raw?.action === 1) return usageCap(raw.param1);
     const d = behaviorsNow().get(raw?.behaviorId);
     return d?.displayName ? d.displayName.replace(/\s*\(.*\)$/, '').slice(0, 10) : `#${raw?.behaviorId ?? '?'}`;
@@ -800,6 +935,7 @@ export function describeBinding(binding, adapter = adapterOf(binding)) {
     const { top, main } = capParts(binding, adapter);
     if (entryId === 'key') return `${top}${main}`;
     if (entryId === 'advanced') {
+        if (adapter === 'qmk') return describe(binding);
         if (adapter === 'zmk-typed' && binding?.action === 1) return usageLabel(binding.param1);
         const d = behaviorsNow().get(binding?.behaviorId);
         const fw = fwLegend(binding);
@@ -866,6 +1002,22 @@ export function composeTapHold({ tap, hold, hand = null, timing } = {}, adapter)
     if (!hold) return { ok: false, message: 'Pick what HOLD does.' };
     if (hold.kind === 'mods' && !(hold.mods & 0xFF)) return { ok: false, message: 'Pick at least one modifier to hold.' };
     const tapMods = tap.mods & 0xFF;
+    const qmk = adapter === 'qmk';
+    if (qmk) {
+        const t = keyCap(adapter, tap.key, tapMods);
+        const tapText = t.top + t.main;
+        if (tap.key > 0xFF || tapMods) {
+            return { ok: false, fallback: 'tap-dance',
+                message: `QMK ${hold.kind === 'layer' ? 'LT()' : 'MT()'} can only tap a plain key; "${tapText}" carries a modifier or is not a basic key. Use a tap dance (tap ${tapText}, hold ${hold.kind === 'layer' ? 'the layer' : modsText(hold.mods ?? 0)}).` };
+        }
+        if (hold.kind === 'key') return { ok: false, fallback: 'tap-dance', message: 'QMK holds only modifiers or a layer. Holding a key needs a tap dance.' };
+        if (hold.kind === 'layer' && !(hold.layer >= 0 && hold.layer <= 15)) {
+            return { ok: false, fallback: 'tap-dance', message: `QMK LT() reaches layers 0–15 only. Layer ${hold.layer} needs a tap dance.` };
+        }
+        if (hold.kind === 'mods' && (hold.mods & 0x0F) && (hold.mods & 0xF0)) {
+            return { ok: false, message: 'QMK MT() holds left or right modifiers, not both. Pick one side.' };
+        }
+    }
     const isStudio = adapter === 'zmk-studio';
     let entryId, params;
     if (hold.kind === 'layer') {
@@ -878,11 +1030,12 @@ export function composeTapHold({ tap, hold, hand = null, timing } = {}, adapter)
             : { hold: hold.mods & 0xFF, tap: tap.key, ...(tapMods ? { tapMods } : {}) };
         if (isStudio) params.live = liveSideFor(hand);
     }
-    params.timing = timing ?? TIMING_PARAM.default;
+    if (!qmk) params.timing = timing ?? TIMING_PARAM.default;
     let value;
     try { value = encode(entryId, params, adapter); } catch {
         return { ok: false, message: `This keyboard has no ${entryId === 'layer-tap' ? 'layer-tap' : 'mod-tap'} behavior for this slot.` };
     }
+    if (qmk) return { ok: true, value, entryId, params, via: entryId === 'layer-tap' ? 'LT()' : 'MT()' };
     const bid = adapter === 'zmk-typed' ? value.behaviorId : value?.behaviorId;
     const via = behaviorsNow().get(bid)?.displayName ?? '';
     return { ok: true, value, entryId, params, via };

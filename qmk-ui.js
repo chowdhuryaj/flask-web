@@ -1,110 +1,46 @@
 // Shared bits for the Svalboard (QMK line) tabs, drawn with the os-keys
 // shell's own pieces (ui.js card / row / btn / modal). Replaces the deleted
-// tiles.js + picker.js without their tile styling.
-//
-// PHASE A STAND-IN: QMK keycodes (u16) show as names for the basic HID range
-// (plus Ctrl/Shift/Alt/GUI wraps) and hex otherwise, and are picked by typing
-// a name or a hex value. Phase B threads a 'qmk' adapter through
-// behavior-catalog / binding-picker / keycodes.js and replaces kcText,
-// kcCell and pickKeycode with the real picker surfaces (qmk.key,
-// qmk.comboOutput, qmk.tapDanceStep, qmk.keyOverride, qmk.cornerChord,
-// qmk.macroKey, qmk.leaderKey, qmk.cskBase, qmk.cskShifted).
+// tiles.js + picker.js without their tile styling. Keycodes are shown and
+// picked through the one picker (binding-picker.js, 'qmk' adapter): the
+// surfaces are qmk.key, qmk.comboOutput, qmk.tapDanceStep, qmk.keyOverride,
+// qmk.cornerChord, qmk.macroKey, qmk.leaderKey, qmk.cskBase, qmk.cskShifted.
 
 import { el, toast, modal } from './ui.js?v=76';
-import { basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols } from './keycodes.js?v=76';
+import { openPicker, renderBindingCell } from './binding-picker.js?v=76';
+import { describeBinding } from './behavior-catalog.js?v=76';
+import { board } from './board.js?v=76';
+import { registerSummary, installSlotSummary } from './zmk-behaviour-common.js?v=76';
+import { isQmkFamily } from './boards.js?v=76';
 
-export const KC_TRNS = 0x0001;
+/** One-line text for a keycode ('' when unset), the picker's words. */
+export const bindingText = (kc) => (kc ? describeBinding(kc, 'qmk') : '');
 
-const BY_CODE = new Map();
-const BY_NAME = new Map();
-for (const k of [...basicKeys, ...navKeys, ...fKeys, ...numpadKeys, ...intlKeys, ...shiftedSymbols]) {
-    if (!BY_CODE.has(k.code)) BY_CODE.set(k.code, k);
-    for (const n of [k.label, k.cap]) if (n && !BY_NAME.has(n.toLowerCase())) BY_NAME.set(n.toLowerCase(), k.code);
-}
-BY_NAME.set('trns', KC_TRNS).set('transparent', KC_TRNS).set('▽', KC_TRNS);
-BY_NAME.set('none', 0).set('no', 0);
-
-// QMK mod wrappers: 0x0100 Ctrl, 0x0200 Shift, 0x0400 Alt, 0x0800 GUI, 0x1000 = right-hand.
-const MOD_GLYPHS = [[0x0100, '⌃'], [0x0200, '⇧'], [0x0400, '⌥'], [0x0800, '⌘']];
-
-/** Short text for a QMK keycode ('' when unset). */
-export function kcText(kc) {
-    if (!kc) return '';
-    if (kc === KC_TRNS) return '▽';
-    const hex = `0x${kc.toString(16).padStart(4, '0')}`;
-    if (BY_CODE.has(kc)) return BY_CODE.get(kc).cap;
-    if (kc < 0x2000) {
-        const base = BY_CODE.get(kc & 0xFF)?.cap;
-        if (!base) return hex;
-        const mods = MOD_GLYPHS.filter(([bit]) => kc & bit).map(([, g]) => g).join('');
-        return `${kc & 0x1000 ? 'R' : ''}${mods}${base}`;
-    }
-    return hex;
+/** Small clickable keycode cell; a mod-tap / layer-tap shows HOLD and TAP. */
+export function bindingCell(kc, onClick, title) {
+    const b = el('button', { class: 'btn small mono', type: 'button', title: title ?? (bindingText(kc) || 'empty'), onclick: onClick });
+    b.append(kc ? renderBindingCell(kc, 'qmk') : '·');
+    return b;
 }
 
-/** Long text for titles: name plus the raw value. */
-export function kcTitle(kc) {
-    if (!kc) return 'empty';
-    const k = BY_CODE.get(kc);
-    return `${k ? k.label : kcText(kc)} (0x${kc.toString(16).padStart(4, '0')})`;
+/** Open the picker as a sheet on a QMK surface; onPick gets a u16. */
+export function pickKey(app, surface, value, title, onPick) {
+    return openPicker({ surface, value: value || null, host: 'sheet', title, app, onPick });
 }
 
-/** Parse what pickKeycode accepts: '0x2a', '42', a key name ('A', 'Esc',
- * 'Backspace'), or a name with mod prefixes 'C-', 'S-', 'A-', 'G-'. Returns
- * a u16 or null. */
-export function parseKeycode(text) {
-    let t = String(text ?? '').trim();
-    if (!t) return 0;
-    if (/^0x[0-9a-f]{1,4}$/i.test(t)) return parseInt(t.slice(2), 16);
-    if (/^[0-9]+$/.test(t) && t.length > 1) { const n = Number(t); return n <= 0xFFFF ? n : null; }
-    let mods = 0;
-    const MOD = { c: 0x0100, s: 0x0200, a: 0x0400, g: 0x0800 };
-    while (/^[csag]-./i.test(t)) { mods |= MOD[t[0].toLowerCase()]; t = t.slice(2); }
-    const code = BY_NAME.get(t.toLowerCase());
-    if (code == null) return null;
-    return mods ? (mods | (code & 0xFF)) : code;
+/** Paste a keycode (M n, TD(n)) onto the key selected on the board, no
+ * auto-advance (a slot is a one-off, not a typing run). */
+export async function pasteToKey(kc) {
+    if (!board.selectedKey()) { toast('Select a key on the board first'); return false; }
+    return board.assign(kc, { advance: false });
 }
 
-/** Small clickable keycode cell. */
-export function kcCell(kc, onClick, title) {
-    return el('button', {
-        class: 'btn small mono', type: 'button', title: title ?? kcTitle(kc),
-        text: kc ? kcText(kc) : '·', onclick: onClick,
-    });
-}
-
-/** Keycode entry sheet (Phase A stand-in for the QMK picker surfaces).
- * onPick(kc) gets a u16; Clear picks 0. */
-export function pickKeycode({ title = 'Pick a key', value = 0, onPick }) {
-    const input = el('input', {
-        type: 'text', value: value ? (BY_CODE.get(value)?.label ?? `0x${value.toString(16).padStart(4, '0')}`) : '',
-        placeholder: 'A, Esc, Backspace, C-A, 0x2A', style: 'width:100%',
-    });
-    const out = el('div', { class: 'note faint' });
-    const show = () => {
-        const kc = parseKeycode(input.value);
-        out.textContent = kc == null ? 'Not a key name or hex value' : kc ? `→ ${kcTitle(kc)}` : 'empty';
-    };
-    input.addEventListener('input', show);
-    let back;
-    const commit = async (kc) => {
-        if (kc == null) { toast('Not a key name or hex value (try 0x2A)', true); return; }
-        back.remove();
-        await onPick(kc);
-    };
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') commit(parseKeycode(input.value));
-        else if (e.key === 'Escape') back.remove();
-    });
-    back = modal(title, el('div', {}, input, out,
-        el('div', { class: 'note faint', text: 'Type a key name or a raw QMK keycode. The full key picker for the Svalboard comes with the keymap editor.' })), [
-        el('button', { class: 'btn', text: 'Cancel', onclick: () => back.remove() }),
-        el('button', { class: 'btn', text: 'Clear', onclick: () => commit(0) }),
-        el('button', { class: 'btn primary', text: 'Set', onclick: () => commit(parseKeycode(input.value)) }),
-    ]);
-    show();
-    input.focus();
-    return back;
+/** Register summary(slot) → text for a catalog entry id ('macro',
+ * 'tap-dance'): the picker's slot chips read app.slotSummary. One registry
+ * with the ZMK tabs (zmk-behaviour-common.js); a Svalboard reader goes quiet
+ * once another board connects, until that board's tab registers its own. */
+export function addSummary(app, entryId, fn) {
+    registerSummary(entryId, (i) => (isQmkFamily(app.family) ? fn(i) : ''));
+    installSlotSummary(app);
 }
 
 /** Announce a live write so the nearest card's reload bar registers its
@@ -124,11 +60,14 @@ export function reloadRow(reload, note) {
         note ? el('span', { class: 'note', text: note }) : null);
 }
 
-/** One slot as a row: name, summary, Edit. */
-export function slotRow({ name, sub = '', empty = false, onEdit }) {
-    return el('div', { class: 'row', style: empty ? 'opacity:0.6' : '' },
+/** One slot as a row: name, summary, Edit, and (keymap slots) Paste onto
+ * the selected key. */
+export function slotRow({ name, sub = '', empty = false, onEdit, onPaste }) {
+    return el('div', { class: 'row' + (empty ? ' faint' : ''), 'data-slot': name },
         el('span', { class: 'lbl' }, el('b', { text: name }), el('span', { class: 'hint', text: sub || 'empty' })),
         el('span', { style: 'flex:1' }),
+        onPaste ? el('button', { class: 'btn small', text: 'Paste on key', 'data-paste': name,
+            title: `Put ${name} on the key selected on the board`, onclick: onPaste }) : null,
         el('button', { class: 'btn small', text: 'Edit', title: `Edit ${name}`, onclick: onEdit }));
 }
 

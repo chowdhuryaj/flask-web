@@ -7,7 +7,7 @@
 
 import { el, card, sliderRow, toast, reloadBar } from './ui.js?v=76';
 import { CH_QMK, V_QMK, slot, SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS } from './flaskproto.js?v=76';
-import { announceEdit, kcCell, pickKeycode } from './qmk-ui.js?v=76';
+import { announceEdit, bindingCell, pickKey } from './qmk-ui.js?v=76';
 
 const OUTPUT_KEYCODE = 0;   // flask_output_kind FLASK_OUT_KEYCODE
 
@@ -37,17 +37,14 @@ export class QmkLeaderTab {
         this.render();
     }
 
-    /** Keycode cell: opens the key sheet, writes, announces the edit. */
-    _kc(kc, title, write) {
-        const cell = kcCell(kc, () => pickKeycode({
-            value: kc, title,
-            onPick: async (picked) => {
-                try {
-                    await write(picked);
-                    announceEdit(cell);
-                    this.render();
-                } catch (e) { toast(`Write failed: ${e.message}`, true); }
-            },
+    /** Keycode cell: opens the picker on `surface`, writes, announces the edit. */
+    _kc(kc, surface, title, write) {
+        const cell = bindingCell(kc, () => pickKey(this.app, surface, kc, title, async (picked) => {
+            try {
+                await write(picked);
+                announceEdit(cell);
+                this.render();
+            } catch (e) { toast(`Write failed: ${e.message}`, true); }
         }));
         return cell;
     }
@@ -74,11 +71,11 @@ export class QmkLeaderTab {
             }
             const row = el('div', { class: 'row', 'data-seq': seq, style: 'gap:2px' },
                 el('span', { class: 'faint', style: 'width:24px', text: `${seq + 1}.` }));
-            q.keys.forEach((kc, pos) => row.append(this._kc(kc, `Sequence ${seq + 1}, key ${pos + 1}`, async (v) => {
+            q.keys.forEach((kc, pos) => row.append(this._kc(kc, 'qmk.leaderKey', `Sequence ${seq + 1}, key ${pos + 1}`, async (v) => {
                 await flask.setU16(CH_QMK.leader, slot.superLeader(seq, pos), v);
                 q.keys[pos] = v;
             })));
-            row.append('→', this._kc(q.out, `Sequence ${seq + 1} output`, async (v) => {
+            row.append('→', this._kc(q.out, 'qmk.comboOutput', `Sequence ${seq + 1} output`, async (v) => {
                 // A stale snippet kind (pre-v18 datablock) would compact the row out.
                 if (q.kind !== OUTPUT_KEYCODE) q.kind = await flask.setU16(CH_QMK.leader, slot.superLeader(seq, SL_KIND_POS), OUTPUT_KEYCODE);
                 await flask.setU16(CH_QMK.leader, slot.superLeader(seq, SL_OUT_POS), v);

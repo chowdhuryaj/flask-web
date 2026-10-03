@@ -545,7 +545,8 @@ class Board extends EventTarget {
     async dropOn(sel, text) {
         let binding;
         try { binding = JSON.parse(text); } catch { return false; }
-        if (!binding || typeof binding !== 'object' || this.#a?.readOnly || this.#pick) return false;
+        // Studio bindings are objects, QMK keycodes numbers (0 = KC_NO); the adapter vets the rest.
+        if (binding == null || !['object', 'number'].includes(typeof binding) || this.#a?.readOnly || this.#pick) return false;
         if (this.#a?.validBinding && !this.#a.validBinding(binding)) return false;   // foreign drag: ignore
         this.#sel = sel;
         this.#renderBoard();

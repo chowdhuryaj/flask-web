@@ -9,7 +9,8 @@
 //
 // `layers`    [{index, id?, name, empty?}] (adapter.layers(); a binding's layer
 //             param is the layer ID, which is the array index unless `id` says so)
-// `keys`      profile keys ({row, col}); the public position is `col`
+// `keys`      profile keys ({row, col}); the public position is `col`, or
+//             `posOf(key)` (QMK: the board's flat key index)
 // `bindingAt` (layerIndex, {kind:'key', row, col}) → binding
 // `combos` [{positions, binding}] (Studio-shaped bindings) count as ways in too:
 // AJ's Totem reaches Control, Fn and Sym through combos. Leader sequences,
@@ -19,7 +20,7 @@
 import { decode } from './behavior-catalog.js?v=76';
 import { layerCodeOf } from './legend.js?v=76';
 
-export function layerIndex({ layers, keys, bindingAt, combos = [], adapter = 'zmk-studio' }) {
+export function layerIndex({ layers, keys, bindingAt, combos = [], adapter = 'zmk-studio', posOf = (k) => k.col }) {
     const byId = new Map(layers.map((l) => [l.id ?? l.index, l.index]));
     const rows = layers.map((l) => ({ index: l.index, id: l.id ?? l.index, name: l.name, always: l.index === 0, activators: [] }));
     let unnamed = 0;
@@ -39,7 +40,7 @@ export function layerIndex({ layers, keys, bindingAt, combos = [], adapter = 'zm
             if (!code || d.params.layer == null) continue;
             const target = byId.get(d.params.layer);
             if (target == null) continue;
-            rows[target].activators.push({ layer: src.index, layerName: src.name, pos: k.col, code });
+            rows[target].activators.push({ layer: src.index, layerName: src.name, pos: posOf(k), code });
         }
     }
     const problems = [];

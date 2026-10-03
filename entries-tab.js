@@ -2,19 +2,15 @@
 // masks, 0x20), Key Overrides, one row per slot with a sheet editor. Port of
 // AdeptCompanion TapDanceComboViews.swift + KeyOverrideView.swift over the LE
 // codecs in vialproto.js. Entry writes need NO unlock (unlike macros) and
-// apply at once. Pasting TD(n) onto a key is the keymap editor's (Phase B).
+// apply at once. A tap dance row pastes TD(n) onto the selected board key.
 
 import { el, card, toast, reloadBar } from './ui.js?v=76';
 import { TapDance, Combo, KeyOverride } from './vialproto.js?v=76';
 import { CH_QMK, slot } from './flaskproto.js?v=76';
-import { modsText } from './behavior-catalog.js?v=76';
-import { kcCell, kcText, pickKeycode, openSheet, reloadRow, slotRow } from './qmk-ui.js?v=76';
+import { modsText, encode } from './behavior-catalog.js?v=76';
+import { bindingCell, bindingText, pickKey as pick, pasteToKey, addSummary, openSheet, reloadRow, slotRow } from './qmk-ui.js?v=76';
 
-// Phase A: every surface is the typed keycode sheet (qmk-ui.js).
-const pick = (_app, _surface, value, title, onPick) => pickKeycode({ value, title, onPick });
-const cap = kcText;
-const bindingCell = kcCell;
-const bindingText = kcText;
+const cap = bindingText;
 const clearBtn = (onclick) => el('button', { class: 'btn small', text: '✕', title: 'Clear', onclick });
 
 // ---------- tap dance ----------
@@ -36,6 +32,7 @@ export class TapDanceTab {
         const { vial } = this.app;
         this.count = (await vial.dynamicEntryCounts()).tapDance;
         this.app.tapDanceCount = this.count;   // WP3 picker: TD slot range
+        addSummary(this.app, 'tap-dance', (i) => tdSummary(this.entries?.[i]));
         this.entries = [];
         for (let i = 0; i < this.count; i++) this.entries.push(await vial.tapDanceGet(i));
         this.render();
@@ -76,6 +73,7 @@ export class TapDanceTab {
             el('div', {}, ...this.entries.map((e, i) => slotRow({
                 name: `TD${i}`, sub: tdSummary(e), empty: TapDance.isEmpty(e),
                 onEdit: () => this.edit(i),
+                onPaste: () => pasteToKey(encode('tap-dance', { slot: i }, 'qmk')),
             }))),
             reloadRow(() => this.load(), 'Tap dance writes are saved to the keyboard at once.')));
     }

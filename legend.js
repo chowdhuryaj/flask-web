@@ -4,6 +4,7 @@
 // violet, transparent / none = dim grey.
 //
 //   legendOf(value, adapter = 'zmk-studio') → {main, sub, kind, subKind}
+//     adapter  'zmk-studio' | 'zmk-typed' | 'qmk' (a Svalboard u16 keycode)
 //     kind     'plain' | 'layer' | 'hold' | 'mod' | 'macro' | 'dim'
 //     subKind  colour of the sub-label: 'layer' | 'hold' | 'dim' | ''
 //
@@ -14,7 +15,7 @@ import { zmkBehaviors } from './zmk-keycodes.js?v=76';
 
 const LAYER_CODE = {
     'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl',
-    'smart-layer': 'smart', 'num-word': 'num',
+    'smart-layer': 'smart', 'num-word': 'num', 'tap-toggle': 'tt', 'default-layer': 'df',
 };
 const MACRO_LIKE = new Set(['macro', 'tap-dance', 'leader', 'gesture', 'adaptive']);
 

@@ -4,7 +4,7 @@
 
 import { el, card, toast, toggleRow, reloadBar } from './ui.js?v=76';
 import { CH_QMK, V_QMK, slot, CSK_SLOTS } from './flaskproto.js?v=76';
-import { kcCell as bindingCell, pickKeycode } from './qmk-ui.js?v=76';
+import { bindingCell, pickKey } from './qmk-ui.js?v=76';
 
 // Spec 3.8 presets: base → what Shift+base types.
 const PRESETS = [
@@ -57,17 +57,15 @@ export class QmkShiftTab {
     _pick(i, which) {
         const isBase = which === 'base';
         const value = isBase ? this.keys[i] : this.shifted[i];
-        pickKeycode({
-            value,
-            title: isBase ? `Shift pair ${i + 1}: key` : `Shift pair ${i + 1}: types when shifted`,
-            onPick: async (kc) => {
+        pickKey(this.app, isBase ? 'qmk.cskBase' : 'qmk.cskShifted', value,
+            isBase ? `Shift pair ${i + 1}: key` : `Shift pair ${i + 1}: types when shifted`,
+            async (kc) => {
                 // A new pair needs both halves; keep the other half as it is.
                 if (await this._write(i, isBase ? kc : this.keys[i], isBase ? this.shifted[i] : kc)) {
                     this.bar.markEdited();
                     this.render();
                 }
-            },
-        });
+            });
     }
 
     async _preset([, base, shifted]) {

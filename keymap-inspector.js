@@ -15,13 +15,15 @@ import { el, toast } from './ui.js?v=76';
 import { board } from './board.js?v=76';
 import { legendOf } from './legend.js?v=76';
 import { layerIndex } from './keymap-layers.js?v=76';
-import { surfaceEntries } from './binding-picker.js?v=76';
+import { SURFACES, surfaceEntries } from './binding-picker.js?v=76';
+import { keySurfaceOf } from './boards.js?v=76';
+import { describe as qmkDescribe, hex } from './keycodes.js?v=76';
 import { keyTimingCard } from './zmk-holdtiming-card.js?v=76';
 import { zmkBehaviors } from './zmk-keycodes.js?v=76';
 import { timingBackendNow, TIMING_PARAM, HOLDTAP, decode, encode, composeTapHold, tapHoldSpecOf,
     homeRowPlan, holdTapParts, modsText } from './behavior-catalog.js?v=76';
 
-const ADAPTER = 'zmk-studio';
+const ADAPTER = 'zmk-studio';   // inspectorModel's default; the inspector follows the board line
 const MODS = [['Ctl', '⌃', 0x01], ['Sft', '⇧', 0x02], ['Alt', '⌥', 0x04], ['Gui', '⌘', 0x08]];
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
 export const SHORTCUTS = [
@@ -49,6 +51,9 @@ export function inspectorModel(binding, adapter = ADAPTER) {
 }
 
 export function createInspector({ app, dock }) {
+    const surface = keySurfaceOf(app);       // 'zmk.key' | 'qmk.key'
+    const AD = SURFACES[surface].adapter;
+    const qmk = AD === 'qmk';
     const ac = new AbortController();     // board listeners die with the inspector
     const root = el('div', { class: 'insp', 'data-view': 'default' });
     // Local UI state that is not (yet) in the binding.
@@ -61,7 +66,9 @@ export function createInspector({ app, dock }) {
     const adapter = () => board.adapter;
     const sel = () => board.selectedKey();
     const layerName = (i) => adapter()?.layers().find((l) => l.index === i)?.name ?? `Layer ${i}`;
-    const entries = () => surfaceEntries('zmk.key', app);
+    const entries = () => surfaceEntries(surface, app);
+    // QMK adapters name their keys ("Left index · North"); ZMK keys are numbers.
+    const keyTitle = (pos) => adapter()?.keyTitle?.(pos) ?? `Key ${pos}`;
     const hasEntry = (id) => entries().some((e) => e.id === id);
     const layerChoices = () => {
         const e = entries().find((x) => x.id === 'layer-tap');
@@ -75,45 +82,45 @@ export function createInspector({ app, dock }) {
     const put = (value) => board.assign(value, { advance: false });
 
     async function applyHold(next) {
-        const m = inspectorModel(board.bindingOf());
+        const m = inspectorModel(board.bindingOf(), AD);
         if (!m.tap) { msg = 'Pick the tap key first: click a key tile, or use Press a key.'; render(); return; }
         const pos = sel()?.pos;
         if (!next || (next.kind === 'mods' && !next.mods)) {
-            await put(encode('key', { key: m.tap.key, mods: m.tap.mods ?? 0 }, ADAPTER));
+            await put(encode('key', { key: m.tap.key, mods: m.tap.mods ?? 0 }, AD));
             return;
         }
         const hold = next.kind === 'mods' ? { kind: 'mods', mods: next.right ? next.mods << 4 : next.mods }
             : next.kind === 'layer' ? { kind: 'layer', layer: next.layer } : { kind: 'key', key: next.key, mods: next.mods ?? 0 };
-        const r = composeTapHold({ tap: m.tap, hold, hand: board.handOf(pos), timing: m.spec?.timing ?? TIMING_PARAM.default }, ADAPTER);
+        const r = composeTapHold({ tap: m.tap, hold, hand: board.handOf(pos), timing: m.spec?.timing ?? TIMING_PARAM.default }, AD);
         if (!r.ok) { msg = r.message; render(); return; }
         msg = '';
         await put(r.value);
     }
 
     async function setTap(k) {
-        const m = inspectorModel(board.bindingOf());
+        const m = inspectorModel(board.bindingOf(), AD);
         const tap = { key: k.key, mods: k.mods ?? 0 };
         if (m.hasHold) {
             const hold = m.kind === 'mods' ? { kind: 'mods', mods: m.right ? m.mods << 4 : m.mods }
                 : m.kind === 'layer' ? { kind: 'layer', layer: m.layer } : { kind: 'key', ...m.holdKey };
-            const r = composeTapHold({ tap, hold, hand: board.handOf(sel()?.pos), timing: m.spec?.timing }, ADAPTER);
+            const r = composeTapHold({ tap, hold, hand: board.handOf(sel()?.pos), timing: m.spec?.timing }, AD);
             if (r.ok) { await put(r.value); return; }
         }
-        await put(encode('key', { key: tap.key, mods: tap.mods }, ADAPTER));
+        await put(encode('key', { key: tap.key, mods: tap.mods }, AD));
     }
 
     const sideNow = (m) => (local.right ?? (m.hasHold && m.kind === 'mods' ? m.right : board.handOf(sel()?.pos) === 'right'));
     const kindNow = (m) => (m.hasHold ? m.kind : local.kind ?? 'mods');
 
     function toggleMod(bit) {
-        const m = inspectorModel(board.bindingOf());
+        const m = inspectorModel(board.bindingOf(), AD);
         const right = sideNow(m);
         const cur = m.hasHold && m.kind === 'mods' ? m.mods : 0;
         applyHold({ kind: 'mods', mods: cur ^ bit, right });
     }
 
     function toggleSide(right) {
-        const m = inspectorModel(board.bindingOf());
+        const m = inspectorModel(board.bindingOf(), AD);
         if (m.hasHold && m.kind === 'mods' && m.mods) applyHold({ kind: 'mods', mods: m.mods, right });
         else { local.right = right; render(); }
     }
@@ -144,23 +151,23 @@ export function createInspector({ app, dock }) {
         if (!m.hasHold) return '';
         if (m.kind === 'mods') return modsText(m.right ? m.mods << 4 : m.mods);
         if (m.kind === 'layer') return layerChoices().find((c) => c.id === m.layer)?.name ?? `Layer ${m.layer}`;
-        return holdTapParts(board.bindingOf(), ADAPTER)?.hold ?? '';
+        return holdTapParts(board.bindingOf(), AD)?.hold ?? '';
     }
 
     function keyPanel(s) {
         const b = board.bindingOf();
-        const m = inspectorModel(b);
+        const m = inspectorModel(b, AD);
         const lg = m.legend;
         const kind = kindNow(m), right = sideNow(m);
         const layerNameNow = layerName(s.layer);
         const tapKnown = !!m.tap;
         const head = el('header', { class: 'insp-head' },
             el('span', { class: `insp-cap k-${lg.kind}` }, el('b', { text: lg.main }), lg.sub ? el('i', { class: 'mono', text: lg.sub }) : null),
-            el('div', { class: 'insp-title' }, el('strong', { text: `Key ${s.pos}` }), el('span', { class: 'mono', text: layerNameNow })),
+            el('div', { class: 'insp-title' }, el('strong', { text: keyTitle(s.pos) }), el('span', { class: 'mono', text: layerNameNow })),
             el('button', { class: 'btn small ghost', type: 'button', text: 'Done', 'aria-label': 'Deselect the key',
                 onclick: () => board.select(null) }));
 
-        const tapLg = tapKnown ? legendOf(encode('key', { key: m.tap.key, mods: m.tap.mods ?? 0 }, ADAPTER), ADAPTER) : lg;
+        const tapLg = tapKnown ? legendOf(encode('key', { key: m.tap.key, mods: m.tap.mods ?? 0 }, AD), AD) : lg;
         const slots = el('div', { class: 'insp-slots' },
             slotBox('tap', 'TAP', tapKnown ? tapLg.main : lg.main, tapKnown ? 'quick press' : 'not a plain key', tapKnown ? '' : lg.kind === 'plain' ? '' : lg.kind,
                 dock.target?.which === 'tap', () => armTarget('tap')),
@@ -171,7 +178,7 @@ export function createInspector({ app, dock }) {
         const kinds = [];
         if (hasEntry('mod-tap')) kinds.push(['mods', 'Modifiers']);
         if (hasEntry('layer-tap')) kinds.push(['layer', 'Layer']);
-        if (hasEntry('mod-tap')) kinds.push(['key', 'Key']);
+        if (hasEntry('mod-tap') && !qmk) kinds.push(['key', 'Key']);   // QMK MT() holds modifiers only
         const seg = el('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Hold does' },
             ...kinds.map(([k, label]) => el('button', { class: kind === k ? 'on' : '', type: 'button', role: 'radio', 'aria-checked': String(kind === k), text: label, 'data-kind': k,
                 onclick: () => { local.kind = k; if (k !== 'key') dock.setTarget(null); render(); } })));
@@ -207,8 +214,8 @@ export function createInspector({ app, dock }) {
         if (m.hasHold) kids.push(timingHost(s.pos, b));
         else timing = { pos: null, el: null, live: null, token: timing.token };
         const quick = el('div', { class: 'insp-actions' },
-            el('button', { class: 'btn small', type: 'button', text: '▽ Pass through', 'data-caption': 'Use the key from the layer below.', onclick: () => put(encode('trans', {}, ADAPTER)) }),
-            el('button', { class: 'btn small', type: 'button', text: '✕ Nothing', 'data-caption': 'Does nothing.', onclick: () => put(encode('none', {}, ADAPTER)) }),
+            el('button', { class: 'btn small', type: 'button', text: '▽ Pass through', 'data-caption': 'Use the key from the layer below.', onclick: () => put(encode('trans', {}, AD)) }),
+            el('button', { class: 'btn small', type: 'button', text: '✕ Nothing', 'data-caption': 'Does nothing.', onclick: () => put(encode('none', {}, AD)) }),
             hasEntry('mod-tap') ? el('button', { class: 'btn small', type: 'button', text: 'Home-row mods…', 'data-act': 'hrm',
                 'data-caption': 'Make the 8 home keys tap-holds with modifiers in one step.', onclick: () => startPreset() }) : null);
         kids.push(quick, el('p', { class: 'insp-src mono', 'data-caption': 'The raw binding.', text: source(b) }));
@@ -216,6 +223,7 @@ export function createInspector({ app, dock }) {
     }
 
     function source(b) {
+        if (qmk) return b == null ? '' : `${qmkDescribe(b)} · ${hex(b)}`;
         if (!b) return '';
         const name = zmkBehaviors().get(b.behaviorId)?.displayName ?? `behavior #${b.behaviorId}`;
         const hex = (n) => `0x${(n >>> 0).toString(16).toUpperCase()}`;
@@ -224,8 +232,9 @@ export function createInspector({ app, dock }) {
 
     /** One timing card per selected key, reused across chip taps. */
     function timingHost(pos, b) {
+        if (qmk) return el('p', { class: 'hint', text: 'Tapping term: one global value for every hold-tap (Device › Settings).' });
         const be = timingBackendNow();
-        const live = decode(b, ADAPTER).params.live;
+        const live = decode(b, AD).params.live;
         const isLive = !!(be.runtime && live && live !== 'off');
         const fixed = live === 'fixed';   // virtual-slot node: no key position, so no same-hand rule
         if (timing.pos === pos && timing.el && timing.live === isLive && timing.fixed === fixed) return timing.el;
@@ -253,7 +262,7 @@ export function createInspector({ app, dock }) {
     function guessHome() {
         const all = board.positions();
         for (const want of [QWERTY, COLEMAK]) {
-            const got = want.map((k) => all.find((p) => { const s = tapHoldSpecOf(p.binding, ADAPTER); return s?.tap?.key === k && !s.tap.mods; })?.pos);
+            const got = want.map((k) => all.find((p) => { const s = tapHoldSpecOf(p.binding, AD); return s?.tap?.key === k && !s.tap.mods; })?.pos);
             if (got.every((p) => p != null)) return got;
         }
         return [];
@@ -271,7 +280,7 @@ export function createInspector({ app, dock }) {
     function presetPanel() {
         const be = timingBackendNow();
         const keys = board.positions().filter((p) => preset.picked.some((q) => JSON.stringify(q) === JSON.stringify(p.pos)));
-        const plan = homeRowPlan(keys, preset.order, ADAPTER, { timing: preset.timing });
+        const plan = homeRowPlan(keys, preset.order, AD, { timing: preset.timing });
         const ORDERS = { GACS: '⌘ ⌥ ⌃ ⇧', CAGS: '⌃ ⌥ ⌘ ⇧' };
         const kids = [
             el('header', { class: 'insp-head' }, el('div', { class: 'insp-title' }, el('strong', { text: 'Home-row mods' }),
@@ -281,23 +290,23 @@ export function createInspector({ app, dock }) {
                     class: preset.order === o ? 'on' : '', type: 'button', role: 'radio', 'aria-checked': String(preset.order === o), 'data-order': o, text: `${o} · ${g}`,
                     onclick: () => { preset.order = o; render(); } })))),
         ];
-        if (be.runtime) {
+        if (be.runtime && !qmk) {
             const val = el('output', { class: 'ht-term mono', text: `${preset.timing} ms` });
             const slider = el('input', { type: 'range', min: TIMING_PARAM.min, max: TIMING_PARAM.max, step: TIMING_PARAM.step, value: preset.timing, 'aria-label': 'Shared tapping term for the 8 keys' });
             slider.addEventListener('input', () => { preset.timing = Number(slider.value); val.textContent = `${preset.timing} ms`; });
             kids.push(el('div', { class: 'insp-row' }, el('span', { class: 'insp-lbl', text: 'Tapping term (all 8)' }), el('div', { class: 'ht-term-row' }, slider, val)));
         }
         kids.push(el('p', { class: 'hint' + (plan.ok ? '' : ' warn'), role: 'status',
-            text: plan.ok ? plan.plan.map((p) => { const h = holdTapParts(p.value, ADAPTER); return `${h.tap}=${h.hold}`; }).join('  ')
+            text: plan.ok ? plan.plan.map((p) => { const h = holdTapParts(p.value, AD); return `${h.tap}=${h.hold}`; }).join('  ')
                 : `${preset.picked.length} of 8 keys picked on the board. ${preset.picked.length === 8 ? plan.message : ''}` }),
         el('div', { class: 'insp-actions' },
             el('button', { class: 'btn small primary', type: 'button', text: 'Apply to 8 keys', 'data-act': 'hrm-apply', disabled: !plan.ok,
                 onclick: async () => {
                     stopPick?.(); stopPick = null;
                     const done = await board.assignMany(plan.plan.map((p) => ({ pos: p.pos, value: p.value })));
-                    if (done && be.runtime) {
+                    if (done && be.runtime && !qmk) {
                         for (const p of plan.plan) {
-                            const lv = decode(p.value, ADAPTER).params;
+                            const lv = decode(p.value, AD).params;
                             if (!lv.live || lv.live === 'off' || lv.live === 'fixed' || lv.variant != null) continue;
                             try { await be.write(p.pos, preset.timing); } catch (err) { toast(`Timing not written: ${err.message}`, true); }
                         }
@@ -316,6 +325,7 @@ export function createInspector({ app, dock }) {
      * the Combos tab's slots once it has loaded. Typed outputs (action 3 = a
      * behavior) become Studio bindings. */
     function combosNow() {
+        if (qmk) return [];   // Vial combos match keycodes, not positions: not a way into a layer here
         const slots = app.offlineWs?.zmk?.combos ?? app.tabInstance?.('zmk-combos')?.slots ?? [];
         return slots.filter((c) => c?.action === 3 && c.positions?.length >= 2)
             .map((c) => ({ positions: c.positions, binding: { behaviorId: c.behaviorId, param1: c.param1 >>> 0, param2: c.param2 >>> 0 } }));
@@ -323,7 +333,8 @@ export function createInspector({ app, dock }) {
 
     function layersCard() {
         const a = adapter();
-        const idx = layerIndex({ layers: a.layers(), keys: a.profile.keys, bindingAt: (l, s) => a.bindingAt(l, s), combos: combosNow(), adapter: ADAPTER });
+        const idx = layerIndex({ layers: a.layers(), keys: a.profile.keys, bindingAt: (l, s) => a.bindingAt(l, s), combos: combosNow(), adapter: AD,
+            ...(a.posOf ? { posOf: (k) => a.posOf({ kind: 'key', row: k.row, col: k.col }) } : {}) });
         const rows = idx.rows.filter((r) => r.always || r.activators.length || !a.layers()[r.index].empty);
         return el('section', { class: 'insp-card', 'data-card': 'layers' },
             el('h4', {}, 'Layers', el('span', { class: 'sub', text: 'what turns each layer on' })),
@@ -340,9 +351,9 @@ export function createInspector({ app, dock }) {
                         onclick: () => app.showTab?.('zmk-combos'),
                     }, `combo ${x.positions.join('+')} `, el('b', { text: `&${x.code}` })) : el('button', {
                         class: 'lyr-chip mono', type: 'button', 'data-pos': x.pos, 'data-from': x.layer,
-                        'data-caption': `Go to key ${x.pos} on ${x.layerName} and select it`,
+                        'data-caption': `Go to ${a.keyTitle ? a.keyTitle(x.pos) : `key ${x.pos}`} on ${x.layerName} and select it`,
                         onclick: () => board.jumpTo(x.layer, x.pos),
-                    }, `${x.layerName} key ${x.pos} `, el('b', { text: `&${x.code}` })))))
+                    }, `${x.layerName} ${a.keyTitle ? a.keyTitle(x.pos) : `key ${x.pos}`} `, el('b', { text: `&${x.code}` })))))
                         : el('span', { class: 'lyr-none', text: 'Nothing turns this on' }))));
     }
 

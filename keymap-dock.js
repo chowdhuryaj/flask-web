@@ -13,13 +13,14 @@
 
 import { el } from './ui.js?v=76';
 import { board, DRAG_TYPE } from './board.js?v=76';
-import { surfaceEntries } from './binding-picker.js?v=76';
+import { SURFACES, surfaceEntries } from './binding-picker.js?v=76';
+import { keySurfaceOf } from './boards.js?v=76';
 import { captureOneKey } from './zmk-capture.js?v=76';
 import { usageParts, kpParam } from './zmk-keycodes.js?v=76';
 import { legendOf } from './legend.js?v=76';
 import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText, NERU_MENU, NERU_DESC } from './behavior-catalog.js?v=76';
 
-const ADAPTER = 'zmk-studio';
+const ADAPTER = 'zmk-studio';   // dockModel's default; createDock follows the board line
 const KEY_A = 0x04;
 
 /** "Add modifiers" chips: label, mask bit. Right-hand bits are the high nibble. */
@@ -34,10 +35,12 @@ const SECTION_CATEGORY = {
     nav: 'Navigation', function: 'F-keys', numpad: 'Keypad', intl: 'Intl',
 };
 const ENTRY_CATEGORY = {
-    'caps-word': 'Key behaviours', repeat: 'Key behaviours', 'grave-escape': 'Key behaviours', swapper: 'Key behaviours', 'super-delete': 'Key behaviours',
+    'caps-word': 'Key behaviours', repeat: 'Key behaviours', 'alt-repeat': 'Key behaviours', 'grave-escape': 'Key behaviours', swapper: 'Key behaviours', 'super-delete': 'Key behaviours',
     'one-shot-mod': 'Key behaviours', 'key-toggle': 'Key behaviours',
     'hold-layer': 'Layers', 'toggle-layer': 'Layers', 'to-layer': 'Layers', 'one-shot-layer': 'Layers',
     'smart-layer': 'Layers', 'num-word': 'Layers', 'layer-tap': 'Layers',
+    'tap-toggle': 'Layers', 'default-layer': 'Layers', 'layer-lock': 'Layers',
+    'device-key': 'Device keys',
     bluetooth: 'Bluetooth & output', output: 'Bluetooth & output',
     'mouse-key': 'Mouse', autoscroll: 'Mouse', 'ball-swap': 'Mouse', gesture: 'Mouse',
     lighting: 'Lighting', underglow: 'Lighting',
@@ -45,7 +48,7 @@ const ENTRY_CATEGORY = {
     macro: 'Macros & run', 'tap-dance': 'Macros & run', adaptive: 'Macros & run', leader: 'Macros & run',
     advanced: 'Other',
 };
-const BEHAVIOUR_ORDER = ['Layers', 'Key behaviours', 'Bluetooth & output', 'Mouse', 'Neru', 'Lighting', 'System', 'Macros & run', 'Other'];
+const BEHAVIOUR_ORDER = ['Layers', 'Key behaviours', 'Bluetooth & output', 'Mouse', 'Device keys', 'Neru', 'Lighting', 'System', 'Macros & run', 'Other'];
 // pointing.h packs x into the high int16, y into the low. Magnitudes are the compiled
 // MOVE_VAL / SCRL_VAL of config/totem.keymap (1800 * MOUSE_SPEED_PCT/100, 20 * SCROLL_SPEED_PCT/100);
 // the app cannot read them from the device. Up is -y for move, +y for scroll.
@@ -60,7 +63,7 @@ const HOLD_MODS = [['⌃ Ctrl', 0xE0], ['⇧ Shift', 0xE1], ['⌥ Opt', 0xE2], [
 const NERU_KEY = { 'Neru Menu + Key (stay)': 'stays on this layer', 'Neru Menu + Key (to base)': 'then back to Base' };
 const NERU_PLAIN = { 'Neru Hints': 'Neru Hints: label every clickable target, type one to click', 'Neru Menu': 'Neru menu: opens the letter menu (g grid, r rgrid, b bisect …)' };
 const MOD_HOLD = { 'Mod / Neru Hints': 'Neru Hints', 'Leader / Shift': 'Leader' };   // param1 = the held key, param2 unused
-const LAYER_SHORT = { 'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl' };
+const LAYER_SHORT = { 'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl', 'tap-toggle': 'tt', 'default-layer': 'df' };
 const TONE = { layer: 'layer', hold: 'hold', mod: 'hold', macro: 'macro', dim: 'dim', plain: '' };
 
 function tile(base, binding, adapter = ADAPTER) {
@@ -138,6 +141,9 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
             ...mk('one-shot-layer', (id) => encode('one-shot-layer', { layer: id }, adapter)),
             ...mk('smart-layer', (id) => encode('smart-layer', { layer: id }, adapter)),
             ...mk('num-word', (id) => encode('num-word', { layer: id }, adapter)),
+            ...mk('tap-toggle', (id) => encode('tap-toggle', { layer: id }, adapter)),
+            ...mk('default-layer', (id) => encode('default-layer', { layer: id }, adapter)),
+            ...(byId.has('layer-lock') ? [tile({ id: 'layer-lock', label: byId.get('layer-lock').name, desc: byId.get('layer-lock').desc }, encode('layer-lock', {}, adapter), adapter)] : []),
         ]);
     }
 
@@ -272,8 +278,10 @@ export function searchTiles(model, q) {
  * @param {object}   o.app
  * @param {(binding) => *} o.assign   plain pick (the board assigns and advances)
  * @param {Element[]} [o.tools]       extra buttons for the tools row (Type-to-assign)
+ * @param {string}   [o.surface]      'zmk.key' | 'qmk.key'; default: the app's firmware line
  */
-export function createDock({ app, assign, tools = [] }) {
+export function createDock({ app, assign, tools = [], surface = keySurfaceOf(app) }) {
+    const AD = SURFACES[surface].adapter;
     let model = null;
     let tab = 'keys';
     let cat = null;
@@ -338,10 +346,10 @@ export function createDock({ app, assign, tools = [] }) {
     const effective = (t) => {
         if (t.kind === 'key') {
             const mods = (t.mods | armed) & 0xFF;
-            return encode('key', { key: t.key, mods }, ADAPTER);
+            return encode('key', { key: t.key, mods }, AD);
         }
         if (t.build) {
-            const spec = tapHoldSpecOf(board.bindingOf(), ADAPTER);
+            const spec = tapHoldSpecOf(board.bindingOf(), AD);
             return t.build(spec?.tap) ?? t.binding;
         }
         return t.binding;
@@ -401,7 +409,7 @@ export function createDock({ app, assign, tools = [] }) {
             const isMod = id >= 0xE0 && id <= 0xE7;
             const m = ((isMod ? 0 : mods) | armed) & 0xFF;
             if (target) target.set({ key: id, mods: m });
-            else assign(encode('key', { key: id, mods: m }, ADAPTER));
+            else assign(encode('key', { key: id, mods: m }, AD));
         }, { onStop: () => { stopCapture = null; press.textContent = '⌨ Press a key'; press.classList.remove('primary'); } });
     });
     chips();
@@ -411,7 +419,7 @@ export function createDock({ app, assign, tools = [] }) {
         root,
         /** Rebuild from the live catalog (layer names, slots). Keeps tab, category, search and armed mods. */
         refresh(app2 = app) {
-            model = dockModel(surfaceEntries('zmk.key', app2), keySections(), ADAPTER);
+            model = dockModel(surfaceEntries(surface, app2), keySections(), AD);
             render();
         },
         armedMods: () => armed,
