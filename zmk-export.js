@@ -9,23 +9,23 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH, V } from './flaskproto.js?v=65';
-import { zmkBehaviors } from './zmk-keycodes.js?v=65';
-import { isRecursiveOutput } from './behavior-catalog.js?v=65';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=65';
+import { CH, V } from './flaskproto.js?v=66';
+import { zmkBehaviors } from './zmk-keycodes.js?v=66';
+import { isRecursiveOutput } from './behavior-catalog.js?v=66';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=66';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=65';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=65';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=65';
+         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=66';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=66';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=66';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=65';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=65';
+    from './zmk-output-codec.js?v=66';
+import { encodeCskSlot, decodeCskSlot, cskMorphCaps, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=66';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=65';
+    from './zmk-tapdance-codec.js?v=66';
 import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
-    from './zmk-adaptive-codec.js?v=65';
+    from './zmk-adaptive-codec.js?v=66';
 
 /** Behavior ids shift between firmware builds and differ from the offline sim,
  * so a behavior output (action 3) is exported with its display name beside the
@@ -137,8 +137,10 @@ async function exportFlaskStateInner(app) {
         const slots = [];
         for (let i = 0; i < count; i++) {
             const r = await flask.getBytes(CH.customShift, V.cskSlot, [i], 1);
-            const { base, shifted } = decodeCskSlot(r);
-            slots.push({ base, shifted });
+            const { base, shifted, mods, keep } = decodeCskSlot(r);
+            // Trigger/keep only when not the Shift default, so old exports stay
+            // byte-identical and old files (no fields) import as Shift.
+            slots.push(mods === MOD_SHIFT_ONLY && !keep ? { base, shifted } : { base, shifted, mods, keep });
         }
         out.customShift = {
             enabled: await g(CH.customShift, V.cskEnabled),
@@ -438,9 +440,15 @@ async function applyFlaskStateInner(app, data, save = true) {
 
     await section('customShift', caps.customShift, async (s) => {
         const count = await flask.getU16(CH.customShift, V.cskSlotCount);
+        const morph = await cskMorphCaps(flask);
         for (let i = 0; i < Math.min(count, s.slots?.length ?? 0); i++) {
-            await flask.setBytes(CH.customShift, V.cskSlot,
-                encodeCskSlot(i, s.slots[i]), 1);
+            const slot = s.slots[i];
+            // Shift-only firmware cannot hold another trigger set or keep-mods.
+            if (!morph && ((slot.mods || MOD_SHIFT_ONLY) !== MOD_SHIFT_ONLY || slot.keep)) {
+                failures.push(`customShift slot ${i}: needs mod-morph firmware, skipped`);
+                continue;
+            }
+            await flask.setBytes(CH.customShift, V.cskSlot, encodeCskSlot(i, slot), 1);
             applied++;
         }
         if (s.enabled != null) await setU(CH.customShift, V.cskEnabled, s.enabled);
@@ -566,4 +574,4 @@ export async function saveFlaskChannels(app, channels) {
 }
 
 // window.flaskExportKeymap / window.flaskPrintLayers (side-effect import; see zmk-extras.js)
-import './zmk-extras.js?v=65';
+import './zmk-extras.js?v=66';

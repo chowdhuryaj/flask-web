@@ -18,29 +18,29 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH, V } from './flaskproto.js?v=65';
+import { CH, V } from './flaskproto.js?v=66';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=65';
-import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=65';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=65';
-import { isUnassignable } from './behavior-catalog.js?v=65';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=66';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=66';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=66';
+import { isUnassignable } from './behavior-catalog.js?v=66';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
-         describeChanges, BASE_PREFIX } from './offline.js?v=65';
-import { saveState } from './save-state.js?v=65';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=65';
-import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=65';
+         describeChanges, BASE_PREFIX } from './offline.js?v=66';
+import { saveState } from './save-state.js?v=66';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=66';
+import { kpParam, cpParam, usageFromName } from './zmk-keycodes.js?v=66';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=65';
-import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=65';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=66';
+import { decodeCskSlot, encodeCskSlot } from './zmk-csk-codec.js?v=66';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=65';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=65';
+    from './zmk-tapdance-codec.js?v=66';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=66';
 import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
-         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=65';
+         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=66';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=65';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=66';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 
@@ -848,6 +848,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.leader && id === V.leaderKeys) return dims(this.ws.family).leaderKeys;
         if (ch === CH.gestures && id === V.gesturesSetCount) return this.ws.zmk.gestures.length;
         if (ch === CH.customShift && id === V.cskSlotCount) return this.ws.zmk.csk.length;
+        if (ch === CH.customShift && id === V.cskMorphCaps) return 1; // the sim speaks the 11-byte frame
         if (ch === CH.tapDance && id === V.tdSlotCount) return this.ws.zmk.tapdance.length;
         if (ch === CH.tapDance && id === V.tdTaps) return dims(this.ws.family).tdTaps;
         // Ball swap "effective" is live-only (base XOR momentary holds) —
@@ -1037,7 +1038,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.customShift && id === V.cskSlot) {
             const slot = payload[0] ?? 0;
             const s = zmk.csk[slot] ?? { base: 0, shifted: 0 };
-            return encodeCskSlot(slot, s);
+            return encodeCskSlot(slot, s, true);
         }
         if (ch === CH.tapDance && id === V.tdStep) {
             const [slot, tap] = payload;
@@ -1169,10 +1170,10 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH.customShift && id === V.cskSlot) {
             const d = decodeCskSlot(payload);
             if (!zmk.csk[d.slot]) return payload;
-            zmk.csk[d.slot] = { base: d.base, shifted: d.shifted };
+            zmk.csk[d.slot] = { base: d.base, shifted: d.shifted, mods: d.mods, keep: d.keep };
             this.ws.zmkDirty.cskSlot[d.slot] = true;
             saveWorkspace(this.ws);
-            return encodeCskSlot(d.slot, zmk.csk[d.slot]);
+            return encodeCskSlot(d.slot, zmk.csk[d.slot], true);
         }
         if (ch === CH.tapDance && id === V.tdStep) {
             const d = decodeTdStep(payload);
