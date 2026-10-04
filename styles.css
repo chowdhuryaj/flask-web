@@ -963,3 +963,17 @@ body.hud-pip .hud { border-radius: 0; min-height: 100vh; }
 .cp-row.on .cp-title { font-weight: var(--fw-sb); }
 .cp-sub { color: var(--muted); font-size: var(--fs-sm); }
 .cp-empty { padding: var(--sp-5) var(--sp-6); color: var(--muted); font-size: var(--fs-sm); }
+
+/* ---------- Svalboard (QMK line) rows ----------
+ * The few layouts the ui.js row / hint / mono classes do not cover: a
+ * wrapping button row, a short number input, and the corner-chord table
+ * (fixed columns so the six chords line up per finger). */
+.row.wrap { flex-wrap: wrap; gap: var(--sp-2); }
+.row input.num { width: 90px; flex: none; }
+.note.warn { color: var(--danger); }
+.cc-grid { overflow-x: auto; }
+.cc-grid .row { gap: var(--sp-1); padding: var(--sp-1) 0; border-bottom: none; }
+.cc-grid .cc-name { width: 72px; flex: none; color: var(--muted); font-size: var(--fs-sm); }
+.cc-grid .cc-col { width: 64px; flex: none; text-align: center; color: var(--muted); font-size: var(--fs-xs); line-height: var(--lh-tight); }
+.cc-grid .cc-cell { width: 64px; flex: none; }
+.cc-grid .cc-cell.unbound, .cc-grid .cc-cell.none { color: var(--faint); }

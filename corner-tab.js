@@ -124,7 +124,7 @@ export class CornerTab {
     _cell(def) {
         const members = this.defs[def] ?? [];
         if (members.length < 2) {
-            return el('span', { class: 'btn small faint', text: '—', style: 'width:64px; opacity:0.3',
+            return el('span', { class: 'btn small cc-cell none', text: '—',
                 title: `${ccDefName(def)}: no switch positions defined in firmware` });
         }
         const kc = this.outputs[def] ?? 0;
@@ -132,25 +132,23 @@ export class CornerTab {
         const where = members.map((p) => `r${ccRow(p)}c${ccCol(p)}`).join(' + ');
         const cell = bindingCell(unbound ? 0 : kc, () => this._pick(def),
             `${ccDefName(def)} (${where})${unbound ? ': unassigned, click to bind' : ` → ${bindingText(kc)}`}`);
-        cell.style.width = '64px';
+        cell.classList.add('cc-cell');
         cell.dataset.def = String(def);
-        if (unbound) { cell.textContent = '+'; cell.style.opacity = '0.4'; }
+        if (unbound) { cell.textContent = '+'; cell.classList.add('unbound'); }
         return cell;
     }
 
     _grid() {
-        const wrap = el('div', { style: 'overflow-x:auto' });
-        wrap.append(el('div', { class: 'row', style: 'gap:2px' },
-            el('span', { class: 'faint', style: 'width:72px', text: 'Finger' }),
-            ...CC.fingerChordNames.map((n) => el('span', {
-                class: 'hint', style: 'width:64px; text-align:center; font-size:9px', text: n,
-            }))));
+        const wrap = el('div', { class: 'cc-grid' });
+        wrap.append(el('div', { class: 'row' },
+            el('span', { class: 'cc-name', text: 'Finger' }),
+            ...CC.fingerChordNames.map((n) => el('span', { class: 'cc-col', text: n }))));
         CC.clusterNames.forEach((cluster, ci) => {
-            const row = el('div', { class: 'row', style: 'gap:2px' },
-                el('span', { class: 'faint', style: 'width:72px', text: cluster }));
+            const row = el('div', { class: 'row' },
+                el('span', { class: 'cc-name', text: cluster }));
             for (let chord = 0; chord < CC.fingerChords; chord++) {
                 const def = ci * CC.fingerChords + chord;
-                row.append(def < this.defCount ? this._cell(def) : el('span', { style: 'width:64px' }));
+                row.append(def < this.defCount ? this._cell(def) : el('span', { class: 'cc-cell' }));
             }
             wrap.append(row);
         });
@@ -183,7 +181,6 @@ export class CornerTab {
             el('div', { class: 'row' },
                 el('span', { class: 'lbl' }, 'Misfires',
                     el('span', { class: 'hint', text: 'chords that started and timed out; high means the window is too tight' })),
-                el('span', { style: 'flex:1' }),
                 el('span', { class: 'mono', text: String(this.misfires) }),
                 el('button', {
                     class: 'btn small', text: 'Reset',
@@ -195,7 +192,7 @@ export class CornerTab {
             // A chord with no combo slot does nothing and looks broken. Name
             // the reference layer the firmware reports (0x0D), never a guess.
             this.unplaced
-                ? el('div', { class: 'note', style: 'color:var(--danger)', text:
+                ? el('div', { class: 'note warn', text:
                     `${this.unplaced} chord(s) will NOT fire. Either ${ref} has nothing (or KC_TRNS) under `
                     + 'one of their keys (chords read their member keys from there on every layer), '
                     + `or the slot budget ran out (${this.slotsUsed}/64 slots used).` })

@@ -65,7 +65,6 @@ export function reloadRow(reload, note) {
 export function slotRow({ name, sub = '', empty = false, onEdit, onPaste }) {
     return el('div', { class: 'row' + (empty ? ' faint' : ''), 'data-slot': name },
         el('span', { class: 'lbl' }, el('b', { text: name }), el('span', { class: 'hint', text: sub || 'empty' })),
-        el('span', { style: 'flex:1' }),
         onPaste ? el('button', { class: 'btn small', text: 'Paste on key', 'data-paste': name,
             title: `Put ${name} on the key selected on the board`, onclick: onPaste }) : null,
         el('button', { class: 'btn small', text: 'Edit', title: `Edit ${name}`, onclick: onEdit }));

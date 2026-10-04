@@ -72,7 +72,7 @@ export class MacrosTab {
 
     unlockBanner() {
         if (this.app.offline || this.app.unlocked) return null;
-        return el('div', { class: 'banner', style: 'margin:6px 0' },
+        return el('div', { class: 'banner' },
             'Macro writes are unlock-gated (the firmware silently ignores them while locked). ',
             el('button', { class: 'btn small', text: 'Unlock…', onclick: () => this.app.onHudLockClick?.() }));
     }
@@ -82,19 +82,17 @@ export class MacrosTab {
         const move = (d) => { const j = i + d; if (j < 0 || j >= draft.length) return; [draft[i], draft[j]] = [draft[j], draft[i]]; sh.refresh(); };
         let value;
         if (a.t === 'text') {
-            value = el('input', { type: 'text', class: 'step-text', value: a.s, placeholder: 'text to type…' });
+            value = el('input', { type: 'text', value: a.s, placeholder: 'text to type…', 'aria-label': `Step ${i + 1} text` });
             value.addEventListener('input', () => { a.s = value.value; });
         } else if (a.t === 'delay') {
-            value = el('input', { type: 'number', min: 1, max: 60000, value: a.ms, style: 'width:90px' });
+            value = el('input', { type: 'number', class: 'num', min: 1, max: 60000, value: a.ms, 'aria-label': `Step ${i + 1} delay (ms)` });
             value.addEventListener('input', () => { a.ms = Number(value.value) || 0; });
         } else {
             value = bindingCell(a.kc, () => this.pickKey(a.kc, `${KIND_LABEL[a.t]} key`, (kc) => { a.kc = kc; sh.refresh(); }), 'Change key');
         }
-        return el('div', { class: 'row step', 'data-step': a.t },
-            el('span', { class: 'step-idx', text: String(i + 1) }),
-            el('span', { class: 'step-kind', text: KIND_LABEL[a.t] }),
+        return el('div', { class: 'row', 'data-step': a.t },
+            el('span', { class: 'lbl' }, KIND_LABEL[a.t], el('span', { class: 'hint mono', text: `step ${i + 1}` })),
             value,
-            el('span', { style: 'flex:1' }),
             el('button', { class: 'btn small', text: '↑', title: 'Move up', onclick: () => move(-1) }),
             el('button', { class: 'btn small', text: '↓', title: 'Move down', onclick: () => move(1) }),
             el('button', { class: 'btn small', text: '✕', title: 'Remove step', onclick: () => { draft.splice(i, 1); sh.refresh(); } }));
@@ -113,7 +111,7 @@ export class MacrosTab {
                 el('div', { class: 'note faint', text: `${this.usage(next)} of ${this.bufferSize} bytes used across all macros` }),
                 ...draft.map((_, i) => this.stepRow(draft, i, sh)),
                 draft.length ? null : el('div', { class: 'faint', text: 'No steps yet. Add one below.' }),
-                el('div', { class: 'row', style: 'gap:4px; flex-wrap:wrap' }, ...STEP_KINDS.map(([t, label]) => el('button', {
+                el('div', { class: 'row wrap' }, ...STEP_KINDS.map(([t, label]) => el('button', {
                     class: 'btn small', text: label, 'data-add': t,
                     onclick: () => {
                         if (t === 'text') draft.push({ t, s: '' });

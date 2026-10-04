@@ -188,7 +188,8 @@ async function loadQmkDevice(device) {
     app.profile = qmkProfile(app.family, app.layerCount, app.board);
     try { app.unlocked = (await app.vial.unlockStatus()).unlocked; }
     catch { app.unlocked = false; }
-    app.onHudLockClick = () => runUnlockFlow(app, (u) => { app.unlocked = u; });
+    // HUD button and the Macros banner: Vial unlock (the HUD then lights presses).
+    app.onHudLockClick = () => runUnlockFlow(app, (u) => { app.unlocked = u; app.hud?.open && app.hud.render(); });
     if (stale()) return;
 
     // Unplugged queue (tunables only) → device.
@@ -219,6 +220,7 @@ async function loadZmkDevice(device) {
     app.vial = null;    // no Vial surface on the ZMK line
     app.board = null;
     app.unlocked = false;
+    app.onHudLockClick = null;   // the Svalboard's unlock flow (HUD, Macros banner)
     // Fresh client per connection: slot counts and hold-tap probes are memoized per client.
     app.flask = new FlaskProto(app.hid);
     app.flask.line = 'zmk';   // 0x28 is tap dance here: SAVE allowed
@@ -313,6 +315,7 @@ function disconnectUI() {
     app.vial = null;
     app.board = null;
     app.unlocked = false;
+    app.onHudLockClick = null;
     app.trainerOnly = false;
     saveState.reset?.();    // drop dirty sources
     saveState.setLine?.(null);

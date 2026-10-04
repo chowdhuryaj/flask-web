@@ -81,21 +81,24 @@ export class QmkShiftTab {
                 label: 'Enabled', value: this.enabled,
                 onChange: (v) => flask.setU16(CH_QMK.customShift, V_QMK.cskEnabled, v ? 1 : 0),
             }));
-        const grid = el('div', { class: 'row', style: 'gap:6px; flex-wrap:wrap' });
+        // One row per pair, like the other tabs; the first empty slot is the "add" row.
+        const pairs = [];
         for (let i = 0; i < CSK_SLOTS; i++) {
             if (!this.keys[i] && i > 0) {
-                // First empty slot is the "add" affordance; the rest stay hidden.
-                grid.append(bindingCell(0, () => this._pick(i, 'base'), 'Add a shift pair'));
+                pairs.push(el('div', { class: 'row', 'data-csk': i },
+                    el('span', { class: 'lbl' }, 'Add a pair', el('span', { class: 'hint', text: 'pick the key first' })),
+                    bindingCell(0, () => this._pick(i, 'base'), 'Add a shift pair')));
                 break;
             }
-            grid.append(el('div', { class: 'csk-pair', 'data-csk': i, style: 'display:flex; gap:2px; align-items:center' },
+            pairs.push(el('div', { class: 'row', 'data-csk': i },
+                el('span', { class: 'lbl' }, `Pair ${i + 1}`, el('span', { class: 'hint', text: 'key, then what Shift + key types' })),
                 bindingCell(this.keys[i], () => this._pick(i, 'base')),
-                '⇧→',
+                el('span', { class: 'mono', text: '⇧→' }),
                 bindingCell(this.shifted[i], () => this._pick(i, 'shifted')),
                 this.keys[i] ? el('button', { class: 'btn small', text: '✕', title: 'Remove this pair', onclick: () => this._remove(i) }) : null));
         }
-        c.append(grid,
-            el('div', { class: 'row', style: 'gap:4px' },
+        c.append(...pairs,
+            el('div', { class: 'row wrap' },
                 el('span', { class: 'hint', text: 'Presets' }),
                 ...PRESETS.map((p) => el('button', { class: 'btn small', text: p[0], onclick: () => this._preset(p) }))),
             this.bar);

@@ -28,7 +28,15 @@ const encoderCount = (profile) => profile.encoderKeys.reduce((m, e) => Math.max(
 // still carries them just has those keys skipped. Live-only ids (dragHires
 // active, nwActive, mbLockMask, diag) and the TOLD board variant stay out.
 
-export function dumpSpec(caps = {}) {
+/** Combo layer-mask slots: what 0x20/0x01 reports, else the firmware's
+ * VIAL_COMBO_ENTRIES (keymaps/flask/config.h: 128). */
+export const COMBO_MASKS_DEFAULT = 128;
+export async function comboMaskCount(flask) {
+    const n = await flask.getU16(CH_QMK.comboLayers, V_QMK.clCount).catch(() => null);
+    return n > 0 ? n : COMBO_MASKS_DEFAULT;
+}
+
+export function dumpSpec(caps = {}, comboMasks = COMBO_MASKS_DEFAULT) {
     const spec = [];
     spec.push([CH_QMK.dpi, [V_QMK.dpiLeft, V_QMK.dpiRight,
         ...(caps.rawCpi ? [V_QMK.dpiLeftCpi, V_QMK.dpiRightCpi] : [])]]);
@@ -64,7 +72,7 @@ export function dumpSpec(caps = {}) {
     if (caps.numWord) spec.push([CH_QMK.numWord, [V_QMK.nwTimeout, V_QMK.nwLayer]]);
     if (caps.comboLayerMasks) {
         const cl = [];
-        for (let i = 0; i < 64; i++) cl.push(slot.comboMask(i));
+        for (let i = 0; i < comboMasks; i++) cl.push(slot.comboMask(i));
         spec.push([CH_QMK.comboLayers, cl]);
     }
     return spec;
@@ -72,11 +80,12 @@ export function dumpSpec(caps = {}) {
 
 /** Read every tunable the spec names ('ch:id' -> {op, val}); ids the board
  * does not serve are skipped. */
-export async function readTunings(app) {
+export async function readTunings(app, flask = app.flask) {
     const out = {};
-    for (const [ch, ids] of dumpSpec(app.caps)) {
+    const masks = app.caps.comboLayerMasks ? await comboMaskCount(flask) : 0;
+    for (const [ch, ids] of dumpSpec(app.caps, masks)) {
         for (const id of ids) {
-            try { out[`${ch}:${id}`] = { op: 'u16', val: await app.flask.getU16(ch, id) }; }
+            try { out[`${ch}:${id}`] = { op: 'u16', val: await flask.getU16(ch, id) }; }
             catch { /* id not served */ }
         }
     }
@@ -86,12 +95,16 @@ export async function readTunings(app) {
 /** Refresh the Svalboard's Unplugged workspace (tunables journal only) from
  * the connected board. Keeps anything still queued. */
 export async function snapshotQmkWorkspace(app) {
-    if (!isQmkFamily(app.family) || !app.caps.flask) return;
-    const tunables = await readTunings(app);
-    const prev = loadWorkspace(app.family);
-    const ws = prev ?? { v: 1, key: app.family, family: app.family, dirty: { tun: {}, rgb: {}, saves: [] } };
+    // Pin the connection: an unplug or a reconnect (to another board) during
+    // the ~240 background GETs must not write an empty or foreign snapshot.
+    const { flask, family } = app;
+    if (!isQmkFamily(family) || !app.caps.flask) return;
+    const tunables = await readTunings(app, flask);
+    if (app.flask !== flask || app.family !== family) return;
+    const prev = loadWorkspace(family);
+    const ws = prev ?? { v: 1, key: family, family, dirty: { tun: {}, rgb: {}, saves: [] } };
     Object.assign(ws, {
-        label: familyLabel(app.family), source: 'device', savedAt: Date.now(),
+        label: familyLabel(family), source: 'device', savedAt: Date.now(),
         protocolVersion: app.protocolVersion, layerCount: app.layerCount,
         // Queued values win over the fresh read until they replay.
         tunables: { ...tunables, ...Object.fromEntries(Object.entries(ws.dirty?.tun ?? {})) },
@@ -189,7 +202,8 @@ export async function exportVil(app) {
         for (const [k, t] of Object.entries(app.offlineWs?.tunables ?? {}))
             tunings[k.replace(':', '.')] = t.val;
     } else if (app.caps.flask) {
-        for (const [ch, ids] of dumpSpec(app.caps)) {
+        const masks = app.caps.comboLayerMasks ? await comboMaskCount(app.flask) : 0;
+        for (const [ch, ids] of dumpSpec(app.caps, masks)) {
             for (const id of ids) {
                 try { tunings[`${ch}.${id}`] = await app.flask.getU16(ch, id); }
                 catch { /* id not served */ }

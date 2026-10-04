@@ -403,5 +403,10 @@ export class HUD {
         this.hintEl.textContent = this._keyFeed()
             ? 'Live: layer follows the board; keys light on press.'
             : (app.caps.hudLayer ? 'Live: layer follows the board.' : '');
+        // Svalboard: presses come from Vial's matrix, which answers only unlocked.
+        if (isQmkFamily(app.family) && app.vial && !app.unlocked && app.onHudLockClick) {
+            this.hintEl.append(' ', el('button', { class: 'btn small', type: 'button', text: 'Unlock to light presses',
+                onclick: () => app.onHudLockClick() }));
+        }
     }
 }
