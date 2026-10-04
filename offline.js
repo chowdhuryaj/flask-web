@@ -14,10 +14,10 @@
 // journal, no keymap simulator. Its corner chords (0x28) are read-only
 // offline and never SAVEd on replay (a 0x28 SAVE wedged the board).
 
-import { el, modal, toast } from './ui.js?v=76';
-import { CH_ZMK, CH_QMK, V, V_QMK } from './flaskproto.js?v=76';
-import { isZmkFamily } from './zmk.js?v=76';
-import { isQmkFamily } from './boards.js?v=76';
+import { el, modal, toast } from './ui.js?v=77';
+import { CH_ZMK, CH_QMK, V, V_QMK } from './flaskproto.js?v=77';
+import { isZmkFamily } from './zmk.js?v=77';
+import { isQmkFamily } from './boards.js?v=77';
 
 const LS_PREFIX = 'flask-offline-';
 const AUTO_KEY = 'flask-offline-autoapply';

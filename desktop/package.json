@@ -1,7 +1,7 @@
 {
   "name": "totem-flask-desktop",
   "productName": "Totem-Flask",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Totem-Flask: the Flask web configurator in its own Chromium (WebHID + WebSerial), installs next to the native Flask.app",
   "private": true,
   "main": "main.js",

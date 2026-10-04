@@ -7,14 +7,14 @@
 import { writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=76');
-const { setZmkContext } = await import('../zmk-keycodes.js?v=76');
-const { legendOf } = await import('../legend.js?v=76');
-const cat = await import('../behavior-catalog.js?v=76');
-const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=76');
-const { dockModel } = await import('../keymap-dock.js?v=76');
-const { inspectorModel } = await import('../keymap-inspector.js?v=76');
-const { layerIndex } = await import('../keymap-layers.js?v=76');
+const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=77');
+const { setZmkContext } = await import('../zmk-keycodes.js?v=77');
+const { legendOf } = await import('../legend.js?v=77');
+const cat = await import('../behavior-catalog.js?v=77');
+const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=77');
+const { dockModel } = await import('../keymap-dock.js?v=77');
+const { inspectorModel } = await import('../keymap-inspector.js?v=77');
+const { layerIndex } = await import('../keymap-layers.js?v=77');
 
 export function totemRender() {
     const behaviors = new Map(TOTEM_DEFAULT.behaviors.map((b) => [b.id, b]));

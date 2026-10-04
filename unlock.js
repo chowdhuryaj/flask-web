@@ -4,8 +4,8 @@
 // traffic (HUD included) for the duration, and if the user closes the modal
 // mid-flow, keep polling in the background and say "replug to recover".
 
-import { el, modal, toast } from './ui.js?v=76';
-import { keyName } from './boards.js?v=76';
+import { el, modal, toast } from './ui.js?v=77';
+import { keyName } from './boards.js?v=77';
 
 export async function runUnlockFlow(app, onDone) {
     const { vial, hid, profile } = app;

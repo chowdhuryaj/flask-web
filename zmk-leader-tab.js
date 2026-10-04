@@ -5,14 +5,14 @@
 // on the main board; the row shows the order. Outputs use the shared
 // BindingPicker (zmk.typedOutput).
 
-import { el, card, sliderRow, toggleRow, toast, reloadBar } from './ui.js?v=76';
-import { CH_ZMK, V } from './flaskproto.js?v=76';
-import { ZMK_LEADER_FN_PRESET } from './zmk.js?v=76';
-import { board } from './board.js?v=76';
-import { kpParam } from './zmk-keycodes.js?v=76';
+import { el, card, sliderRow, toggleRow, toast, reloadBar } from './ui.js?v=77';
+import { CH_ZMK, V } from './flaskproto.js?v=77';
+import { ZMK_LEADER_FN_PRESET } from './zmk.js?v=77';
+import { board } from './board.js?v=77';
+import { kpParam } from './zmk-keycodes.js?v=77';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty }
-    from './zmk-output-codec.js?v=76';
-import { blurClicks, pickOutput, outText, outCell, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=76';
+    from './zmk-output-codec.js?v=77';
+import { blurClicks, pickOutput, outText, outCell, onSlotsChanged, dim } from './zmk-behaviour-common.js?v=77';
 
 export class ZmkLeaderTab {
     constructor(app) {

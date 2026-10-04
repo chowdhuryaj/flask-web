@@ -11,14 +11,14 @@
 //        binding?             (kind 'binding': ready to write),
 //        build?(tap)          (layer-tap / toggle: rebuilt around the key's tap)}
 
-import { el } from './ui.js?v=76';
-import { board, DRAG_TYPE } from './board.js?v=76';
-import { SURFACES, surfaceEntries } from './binding-picker.js?v=76';
-import { keySurfaceOf } from './boards.js?v=76';
-import { captureOneKey } from './zmk-capture.js?v=76';
-import { usageParts, kpParam } from './zmk-keycodes.js?v=76';
-import { legendOf } from './legend.js?v=76';
-import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText, NERU_MENU, NERU_DESC } from './behavior-catalog.js?v=76';
+import { el } from './ui.js?v=77';
+import { board, DRAG_TYPE } from './board.js?v=77';
+import { SURFACES, surfaceEntries } from './binding-picker.js?v=77';
+import { keySurfaceOf } from './boards.js?v=77';
+import { captureOneKey } from './zmk-capture.js?v=77';
+import { usageParts, kpParam } from './zmk-keycodes.js?v=77';
+import { legendOf } from './legend.js?v=77';
+import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText, NERU_MENU, NERU_DESC } from './behavior-catalog.js?v=77';
 
 const ADAPTER = 'zmk-studio';   // dockModel's default; createDock follows the board line
 const KEY_A = 0x04;

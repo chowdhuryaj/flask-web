@@ -8,9 +8,9 @@ import { readFileSync } from 'node:fs';
 let checks = 0;
 const mem = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k), key: () => null, length: 0 };
-const { OfflineFlask, syncWorkspace } = await import('../offline.js?v=76');
-const { FlaskProto, CH_QMK, CH_ZMK, V_QMK, CMD } = await import('../flaskproto.js?v=76');
-const { SaveState, assertRegistrable } = await import('../save-state.js?v=76');
+const { OfflineFlask, syncWorkspace } = await import('../offline.js?v=77');
+const { FlaskProto, CH_QMK, CH_ZMK, V_QMK, CMD } = await import('../flaskproto.js?v=77');
+const { SaveState, assertRegistrable } = await import('../save-state.js?v=77');
 const ws = JSON.parse(readFileSync(new URL('./fixtures/svalboard-snapshot.json', import.meta.url)));
 
 // 1. _journal refuses setU16/setI16/setBytes on 0x28 for a Svalboard workspace.
@@ -58,7 +58,7 @@ saved.length = 0;
 app.flask.line = 'zmk';
 await syncWorkspace(app, ws);
 assert.ok(saved.includes(CH_ZMK.tapDance), 'ZMK replay saves 0x28 tap dance'); checks++;
-const { ZmkOfflineFlask, createZmkTemplate } = await import('../zmk-offline.js?v=76');
+const { ZmkOfflineFlask, createZmkTemplate } = await import('../zmk-offline.js?v=77');
 await new ZmkOfflineFlask(createZmkTemplate('imprint')).setU16(CH_ZMK.tapDance, 1, 1); checks++;
 
 // 4. save-state never registers 0x28 on the QMK line; ZMK registers it.

@@ -11,17 +11,17 @@
 // The inspector never advances the selection (it edits THIS key). A plain pick
 // from the palette still auto-advances; that is board.assign's default.
 
-import { el, toast } from './ui.js?v=76';
-import { board } from './board.js?v=76';
-import { legendOf } from './legend.js?v=76';
-import { layerIndex } from './keymap-layers.js?v=76';
-import { SURFACES, surfaceEntries } from './binding-picker.js?v=76';
-import { keySurfaceOf } from './boards.js?v=76';
-import { describe as qmkDescribe, hex as qmkHex } from './keycodes.js?v=76';
-import { keyTimingCard } from './zmk-holdtiming-card.js?v=76';
-import { zmkBehaviors } from './zmk-keycodes.js?v=76';
+import { el, toast } from './ui.js?v=77';
+import { board } from './board.js?v=77';
+import { legendOf } from './legend.js?v=77';
+import { layerIndex } from './keymap-layers.js?v=77';
+import { SURFACES, surfaceEntries } from './binding-picker.js?v=77';
+import { keySurfaceOf } from './boards.js?v=77';
+import { describe as qmkDescribe, hex as qmkHex } from './keycodes.js?v=77';
+import { keyTimingCard } from './zmk-holdtiming-card.js?v=77';
+import { zmkBehaviors } from './zmk-keycodes.js?v=77';
 import { timingBackendNow, TIMING_PARAM, HOLDTAP, decode, encode, composeTapHold, tapHoldSpecOf,
-    homeRowPlan, holdTapParts, modsText } from './behavior-catalog.js?v=76';
+    homeRowPlan, holdTapParts, modsText } from './behavior-catalog.js?v=77';
 
 const ADAPTER = 'zmk-studio';   // inspectorModel's default; the inspector follows the board line
 const MODS = [['Ctl', '⌃', 0x01], ['Sft', '⇧', 0x02], ['Alt', '⌥', 0x04], ['Gui', '⌘', 0x08]];

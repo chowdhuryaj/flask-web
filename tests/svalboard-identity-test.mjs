@@ -13,10 +13,10 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
 const mem = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k), key: () => null, length: 0 };
 
-const { familyOf, familyLabel, capabilities, expectedProtocol, lineOf, HID_IDS, qmkProfile, readBoardMeta } = await import('../boards.js?v=76');
-const { FlaskProto, CMD, CH_QMK, V_QMK, CH_ZMK, V } = await import('../flaskproto.js?v=76');
-const { confirmZmkFamily } = await import('../zmk.js?v=76');
-const { tabsFor } = await import('../tab-registry.js?v=76');
+const { familyOf, familyLabel, capabilities, expectedProtocol, lineOf, HID_IDS, qmkProfile, readBoardMeta } = await import('../boards.js?v=77');
+const { FlaskProto, CMD, CH_QMK, V_QMK, CH_ZMK, V } = await import('../flaskproto.js?v=77');
+const { confirmZmkFamily } = await import('../zmk.js?v=77');
+const { tabsFor } = await import('../tab-registry.js?v=77');
 
 /** Fake raw-HID transport answering GETs from a table, unhandled otherwise. */
 const fakeHid = (table) => ({
@@ -93,7 +93,7 @@ ok(/!isQmkFamily\(app\.family\)\s*\n?\s*&& \(app\.caps\.autoscroll/.test(hud), '
 
 // 5. snapshotQmkWorkspace: an unplugged link (hid.connected false) must not save.
 {
-    const { snapshotQmkWorkspace } = await import('../vil.js?v=76');
+    const { snapshotQmkWorkspace } = await import('../vil.js?v=77');
     const flask = { getU16: async () => { throw new Error('unplugged'); } };
     const app = { family: 'svalboard', flask, caps: capabilities('svalboard', 27), hid: { connected: false } };
     await snapshotQmkWorkspace(app);

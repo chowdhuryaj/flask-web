@@ -8,11 +8,11 @@
 // answering the handshake); ZMK = 1d50:615e (shared by every ZMK board,
 // confirmed by meta 0x03 in zmk.js confirmZmkFamily).
 
-import { VIDPID, EXPECTED_PROTOCOL, CH_QMK, V_QMK } from './flaskproto.js?v=76';
-import { SVALBOARD_LAYOUT } from './svalboard-layout.js?v=76';
-import { capLabel, hoverText } from './keycodes.js?v=76';
+import { VIDPID, EXPECTED_PROTOCOL, CH_QMK, V_QMK } from './flaskproto.js?v=77';
+import { SVALBOARD_LAYOUT } from './svalboard-layout.js?v=77';
+import { capLabel, hoverText } from './keycodes.js?v=77';
 import { ZMK_VIDPID, ZMK_FAMILY_LABELS, ZMK_EXPECTED_PROTOCOL, isZmkFamily,
-         zmkFamilyCandidate, zmkCapabilities } from './zmk.js?v=76';
+         zmkFamilyCandidate, zmkCapabilities } from './zmk.js?v=77';
 
 /** Every VID/PID the app talks to (webhid filters, desktop allow-list). */
 export const HID_IDS = [ZMK_VIDPID, VIDPID.svalboard];

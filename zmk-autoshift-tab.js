@@ -4,12 +4,12 @@
 // no per-key reassigning. Every SET adopts the echoed (clamped) value; edits are
 // live and the top bar's Save writes flash (reloadBar, source 0x2C).
 
-import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=76';
-import { CH_ZMK, V } from './flaskproto.js?v=76';
-import { blurClicks } from './zmk-behaviour-common.js?v=76';
+import { el, card, toggleRow, toast, reloadBar } from './ui.js?v=77';
+import { CH_ZMK, V } from './flaskproto.js?v=77';
+import { blurClicks } from './zmk-behaviour-common.js?v=77';
 import {
     ASH_GROUPS, ASH_DEFAULTS, ASH_TIMEOUT, ASH_RETRO_LIMIT, clampAshTimeout, clampRetroLimit,
-} from './zmk-autoshift-codec.js?v=76';
+} from './zmk-autoshift-codec.js?v=77';
 
 const IDS = {
     enabled: V.ashEnabled, timeout: V.ashTimeout, groups: V.ashGroups, modifiers: V.ashModifiers,

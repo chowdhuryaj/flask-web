@@ -4,32 +4,32 @@
 // meta, unlock state, tunables replay), drives capability-gated tabs, themes,
 // and the HUD.
 
-import { el, toast, modal } from './ui.js?v=76';
-import { diag } from './diag.js?v=76';
-import { FlaskHID } from './webhid.js?v=76';
-import { renderPreflight } from './preflight.js?v=76';
-import { FlaskProto, CH_ZMK, V } from './flaskproto.js?v=76';
+import { el, toast, modal } from './ui.js?v=77';
+import { diag } from './diag.js?v=77';
+import { FlaskHID } from './webhid.js?v=77';
+import { renderPreflight } from './preflight.js?v=77';
+import { FlaskProto, CH_ZMK, V } from './flaskproto.js?v=77';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=76';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=77';
 import { familyOf, familyLabel, capabilities, expectedProtocol, pickReconnectDevice,
-         isQmkFamily, lineOf, qmkProfile, readBoardMeta } from './boards.js?v=76';
-import { VialClient } from './vialclient.js?v=76';
-import { runUnlockFlow } from './unlock.js?v=76';
-import * as vil from './vil.js?v=76';
-import { CommandPalette } from './command-palette.js?v=76';
-import { HUD } from './hud.js?v=76';
+         isQmkFamily, lineOf, qmkProfile, readBoardMeta } from './boards.js?v=77';
+import { VialClient } from './vialclient.js?v=77';
+import { runUnlockFlow } from './unlock.js?v=77';
+import * as vil from './vil.js?v=77';
+import { CommandPalette } from './command-palette.js?v=77';
+import { HUD } from './hud.js?v=77';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
          zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
-         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=76';
-import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace, OfflineFlask } from './offline.js?v=76';
-import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=76';
-import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=76';
-import { shell } from './app-shell.js?v=76';
-import { installCaptions, setCaptionGroup } from './caption.js?v=76';
-import { saveState, discardMessage } from './save-state.js?v=76';
-import { board } from './board.js?v=76';
-import { attachHoldtap } from './behavior-catalog.js?v=76';
-import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=76';
+         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=77';
+import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace, OfflineFlask } from './offline.js?v=77';
+import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=77';
+import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=77';
+import { shell } from './app-shell.js?v=77';
+import { installCaptions, setCaptionGroup } from './caption.js?v=77';
+import { saveState, discardMessage } from './save-state.js?v=77';
+import { board } from './board.js?v=77';
+import { attachHoldtap } from './behavior-catalog.js?v=77';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=77';
 
 function downloadText(filename, text) {
     const a = document.createElement('a');

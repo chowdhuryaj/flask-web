@@ -4,12 +4,12 @@
 import assert from 'node:assert/strict';
 import {
     ASH_GROUPS, ASH_DEFAULTS, clampAshTimeout, clampRetroLimit, clampAshGroups, ashEligible,
-} from '../zmk-autoshift-codec.js?v=76';
-import { CH_ZMK, V, CMD, FlaskProto } from '../flaskproto.js?v=76';
-import { zmkCapabilities } from '../zmk.js?v=76';
-import { createZmkTemplate, ZmkOfflineFlask, normalizeZmkWorkspace } from '../zmk-offline.js?v=76';
-import { syncWorkspace, pendingCount } from '../offline.js?v=76';
-import { exportFlaskState, applyFlaskState } from '../zmk-export.js?v=76';
+} from '../zmk-autoshift-codec.js?v=77';
+import { CH_ZMK, V, CMD, FlaskProto } from '../flaskproto.js?v=77';
+import { zmkCapabilities } from '../zmk.js?v=77';
+import { createZmkTemplate, ZmkOfflineFlask, normalizeZmkWorkspace } from '../zmk-offline.js?v=77';
+import { syncWorkspace, pendingCount } from '../offline.js?v=77';
+import { exportFlaskState, applyFlaskState } from '../zmk-export.js?v=77';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };

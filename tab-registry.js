@@ -15,35 +15,35 @@
 // `app` needs only {trainerOnly, family, caps}. Constructors are called as
 // `new ctor(app)` by main.js; nothing here touches the DOM.
 
-import { isZmkFamily } from './zmk.js?v=76';
-import { isQmkFamily } from './boards.js?v=76';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=76';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=76';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=76';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=76';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=76';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=76';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=76';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=76';
-import { ZmkAutoshiftTab } from './zmk-autoshift-tab.js?v=76';
-import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=76';
-import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=76';
-import { ZmkTestTab } from './zmk-test-tab.js?v=76';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=76';
-import { MouseTab } from './mouse-tab.js?v=76';
-import { TrainerTab } from './trainer-tab.js?v=76';
-import { KeyboardTab } from './app-shell.js?v=76';
+import { isZmkFamily } from './zmk.js?v=77';
+import { isQmkFamily } from './boards.js?v=77';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=77';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=77';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=77';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=77';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=77';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=77';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=77';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=77';
+import { ZmkAutoshiftTab } from './zmk-autoshift-tab.js?v=77';
+import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=77';
+import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=77';
+import { ZmkTestTab } from './zmk-test-tab.js?v=77';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=77';
+import { MouseTab } from './mouse-tab.js?v=77';
+import { TrainerTab } from './trainer-tab.js?v=77';
+import { KeyboardTab } from './app-shell.js?v=77';
 // Svalboard (QMK line). Caps come from boards.js qmkCapabilities, whose keys
 // never overlap the ZMK rows' caps; every row also gates on the family.
-import { SettingsTab } from './settings-tab.js?v=76';
-import { MacrosTab } from './macros-tab.js?v=76';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=76';
-import { QmkLeaderTab } from './qmk-leader-tab.js?v=76';
-import { QmkShiftTab } from './qmk-shift-tab.js?v=76';
-import { TypingTab } from './typing-tab.js?v=76';
-import { CornerTab } from './corner-tab.js?v=76';
-import { QmkMouseTab } from './qmk-mouse-tab.js?v=76';
-import { QmkKeymapTab } from './qmk-keymap-tab.js?v=76';
+import { SettingsTab } from './settings-tab.js?v=77';
+import { MacrosTab } from './macros-tab.js?v=77';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=77';
+import { QmkLeaderTab } from './qmk-leader-tab.js?v=77';
+import { QmkShiftTab } from './qmk-shift-tab.js?v=77';
+import { TypingTab } from './typing-tab.js?v=77';
+import { CornerTab } from './corner-tab.js?v=77';
+import { QmkMouseTab } from './qmk-mouse-tab.js?v=77';
+import { QmkKeymapTab } from './qmk-keymap-tab.js?v=77';
 
 /**
  * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the

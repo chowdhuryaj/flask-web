@@ -7,9 +7,9 @@
 //
 // Reads every value ONCE into `this.s` and renders from that.
 
-import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=76';
-import { CH_QMK, V_QMK, slot, osName, CYCLOTAB_KEYS } from './flaskproto.js?v=76';
-import { announceEdit, bindingCell, pickKey, layerOptions } from './qmk-ui.js?v=76';
+import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=77';
+import { CH_QMK, V_QMK, slot, osName, CYCLOTAB_KEYS } from './flaskproto.js?v=77';
+import { announceEdit, bindingCell, pickKey, layerOptions } from './qmk-ui.js?v=77';
 
 export class TypingTab {
     constructor(app) {

@@ -27,16 +27,16 @@ const doc = new EventTarget();
 Object.assign(doc, { createElement: (t) => new Node(t), createTextNode: (t) => ({ nodeType: 3, textContent: t }), querySelector: () => null, body: new Node('body') });
 globalThis.document = doc;
 
-const { CH_ZMK, V } = await import('../flaskproto.js?v=76');
-const { zmkCapabilities } = await import('../zmk.js?v=76');
-const off = await import('../zmk-offline.js?v=76');
+const { CH_ZMK, V } = await import('../flaskproto.js?v=77');
+const { zmkCapabilities } = await import('../zmk.js?v=77');
+const off = await import('../zmk-offline.js?v=77');
 const { createZmkTemplate, ZmkOfflineFlask, queuedLayersMatch, dropJournals } = off;
-const { setZmkContext } = await import('../zmk-keycodes.js?v=76');
-const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=76');
-const { encodeGestureSlot } = await import('../zmk-output-codec.js?v=76');
-const { decodeTdStep } = await import('../zmk-tapdance-codec.js?v=76');
-const common = await import('../zmk-behaviour-common.js?v=76');
-const { exportFlaskState, applyFlaskState } = await import('../zmk-export.js?v=76');
+const { setZmkContext } = await import('../zmk-keycodes.js?v=77');
+const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=77');
+const { encodeGestureSlot } = await import('../zmk-output-codec.js?v=77');
+const { decodeTdStep } = await import('../zmk-tapdance-codec.js?v=77');
+const common = await import('../zmk-behaviour-common.js?v=77');
+const { exportFlaskState, applyFlaskState } = await import('../zmk-export.js?v=77');
 
 const behaviors = new Map(TOTEM_DEFAULT.behaviors.map((d) => [d.id, d]));
 setZmkContext({ behaviors, layers: [{ id: 0, name: 'base' }] });
