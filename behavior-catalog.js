@@ -918,6 +918,16 @@ const FW_LEGEND = new Map([
     ['Mod / Neru Hints', (p1) => ({ top: holdMod(p1), main: 'Neru Hints', hold: 'mod' })],
     ['Mod / Neru Menu Key', (p1, p2) => ({ top: holdMod(p1), main: `Neru ${neruKey(p2).main.replace(/^Neru /, '')}`, hold: 'mod' })],
 ]);
+// Totem-ZMK wraps &mmv / &msc in param-less macros: Studio rejects a raw param on
+// behavior_input_two_axis (no metadata → INVALID_PARAMETERS). Contract with the
+// firmware: node name, display-name, search words.
+export const MOUSE_MACROS = [
+    ['mm_up', 'Mouse ↑', 'up'], ['mm_down', 'Mouse ↓', 'down'], ['mm_left', 'Mouse ←', 'left'], ['mm_right', 'Mouse →', 'right'],
+    ['mm_ul', 'Mouse ↖', 'up-left'], ['mm_ur', 'Mouse ↗', 'up-right'], ['mm_dl', 'Mouse ↙', 'down-left'], ['mm_dr', 'Mouse ↘', 'down-right'],
+    ['sc_up', 'Scroll ↑', 'up'], ['sc_down', 'Scroll ↓', 'down'], ['sc_left', 'Scroll ←', 'left'], ['sc_right', 'Scroll →', 'right'],
+].map(([node, name, dir]) => ({ node, name, dir, word: name.split(' ')[0] }));
+/** The contract row a device behaviour is, by display-name, else node name (a nameless node reports it). */
+export const mouseMacroOf = (d) => (d ? MOUSE_MACROS.find((m) => d.displayName === m.name || d.displayName === m.node || d.node === m.node) ?? null : null);
 const MOUSE_BUTTON = { 1: 'Click', 2: 'Right click', 4: 'Middle click', 8: 'Back', 16: 'Forward' };   // pointing.h MB1..MB5 bits
 const fwLegend = (raw) => FW_LEGEND.get(behaviorsNow().get(raw?.behaviorId)?.displayName)?.(raw.param1 >>> 0, raw.param2 >>> 0);
 

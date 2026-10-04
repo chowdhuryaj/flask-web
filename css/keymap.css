@@ -72,6 +72,7 @@ kbd {
 }
 .tile:hover { border-color: var(--accent-line); }
 .tile:active { cursor: grabbing; }
+.tile[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .tile-cap { font-size: var(--fs-md); font-weight: var(--fw-sb); line-height: 1.15; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-sub { font-family: var(--font-mono); font-size: 0.625rem; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile.t-layer .tile-cap { color: var(--c-layer); }

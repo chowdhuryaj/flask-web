@@ -18,7 +18,7 @@ import { keySurfaceOf } from './boards.js?v=77';
 import { captureOneKey } from './zmk-capture.js?v=77';
 import { usageParts, kpParam } from './zmk-keycodes.js?v=77';
 import { legendOf } from './legend.js?v=77';
-import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText, NERU_MENU, NERU_DESC } from './behavior-catalog.js?v=77';
+import { encode, keySections, composeTapHold, tapHoldSpecOf, modsText, NERU_MENU, NERU_DESC, MOUSE_MACROS, mouseMacroOf } from './behavior-catalog.js?v=77';
 
 const ADAPTER = 'zmk-studio';   // dockModel's default; createDock follows the board line
 const KEY_A = 0x04;
@@ -49,13 +49,10 @@ const ENTRY_CATEGORY = {
     advanced: 'Other',
 };
 const BEHAVIOUR_ORDER = ['Layers', 'Key behaviours', 'Bluetooth & output', 'Mouse', 'Device keys', 'Neru', 'Lighting', 'System', 'Macros & run', 'Other'];
-// pointing.h packs x into the high int16, y into the low. Magnitudes are the compiled
-// MOVE_VAL / SCRL_VAL of config/totem.keymap (1800 * MOUSE_SPEED_PCT/100, 20 * SCROLL_SPEED_PCT/100);
-// the app cannot read them from the device. Up is -y for move, +y for scroll.
-const POINTING = {
-    mouse_move: { word: 'Mouse', val: 1800, dirs: [['left', -1, 0], ['down', 0, 1], ['up', 0, -1], ['right', 1, 0]] },
-    mouse_scroll: { word: 'Scroll', val: 20, dirs: [['left', -1, 0], ['down', 0, -1], ['up', 0, 1], ['right', 1, 0]] },
-};
+// &mmv / &msc (live name, sim name) -> the direction word. Studio rejects their raw params,
+// so the palette offers the firmware's mm_* / sc_* macros (MOUSE_MACROS) instead.
+const POINTING = { mouse_move: 'Mouse', 'Mouse Move': 'Mouse', mouse_scroll: 'Scroll', 'Mouse Scroll': 'Scroll' };
+export const MOUSE_MACRO_HINT = 'needs firmware with mouse macros (mm_*/sc_*)';
 // Totem firmware behaviors the picker expands by name (Totem-ZMK config/totem.keymap).
 // Neru menu letters are HID keyboard usages; hold modifiers are the four left mods.
 const NERU_USAGE = (c) => kpParam(c === '2' ? 0x1F : 0x04 + c.charCodeAt(0) - 65);
@@ -195,6 +192,7 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
             const [p1, p2] = [kinds(d, 'param1'), kinds(d, 'param2')];
             const short = d.displayName.replace(/\s*\/\s*Layer$/, '');
             const n = d.displayName;
+            if (POINTING[n] || mouseMacroOf(d)) continue;   // the direction tiles below
             if (NERU_PLAIN[n]) {
                 neru.push(tile({ id: `adv:${d.id}`, label: NERU_PLAIN[n], desc }, { behaviorId: d.id, param1: 0, param2: 0 }, adapter));
             } else if (NERU_KEY[n]) {
@@ -222,13 +220,6 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
                     t.build = build;
                     out.push(t);
                 }
-            } else if (!p1.length && POINTING[d.displayName]) {
-                // Param-0 would be a no-op; offer the four directions instead.
-                const { word, val, dirs } = POINTING[d.displayName];
-                for (const [dir, x, y] of dirs) {
-                    out.push(tile({ id: `adv:${d.id}:${dir}`, label: `${word} ${dir}`, desc: 'Other firmware behavior', sub: '' },
-                        { behaviorId: d.id, param1: (((x * val & 0xFFFF) << 16) + (y * val & 0xFFFF)) >>> 0, param2: 0 }, adapter));
-                }
             } else if (!p1.length) {
                 out.push(tile({ id: `adv:${d.id}`, label: d.displayName, desc: 'Other firmware behavior', sub: '' },
                     { behaviorId: d.id, param1: 0, param2: 0 }, adapter));
@@ -247,6 +238,16 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
                 out.push(t);
             }
             // Other shapes (constants, ranges): no tile; the picker's "Other behavior" row covers them.
+        }
+        // Mouse / scroll directions: the macro's id with p1 = p2 = 0, never &mmv/&msc with a raw param.
+        // Older firmware (pointing, no macros) gets the same tiles disabled.
+        const words = new Set(adv.behaviors.map((d) => POINTING[d.displayName] ?? mouseMacroOf(d)?.word).filter(Boolean));
+        for (const m of MOUSE_MACROS.filter((x) => words.has(x.word))) {
+            const d = adv.behaviors.find((x) => mouseMacroOf(x) === m);
+            const label = `${m.word} ${m.dir} (${m.node} macro)`;
+            out.push(d ? tile({ id: `mm:${m.node}`, label, desc: 'Totem firmware macro', sub: '' }, { behaviorId: d.id, param1: 0, param2: 0 }, adapter)
+                : { id: `mm:${m.node}`, kind: 'binding', binding: null, disabled: true, cap: m.name, sub: '', tone: '', label: `${label}: ${MOUSE_MACRO_HINT}`,
+                    desc: '', search: `${m.name} ${label}`.toLowerCase() });
         }
         for (const t of out) t.search += ' advanced other';
         add('Other', out);
@@ -356,16 +357,18 @@ export function createDock({ app, assign, tools = [], surface = keySurfaceOf(app
     };
 
     function click(t) {
+        if (t.disabled) return;
         if (t.kind === 'key' && target) { target.set({ key: t.key, mods: (t.mods | armed) & 0xFF }); return; }
         assign(effective(t));
     }
 
     function tileEl(t) {
-        const b = el('button', { class: `tile${t.tone ? ' t-' + t.tone : ''}`, type: 'button', draggable: 'true',
-            'data-tile': t.id, 'aria-label': t.label || t.cap, title: t.label || t.cap,
+        const b = el('button', { class: `tile${t.tone ? ' t-' + t.tone : ''}`, type: 'button', draggable: String(!t.disabled),
+            'data-tile': t.id, 'aria-label': t.label || t.cap, title: t.label || t.cap, ...(t.disabled ? { 'aria-disabled': 'true' } : {}),
             'data-caption': `${t.label ?? t.cap}${t.desc ? ' · ' + t.desc : ''}`,
             onclick: () => click(t),
             ondragstart: (e) => {
+                if (t.disabled) { e.preventDefault(); return; }
                 e.dataTransfer.effectAllowed = 'copy';
                 e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(t.kind === 'key' ? effective(t) : t.binding));
                 e.dataTransfer.setData('text/plain', t.label || t.cap);

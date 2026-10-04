@@ -63,16 +63,14 @@ ok(searchTiles(model, 'bisect').length >= 2 + 4, '"bisect" finds every variant')
 // Plain leftovers keep their one tile; nothing else is dropped or doubled.
 eq(new Set([...other, ...neruTiles].map((t) => t.id)).size, other.length + neruTiles.length, 'tile ids are unique');
 
-// Mouse move / scroll: four direction tiles each, no param-0 tile. pointing.h: x high int16, y low;
-// magnitudes are the keymap's compiled MOVE_VAL 1800 / SCRL_VAL 20; move up = -y, scroll up = +y.
-const dirs = (id) => other.filter((t) => t.id.startsWith(`adv:${id}:`));
-eq(other.some((t) => t.id === 'adv:89' || t.id === 'adv:90'), false, 'no no-op param-0 tiles');
-eq(dirs(89).map((t) => [t.label, t.cap, t.binding.param1]),
-    [['Mouse left', 'Mouse ←', (-1800 & 0xFFFF) * 65536], ['Mouse down', 'Mouse ↓', 1800], ['Mouse up', 'Mouse ↑', (-1800) & 0xFFFF], ['Mouse right', 'Mouse →', 1800 * 65536]]);
-eq(dirs(90).map((t) => [t.label, t.cap, t.binding.param1]),
-    [['Scroll left', 'Scroll ←', (-20 & 0xFFFF) * 65536], ['Scroll down', 'Scroll ↓', (-20) & 0xFFFF], ['Scroll up', 'Scroll ↑', 20], ['Scroll right', 'Scroll →', 20 * 65536]]);
-ok(searchTiles(model, 'mouse left').some((t) => t.id === 'adv:89:left'), '"mouse left" finds it');
-ok(searchTiles(model, 'scroll up').some((t) => t.id === 'adv:90:up'), '"scroll up" finds it');
+// Mouse move / scroll: Studio rejects raw &mmv/&msc params, so this older device (no mm_*/sc_* macros)
+// gets the 12 contract tiles disabled, no param-0 tile, no raw-param tile.
+eq(other.some((t) => t.id === 'adv:89' || t.id === 'adv:90' || t.id.startsWith('adv:89:') || t.id.startsWith('adv:90:')), false, 'no &mmv/&msc tiles');
+const mm = other.filter((t) => t.id.startsWith('mm:'));
+eq(mm.map((t) => t.cap), ['Mouse ↑', 'Mouse ↓', 'Mouse ←', 'Mouse →', 'Mouse ↖', 'Mouse ↗', 'Mouse ↙', 'Mouse ↘', 'Scroll ↑', 'Scroll ↓', 'Scroll ←', 'Scroll →']);
+ok(mm.every((t) => t.disabled && t.binding === null && t.label.endsWith('needs firmware with mouse macros (mm_*/sc_*)')), 'disabled with the hint');
+ok(searchTiles(model, 'mouse left').some((t) => t.id === 'mm:mm_left'), '"mouse left" finds it');
+ok(searchTiles(model, 'scroll up').some((t) => t.id === 'mm:sc_up'), '"scroll up" finds it');
 
 // Search.
 eq(searchTiles(model, 'super delete').filter((t) => t.id.startsWith('adv:88:')).length, NAMES.length, '"super delete" finds the layered tiles');
