@@ -82,13 +82,16 @@ export function dumpSpec(caps = {}, comboMasks = COMBO_MASKS_DEFAULT) {
  * does not serve are skipped. */
 export async function readTunings(app, flask = app.flask) {
     const out = {};
+    let asked = 0;
     const masks = app.caps.comboLayerMasks ? await comboMaskCount(flask) : 0;
     for (const [ch, ids] of dumpSpec(app.caps, masks)) {
         for (const id of ids) {
+            asked++;
             try { out[`${ch}:${id}`] = { op: 'u16', val: await flask.getU16(ch, id) }; }
             catch { /* id not served */ }
         }
     }
+    Object.defineProperty(out, 'asked', { value: asked });   // non-enumerable: callers spread/iterate `out`
     return out;
 }
 
@@ -100,7 +103,10 @@ export async function snapshotQmkWorkspace(app) {
     const { flask, family } = app;
     if (!isQmkFamily(family) || !app.caps.flask) return;
     const tunables = await readTunings(app, flask);
-    if (app.flask !== flask || app.family !== family) return;
+    // A plain unplug replaces neither app.flask nor app.family: the read fails into
+    // the catches above, so also require a live link and a complete read.
+    if (app.flask !== flask || app.family !== family || !app.hid?.connected) return;
+    if (Object.keys(tunables).length < tunables.asked) return;
     const prev = loadWorkspace(family);
     const ws = prev ?? { v: 1, key: family, family, dirty: { tun: {}, rgb: {}, saves: [] } };
     Object.assign(ws, {

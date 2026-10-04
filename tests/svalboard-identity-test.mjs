@@ -91,4 +91,13 @@ eq(familyOf(0x1234, 0x5678), 'generic', 'anything else is generic');
 const hud = readFileSync(new URL('../' + 'hud.js', import.meta.url), 'utf8');
 ok(/!isQmkFamily\(app\.family\)\s*\n?\s*&& \(app\.caps\.autoscroll/.test(hud), 'HUD status poll gated off the QMK line');
 
+// 5. snapshotQmkWorkspace: an unplugged link (hid.connected false) must not save.
+{
+    const { snapshotQmkWorkspace } = await import('../vil.js?v=76');
+    const flask = { getU16: async () => { throw new Error('unplugged'); } };
+    const app = { family: 'svalboard', flask, caps: capabilities('svalboard', 27), hid: { connected: false } };
+    await snapshotQmkWorkspace(app);
+    ok(![...mem.keys()].some((k) => /svalboard/.test(k)), 'unplugged Svalboard saves no workspace');
+}
+
 console.log(`svalboard-identity-test: ${checks} checks OK`);
