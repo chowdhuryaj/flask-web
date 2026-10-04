@@ -39,6 +39,7 @@
         "filter": [
           "*.js",
           "*.html",
+          "!dev-sval-harness.html",
           "*.css",
           "css/**",
           "fonts/**",
