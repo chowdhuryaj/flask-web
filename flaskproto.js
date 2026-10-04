@@ -34,6 +34,7 @@ export const CH_ZMK = {
     scrollScale: 0x29, // v15+: flask_scrollscale live scroll speed
     adaptive: 0x2B, // v18+ (Totem): flask_adaptive runtime adaptive keys (&fak)
     autoShift: 0x2C, // v19+ (Totem): flask_autoshift runtime global auto shift + retro shift
+    mouseKeys: 0x2D, // v20+ (Totem): flask_mousekeys live &mmv/&msc speed + ramp
 };
 
 export const V = {
@@ -72,6 +73,12 @@ export const V = {
     // benched default, 200 = twice as fast. One knob drives both axes so
     // their base ratio (16 horizontal : 12 vertical on the Imprint) holds.
     scrollSpeedPct: 0x01,
+    // mouse keys (flask_mousekeys 0x2D, v20+). Plain u16 each. High nibble =
+    // kind (0x0_ pointer, 0x1_ scroll). Speed = percent of the keymap's
+    // compiled max (10..400), ramp = ms to full speed (0..3000, 0 = none),
+    // exp 0 uniform / 1 linear / 2 quadratic / 3 cubic.
+    mkPointerSpeed: 0x01, mkPointerRamp: 0x02, mkPointerExp: 0x03,
+    mkScrollSpeed: 0x11, mkScrollRamp: 0x12, mkScrollExp: 0x13,
     // RGB map (0x21) — enabled/layers/leds are u16; led/fill are
     // PAYLOAD-ADDRESSED byte frames (getBytes/setBytes, never u16 helpers).
     // 0x04-0x08: effect engine (v9) — whole-strip animation underneath the

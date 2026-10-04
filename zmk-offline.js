@@ -18,31 +18,31 @@
 // (Cyboard-ZMK config/info.json + imprint.keymap): 70 positions, rows
 // 12/12/12/12/10/6/6, layers Base/Control/Fn/Mouse/Snipe/Num + 4 spares.
 
-import { CH_ZMK, V } from './flaskproto.js?v=77';
+import { CH_ZMK, V } from './flaskproto.js?v=78';
 import { ZMK_EXPECTED_PROTOCOL, ZMK_FAMILY_LABELS, ZMK_FAMILY_CODES, ZMK_HARDWARE,
-         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=77';
-import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=77';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=77';
-import { isUnassignable } from './behavior-catalog.js?v=77';
+         zmkCapabilities, ZMK_TRACKBALLS } from './zmk.js?v=78';
+import { TOTEM_GEOM, TOTEM_LAYOUT } from './zmk-totem-layout.js?v=78';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=78';
+import { isUnassignable } from './behavior-catalog.js?v=78';
 import { OfflineFlask, saveWorkspace, pendingCount, clearDirty, loadWorkspace, workspaceKey,
-         describeChanges, BASE_PREFIX } from './offline.js?v=77';
-import { saveState } from './save-state.js?v=77';
-import { LOCK_UNLOCKED } from './zmk-studio.js?v=77';
-import { kpParam, cpParam, usageFromName, layerLabel } from './zmk-keycodes.js?v=77';
+         describeChanges, BASE_PREFIX } from './offline.js?v=78';
+import { saveState } from './save-state.js?v=78';
+import { LOCK_UNLOCKED } from './zmk-studio.js?v=78';
+import { kpParam, cpParam, usageFromName, layerLabel } from './zmk-keycodes.js?v=78';
 import { decodeComboSlot, encodeComboSlot, COMBO_MAX_KEYS, COMBO_POS_NONE,
          COMBO_ACTION, COMBO_LAYER_ANY, decodeComboSlotV2, encodeComboSlotV2,
          decodeComboSlotV3, encodeComboSlotV3,
-         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=77';
-import { decodeCskSlot, encodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps } from './zmk-csk-codec.js?v=77';
+         comboSlotToTyped, comboTypedToLegacy } from './zmk-combos-codec.js?v=78';
+import { decodeCskSlot, encodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps } from './zmk-csk-codec.js?v=78';
 import { TD_ACTION, decodeTdStep, encodeTdStep, decodeTdCfg, encodeTdCfg }
-    from './zmk-tapdance-codec.js?v=77';
-import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=77';
+    from './zmk-tapdance-codec.js?v=78';
+import { decodeMacroStep, encodeMacroStep, MACRO_ACTION } from './zmk-macros-codec.js?v=78';
 import { AK_ACTION, decodeAkRule, encodeAkRule, decodeAkStep, encodeAkStep,
-         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=77';
+         decodeAkFallback, encodeAkFallback } from './zmk-adaptive-codec.js?v=78';
 import { ASH_DEFAULTS, clampAshTimeout, clampRetroLimit, clampAshGroups, clampAshFlag }
-    from './zmk-autoshift-codec.js?v=77';
+    from './zmk-autoshift-codec.js?v=78';
 import { OUTPUT_ACTION, encodeLeaderSlot, decodeLeaderSlot,
-         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=77';
+         encodeGestureSlot, decodeGestureSlot } from './zmk-output-codec.js?v=78';
 
 export const ZMK_TEMPLATE_FAMILIES = ['imprint', 'totem'];
 
@@ -571,7 +571,26 @@ function seedImprintTunables(tun, family = 'imprint') {
     seed(CH_ZMK.autoShift, V.ashNoAutoRepeat, A.noAutoRepeat);
     seed(CH_ZMK.autoShift, V.ashRetro, A.retro);
     seed(CH_ZMK.autoShift, V.ashRetroLimit, A.retroLimit);
+    // v20: flask_mousekeys (Totem only — the Imprint image has no
+    // flask_mk_* nodes, so its 0x2D answers unhandled). Boot values are the
+    // Totem keymap's tuning block: pointer 100% / 600 ms / linear, scroll
+    // 100% / 150 ms / uniform.
+    if (family === 'totem') {
+        seed(CH_ZMK.mouseKeys, V.mkPointerSpeed, 100);
+        seed(CH_ZMK.mouseKeys, V.mkPointerRamp, 600);
+        seed(CH_ZMK.mouseKeys, V.mkPointerExp, 1);
+        seed(CH_ZMK.mouseKeys, V.mkScrollSpeed, 100);
+        seed(CH_ZMK.mouseKeys, V.mkScrollRamp, 150);
+        seed(CH_ZMK.mouseKeys, V.mkScrollExp, 0);
+    }
 }
+
+/** SET clamps for 0x2D (flask_mousekeys_params_set; the echo is the applied value). */
+const clampTo = (lo, hi) => (v) => Math.min(Math.max(lo, Math.round(Number(v) || 0)), hi);
+const MK_CLAMP = {
+    [V.mkPointerSpeed]: clampTo(10, 400), [V.mkPointerRamp]: clampTo(0, 3000), [V.mkPointerExp]: clampTo(0, 3),
+    [V.mkScrollSpeed]: clampTo(10, 400), [V.mkScrollRamp]: clampTo(0, 3000), [V.mkScrollExp]: clampTo(0, 3),
+};
 
 
 /** SET clamps for 0x2C, per contract §2 (the echo is the applied value). */
@@ -856,6 +875,10 @@ export class ZmkOfflineFlask extends OfflineFlask {
             if (id === V.akStepCount) return ak.rules[0].steps.length;
             throw new Error('unhandled');
         }
+        if (ch === CH_ZMK.mouseKeys) {   // Totem only, six ids (0xFF echo otherwise)
+            if (this.ws.family !== 'totem' || !MK_CLAMP[id]) throw new Error('unhandled');
+            return super.getU16(ch, id);
+        }
         if (ch === CH_ZMK.autoShift) {
             if (!ASH_CLAMP[id]) throw new Error('unhandled');   // 0xFF echo
             return super.getU16(ch, id);
@@ -889,6 +912,12 @@ export class ZmkOfflineFlask extends OfflineFlask {
         if (ch === CH_ZMK.autoShift) {
             if (!ASH_CLAMP[id]) throw new Error('unhandled');
             const v = ASH_CLAMP[id](value);
+            this._journal(ch, id, 'u16', v);
+            return v;
+        }
+        if (ch === CH_ZMK.mouseKeys) {
+            if (this.ws.family !== 'totem' || !MK_CLAMP[id]) throw new Error('unhandled');
+            const v = MK_CLAMP[id](value);
             this._journal(ch, id, 'u16', v);
             return v;
         }

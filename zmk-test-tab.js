@@ -12,16 +12,16 @@
 //   - Mouse + scroll tester: pointer speed/peak, buttons, wheel notches and
 //     direction — bench surface for the scroll chain / snap / accel feel.
 
-import { el, card, toast } from './ui.js?v=77';
-import { CH_ZMK, V } from './flaskproto.js?v=77';
-import { diag } from './diag.js?v=77';
-import { calibrateButton } from './zmk-ht-calibrate-card.js?v=77';
+import { el, card, toast } from './ui.js?v=78';
+import { CH_ZMK, V } from './flaskproto.js?v=78';
+import { diag } from './diag.js?v=78';
+import { calibrateButton } from './zmk-ht-calibrate-card.js?v=78';
 import { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION,
          encodeComboSlotV3, decodeComboSlotV3 }
-    from './zmk-combos-codec.js?v=77';
-import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=77';
+    from './zmk-combos-codec.js?v=78';
+import { encodeCskSlot, decodeCskSlot } from './zmk-csk-codec.js?v=78';
 import { TD_ACTION, encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=77';
+    from './zmk-tapdance-codec.js?v=78';
 
 const now = () => performance.now();
 
@@ -183,6 +183,23 @@ export class ZmkTestTab {
                     if (echo != null && echo !== 400) {
                         throw new Error(`echo said ${echo}, device stored ${got}`);
                     }
+                    return `500→${got}, restored ${orig}`;
+                });
+            }
+            if (caps.mouseKeys) {
+                await probe('mouse keys: pointer speed round-trip', () =>
+                    flipU16(CH_ZMK.mouseKeys, V.mkPointerSpeed, 175));
+                await probe('mouse keys: scroll ramp round-trip', () =>
+                    flipU16(CH_ZMK.mouseKeys, V.mkScrollRamp, 400));
+                // flask_mousekeys clamps speed to 10..400 and re-GETs, so the
+                // echo must carry the CLAMPED value.
+                await probe('mouse keys: speed clamps out-of-range', async () => {
+                    const orig = await flask.getU16(CH_ZMK.mouseKeys, V.mkPointerSpeed);
+                    const echo = await flask.setU16(CH_ZMK.mouseKeys, V.mkPointerSpeed, 500);
+                    const got = await flask.getU16(CH_ZMK.mouseKeys, V.mkPointerSpeed);
+                    await flask.setU16(CH_ZMK.mouseKeys, V.mkPointerSpeed, orig);
+                    if (got !== 400) throw new Error(`sent 500, device kept ${got} (want 400)`);
+                    if (echo != null && echo !== 400) throw new Error(`echo said ${echo}, device stored ${got}`);
                     return `500→${got}, restored ${orig}`;
                 });
             }

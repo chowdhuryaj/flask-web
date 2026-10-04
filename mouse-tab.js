@@ -1,10 +1,10 @@
-// Mouse (pointing-device) tuning tab — the Imprint's trackballs. Slider
+// Mouse tuning tab — the Imprint's trackballs, and mouse keys (Totem). Slider
 // ranges mirror the firmware, but the firmware clamps are authoritative
 // (clamp-echo). Float params ride the wire ×100 (accel).
 
-import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=77';
-import { CH_ZMK, V } from './flaskproto.js?v=77';
-import { renderKeyboardSVG } from './board.js?v=77';
+import { el, card, sliderRow, toggleRow, selectRow, saveBar, toast } from './ui.js?v=78';
+import { CH_ZMK, V } from './flaskproto.js?v=78';
+import { renderKeyboardSVG } from './board.js?v=78';
 
 const pct = (v) => (v / 100).toFixed(2);
 
@@ -85,6 +85,35 @@ export class MouseTab {
             };
             await this.renderBallsPreview();
             cardsRow.append(ballsCard);
+        }
+
+        // ---- mouse keys ----
+        // ZMK line v20+ (flask_mousekeys, channel 0x2D): &mmv/&msc run at the
+        // keymap's compiled max rate; the firmware scales that by a live
+        // percent and ramps it in over Ramp ms as (t/ramp)^exp. Thumb
+        // speed-step layers still multiply on top. Clamps are the firmware's
+        // (echo). One SAVE persists pointer and scroll together.
+        if (caps.mouseKeys) {
+            const EXP = ['uniform', 'linear', 'quadratic', 'cubic'];
+            const rows = async (title, speedId, rampId, expId) => [
+                el('div', { class: 'hint', text: title }),
+                sliderRow({ label: 'Speed', hint: '100% = the keymap\'s compiled max speed',
+                    min: 10, max: 400, step: 5, format: (v) => `${v}%`,
+                    value: await g(CH_ZMK.mouseKeys, speedId),
+                    onChange: (v) => flask.setU16(CH_ZMK.mouseKeys, speedId, v) }),
+                sliderRow({ label: 'Ramp', hint: 'time to reach full speed; 0 = full speed at once',
+                    min: 0, max: 3000, step: 50, format: (v) => `${v} ms`,
+                    value: await g(CH_ZMK.mouseKeys, rampId),
+                    onChange: (v) => flask.setU16(CH_ZMK.mouseKeys, rampId, v) }),
+                sliderRow({ label: 'Acceleration', hint: 'shape of the ramp (ignored when Ramp is 0)',
+                    min: 0, max: 3, step: 1, format: (v) => EXP[v] ?? String(v),
+                    value: await g(CH_ZMK.mouseKeys, expId),
+                    onChange: (v) => flask.setU16(CH_ZMK.mouseKeys, expId, v) }),
+            ];
+            cardsRow.append(card('Mouse keys', 'speed and acceleration of the mouse-move and scroll keys',
+                ...await rows('Pointer', V.mkPointerSpeed, V.mkPointerRamp, V.mkPointerExp),
+                ...await rows('Scroll', V.mkScrollSpeed, V.mkScrollRamp, V.mkScrollExp),
+                saveBar(() => flask.save(CH_ZMK.mouseKeys))));
         }
 
         // ---- acceleration ----

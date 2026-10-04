@@ -4,8 +4,8 @@
 // id has its §1.3 group.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { zmkCapabilities } from '../zmk.js?v=77';
-import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js?v=77';
+import { zmkCapabilities } from '../zmk.js?v=78';
+import { TAB_TABLE, TAB_GROUPS, tabsFor, groupOf } from '../tab-registry.js?v=78';
 
 const before = JSON.parse(readFileSync(new URL('./fixtures/tabs-before-wp0.json', import.meta.url)));
 // Deliberate changes from §1.3; anything else differing is a regression.
@@ -99,6 +99,15 @@ for (const ws of Object.keys(before)) {
     assert.ok(!beh('generic', true).includes('zmk-autoshift'), 'never without a ZMK family'); checks++;
     const t = TAB_TABLE.find((u) => u.id === 'zmk-autoshift');
     assert.equal(t.label, 'Auto Shift'); assert.equal(t.screen, 'behaviours'); checks += 2;
+}
+// flask_mousekeys (0x2D, v20): the Totem gets Device › Mouse only with caps.mouseKeys
+// (main.js probe); the Imprint keeps it through caps.mouse.
+{
+    const ids = (fam, v, mk) => tabsFor({ family: fam, caps: { ...zmkCapabilities(fam, v), ...(mk == null ? {} : { mouseKeys: mk }) } }).map((t) => t.id);
+    assert.ok(ids('totem', 20).includes('mouse'), 'totem v20: Mouse tab'); checks++;
+    assert.ok(!ids('totem', 20, false).includes('mouse'), 'probe failed: no Mouse tab'); checks++;
+    assert.ok(!ids('totem', 19).includes('mouse'), 'totem v19: no Mouse tab'); checks++;
+    assert.ok(ids('imprint', 19).includes('mouse'), 'imprint keeps its Mouse tab'); checks++;
 }
 assert.deepEqual(tabsFor({ trainerOnly: true }).map((t) => t.id), ['trainer']); checks++;
 // Rows sharing an id must agree on label and group.

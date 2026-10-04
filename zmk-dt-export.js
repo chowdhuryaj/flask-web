@@ -337,7 +337,7 @@ export function exportKeymapText(data, opts = {}) {
     if (akLive) notExported.push(`adaptive keys: ${akLive} flask_adaptive rule(s) (a runtime table; the keymap's ak nodes are only the compiled defaults). Keep the app's JSON export.`);
     const gestLive = (flask.gestures?.sets ?? []).flat().filter((g) => g.action).length;
     if (gestLive) notExported.push(`gestures: ${gestLive} gesture binding(s) (Imprint trackball runtime table).`);
-    const settings = ['autoscroll', 'accel', 'scrollSnap', 'scrollSpeed', 'ballSwap', 'autoMouse', 'rgb']
+    const settings = ['autoscroll', 'accel', 'scrollSnap', 'scrollSpeed', 'mouseKeys', 'ballSwap', 'autoMouse', 'rgb']
         .filter((k) => flask[k]);
     if (settings.length) notExported.push(`device settings (runtime, Kconfig/devicetree-less): ${settings.join(', ')}.`);
 

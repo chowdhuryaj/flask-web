@@ -6,10 +6,10 @@
 // journals the whole decoded macro list; sync replays it (and reports the
 // unlock requirement if the board arrives locked).
 
-import { el, card, toast } from './ui.js?v=77';
-import { MacroCodec } from './vialproto.js?v=77';
-import { encode } from './behavior-catalog.js?v=77';
-import { bindingCell, pickKey, pasteToKey, addSummary, openSheet, reloadRow, slotRow } from './qmk-ui.js?v=77';
+import { el, card, toast } from './ui.js?v=78';
+import { MacroCodec } from './vialproto.js?v=78';
+import { encode } from './behavior-catalog.js?v=78';
+import { bindingCell, pickKey, pasteToKey, addSummary, openSheet, reloadRow, slotRow } from './qmk-ui.js?v=78';
 
 const STEP_KINDS = [
     ['text', 'Type text'], ['tap', 'Tap key'], ['down', 'Hold key down'], ['up', 'Release key'], ['delay', 'Delay'],

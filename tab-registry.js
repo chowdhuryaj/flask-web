@@ -15,35 +15,35 @@
 // `app` needs only {trainerOnly, family, caps}. Constructors are called as
 // `new ctor(app)` by main.js; nothing here touches the DOM.
 
-import { isZmkFamily } from './zmk.js?v=77';
-import { isQmkFamily } from './boards.js?v=77';
-import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=77';
-import { ZmkRgbTab } from './zmk-rgb-tab.js?v=77';
-import { ZmkCombosTab } from './zmk-combos-tab.js?v=77';
-import { ZmkMacrosTab } from './zmk-macros-tab.js?v=77';
-import { ZmkLeaderTab } from './zmk-leader-tab.js?v=77';
-import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=77';
-import { ZmkShiftTab } from './zmk-shift-tab.js?v=77';
-import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=77';
-import { ZmkAutoshiftTab } from './zmk-autoshift-tab.js?v=77';
-import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=77';
-import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=77';
-import { ZmkTestTab } from './zmk-test-tab.js?v=77';
-import { ZmkModesTab } from './zmk-modes-tab.js?v=77';
-import { MouseTab } from './mouse-tab.js?v=77';
-import { TrainerTab } from './trainer-tab.js?v=77';
-import { KeyboardTab } from './app-shell.js?v=77';
+import { isZmkFamily } from './zmk.js?v=78';
+import { isQmkFamily } from './boards.js?v=78';
+import { ZmkKeymapTab } from './zmk-keymap-tab.js?v=78';
+import { ZmkRgbTab } from './zmk-rgb-tab.js?v=78';
+import { ZmkCombosTab } from './zmk-combos-tab.js?v=78';
+import { ZmkMacrosTab } from './zmk-macros-tab.js?v=78';
+import { ZmkLeaderTab } from './zmk-leader-tab.js?v=78';
+import { ZmkGesturesTab } from './zmk-gestures-tab.js?v=78';
+import { ZmkShiftTab } from './zmk-shift-tab.js?v=78';
+import { ZmkTapDanceTab } from './zmk-tapdance-tab.js?v=78';
+import { ZmkAutoshiftTab } from './zmk-autoshift-tab.js?v=78';
+import { ZmkAdaptiveTab } from './zmk-adaptive-tab.js?v=78';
+import { ZmkHoldTimingTab } from './zmk-holdtiming-card.js?v=78';
+import { ZmkTestTab } from './zmk-test-tab.js?v=78';
+import { ZmkModesTab } from './zmk-modes-tab.js?v=78';
+import { MouseTab } from './mouse-tab.js?v=78';
+import { TrainerTab } from './trainer-tab.js?v=78';
+import { KeyboardTab } from './app-shell.js?v=78';
 // Svalboard (QMK line). Caps come from boards.js qmkCapabilities, whose keys
 // never overlap the ZMK rows' caps; every row also gates on the family.
-import { SettingsTab } from './settings-tab.js?v=77';
-import { MacrosTab } from './macros-tab.js?v=77';
-import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=77';
-import { QmkLeaderTab } from './qmk-leader-tab.js?v=77';
-import { QmkShiftTab } from './qmk-shift-tab.js?v=77';
-import { TypingTab } from './typing-tab.js?v=77';
-import { CornerTab } from './corner-tab.js?v=77';
-import { QmkMouseTab } from './qmk-mouse-tab.js?v=77';
-import { QmkKeymapTab } from './qmk-keymap-tab.js?v=77';
+import { SettingsTab } from './settings-tab.js?v=78';
+import { MacrosTab } from './macros-tab.js?v=78';
+import { TapDanceTab, ComboTab, KeyOverrideTab } from './entries-tab.js?v=78';
+import { QmkLeaderTab } from './qmk-leader-tab.js?v=78';
+import { QmkShiftTab } from './qmk-shift-tab.js?v=78';
+import { TypingTab } from './typing-tab.js?v=78';
+import { CornerTab } from './corner-tab.js?v=78';
+import { QmkMouseTab } from './qmk-mouse-tab.js?v=78';
+import { QmkKeymapTab } from './qmk-keymap-tab.js?v=78';
 
 /**
  * What KIND of thing a tab is. Mirrors AdeptCompanion's PaletteGroup, so the
@@ -83,7 +83,9 @@ export const TAB_TABLE = [
     { id: 'qmk-settings', label: 'Settings', group: 'device', screen: 'device', when: (a) => qmk(a) && !!a.caps.vial, ctor: SettingsTab },
     { id: 'zmk-keymap', label: 'Keymap', group: 'keys', screen: 'keymap', when: (a) => a.caps.zmkStudio, ctor: ZmkKeymapTab },
     { id: 'gestures', label: 'Gestures', group: 'device', screen: 'device', when: (a) => a.caps.gestures, ctor: ZmkGesturesTab },
-    { id: 'mouse', label: 'Mouse', group: 'device', screen: 'device', when: (a) => zmk(a) && a.caps.mouse, ctor: MouseTab },
+    // caps.mouse = trackball channels (Imprint); caps.mouseKeys = flask_mousekeys
+    // (0x2D, v20, main.js probe) — the Totem's Mouse tab is just that card.
+    { id: 'mouse', label: 'Mouse', group: 'device', screen: 'device', when: (a) => zmk(a) && !!(a.caps.mouse || a.caps.mouseKeys), ctor: MouseTab },
     // Needs no capability: it runs on browser key events.
     { id: 'trainer', label: 'Trainer', group: 'trainer', screen: 'trainer', when: () => true, ctor: TrainerTab },
     { id: 'rgb', label: 'RGB', group: 'device', screen: 'device', when: (a) => a.caps.rgbMap, ctor: ZmkRgbTab },

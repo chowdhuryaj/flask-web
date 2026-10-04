@@ -9,23 +9,23 @@
 // both ways — importing a v9 export into a v10 device just skips nothing,
 // importing v10 into v9 skips leader/gestures.
 
-import { CH_ZMK, V } from './flaskproto.js?v=77';
-import { zmkBehaviors } from './zmk-keycodes.js?v=77';
-import { isRecursiveOutput } from './behavior-catalog.js?v=77';
-import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=77';
+import { CH_ZMK, V } from './flaskproto.js?v=78';
+import { zmkBehaviors } from './zmk-keycodes.js?v=78';
+import { isRecursiveOutput } from './behavior-catalog.js?v=78';
+import { zmkAllSlotNames, zmkApplySlotNames } from './zmk.js?v=78';
 import { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS,
          encodeComboSlotV2, decodeComboSlotV2, comboSlotToTyped,
          encodeComboSlotV3, decodeComboSlotV3,
-         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=77';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=77';
-import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=77';
+         comboTypedToLegacy, findDuplicateCombo, comboSlotV2IsEmpty } from './zmk-combos-codec.js?v=78';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=78';
+import { encodeMacroStep, decodeMacroStep } from './zmk-macros-codec.js?v=78';
 import { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot }
-    from './zmk-output-codec.js?v=77';
-import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=77';
+    from './zmk-output-codec.js?v=78';
+import { encodeCskSlot, decodeCskSlot, cskMorphCaps, cskNeedsMorph, cskNeedsOs, cskOskCaps, MOD_SHIFT_ONLY } from './zmk-csk-codec.js?v=78';
 import { encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg }
-    from './zmk-tapdance-codec.js?v=77';
+    from './zmk-tapdance-codec.js?v=78';
 import { encodeAkRule, decodeAkRule, encodeAkStep, decodeAkStep, encodeAkFallback, decodeAkFallback }
-    from './zmk-adaptive-codec.js?v=77';
+    from './zmk-adaptive-codec.js?v=78';
 
 /** Behavior ids shift between firmware builds and differ from the offline sim,
  * so a behavior output (action 3) is exported with its display name beside the
@@ -93,6 +93,14 @@ async function exportFlaskStateInner(app) {
     }
     if (caps.ballSwap) {
         out.ballSwap = { swapped: await g(CH_ZMK.ballSwap, V.bswapSwapped) };
+    }
+    if (caps.mouseKeys) {
+        out.mouseKeys = {
+            pointer: { speedPct: await g(CH_ZMK.mouseKeys, V.mkPointerSpeed),
+                rampMs: await g(CH_ZMK.mouseKeys, V.mkPointerRamp), exp: await g(CH_ZMK.mouseKeys, V.mkPointerExp) },
+            scroll: { speedPct: await g(CH_ZMK.mouseKeys, V.mkScrollSpeed),
+                rampMs: await g(CH_ZMK.mouseKeys, V.mkScrollRamp), exp: await g(CH_ZMK.mouseKeys, V.mkScrollExp) },
+        };
     }
     if (caps.autoMouse) {
         out.autoMouse = {
@@ -375,6 +383,16 @@ async function applyFlaskStateInner(app, data, save = true) {
         if (s.speedPct != null) await setU(CH_ZMK.scrollScale, V.scrollSpeedPct, s.speedPct);
     }, CH_ZMK.scrollScale);
 
+    await section('mouseKeys', caps.mouseKeys, async (s) => {
+        const ids = [['pointer', V.mkPointerSpeed, V.mkPointerRamp, V.mkPointerExp],
+            ['scroll', V.mkScrollSpeed, V.mkScrollRamp, V.mkScrollExp]];
+        for (const [k, speed, ramp, exp] of ids) {
+            if (s[k]?.speedPct != null) await setU(CH_ZMK.mouseKeys, speed, s[k].speedPct);
+            if (s[k]?.rampMs != null) await setU(CH_ZMK.mouseKeys, ramp, s[k].rampMs);
+            if (s[k]?.exp != null) await setU(CH_ZMK.mouseKeys, exp, s[k].exp);
+        }
+    }, CH_ZMK.mouseKeys);
+
     await section('ballSwap', caps.ballSwap, async (s) => {
         if (s.swapped != null) await setU(CH_ZMK.ballSwap, V.bswapSwapped, s.swapped);
     }, CH_ZMK.ballSwap);
@@ -608,4 +626,4 @@ export async function saveFlaskChannels(app, channels) {
 }
 
 // window.flaskExportKeymap / window.flaskPrintLayers (side-effect import; see zmk-extras.js)
-import './zmk-extras.js?v=77';
+import './zmk-extras.js?v=78';

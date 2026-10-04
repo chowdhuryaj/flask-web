@@ -5,9 +5,9 @@
 // (zmk-leader-tab.js). Reads every value once into `this.s` and renders
 // from that (16 x 7 slots; re-reading after each pick made it unusable).
 
-import { el, card, sliderRow, toast, reloadBar } from './ui.js?v=77';
-import { CH_QMK, V_QMK, slot, SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS } from './flaskproto.js?v=77';
-import { announceEdit, bindingCell, pickKey } from './qmk-ui.js?v=77';
+import { el, card, sliderRow, toast, reloadBar } from './ui.js?v=78';
+import { CH_QMK, V_QMK, slot, SL_SEQS, SL_KEYS, SL_KIND_POS, SL_OUT_POS } from './flaskproto.js?v=78';
+import { announceEdit, bindingCell, pickKey } from './qmk-ui.js?v=78';
 
 const OUTPUT_KEYCODE = 0;   // flask_output_kind FLASK_OUT_KEYCODE
 

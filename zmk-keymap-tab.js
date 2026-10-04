@@ -11,24 +11,24 @@
 // Save/Discard to save-state (spec §3.2). Bindings are
 // {behaviorId,param1,param2} objects, not QMK ints.
 
-import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=77';
-import { board } from './board.js?v=77';
-import { createDock } from './keymap-dock.js?v=77';
-import { createInspector } from './keymap-inspector.js?v=77';
-import { encode } from './behavior-catalog.js?v=77';
-import { shell } from './app-shell.js?v=77';
-import { saveState } from './save-state.js?v=77';
-import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=77';
-import { zmkApplyPendingKeymap, queuedLayersMatch, seedWorkspaceFromDevice } from './zmk-offline.js?v=77';
-import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=77';
-import { keymapLayersData, diffKeymapLayers, pairLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=77';
-import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=77';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=77';
+import { el, toast, card, modal, SAVE_STATE } from './ui.js?v=78';
+import { board } from './board.js?v=78';
+import { createDock } from './keymap-dock.js?v=78';
+import { createInspector } from './keymap-inspector.js?v=78';
+import { encode } from './behavior-catalog.js?v=78';
+import { shell } from './app-shell.js?v=78';
+import { saveState } from './save-state.js?v=78';
+import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=78';
+import { zmkApplyPendingKeymap, queuedLayersMatch, seedWorkspaceFromDevice } from './zmk-offline.js?v=78';
+import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=78';
+import { keymapLayersData, diffKeymapLayers, pairLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=78';
+import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=78';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=78';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
     setZmkContext, zmkBehaviors, zmkLayers, layerName, layerLabel, isZmkBinding,
     bindingCap, bindingHover, bindingDescribe, usageCap, usageLabel,
-} from './zmk-keycodes.js?v=77';
+} from './zmk-keycodes.js?v=78';
 
 // One serial client for the whole page: tab instances are discarded on HID
 // disconnect/reconnect (main.js rebuilds all panels) with no dtor hook, so

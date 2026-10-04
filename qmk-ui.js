@@ -5,12 +5,12 @@
 // surfaces are qmk.key, qmk.comboOutput, qmk.tapDanceStep, qmk.keyOverride,
 // qmk.cornerChord, qmk.macroKey, qmk.leaderKey, qmk.cskBase, qmk.cskShifted.
 
-import { el, toast, modal } from './ui.js?v=77';
-import { openPicker, renderBindingCell } from './binding-picker.js?v=77';
-import { describeBinding } from './behavior-catalog.js?v=77';
-import { board } from './board.js?v=77';
-import { registerSummary, installSlotSummary } from './zmk-behaviour-common.js?v=77';
-import { isQmkFamily } from './boards.js?v=77';
+import { el, toast, modal } from './ui.js?v=78';
+import { openPicker, renderBindingCell } from './binding-picker.js?v=78';
+import { describeBinding } from './behavior-catalog.js?v=78';
+import { board } from './board.js?v=78';
+import { registerSummary, installSlotSummary } from './zmk-behaviour-common.js?v=78';
+import { isQmkFamily } from './boards.js?v=78';
 
 /** One-line text for a keycode ('' when unset), the picker's words. */
 export const bindingText = (kc) => (kc ? describeBinding(kc, 'qmk') : '');

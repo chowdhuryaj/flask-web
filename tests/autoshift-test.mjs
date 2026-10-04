@@ -4,12 +4,12 @@
 import assert from 'node:assert/strict';
 import {
     ASH_GROUPS, ASH_DEFAULTS, clampAshTimeout, clampRetroLimit, clampAshGroups, ashEligible,
-} from '../zmk-autoshift-codec.js?v=77';
-import { CH_ZMK, V, CMD, FlaskProto } from '../flaskproto.js?v=77';
-import { zmkCapabilities } from '../zmk.js?v=77';
-import { createZmkTemplate, ZmkOfflineFlask, normalizeZmkWorkspace } from '../zmk-offline.js?v=77';
-import { syncWorkspace, pendingCount } from '../offline.js?v=77';
-import { exportFlaskState, applyFlaskState } from '../zmk-export.js?v=77';
+} from '../zmk-autoshift-codec.js?v=78';
+import { CH_ZMK, V, CMD, FlaskProto } from '../flaskproto.js?v=78';
+import { zmkCapabilities } from '../zmk.js?v=78';
+import { createZmkTemplate, ZmkOfflineFlask, normalizeZmkWorkspace } from '../zmk-offline.js?v=78';
+import { syncWorkspace, pendingCount } from '../offline.js?v=78';
+import { exportFlaskState, applyFlaskState } from '../zmk-export.js?v=78';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -79,7 +79,7 @@ const mkApp = (family = 'totem') => {
 };
 {
     const a = mkApp();
-    eq(a.ws.protocolVersion, 19, 'the unplugged Totem answers v19 so the tab can be tried');
+    eq(a.ws.protocolVersion, 20, 'the unplugged Totem answers v20 (>= 19, so the tab can be tried)');
     const get = (id) => a.flask.getU16(CH_ZMK.autoShift, id);
     eq([await get(1), await get(2), await get(3), await get(4), await get(5), await get(6), await get(7), await get(8)],
         [0, 175, 0x0F, 0, 0, 0, 1, 500], 'contract defaults');
@@ -108,7 +108,7 @@ const mkApp = (family = 'totem') => {
     ws.protocolVersion = 18;
     normalizeZmkWorkspace(ws);
     eq(ws.tunables[`${CH_ZMK.autoShift}:${V.ashTimeout}`], { op: 'u16', val: 175 });
-    eq(ws.protocolVersion, 19);
+    eq(ws.protocolVersion, 20);
     ws.tunables[`${CH_ZMK.autoShift}:${V.ashTimeout}`] = { op: 'u16', val: 300 };
     normalizeZmkWorkspace(ws);
     eq(ws.tunables[`${CH_ZMK.autoShift}:${V.ashTimeout}`].val, 300, 'saved values are not clobbered');

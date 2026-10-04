@@ -4,32 +4,32 @@
 // meta, unlock state, tunables replay), drives capability-gated tabs, themes,
 // and the HUD.
 
-import { el, toast, modal } from './ui.js?v=77';
-import { diag } from './diag.js?v=77';
-import { FlaskHID } from './webhid.js?v=77';
-import { renderPreflight } from './preflight.js?v=77';
-import { FlaskProto, CH_ZMK, V } from './flaskproto.js?v=77';
+import { el, toast, modal } from './ui.js?v=78';
+import { diag } from './diag.js?v=78';
+import { FlaskHID } from './webhid.js?v=78';
+import { renderPreflight } from './preflight.js?v=78';
+import { FlaskProto, CH_ZMK, V } from './flaskproto.js?v=78';
 import { isZmkFamily, zmkProfile, confirmZmkFamily, ZMK_FAMILY_UNRESOLVED_MSG,
-         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=77';
+         zmkReadKeyState, zmkReportResetCause } from './zmk.js?v=78';
 import { familyOf, familyLabel, capabilities, expectedProtocol, pickReconnectDevice,
-         isQmkFamily, lineOf, qmkProfile, readBoardMeta } from './boards.js?v=77';
-import { VialClient } from './vialclient.js?v=77';
-import { runUnlockFlow } from './unlock.js?v=77';
-import * as vil from './vil.js?v=77';
-import { CommandPalette } from './command-palette.js?v=77';
-import { HUD } from './hud.js?v=77';
+         isQmkFamily, lineOf, qmkProfile, readBoardMeta } from './boards.js?v=78';
+import { VialClient } from './vialclient.js?v=78';
+import { runUnlockFlow } from './unlock.js?v=78';
+import * as vil from './vil.js?v=78';
+import { CommandPalette } from './command-palette.js?v=78';
+import { HUD } from './hud.js?v=78';
 import { ZMK_TEMPLATE_FAMILIES, createZmkTemplate, attachZmkOffline,
          zmkSyncExtras, zmkPendingCount, offlineQueued, discardOfflineQueued,
-         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=77';
-import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace, OfflineFlask } from './offline.js?v=77';
-import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=77';
-import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=77';
-import { shell } from './app-shell.js?v=77';
-import { installCaptions, setCaptionGroup } from './caption.js?v=77';
-import { saveState, discardMessage } from './save-state.js?v=77';
-import { board } from './board.js?v=77';
-import { attachHoldtap } from './behavior-catalog.js?v=77';
-import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=77';
+         seedWorkspaceFromSnapshot, zmkDescribeChanges, dropJournals } from './zmk-offline.js?v=78';
+import { saveWorkspace, deleteWorkspace, listWorkspaces, maybeSyncOffline, loadWorkspace, OfflineFlask } from './offline.js?v=78';
+import { zmkLiveKeymapTab } from './zmk-keymap-tab.js?v=78';
+import { TAB_GROUPS, tabsFor, groupOf, screensFor, screenOf, BOARD_TABS, SIDE_TABS } from './tab-registry.js?v=78';
+import { shell } from './app-shell.js?v=78';
+import { installCaptions, setCaptionGroup } from './caption.js?v=78';
+import { saveState, discardMessage } from './save-state.js?v=78';
+import { board } from './board.js?v=78';
+import { attachHoldtap } from './behavior-catalog.js?v=78';
+import { initAppearance, appearance, applyBoardZoom, currentBoardZoom, BOARD_ZOOM } from './themes.js?v=78';
 
 function downloadText(filename, text) {
     const a = document.createElement('a');
@@ -264,6 +264,7 @@ async function loadZmkDevice(device) {
     updateStatus(device);
     await probeHoldtap();
     await probeAdaptive();
+    await probeMouseKeys();
     if (stale()) return;
     buildTabs();
     if (TABS.length) await showTab(TABS[0].id);
@@ -364,6 +365,7 @@ async function startOffline(key, family) {
     updateOfflineBanner();
     await probeHoldtap();
     await probeAdaptive();
+    await probeMouseKeys();
     buildTabs();
     showTab('zmk-keymap');
 }
@@ -483,6 +485,16 @@ async function probeAdaptive() {
     if ((app.protocolVersion ?? 0) < 18) return;
     try { app.caps.adaptive = !!(await app.flask.getU16(CH_ZMK.adaptive, V.akSetCount)); }
     catch { app.caps.adaptive = false; }
+}
+
+/** caps.mouseKeys for Device › Mouse: proto >= 20 and channel 0x2D answers
+ * GET 0x01 (0xFF echo = module not compiled in). */
+async function probeMouseKeys() {
+    if (!app.caps || !isZmkFamily(app.family)) return;
+    app.caps.mouseKeys = false;
+    if ((app.protocolVersion ?? 0) < 20) return;
+    try { app.caps.mouseKeys = !!(await app.flask.getU16(CH_ZMK.mouseKeys, V.mkPointerSpeed)); }
+    catch { app.caps.mouseKeys = false; }
 }
 
 function buildTabs() {

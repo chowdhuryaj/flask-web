@@ -4,9 +4,9 @@
 // the app speaks the Flask frame (flaskproto.js CH_ZMK/V/CMD) via
 // zmk-flask-modules flask_proto.
 
-import { CH_ZMK, V } from './flaskproto.js?v=77';
-import { diag } from './diag.js?v=77';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=77';
+import { CH_ZMK, V } from './flaskproto.js?v=78';
+import { diag } from './diag.js?v=78';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=78';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -88,11 +88,15 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)', totem: 'TOT
 // table-gated: caps.adaptive comes from main.js probeAdaptive(). v19 (both
 // families) adds flask_autoshift 0x2C: runtime global auto shift + retro shift
 // (caps.autoshift, version-gated).
-// Both families expect 19 (caps.autoshift is version-gated in zmkCapabilities,
-// firmware ships it off). The Imprint reaches 19 once its config is rebuilt on
-// the unified modules; until then it reports 16, the autoshift/holdtap/adaptive
-// features stay gated off and the header shows the reflash warning.
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 19, totem: 19 };
+// v20 (Totem) adds flask_mousekeys 0x2D: live &mmv/&msc speed + ramp
+// (caps.mouseKeys: version-gated here, then main.js probeMouseKeys() checks
+// GET 2D 01 answers).
+// Totem expects 20. The Imprint expects 19 (caps.autoshift is version-gated in
+// zmkCapabilities, firmware ships it off): it reaches 19 once its config is
+// rebuilt on the unified modules; until then it reports 16, the
+// autoshift/holdtap/adaptive features stay gated off and the header shows the
+// reflash warning.
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 19, totem: 20 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -186,6 +190,11 @@ export function zmkCapabilities(family, version) {
         // flask_autoshift (0x2C, v19): global auto shift + retro shift — the
         // Auto Shift tab. Both families; the firmware ships it off.
         autoshift: flask && v >= 19,
+        // flask_mousekeys (0x2D, v20): live mouse-key (&mmv/&msc) speed + ramp
+        // — the Mouse tab's "Mouse keys" card. Not a pointing-device channel,
+        // so the Totem gets it. main.js probeMouseKeys() narrows it to boards
+        // whose GET 2D 01 answers.
+        mouseKeys: flask && v >= 20,
         hudLayer: flask,    // meta 0x02 active layer — always on the ZMK line
     };
 }
