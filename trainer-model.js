@@ -18,7 +18,7 @@
 // Same constants, same sampling order, same RNG — the two apps are meant to
 // produce identical lessons from identical settings and seeds.
 
-import { WORDS, rankWeight } from './trainer-words.js?v=78';
+import { WORDS, rankWeight } from './trainer-words.js?v=79';
 
 export const SPACE = 32;
 

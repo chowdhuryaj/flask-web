@@ -12,11 +12,11 @@
 // ("KC_A") are skipped and counted (no qmk_id table here).
 
 import { CH_QMK, V_QMK, slot, CSK_SLOTS, SL_SEQS, SL_OUT_POS, CYCLOTAB_KEYS,
-         CC, ccRetired } from './flaskproto.js?v=78';
-import { QMK_SETTINGS, MacroCodec, KeyOverride } from './vialproto.js?v=78';
-import { familyLabel, isQmkFamily } from './boards.js?v=78';
-import { isZmkFamily } from './zmk.js?v=78';
-import { saveWorkspace, loadWorkspace } from './offline.js?v=78';
+         CC, ccRetired } from './flaskproto.js?v=79';
+import { QMK_SETTINGS, MacroCodec, KeyOverride } from './vialproto.js?v=79';
+import { familyLabel, isQmkFamily } from './boards.js?v=79';
+import { isZmkFamily } from './zmk.js?v=79';
+import { saveWorkspace, loadWorkspace } from './offline.js?v=79';
 
 const encoderCount = (profile) => profile.encoderKeys.reduce((m, e) => Math.max(m, e.index + 1), 0);
 
@@ -467,7 +467,7 @@ export async function saveLayoutFile(app) {
         downloadText(filename, text);
         return { line, filename };
     }
-    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=78');
+    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=79');
     const kt = zmkLiveKeymapTab();
     if (!kt?.keymap) throw new Error('the keymap is still loading');
     await kt.exportKeymap();
@@ -486,7 +486,7 @@ export async function loadLayoutFile(app, file) {
         if (stats.notes.length) message += ` — ${stats.notes.join('; ')}`;
         return { line, message, warn: stats.notes.length > 0 };
     }
-    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=78');
+    const { zmkLiveKeymapTab } = await import('./zmk-keymap-tab.js?v=79');
     const kt = zmkLiveKeymapTab();
     if (!kt?.keymap) throw new Error('the keymap is still loading');
     await kt.importKeymap(file);

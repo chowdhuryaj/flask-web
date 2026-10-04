@@ -4,9 +4,9 @@
 // the app speaks the Flask frame (flaskproto.js CH_ZMK/V/CMD) via
 // zmk-flask-modules flask_proto.
 
-import { CH_ZMK, V } from './flaskproto.js?v=78';
-import { diag } from './diag.js?v=78';
-import { TOTEM_GEOM } from './zmk-totem-layout.js?v=78';
+import { CH_ZMK, V } from './flaskproto.js?v=79';
+import { diag } from './diag.js?v=79';
+import { TOTEM_GEOM } from './zmk-totem-layout.js?v=79';
 
 // Stock ZMK USB identity — shared by EVERY default ZMK board, so a VID/PID
 // match is only a CANDIDATE; confirmZmkFamily() reads meta 0x03 to be sure.
@@ -91,12 +91,13 @@ export const ZMK_FAMILY_LABELS = { imprint: 'Cyboard Imprint (ZMK)', totem: 'TOT
 // v20 (Totem) adds flask_mousekeys 0x2D: live &mmv/&msc speed + ramp
 // (caps.mouseKeys: version-gated here, then main.js probeMouseKeys() checks
 // GET 2D 01 answers).
-// Totem expects 20. The Imprint expects 19 (caps.autoshift is version-gated in
+// v21 (Totem) adds the mouse-key start speed floor on 0x2D (0x04 / 0x14;
+// caps.mouseKeysFloor). Totem expects 21. The Imprint expects 19 (caps.autoshift is version-gated in
 // zmkCapabilities, firmware ships it off): it reaches 19 once its config is
 // rebuilt on the unified modules; until then it reports 16, the
 // autoshift/holdtap/adaptive features stay gated off and the header shows the
 // reflash warning.
-export const ZMK_EXPECTED_PROTOCOL = { imprint: 19, totem: 20 };
+export const ZMK_EXPECTED_PROTOCOL = { imprint: 19, totem: 21 };
 
 /** Pressed-key set for the HUD, from the key-state bitmap (0x23). Keys are
  * "row,col" strings matching the published ZMK geometry (row 0, col =
@@ -195,6 +196,8 @@ export function zmkCapabilities(family, version) {
         // so the Totem gets it. main.js probeMouseKeys() narrows it to boards
         // whose GET 2D 01 answers.
         mouseKeys: flask && v >= 20,
+        // v21: the Mouse keys card's Start speed slider (floor_pct).
+        mouseKeysFloor: flask && v >= 21,
         hudLayer: flask,    // meta 0x02 active layer — always on the ZMK line
     };
 }

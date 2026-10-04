@@ -20,11 +20,11 @@
 // its two keys (board.setChordBoxes; click = the picker) and the layer rail
 // carries a count / warning note.
 
-import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=78';
-import { CH_QMK, V_QMK, CC, ccDefName, ccRow, ccCol, ccRetired } from './flaskproto.js?v=78';
-import { bindingCell, bindingText, pickKey, reloadRow } from './qmk-ui.js?v=78';
-import { board } from './board.js?v=78';
-import { legendOf } from './legend.js?v=78';
+import { el, card, sliderRow, toggleRow, toast } from './ui.js?v=79';
+import { CH_QMK, V_QMK, CC, ccDefName, ccRow, ccCol, ccRetired } from './flaskproto.js?v=79';
+import { bindingCell, bindingText, pickKey, reloadRow } from './qmk-ui.js?v=79';
+import { board } from './board.js?v=79';
+import { legendOf } from './legend.js?v=79';
 
 const KC_TRNS = 0x0001;
 /** Box text: the key legend, with its hold after a slash ("T/⇧"). */

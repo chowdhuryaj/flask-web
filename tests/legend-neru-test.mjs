@@ -3,8 +3,8 @@
 // never hard-coded numbers; pointing params follow ZMK pointing.h (x high 16, y low 16).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { setZmkContext } from '../zmk-keycodes.js?v=78';
-import { legendOf } from '../legend.js?v=78';
+import { setZmkContext } from '../zmk-keycodes.js?v=79';
+import { legendOf } from '../legend.js?v=79';
 
 const eq = (a, b, m = '') => assert.deepEqual(a, b, m);
 const NAMES = ['mouse_move', 'mouse_scroll', 'Neru Hints', 'Neru Menu', 'Neru Menu + Key (to base)', 'Neru Menu + Key (stay)',
@@ -25,7 +25,7 @@ const lg = (n, param1 = 0, param2 = 0) => { const l = legendOf({ behaviorId: id(
 
 // mm_*/sc_* macros (Totem-ZMK 6ec01aa): same glyph and label as the raw key, "(macro)" in the description.
 {
-    const { MOUSE_MACROS, describeBinding } = await import('../behavior-catalog.js?v=78');
+    const { MOUSE_MACROS, describeBinding } = await import('../behavior-catalog.js?v=79');
     const macros = MOUSE_MACROS.map((m, i) => ({ id: 300 + i, displayName: m.name, metadata: [{ param1: [], param2: [] }] }));
     const nodeOnly = { id: 400, displayName: 'sc_left', metadata: [{ param1: [], param2: [] }] };   // no display-name: the device reports the node
     setZmkContext({ behaviors: new Map([...live, ...macros, nodeOnly].map((d) => [d.id, d])), layers });

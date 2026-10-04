@@ -11,16 +11,16 @@
 //   'qmk'        number, a QMK u16 keycode (Svalboard: Vial keymap, Vial
 //                entries, Flask corner / leader / shift slots).
 
-import { el } from './ui.js?v=78';
-import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=78';
-import { captureOneKey } from './zmk-capture.js?v=78';
-import { saveState } from './save-state.js?v=78';
-import { board } from './board.js?v=78';
+import { el } from './ui.js?v=79';
+import { zmkBehaviors, usageParts } from './zmk-keycodes.js?v=79';
+import { captureOneKey } from './zmk-capture.js?v=79';
+import { saveState } from './save-state.js?v=79';
+import { board } from './board.js?v=79';
 import {
     CATALOG_GROUPS, catalogFor, decode, encode, capParts, describeBinding, keySections, modsText,
     resolveTiming, timingBackendNow, attachHoldtap, HOLDTAP, TIMING_PARAM, adapterOf,
     composeTapHold, tapHoldSpecOf, holdTapParts, homeRowPlan,
-} from './behavior-catalog.js?v=78';
+} from './behavior-catalog.js?v=79';
 
 /**
  * Every surface a picker can serve (spec §4.7). `hide` lists catalog group

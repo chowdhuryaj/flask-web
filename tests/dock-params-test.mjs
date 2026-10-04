@@ -2,10 +2,10 @@
 // Neru Menu + Key) get tiles under Behaviours > Other, and search finds them.
 // Names and kinds are the Totem's live behavior list (Totem-ZMK keymap-after.json).
 import assert from 'node:assert/strict';
-import { setZmkContext } from '../zmk-keycodes.js?v=78';
-import { surfaceEntries } from '../binding-picker.js?v=78';
-import { dockModel, searchTiles } from '../keymap-dock.js?v=78';
-import { tapHoldSpecOf } from '../behavior-catalog.js?v=78';
+import { setZmkContext } from '../zmk-keycodes.js?v=79';
+import { surfaceEntries } from '../binding-picker.js?v=79';
+import { dockModel, searchTiles } from '../keymap-dock.js?v=79';
+import { tapHoldSpecOf } from '../behavior-catalog.js?v=79';
 
 let checks = 0;
 const eq = (a, b, m = '') => { assert.deepEqual(a, b, m); checks++; };
@@ -75,7 +75,7 @@ ok(searchTiles(model, 'scroll up').some((t) => t.id === 'mm:sc_up'), '"scroll up
 
 // Firmware with the macros: each tile resolves to the macro's id (by display-name, else node name), p1 = p2 = 0.
 {
-    const { MOUSE_MACROS } = await import('../behavior-catalog.js?v=78');
+    const { MOUSE_MACROS } = await import('../behavior-catalog.js?v=79');
     const macros = MOUSE_MACROS.map((m, i) => ({ id: 120 + i, displayName: i === 11 ? m.node : m.name, metadata: [{ param1: [], param2: [] }] }));
     setZmkContext({ behaviors: new Map([...LIVE, ...macros].map((d) => [d.id, d])), layers: NAMES.map((name, id) => ({ id, name })) });
     const m2 = dockModel(surfaceEntries('zmk.key', {}), []);
@@ -86,7 +86,7 @@ ok(searchTiles(model, 'scroll up').some((t) => t.id === 'mm:sc_up'), '"scroll up
     ok(!m2.behaviours.flatMap((c) => c.tiles).some((t) => /^adv:12\d|^adv:13[01]/.test(t.id)), 'macros are not doubled as plain Other tiles');
     // Guard: no tile (nor its build()) writes a pointing behaviour (&mmv/&msc) with a param, here or on the pinned default.
     const POINT = /^(mouse_move|mouse_scroll|Mouse Move|Mouse Scroll)$/;
-    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=78');
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=79');
     for (const ctx of [[...LIVE, ...macros], LIVE, TOTEM_DEFAULT.behaviors]) {
         const bmap = new Map(ctx.map((d) => [d.id, d]));
         setZmkContext({ behaviors: bmap, layers: NAMES.map((name, id) => ({ id, name })) });

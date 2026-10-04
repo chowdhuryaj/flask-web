@@ -79,6 +79,9 @@ export const V = {
     // exp 0 uniform / 1 linear / 2 quadratic / 3 cubic.
     mkPointerSpeed: 0x01, mkPointerRamp: 0x02, mkPointerExp: 0x03,
     mkScrollSpeed: 0x11, mkScrollRamp: 0x12, mkScrollExp: 0x13,
+    // v21+: start speed floor, percent of full speed a movement begins at
+    // (0..100, 0 = plain ramp from zero).
+    mkPointerFloor: 0x04, mkScrollFloor: 0x14,
     // RGB map (0x21) — enabled/layers/leds are u16; led/fill are
     // PAYLOAD-ADDRESSED byte frames (getBytes/setBytes, never u16 helpers).
     // 0x04-0x08: effect engine (v9) — whole-strip animation underneath the

@@ -23,13 +23,13 @@
 import {
     basicKeys, navKeys, fKeys, numpadKeys, intlKeys, shiftedSymbols,
     R, mediaKeys, mouseKeys, rgbKeys, deviceCustoms, macroKeys, lookup, capLabel, describe,
-} from './keycodes.js?v=78';
-import { isQmkFamily } from './boards.js?v=78';
+} from './keycodes.js?v=79';
+import { isQmkFamily } from './boards.js?v=79';
 import {
     zmkBehaviors, zmkLayers, layerNameIn, layerLabel, usageCap, usageLabel, usageParts, consumerUsages,
     kpParam, HID_PAGE_KEYBOARD, HID_PAGE_CONSUMER,
-} from './zmk-keycodes.js?v=78';
-import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=78';
+} from './zmk-keycodes.js?v=79';
+import { TOTEM_DEFAULT } from './zmk-totem-default.js?v=79';
 
 /** Picker groups, in display order (§4.5). Entry.group is one of these ids. */
 export const CATALOG_GROUPS = [

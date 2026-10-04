@@ -4,11 +4,11 @@
 // codecs in vialproto.js. Entry writes need NO unlock (unlike macros) and
 // apply at once. A tap dance row pastes TD(n) onto the selected board key.
 
-import { el, card, toast, reloadBar } from './ui.js?v=78';
-import { TapDance, Combo, KeyOverride } from './vialproto.js?v=78';
-import { CH_QMK, slot } from './flaskproto.js?v=78';
-import { modsText, encode } from './behavior-catalog.js?v=78';
-import { bindingCell, bindingText, pickKey as pick, pasteToKey, addSummary, openSheet, reloadRow, slotRow } from './qmk-ui.js?v=78';
+import { el, card, toast, reloadBar } from './ui.js?v=79';
+import { TapDance, Combo, KeyOverride } from './vialproto.js?v=79';
+import { CH_QMK, slot } from './flaskproto.js?v=79';
+import { modsText, encode } from './behavior-catalog.js?v=79';
+import { bindingCell, bindingText, pickKey as pick, pasteToKey, addSummary, openSheet, reloadRow, slotRow } from './qmk-ui.js?v=79';
 
 const cap = bindingText;
 const clearBtn = (onclick) => el('button', { class: 'btn small', text: '✕', title: 'Clear', onclick });

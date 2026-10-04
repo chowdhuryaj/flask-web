@@ -17,8 +17,8 @@
 // macros and unnamed firmware behaviours are not scanned (`unnamed` says how
 // many keys hide one), so the lint says "nothing found", never "unreachable".
 
-import { decode } from './behavior-catalog.js?v=78';
-import { layerCodeOf } from './legend.js?v=78';
+import { decode } from './behavior-catalog.js?v=79';
+import { layerCodeOf } from './legend.js?v=79';
 
 export function layerIndex({ layers, keys, bindingAt, combos = [], adapter = 'zmk-studio', posOf = (k) => k.col }) {
     const byId = new Map(layers.map((l) => [l.id ?? l.index, l.index]));

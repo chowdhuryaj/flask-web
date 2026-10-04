@@ -9,13 +9,13 @@
 // firmware, so no layer add / move / remove; a rename lives in the app
 // (boards.js setLayerName). setKeycode needs no unlock.
 
-import { el, toast, card } from './ui.js?v=78';
-import { board } from './board.js?v=78';
-import { shell } from './app-shell.js?v=78';
-import { createDock } from './keymap-dock.js?v=78';
-import { createInspector } from './keymap-inspector.js?v=78';
-import { encode, describeBinding, setQmkLayerNames } from './behavior-catalog.js?v=78';
-import { setLayerName, svalboardKeys } from './boards.js?v=78';
+import { el, toast, card } from './ui.js?v=79';
+import { board } from './board.js?v=79';
+import { shell } from './app-shell.js?v=79';
+import { createDock } from './keymap-dock.js?v=79';
+import { createInspector } from './keymap-inspector.js?v=79';
+import { encode, describeBinding, setQmkLayerNames } from './behavior-catalog.js?v=79';
+import { setLayerName, svalboardKeys } from './boards.js?v=79';
 
 const KC_NO = 0x0000, KC_TRNS = 0x0001;
 const isKeycode = (v) => Number.isInteger(v) && v >= 0 && v <= 0xFFFF;

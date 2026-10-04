@@ -30,25 +30,25 @@ Object.assign(doc, {
 });
 globalThis.document = doc;
 
-const { CH_ZMK, V } = await import('../flaskproto.js?v=78');
-const { zmkCapabilities } = await import('../zmk.js?v=78');
-const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=78');
-const { saveState } = await import('../save-state.js?v=78');
-const { setZmkContext } = await import('../zmk-keycodes.js?v=78');
-const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=78');
-const { encodeMacroStep, decodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=78');
-const { decodeAkStep, encodeAkStep, encodeAkRule, AK_ACTION } = await import('../zmk-adaptive-codec.js?v=78');
-const { decodeTdStep, encodeTdStep } = await import('../zmk-tapdance-codec.js?v=78');
-const common = await import('../zmk-behaviour-common.js?v=78');
-const { ZmkMacrosTab } = await import('../zmk-macros-tab.js?v=78');
-const { ZmkAdaptiveTab } = await import('../zmk-adaptive-tab.js?v=78');
-const { ZmkTapDanceTab } = await import('../zmk-tapdance-tab.js?v=78');
-const { ZmkCombosTab } = await import('../zmk-combos-tab.js?v=78');
-const { ZmkLeaderTab } = await import('../zmk-leader-tab.js?v=78');
-const { exportFlaskState, applyFlaskState, namedOut, resolveOut } = await import('../zmk-export.js?v=78');
-const catalog = await import('../behavior-catalog.js?v=78');
-const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=78');
-const { modeSummary } = await import('../zmk-modes.js?v=78');
+const { CH_ZMK, V } = await import('../flaskproto.js?v=79');
+const { zmkCapabilities } = await import('../zmk.js?v=79');
+const { createZmkTemplate, ZmkOfflineFlask } = await import('../zmk-offline.js?v=79');
+const { saveState } = await import('../save-state.js?v=79');
+const { setZmkContext } = await import('../zmk-keycodes.js?v=79');
+const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=79');
+const { encodeMacroStep, decodeMacroStep, MACRO_ACTION } = await import('../zmk-macros-codec.js?v=79');
+const { decodeAkStep, encodeAkStep, encodeAkRule, AK_ACTION } = await import('../zmk-adaptive-codec.js?v=79');
+const { decodeTdStep, encodeTdStep } = await import('../zmk-tapdance-codec.js?v=79');
+const common = await import('../zmk-behaviour-common.js?v=79');
+const { ZmkMacrosTab } = await import('../zmk-macros-tab.js?v=79');
+const { ZmkAdaptiveTab } = await import('../zmk-adaptive-tab.js?v=79');
+const { ZmkTapDanceTab } = await import('../zmk-tapdance-tab.js?v=79');
+const { ZmkCombosTab } = await import('../zmk-combos-tab.js?v=79');
+const { ZmkLeaderTab } = await import('../zmk-leader-tab.js?v=79');
+const { exportFlaskState, applyFlaskState, namedOut, resolveOut } = await import('../zmk-export.js?v=79');
+const catalog = await import('../behavior-catalog.js?v=79');
+const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=79');
+const { modeSummary } = await import('../zmk-modes.js?v=79');
 
 const behaviors = new Map(TOTEM_DEFAULT.behaviors.map((d) => [d.id, d]));
 setZmkContext({ behaviors, layers: [{ id: 0, name: 'base' }] });
@@ -210,7 +210,7 @@ const stub = (tab) => { tab.render = () => {}; return tab; };
     eq(td.slots[3].taps[1].action, 0, 'failed write: cache still shows what the device holds');
     app.flask.setBytes = real;
     // WB-12: delete drops the custom name
-    const { zmkSetSlotName, zmkSlotName } = await import('../zmk.js?v=78');
+    const { zmkSetSlotName, zmkSlotName } = await import('../zmk.js?v=79');
     zmkSetSlotName('totem', 'tapdance', 3, 'mine');
     await td.clearSlot(3);
     eq(zmkSlotName('totem', 'tapdance', 3), '', 'tap dance delete drops its name');
@@ -271,7 +271,7 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
     common.announceSlots(CH_ZMK.macros);
     await flush(); await flush();
     eq(macros.steps[4][0].action, MACRO_ACTION.tap, 'a whole-table announcement reloads the Macros tab');
-    const { ZmkModesTab } = await import('../zmk-modes-tab.js?v=78');
+    const { ZmkModesTab } = await import('../zmk-modes-tab.js?v=79');
     const modes = stub(new ZmkModesTab(app));
     modes._keymapTab = () => ({ applyKeymapData: async () => ({}) });
     modes.store = { modes: [{ id: 'm1', name: 'Mode', data: { kind: 'flask-zmk-keymap', layers: [],
@@ -370,11 +370,11 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
 
 // ---- flask_mousekeys (0x2D, v20): Mouse tab on the Totem renders the Mouse keys card ----
 {
-    const { MouseTab } = await import('../mouse-tab.js?v=78');
+    const { MouseTab } = await import('../mouse-tab.js?v=79');
     const ws = createZmkTemplate('totem');
     const app = { ws, flask: new ZmkOfflineFlask(ws), profile: { family: 'totem' }, hid: { pause() {}, resume() {} },
-        caps: zmkCapabilities('totem', 20), protocolVersion: 20 };
-    eq(ws.protocolVersion, 20, 'offline Totem is v20');
+        caps: zmkCapabilities('totem', 21), protocolVersion: 21 };
+    eq(ws.protocolVersion, 21, 'offline Totem is v21');
     ok(app.caps.mouseKeys && !app.caps.mouse, 'mouse keys without trackball caps');
     const tab = new MouseTab(app);
     await tab.load();
@@ -385,16 +385,20 @@ ok(SURFACES['zmk.adaptiveTrigger'].hide.includes('mod-keys'), 'trigger surface h
     const ranges = [];
     const walk = (n) => { if (n?.attrs?.type === 'range') ranges.push(n.attrs.value); (n?.kids ?? []).forEach(walk); };
     walk(tab.root);
-    eq(ranges, ['100', '600', '1', '100', '150', '0'], 'sliders open on the keymap boot defaults');
+    eq(ranges, ['100', '600', '40', '1', '100', '150', '0', '0'], 'sliders open on the keymap boot defaults (speed, ramp, start speed, accel)');
     // Clamp-echo + journal + save on 0x2D.
     eq(await app.flask.setU16(CH_ZMK.mouseKeys, V.mkPointerSpeed, 500), 400, 'speed clamps to 400');
     eq(await app.flask.setU16(CH_ZMK.mouseKeys, V.mkScrollRamp, 9000), 3000, 'ramp clamps to 3000');
     eq(await app.flask.setU16(CH_ZMK.mouseKeys, V.mkScrollExp, 7), 3, 'exponent clamps to 3');
     eq(await app.flask.getU16(CH_ZMK.mouseKeys, V.mkPointerSpeed), 400, 'GET returns the applied value');
-    await assert.rejects(() => app.flask.getU16(CH_ZMK.mouseKeys, 0x04), /unhandled/, 'unknown id unhandled'); checks++;
+    eq(await app.flask.setU16(CH_ZMK.mouseKeys, V.mkPointerFloor, 250), 100, 'floor clamps to 100');
+    eq(await app.flask.setU16(CH_ZMK.mouseKeys, V.mkPointerFloor, 40), 40, 'floor echoes');
+    eq(await app.flask.getU16(CH_ZMK.mouseKeys, V.mkScrollFloor), 0, 'scroll floor boots at 0');
+    ok(text.includes('Start speed'), 'Start speed slider rendered');
+    await assert.rejects(() => app.flask.getU16(CH_ZMK.mouseKeys, 0x05), /unhandled/, 'unknown id unhandled'); checks++;
     // Export carries it; apply writes it back.
     const st = await exportFlaskState(app);
-    eq(st.mouseKeys, { pointer: { speedPct: 400, rampMs: 600, exp: 1 }, scroll: { speedPct: 100, rampMs: 3000, exp: 3 } }, 'export carries mouse keys');
+    eq(st.mouseKeys, { pointer: { speedPct: 400, rampMs: 600, exp: 1, floorPct: 40 }, scroll: { speedPct: 100, rampMs: 3000, exp: 3, floorPct: 0 } }, 'export carries mouse keys');
     // The Imprint sim has no 0x2D.
     const imp = createZmkTemplate('imprint');
     await assert.rejects(() => new ZmkOfflineFlask(imp).getU16(CH_ZMK.mouseKeys, V.mkPointerSpeed), /unhandled/, 'imprint: 0x2D unhandled'); checks++;

@@ -4,12 +4,12 @@
 // channel (v25 variant / cluster keys / drops, v26 half).
 // Port of AdeptCompanion QMKSettingsView.swift.
 
-import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=78';
-import { QMK_SETTINGS } from './vialproto.js?v=78';
-import { CH_QMK, V_QMK } from './flaskproto.js?v=78';
-import { BOARD_VARIANTS, readBoardMeta, svalboardKeys } from './boards.js?v=78';
-import { board } from './board.js?v=78';
-import { runUnlockFlow, lockKeyboard } from './unlock.js?v=78';
+import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=79';
+import { QMK_SETTINGS } from './vialproto.js?v=79';
+import { CH_QMK, V_QMK } from './flaskproto.js?v=79';
+import { BOARD_VARIANTS, readBoardMeta, svalboardKeys } from './boards.js?v=79';
+import { board } from './board.js?v=79';
+import { runUnlockFlow, lockKeyboard } from './unlock.js?v=79';
 
 export class SettingsTab {
     constructor(app) {

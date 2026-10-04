@@ -2,9 +2,9 @@
 // line (0x16: an enable flag plus CSK_SLOTS u16 (base, shifted) pairs). The
 // ZMK line's 0x16 is a different payload (zmk-shift-tab.js, Mod Morph).
 
-import { el, card, toast, toggleRow, reloadBar } from './ui.js?v=78';
-import { CH_QMK, V_QMK, slot, CSK_SLOTS } from './flaskproto.js?v=78';
-import { bindingCell, pickKey } from './qmk-ui.js?v=78';
+import { el, card, toast, toggleRow, reloadBar } from './ui.js?v=79';
+import { CH_QMK, V_QMK, slot, CSK_SLOTS } from './flaskproto.js?v=79';
+import { bindingCell, pickKey } from './qmk-ui.js?v=79';
 
 // Spec 3.8 presets: base → what Shift+base types.
 const PRESETS = [

@@ -6,9 +6,9 @@
 // firmware (v18/v26) and have no card. The ZMK line's Mouse tab is
 // mouse-tab.js; 0x1B/0x05 means something else there.
 
-import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=78';
-import { CH_QMK, V_QMK, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS, CPI_MAX, CPI_STEP } from './flaskproto.js?v=78';
-import { layerOptions } from './qmk-ui.js?v=78';
+import { el, card, sliderRow, toggleRow, selectRow, reloadBar, toast } from './ui.js?v=79';
+import { CH_QMK, V_QMK, SVAL_DPI_OPTIONS, SVAL_AUTOMOUSE_TIMEOUTS, CPI_MAX, CPI_STEP } from './flaskproto.js?v=79';
+import { layerOptions } from './qmk-ui.js?v=79';
 
 const AM_SRC_LEFT = 0x01, AM_SRC_RIGHT = 0x02;
 

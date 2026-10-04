@@ -14,14 +14,14 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
 const mem = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k), key: () => null, length: 0 };
 
-const cat = await import('../behavior-catalog.js?v=78');
-const { legendOf } = await import('../legend.js?v=78');
-const { R, describe, capLabel } = await import('../keycodes.js?v=78');
-const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=78');
-const { dockModel } = await import('../keymap-dock.js?v=78');
-const { inspectorModel } = await import('../keymap-inspector.js?v=78');
-const { svalboardKeys, qmkProfile, keyName, keySurfaceOf, svalboardLayerNames } = await import('../boards.js?v=78');
-const { SVALBOARD_LAYOUT } = await import('../svalboard-layout.js?v=78');
+const cat = await import('../behavior-catalog.js?v=79');
+const { legendOf } = await import('../legend.js?v=79');
+const { R, describe, capLabel } = await import('../keycodes.js?v=79');
+const { SURFACES, surfaceEntries } = await import('../binding-picker.js?v=79');
+const { dockModel } = await import('../keymap-dock.js?v=79');
+const { inspectorModel } = await import('../keymap-inspector.js?v=79');
+const { svalboardKeys, qmkProfile, keyName, keySurfaceOf, svalboardLayerNames } = await import('../boards.js?v=79');
+const { SVALBOARD_LAYOUT } = await import('../svalboard-layout.js?v=79');
 const { totemRenderHashes } = await import('./totem-render-snapshot.mjs');
 
 // ---- 1. encode(decode(kc)) === kc for every u16 ----
@@ -132,7 +132,7 @@ eq(cat.homeRowPlan([0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ pos: i, x: i, binding:
     [0x2804, 0x2405, 0x2106, 0x2207, 0x3208, 0x3109, 0x340A, 0x380B], 'home-row mods on QMK: GACS, right side mirrored');
 
 // ---- 7. keymap tab adapter: Vial setKeycode, positions, names ----
-const { QmkKeymapTab } = await import('../qmk-keymap-tab.js?v=78');
+const { QmkKeymapTab } = await import('../qmk-keymap-tab.js?v=79');
 const writes = [];
 const tapp = { ...app, layerCount: 2, vial: { setKeycode: async (...a) => { writes.push(a); } },
     keymap: [Array.from({ length: 10 }, () => Array(6).fill(0x0004)), Array.from({ length: 10 }, () => Array(6).fill(0x0001))] };

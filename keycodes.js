@@ -10,7 +10,7 @@
 // hoverText. Ranges mirror the svalboard-vial-qmk fork's quantum/keycodes.h
 // (mouse keys sit at 0x00CD-0x00DF there).
 
-import { SVALBOARD_LAYOUT } from './svalboard-layout.js?v=78';
+import { SVALBOARD_LAYOUT } from './svalboard-layout.js?v=79';
 
 const K = (code, label, cap, detail) => ({ code, label, cap, detail: detail || null });
 

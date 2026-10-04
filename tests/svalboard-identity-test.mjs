@@ -13,10 +13,10 @@ const eq = (a, b, m) => { assert.deepEqual(a, b, m); checks++; };
 const mem = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k), key: () => null, length: 0 };
 
-const { familyOf, familyLabel, capabilities, expectedProtocol, lineOf, HID_IDS, qmkProfile, readBoardMeta } = await import('../boards.js?v=78');
-const { FlaskProto, CMD, CH_QMK, V_QMK, CH_ZMK, V } = await import('../flaskproto.js?v=78');
-const { confirmZmkFamily } = await import('../zmk.js?v=78');
-const { tabsFor } = await import('../tab-registry.js?v=78');
+const { familyOf, familyLabel, capabilities, expectedProtocol, lineOf, HID_IDS, qmkProfile, readBoardMeta } = await import('../boards.js?v=79');
+const { FlaskProto, CMD, CH_QMK, V_QMK, CH_ZMK, V } = await import('../flaskproto.js?v=79');
+const { confirmZmkFamily } = await import('../zmk.js?v=79');
+const { tabsFor } = await import('../tab-registry.js?v=79');
 
 /** Fake raw-HID transport answering GETs from a table, unhandled otherwise. */
 const fakeHid = (table) => ({
@@ -77,7 +77,7 @@ const zp = new FlaskProto(fakeHid(zmkTable));
 zp.line = 'zmk';
 zmk.protocolVersion = await zp.handshake();
 zmk.family = await confirmZmkFamily(zp, zmk.family);
-eq([zmk.family, zmk.protocolVersion, expectedProtocol(zmk.family)], ['totem', 19, 20], 'a v19 Totem resolves; the app expects v20 (mouse keys 0x2D)');
+eq([zmk.family, zmk.protocolVersion, expectedProtocol(zmk.family)], ['totem', 19, 21], 'a v19 Totem resolves; the app expects v21 (mouse keys 0x2D + start floor)');
 zmk.caps = capabilities(zmk.family, zmk.protocolVersion);
 const zmkTabs = tabsFor(zmk).map((t) => t.id);
 eq(zmkTabs[0], 'zmk-keymap', 'ZMK still lands on its keymap');
@@ -93,7 +93,7 @@ ok(/!isQmkFamily\(app\.family\)\s*\n?\s*&& \(app\.caps\.autoscroll/.test(hud), '
 
 // 5. snapshotQmkWorkspace: an unplugged link (hid.connected false) must not save.
 {
-    const { snapshotQmkWorkspace } = await import('../vil.js?v=78');
+    const { snapshotQmkWorkspace } = await import('../vil.js?v=79');
     const flask = { getU16: async () => { throw new Error('unplugged'); } };
     const app = { family: 'svalboard', flask, caps: capabilities('svalboard', 27), hid: { connected: false } };
     await snapshotQmkWorkspace(app);

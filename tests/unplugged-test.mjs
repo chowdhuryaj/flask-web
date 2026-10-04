@@ -2,9 +2,9 @@
 // through the Studio sim, resolves device-only behaviors, queues a diff-only
 // pendingKeymap on save, and is never reseeded over unsynced edits.
 import assert from 'node:assert/strict';
-import { loadWorkspace } from '../offline.js?v=78';
+import { loadWorkspace } from '../offline.js?v=79';
 import { seedWorkspaceFromDevice, seedWorkspaceFromSnapshot, zmkSyncExtras, createZmkTemplate,
-         OfflineStudioClient } from '../zmk-offline.js?v=78';
+         OfflineStudioClient } from '../zmk-offline.js?v=79';
 
 const mem = new Map();
 globalThis.localStorage ??= {
@@ -40,13 +40,13 @@ assert.equal(weird.displayName, 'Weird Thing'); assert.ok((await c.listAllBehavi
 
 // Real firmware refuses behaviors with no get_parameter_metadata (-ENODEV); the sim mirrors it.
 {
-    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=78');
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=79');
     const sw = TOTEM_DEFAULT.behaviors.find((b) => b.node === 'sw_layout');
     await assert.rejects(c.setLayerBinding(0, 3, { behaviorId: sw.id, param1: 0, param2: 0 }), /INVALID_PARAMETERS/); checks++;
     // Mouse directions: raw &mmv with a param is refused like on hardware; the mm_*/sc_* macros assign.
     const by = (node) => TOTEM_DEFAULT.behaviors.find((b) => b.node === node);
     await assert.rejects(c.setLayerBinding(0, 3, { behaviorId: by('mmv').id, param1: 20, param2: 0 }), /INVALID_PARAMETERS/); checks++;
-    const { MOUSE_MACROS } = await import('../behavior-catalog.js?v=78');
+    const { MOUSE_MACROS } = await import('../behavior-catalog.js?v=79');
     for (const m of MOUSE_MACROS) {
         assert.equal(by(m.node)?.displayName, m.name, `sim lists ${m.node} as "${m.name}"`);
         await c.setLayerBinding(0, 3, { behaviorId: by(m.node).id, param1: 0, param2: 0 });

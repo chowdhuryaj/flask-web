@@ -12,7 +12,7 @@ import {
     decodeBehaviorDetails,
     decodeLayer, decodeMoveLayerResponse, decodeAddLayerResponse,
     decodeRemoveLayerResponse, decodeRestoreLayerResponse,
-} from './zmk-studio.js?v=78';
+} from './zmk-studio.js?v=79';
 
 let checks = 0;
 
@@ -256,7 +256,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
     const {
         kpParam, cpParam, usageParts, usageCap, usageFromName,
         setZmkContext, bindingCap, bindingHover, eventToUsageParam,
-    } = await import('./zmk-keycodes.js?v=78');
+    } = await import('./zmk-keycodes.js?v=79');
 
     // type-to-assign capture: KeyboardEvent.code → usage param
     eq(eventToUsageParam({ code: 'KeyA' }), 0x00070004, 'eventToUsage KeyA');
@@ -316,7 +316,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 // ---- flask_combos slot codec (channel 0x24 payload frames) ----
 {
     const { COMBO_POS_NONE, COMBO_MAX_KEYS, decodeComboSlot, encodeComboSlot,
-            comboSlotIsEmpty } = await import('./zmk-combos-codec.js?v=78');
+            comboSlotIsEmpty } = await import('./zmk-combos-codec.js?v=79');
 
     // encode: pads to 4 positions, usage big-endian
     eq(encodeComboSlot(3, { positions: [12, 40], usage: 0x02070004 }),
@@ -353,7 +353,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 // ---- flask_macros step codec (channel 0x25 payload frames) ----
 {
     const { MACRO_ACTION, decodeMacroStep, encodeMacroStep,
-            macroIsEmpty, macroLiveSteps } = await import('./zmk-macros-codec.js?v=78');
+            macroIsEmpty, macroLiveSteps } = await import('./zmk-macros-codec.js?v=79');
 
     // encode: [slot, step, action, param u32 BE]
     eq(encodeMacroStep(2, 5, { action: MACRO_ACTION.tap, param: 0x02070004 }),
@@ -395,9 +395,9 @@ eq(zigzag(1), 2, 'zigzag(1)');
 // ---- offline imprint preview template (zmk-offline.js) ----
 {
     const { createZmkTemplate, ZmkOfflineFlask, OfflineStudioClient,
-            zmkPendingCount } = await import('./zmk-offline.js?v=78');
-    const { CH_ZMK, V } = await import('./flaskproto.js?v=78');
-    const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=78');
+            zmkPendingCount } = await import('./zmk-offline.js?v=79');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=79');
+    const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=79');
 
     // localStorage shim so saveWorkspace calls inside the sims don't throw.
     globalThis.localStorage ??= {
@@ -521,7 +521,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 // ---- offline keymap auto-sync queue (zmk-offline.js) ----
 {
     const { createZmkTemplate, OfflineStudioClient, zmkPendingCount,
-            zmkClearDirty, zmkApplyPendingKeymap } = await import('./zmk-offline.js?v=78');
+            zmkClearDirty, zmkApplyPendingKeymap } = await import('./zmk-offline.js?v=79');
 
     const ws = createZmkTemplate('imprint');
     const studio = new OfflineStudioClient(ws);
@@ -560,7 +560,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 // ---- combos codec: keys-per-slot sized frames (zmk-combos-codec.js) ----
 {
     const { encodeComboSlot, decodeComboSlot, COMBO_MAX_KEYS } =
-        await import('./zmk-combos-codec.js?v=78');
+        await import('./zmk-combos-codec.js?v=79');
 
     // Default (v7/v8) stays byte-compatible with the old 4-pos frame.
     eq(COMBO_MAX_KEYS, 4, 'codec default stays at the v7/v8 wire shape');
@@ -580,7 +580,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 {
     const { encodeLeaderSlot, decodeLeaderSlot, leaderSlotIsEmpty,
             encodeGestureSlot, decodeGestureSlot, OUTPUT_ACTION } =
-        await import('./zmk-output-codec.js?v=78');
+        await import('./zmk-output-codec.js?v=79');
 
     const lf = encodeLeaderSlot(2, { positions: [13, 14], action: 1, param: 0x70004 }, 8);
     eq(lf.length, 14, 'leader frame = seq + 8 pos + action + u32');
@@ -605,11 +605,11 @@ eq(zigzag(1), 2, 'zigzag(1)');
 // ---- v10 sim: leader + gesture channels ----
 {
     const { createZmkTemplate, ZmkOfflineFlask, zmkPendingCount, zmkClearDirty } =
-        await import('./zmk-offline.js?v=78');
-    const { CH_ZMK, V } = await import('./flaskproto.js?v=78');
-    const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=78');
+        await import('./zmk-offline.js?v=79');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=79');
+    const { ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=79');
     const { encodeLeaderSlot, decodeLeaderSlot, encodeGestureSlot, decodeGestureSlot } =
-        await import('./zmk-output-codec.js?v=78');
+        await import('./zmk-output-codec.js?v=79');
 
     const ws = createZmkTemplate('imprint');
     eq(ws.protocolVersion, ZMK_EXPECTED_PROTOCOL.imprint,
@@ -652,12 +652,12 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
 // ---- full-device export/import round trip (zmk-export.js) ----
 {
-    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=78');
-    const { zmkCapabilities } = await import('./zmk.js?v=78');
-    const { exportFlaskState, applyFlaskState } = await import('./zmk-export.js?v=78');
-    const { CH_ZMK, V } = await import('./flaskproto.js?v=78');
-    const { encodeComboSlot } = await import('./zmk-combos-codec.js?v=78');
-    const { encodeLeaderSlot } = await import('./zmk-output-codec.js?v=78');
+    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=79');
+    const { zmkCapabilities } = await import('./zmk.js?v=79');
+    const { exportFlaskState, applyFlaskState } = await import('./zmk-export.js?v=79');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=79');
+    const { encodeComboSlot } = await import('./zmk-combos-codec.js?v=79');
+    const { encodeLeaderSlot } = await import('./zmk-output-codec.js?v=79');
 
     const mkApp = () => {
         const ws = createZmkTemplate('imprint');
@@ -739,7 +739,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
 // ---- colour picker maths (colorpicker.js) ----
 {
-    const C = await import('./colorpicker.js?v=78');
+    const C = await import('./colorpicker.js?v=79');
 
     // The picker speaks the FIRMWARE's space (h/s/v 0-255), so a colour that
     // survives a round trip is a colour the board renders as shown.
@@ -786,7 +786,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
 // ---- Modes store (zmk-modes.js) ----
 {
-    const M = await import('./zmk-modes.js?v=78');
+    const M = await import('./zmk-modes.js?v=79');
     {   // Make baseline: only a clean import AND a successful save mark it
         const run = (r, saved) => M.writeBaseline({
             applyKeymapData: async () => r, saveChanges: async () => saved }, {});
@@ -845,7 +845,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
 // ---- v13 caps + profile decorations (zmk.js) ----
 {
-    const { zmkCapabilities, zmkProfile, ZMK_TRACKBALLS } = await import('./zmk.js?v=78');
+    const { zmkCapabilities, zmkProfile, ZMK_TRACKBALLS } = await import('./zmk.js?v=79');
     const v12 = zmkCapabilities('imprint', 12);
     const v13 = zmkCapabilities('imprint', 13);
     eq(v12.autoMouse, false, 'v12 firmware has no automouse channel');
@@ -859,7 +859,7 @@ eq(zigzag(1), 2, 'zigzag(1)');
 
 // ---- RGB painter LED → key geometry mapping (zmk-rgb-tab.js) ----
 {
-    const { ledKeyOrder } = await import('./zmk-rgb-tab.js?v=78');
+    const { ledKeyOrder } = await import('./zmk-rgb-tab.js?v=79');
     // Two halves of 2 keys each, right half offset in x; thumb-cluster-style
     // stragglers keep position order within their half.
     const keys = [
@@ -884,7 +884,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
 // ---- LED→key custom measured map (zmk-rgb-tab.js wizard store) ----
 {
-    const { ledKeyOrder, saveLedMap, storedLedMap } = await import('./zmk-rgb-tab.js?v=78');
+    const { ledKeyOrder, saveLedMap, storedLedMap } = await import('./zmk-rgb-tab.js?v=79');
     // Node has no localStorage — storedLedMap must fail soft (guess path).
     eq(storedLedMap(), null, 'no localStorage = no stored map');
     const store = new Map();
@@ -914,7 +914,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 // in-flight slot-4 request — with echoBytes the matcher checks the address
 // prefix, so the stale frame is dropped and the real answer is adopted.
 {
-    const { FlaskHID } = await import('./webhid.js?v=78');
+    const { FlaskHID } = await import('./webhid.js?v=79');
     const hid = new FlaskHID();
     hid.device = { opened: true, sendReport: async () => {} };
     const reply = (bytes) => {
@@ -948,7 +948,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
         removeItem(k) { this._m.delete(k); },
     };
     const { zmkSlotName, zmkSetSlotName, zmkAllSlotNames, zmkApplySlotNames } =
-        await import('./zmk.js?v=78');
+        await import('./zmk.js?v=79');
     zmkSetSlotName('imprint', 'combos', 3, 'copy-pair');
     eq(zmkSlotName('imprint', 'combos', 3), 'copy-pair', 'slot name round-trips');
     zmkSetSlotName('imprint', 'combos', 3, '');
@@ -966,10 +966,10 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
         setItem(k, v) { this._m.set(k, String(v)); },
         removeItem(k) { this._m.delete(k); },
     };
-    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=78');
-    const { CH_ZMK, V } = await import('./flaskproto.js?v=78');
+    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=79');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=79');
     const { encodeComboSlotV2, decodeComboSlotV2, COMBO_ACTION } =
-        await import('./zmk-combos-codec.js?v=78');
+        await import('./zmk-combos-codec.js?v=79');
 
     const t = { positions: [3, 9], action: COMBO_ACTION.behavior,
         behaviorId: 0xBEEF, param1: 0x02070004, param2: 7 };
@@ -1004,14 +1004,14 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
         setItem(k, v) { this._m.set(k, String(v)); },
         removeItem(k) { this._m.delete(k); },
     };
-    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=78');
-    const { CH_ZMK, V } = await import('./flaskproto.js?v=78');
+    const { createZmkTemplate, ZmkOfflineFlask } = await import('./zmk-offline.js?v=79');
+    const { CH_ZMK, V } = await import('./flaskproto.js?v=79');
     const { encodeComboSlotV3, decodeComboSlotV3, COMBO_ACTION, COMBO_LAYER_ANY } =
-        await import('./zmk-combos-codec.js?v=78');
+        await import('./zmk-combos-codec.js?v=79');
     const { encodeCskSlot, decodeCskSlot, cskSlotIsEmpty } =
-        await import('./zmk-csk-codec.js?v=78');
+        await import('./zmk-csk-codec.js?v=79');
     const { TD_ACTION, encodeTdStep, decodeTdStep, encodeTdCfg, decodeTdCfg,
-        tdDanceLength } = await import('./zmk-tapdance-codec.js?v=78');
+        tdDanceLength } = await import('./zmk-tapdance-codec.js?v=79');
 
     // v3 codec round trip (timing + layer ride behind the v2 frame).
     const t3 = { positions: [3, 9], action: COMBO_ACTION.behavior,
@@ -1089,7 +1089,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 // ---- keymap auto-restore snapshot/diff (zmk-keymap-sync.js, pure) ----
 {
     const { keymapLayersData, diffKeymapLayers, keymapDiffers, keymapDiffSummary } =
-        await import('./zmk-keymap-sync.js?v=78');
+        await import('./zmk-keymap-sync.js?v=79');
 
     const behaviors = new Map([
         [7, { displayName: 'Key Press' }],
@@ -1146,8 +1146,8 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
 // ---- capture helpers (zmk-capture.js, pure — window untouched) ----
 {
-    const { isModifierUsage, bareUsage } = await import('./zmk-capture.js?v=78');
-    const { kpParam } = await import('./zmk-keycodes.js?v=78');
+    const { isModifierUsage, bareUsage } = await import('./zmk-capture.js?v=79');
+    const { kpParam } = await import('./zmk-keycodes.js?v=79');
     eq(isModifierUsage(kpParam(0xE0)), true, 'Left Ctrl is a modifier usage');
     eq(isModifierUsage(kpParam(0xE7)), true, 'Right GUI is a modifier usage');
     eq(isModifierUsage(kpParam(0x04)), false, 'A is not a modifier usage');
@@ -1161,15 +1161,17 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 {
     const { ZMK_FAMILY_CODES, ZMK_FAMILIES, ZMK_FAMILY_LABELS, ZMK_EXPECTED_PROTOCOL,
             zmkCapabilities, zmkProfile, zmkFamilyCandidate, confirmZmkFamily,
-            zmkFamilyMismatch } = await import('./zmk.js?v=78');
+            zmkFamilyMismatch } = await import('./zmk.js?v=79');
     eq(ZMK_FAMILY_CODES[6], 'totem', 'meta family code 6 = totem');
     eq(ZMK_FAMILY_CODES[4], 'imprint', 'meta family code 4 stays imprint');
     eq(ZMK_FAMILIES.includes('totem'), true, 'totem is a ZMK family');
     eq(ZMK_FAMILY_LABELS.totem, 'TOTEM (ZMK)', 'totem label');
-    eq(ZMK_EXPECTED_PROTOCOL.totem, 20, 'totem is v20 (flask_mousekeys 0x2D)');
+    eq(ZMK_EXPECTED_PROTOCOL.totem, 21, 'totem is v21 (flask_mousekeys 0x2D + start floor)');
     // flask_mousekeys: version-gated (main.js probe narrows it), NOT pointing-gated.
     eq(zmkCapabilities('totem', 19).mouseKeys, false, 'totem v19: no mouse keys card');
     eq(zmkCapabilities('totem', 20).mouseKeys, true, 'totem v20: mouse keys');
+    eq(zmkCapabilities('totem', 20).mouseKeysFloor, false, 'totem v20: no start-speed slider');
+    eq(zmkCapabilities('totem', 21).mouseKeysFloor, true, 'totem v21: start-speed slider');
     eq(zmkCapabilities('totem', 20).mouse, false, 'totem v20: still no trackball channels');
     eq(zmkCapabilities('totem', undefined).mouseKeys, false, 'no flask protocol: no mouse keys');
     eq(ZMK_EXPECTED_PROTOCOL.imprint, 19, 'imprint expects v19 (reaches it once rebuilt on the unified modules)');
@@ -1189,7 +1191,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
         null, 'timeout leaves the family unresolved (no imprint fallback)');
     eq(await confirmZmkFamily(fake(99), 'imprint'), null, 'unknown family code stays unresolved');
     // Writes are blocked while unresolved: keymap tab guards on app.familyUnresolved.
-    const { ZmkKeymapTab } = await import("./zmk-keymap-tab.js?v=78");
+    const { ZmkKeymapTab } = await import("./zmk-keymap-tab.js?v=79");
     if (ZmkKeymapTab) {
         const t = Object.create(ZmkKeymapTab.prototype);
         t.app = { familyUnresolved: true };
@@ -1237,10 +1239,10 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 // ---- totem offline preview: shared layout, generated default, no drift ----
 {
     const { createZmkTemplate, ZMK_TEMPLATE_FAMILIES, ZmkOfflineFlask, OfflineStudioClient }
-        = await import('./zmk-offline.js?v=78');
-    const { TOTEM_GEOM } = await import('./zmk-totem-layout.js?v=78');
-    const { TOTEM_DEFAULT } = await import('./zmk-totem-default.js?v=78');
-    const { zmkProfile, zmkCapabilities, ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=78');
+        = await import('./zmk-offline.js?v=79');
+    const { TOTEM_GEOM } = await import('./zmk-totem-layout.js?v=79');
+    const { TOTEM_DEFAULT } = await import('./zmk-totem-default.js?v=79');
+    const { zmkProfile, zmkCapabilities, ZMK_EXPECTED_PROTOCOL } = await import('./zmk.js?v=79');
     eq(ZMK_TEMPLATE_FAMILIES.includes('totem'), true, 'totem offline template listed');
     eq(TOTEM_GEOM.length, 38, 'totem layout has 38 keys');
     const ws = createZmkTemplate('totem');
@@ -1263,7 +1265,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     // Hidden exactly as online: pointing/RGB caps off, none of their tunables seeded.
     const caps = zmkCapabilities(ws.family, ws.protocolVersion);
     eq(caps.mouse || caps.rgbMap || caps.gestures, false, 'offline totem caps hide pointing/RGB');
-    const { CH_ZMK: CHn } = await import('./flaskproto.js?v=78');
+    const { CH_ZMK: CHn } = await import('./flaskproto.js?v=79');
     const banned = [CHn.autoscroll, CHn.accel, CHn.scrollSnap, CHn.scrollScale, CHn.gestures,
         CHn.ballSwap, CHn.autoMouse, CHn.rgbMap].map(String);
     eq(Object.keys(ws.tunables).some((k) => banned.includes(k.split(':')[0])), false, 'no pointing/RGB tunables seeded for totem');
@@ -1313,7 +1315,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
     // firmware working tree never fails this suite. Skipped, loudly, without
     // the repo or the commit.
     const { generateAt, firmwareSha } = await import('./gen-totem-default.mjs');
-    const { TOTEM_LAYOUT } = await import('./zmk-totem-layout.js?v=78');
+    const { TOTEM_LAYOUT } = await import('./zmk-totem-layout.js?v=79');
     const pin = TOTEM_DEFAULT.firmwareSha;
     eq(/^[0-9a-f]{40}$/.test(pin ?? ''), true, 'zmk-totem-default.js records its Totem-ZMK commit (firmwareSha)');
     eq(TOTEM_LAYOUT.firmwareSha, pin, 'layout and keymap data come from one commit');
@@ -1321,8 +1323,8 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
         const REGEN = `differs from the generator output for Totem-ZMK ${pin.slice(0, 7)} — regenerate: node gen-totem-default.mjs ${FIRMWARE_ROOT} ${pin.slice(0, 7)}`;
         const { layout, keymap } = generateAt(FIRMWARE_ROOT, pin);
         const here = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
-        eq(here('./zmk-totem-default.js?v=78') === keymap, true, `zmk-totem-default.js ${REGEN}`);
-        eq(here('./zmk-totem-layout.js?v=78') === layout, true, `zmk-totem-layout.js ${REGEN}`);
+        eq(here('./zmk-totem-default.js?v=79') === keymap, true, `zmk-totem-default.js ${REGEN}`);
+        eq(here('./zmk-totem-layout.js?v=79') === layout, true, `zmk-totem-layout.js ${REGEN}`);
         eq(TOTEM_LAYOUT.keys.length, 38, 'firmware physical layout has 38 keys');
         const head = firmwareSha(FIRMWARE_ROOT, 'HEAD');
         if (head && head !== pin) console.log(`zmk-studio-test: NOTE Totem-ZMK HEAD ${head.slice(0, 7)} is newer than the pinned ${pin.slice(0, 7)} — regenerate: node gen-totem-default.mjs`);
@@ -1333,7 +1335,7 @@ eq(fBytes(9, []), [0x4A, 0x00], 'add_layer = empty length-delimited field 9');
 
 // ---- reconnect pick: two boards on one VID:PID (Totem + Imprint)
 {
-    const { pickReconnectDevice } = await import('./boards.js?v=78');
+    const { pickReconnectDevice } = await import('./boards.js?v=79');
     const dev = (productName, pid = 0x615E, vid = 0x1D50) => ({ vendorId: vid, productId: pid, productName });
     const totem = dev('Totem'), imp = dev('Imprint'), other = dev('Other', 0x1234);
     const last = '1d50:615e';
