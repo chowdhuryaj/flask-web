@@ -43,6 +43,15 @@ assert.equal(weird.displayName, 'Weird Thing'); assert.ok((await c.listAllBehavi
     const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=77');
     const sw = TOTEM_DEFAULT.behaviors.find((b) => b.node === 'sw_layout');
     await assert.rejects(c.setLayerBinding(0, 3, { behaviorId: sw.id, param1: 0, param2: 0 }), /INVALID_PARAMETERS/); checks++;
+    // Mouse directions: raw &mmv with a param is refused like on hardware; the mm_*/sc_* macros assign.
+    const by = (node) => TOTEM_DEFAULT.behaviors.find((b) => b.node === node);
+    await assert.rejects(c.setLayerBinding(0, 3, { behaviorId: by('mmv').id, param1: 20, param2: 0 }), /INVALID_PARAMETERS/); checks++;
+    const { MOUSE_MACROS } = await import('../behavior-catalog.js?v=77');
+    for (const m of MOUSE_MACROS) {
+        assert.equal(by(m.node)?.displayName, m.name, `sim lists ${m.node} as "${m.name}"`);
+        await c.setLayerBinding(0, 3, { behaviorId: by(m.node).id, param1: 0, param2: 0 });
+        checks += 1;
+    }
 }
 
 // Edit + save: only the changed key is queued, by display name.

@@ -72,6 +72,43 @@ ok(mm.every((t) => t.disabled && t.binding === null && t.label.endsWith('needs f
 ok(searchTiles(model, 'mouse left').some((t) => t.id === 'mm:mm_left'), '"mouse left" finds it');
 ok(searchTiles(model, 'scroll up').some((t) => t.id === 'mm:sc_up'), '"scroll up" finds it');
 
+// Firmware with the macros: each tile resolves to the macro's id (by display-name, else node name), p1 = p2 = 0.
+{
+    const { MOUSE_MACROS } = await import('../behavior-catalog.js?v=77');
+    const macros = MOUSE_MACROS.map((m, i) => ({ id: 120 + i, displayName: i === 11 ? m.node : m.name, metadata: [{ param1: [], param2: [] }] }));
+    setZmkContext({ behaviors: new Map([...LIVE, ...macros].map((d) => [d.id, d])), layers: NAMES.map((name, id) => ({ id, name })) });
+    const m2 = dockModel(surfaceEntries('zmk.key', {}), []);
+    const tiles = m2.behaviours.find((c) => c.label === 'Other').tiles.filter((t) => t.id.startsWith('mm:'));
+    eq(tiles.map((t) => [t.cap, t.binding]), MOUSE_MACROS.map((m, i) => [m.name, { behaviorId: 120 + i, param1: 0, param2: 0 }]),
+        'tile -> macro id, no params (sc_right found by node name)');
+    ok(tiles.every((t) => !t.disabled), 'enabled');
+    ok(!m2.behaviours.flatMap((c) => c.tiles).some((t) => /^adv:12\d|^adv:13[01]/.test(t.id)), 'macros are not doubled as plain Other tiles');
+    // Guard: no tile (nor its build()) writes a pointing behaviour (&mmv/&msc) with a param, here or on the pinned default.
+    const POINT = /^(mouse_move|mouse_scroll|Mouse Move|Mouse Scroll)$/;
+    const { TOTEM_DEFAULT } = await import('../zmk-totem-default.js?v=77');
+    for (const ctx of [[...LIVE, ...macros], LIVE, TOTEM_DEFAULT.behaviors]) {
+        const bmap = new Map(ctx.map((d) => [d.id, d]));
+        setZmkContext({ behaviors: bmap, layers: NAMES.map((name, id) => ({ id, name })) });
+        const mod = dockModel(surfaceEntries('zmk.key', {}), []);
+        for (const t of [...mod.pinned, ...mod.behaviours.flatMap((c) => c.tiles)]) {
+            for (const b of [t.binding, t.build?.(), t.build?.({ key: 0x2C, mods: 0 })].filter(Boolean)) {
+                ok(!(POINT.test(bmap.get(b.behaviorId)?.displayName ?? '') && ((b.param1 >>> 0) || (b.param2 >>> 0))), `${t.id} writes &mmv/&msc with a param`);
+            }
+        }
+    }
+    setZmkContext({ behaviors: new Map(LIVE.map((d) => [d.id, d])), layers: NAMES.map((name, id) => ({ id, name })) });
+}
+// Grep guard: the app sources no longer pack pointing.h params (x << 16 | y) for a write; only the legend decodes them
+// and the export prints them.
+{
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const root = new URL('../', import.meta.url);
+    for (const f of readdirSync(root).filter((n) => /\.js$/.test(n) && !['behavior-catalog.js', 'zmk-dt-export.js', 'zmk-totem-default.js'].includes(n))) {
+        const src = readFileSync(new URL(f, root), 'utf8');
+        ok(!/MOVE_VAL|SCRL_VAL|val:\s*1800|mouse_move\s*:\s*\{/.test(src), `${f} builds raw &mmv/&msc params`);
+    }
+}
+
 // Search.
 eq(searchTiles(model, 'super delete').filter((t) => t.id.startsWith('adv:88:')).length, NAMES.length, '"super delete" finds the layered tiles');
 ok(searchTiles(model, 'super delete / layer: nav').some((t) => t.id === 'adv:88:2'));

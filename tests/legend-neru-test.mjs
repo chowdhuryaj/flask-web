@@ -22,6 +22,25 @@ setZmkContext({ behaviors: new Map(live.map((d) => [d.id, d])), layers });
 const id = (n) => live.find((d) => d.displayName === n).id;
 const lg = (n, param1 = 0, param2 = 0) => { const l = legendOf({ behaviorId: id(n), param1, param2 }); return [l.main, l.sub]; };
 
+
+// mm_*/sc_* macros (Totem-ZMK 6ec01aa): same glyph and label as the raw key, "(macro)" in the description.
+{
+    const { MOUSE_MACROS, describeBinding } = await import('../behavior-catalog.js?v=77');
+    const macros = MOUSE_MACROS.map((m, i) => ({ id: 300 + i, displayName: m.name, metadata: [{ param1: [], param2: [] }] }));
+    const nodeOnly = { id: 400, displayName: 'sc_left', metadata: [{ param1: [], param2: [] }] };   // no display-name: the device reports the node
+    setZmkContext({ behaviors: new Map([...live, ...macros, nodeOnly].map((d) => [d.id, d])), layers });
+    const m = (id) => { const l = legendOf({ behaviorId: id, param1: 0, param2: 0 }); return [l.main, l.sub, l.kind]; };
+    eq(m(300), ['Mouse ↑', '', 'plain']);
+    eq(m(307), ['Mouse ↘', '', 'plain']);
+    eq(m(311), ['Scroll →', '', 'plain']);
+    eq(m(400), ['Scroll ←', '', 'plain'], 'node-name fallback');
+    const raw = legendOf({ behaviorId: id('mouse_move'), param1: (-1800) & 0xFFFF, param2: 0 });
+    eq([raw.main, raw.sub, raw.kind], m(300), 'macro key reads exactly like the raw &mmv MOVE_UP key');
+    eq(describeBinding({ behaviorId: 300, param1: 0, param2: 0 }, 'zmk-studio'), 'Mouse ↑ (macro)');
+    eq(describeBinding({ behaviorId: 400, param1: 0, param2: 0 }, 'zmk-studio'), 'Scroll ← (macro)');
+    setZmkContext({ behaviors: new Map(live.map((d) => [d.id, d])), layers });
+}
+
 // pointing.h: MOVE_X(h) = (h & 0xFFFF) << 16, MOVE_Y(v) = v & 0xFFFF; MOVE_UP = Y(-v), SCRL_UP = Y(+v).
 const X = (h) => ((h & 0xFFFF) << 16) >>> 0, Y = (v) => v & 0xFFFF;
 for (const v of [600, 1800, 7]) {   // scales with MOVE_VAL, only the sign matters
