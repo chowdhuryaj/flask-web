@@ -100,6 +100,13 @@ const FIRMWARE = {
     'Num Word': ['num_word', 'l'], 'Flask Leader': ['fled'],
     'Adaptive Key': ['fak', 'n'],   // &fak <set>: the rules are runtime (see not-exported below)
 };
+// Totem mouse direction macros (param-less wrappers of &mmv/&msc), by display-name; the
+// same contract as MOUSE_MACROS in behavior-catalog.js (this module stays import-free).
+for (const n of ['mm_up Mouse ↑', 'mm_down Mouse ↓', 'mm_left Mouse ←', 'mm_right Mouse →', 'mm_ul Mouse ↖', 'mm_ur Mouse ↗',
+    'mm_dl Mouse ↙', 'mm_dr Mouse ↘', 'sc_up Scroll ↑', 'sc_down Scroll ↓', 'sc_left Scroll ←', 'sc_right Scroll →']) {
+    const [node, name] = [n.split(' ')[0], n.slice(n.indexOf(' ') + 1)];
+    FIRMWARE[name] = FIRMWARE[node] = [node];   // node name too: a node without display-name reports it
+}
 // bt.h: BT_SEL and BT_DISC take a profile index (second cell); the rest take none.
 const BT = { 0: 'BT_CLR', 1: 'BT_NXT', 2: 'BT_PRV', 3: 'BT_SEL', 4: 'BT_CLR_ALL', 5: 'BT_DISC' };
 const BT_WITH_PROFILE = new Set([3, 5]);

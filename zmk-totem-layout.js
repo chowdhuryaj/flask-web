@@ -3,7 +3,7 @@
 // Both the connected profile (zmk.js) and the offline sim read this one module.
 export const TOTEM_LAYOUT = {
  "source": "boards/shields/totem/totem.dtsi",
- "firmwareSha": "28760242a958fce9e9a786f31e0e9e1cbb83e417",
+ "firmwareSha": "6ec01aa89a52bd8148b2483241d85e5ff6647901",
  "sha256": "5a9db709e7814454a6eac4e38e838189f39d0231a414d7df8fd33b1e05ebe56f",
  "name": "TOTEM",
  "keys": [

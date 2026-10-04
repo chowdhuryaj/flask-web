@@ -116,7 +116,11 @@ if (!existsSync(real) && process.env.FLASK_SKIP_FW_CHECK !== '1') {
     throw new Error(`keymap-export-test: firmware repo not found at ${real}; set FLASK_SKIP_FW_CHECK=1 to skip the cross-check`);
 }
 if (existsSync(real)) {
-    const src = readFileSync(real, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    // The keymap at the commit zmk-totem-default.js was generated from, not the working tree
+    // (the firmware checkout may sit on another branch than the pin).
+    const { readAt, FIRMWARE_ROOT } = await import('../gen-totem-default.mjs');
+    const realText = readAt(FIRMWARE_ROOT, T.firmwareSha, 'config/totem.keymap');
+    const src = realText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const ALIAS = { RET: 'ENTER', RETURN: 'ENTER', DOWN_ARROW: 'DOWN', UP_ARROW: 'UP', LEFT_ARROW: 'LEFT', RIGHT_ARROW: 'RIGHT',
         C_REWIND: 'C_RW', C_PLAY_PAUSE: 'C_PP', C_FAST_FORWARD: 'C_FF', ESCAPE: 'ESC', BACKSPACE: 'BSPC', DELETE: 'DEL', PERIOD: 'DOT', SLASH: 'FSLH',
         LEFT_SHIFT: 'LSHFT', LSHIFT: 'LSHFT', LEFT_CONTROL: 'LCTRL', LCTL: 'LCTRL', LEFT_BRACKET: 'LBKT', RIGHT_BRACKET: 'RBKT', PAGE_UP: 'PG_UP', PAGE_DOWN: 'PG_DN' };
@@ -128,7 +132,7 @@ if (existsSync(real)) {
     // Layer constants compare by number (the firmware says L_NAV, the export derives L_NAVIGATION
     // from the display name). Trailing dummy cells are exported as written (catalog `cells`).
     const layerDefs = (t) => Object.fromEntries([...t.matchAll(/^#define\s+(L_\w+)\s+(\d+)/gm)].map((m) => [m[1], m[2]]));
-    const realDefs = layerDefs(readFileSync(real, 'utf8')), ourDefs = layerDefs(text);
+    const realDefs = layerDefs(realText), ourDefs = layerDefs(text);
     const cellsFor = (defs) => (bindingsText) => bindingsText.replace(/[<>]/g, ' ').split('&').slice(1).map(norm)
         .map((c) => c.replace(/\bL_[A-Z0-9_]+\b/g, (w) => `layer${defs[w] ?? w}`)).map((c) => `&${c}`);
     // pointing.h names -> the MOVE_X/MOVE_Y/MBn form the export writes (steps from the keymap's tuning block).
