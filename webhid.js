@@ -166,7 +166,15 @@ export class FlaskHID extends EventTarget {
                     }
                 }, timeoutMs),
             };
-            this.device.sendReport(0, report).catch(async (e) => {
+            // One retry before teardown: another process (Neru's totem-layer) can
+            // hold the raw HID interface for a few ms, failing a single write
+            // while the handle is fine. Only a second failure means it's dead.
+            const dev0 = this.device;
+            dev0.sendReport(0, report).catch(async () => {
+                await new Promise((r) => setTimeout(r, 80));
+                if (this.device !== dev0 || !dev0.opened) throw new Error('device closed');
+                return dev0.sendReport(0, report);
+            }).catch(async (e) => {
                 diag.log('write-failed', `${e.message} — tearing the connection down`);
                 this._rejectPending(new HIDError('writeFailed', `HID write failed: ${e.message}`));
                 // A failed WRITE means the OS handle is dead — this happens
