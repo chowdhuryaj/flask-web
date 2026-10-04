@@ -318,6 +318,8 @@ function disconnectUI() {
     app.unlocked = false;
     app.onHudLockClick = null;
     app.trainerOnly = false;
+    board.unbind();   // old tab's undo stack must not write to the next board
+    document.querySelectorAll('.modal-back').forEach((m) => m.remove());   // open macro/TD/override sheets
     saveState.reset?.();    // drop dirty sources
     saveState.setLine?.(null);
     $('status-pill').classList.remove('connected', 'offline');

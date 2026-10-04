@@ -137,7 +137,7 @@ const writes = [];
 const tapp = { ...app, layerCount: 2, vial: { setKeycode: async (...a) => { writes.push(a); } },
     keymap: [Array.from({ length: 10 }, () => Array(6).fill(0x0004)), Array.from({ length: 10 }, () => Array(6).fill(0x0001))] };
 const tab = Object.create(QmkKeymapTab.prototype);
-Object.assign(tab, { app: tapp, state: 'ready' });
+Object.assign(tab, { app: tapp, state: 'ready', _vial: tapp.vial });
 tab.adapter = tab._makeAdapter();
 const a = tab.adapter;
 eq(a.surface, 'qmk.key');

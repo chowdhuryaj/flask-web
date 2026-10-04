@@ -76,6 +76,7 @@ export class CornerTab {
 
     async load() {
         const { flask, caps } = this.app;
+        this._flask = flask;
         const g = (id) => flask.getU16(CH_QMK.corner, id);
         this.defCount = Math.min(await g(V_QMK.ccDefCount), CC.total);
         this.enabled = (await g(V_QMK.ccEnabled)) !== 0;
@@ -109,6 +110,7 @@ export class CornerTab {
     /** Bind a chord. KC_TRNS (or Clear) unbinds it. The SET persists itself. */
     async _set(def, keycode) {
         const kc = keycode || KC_TRNS;
+        if (this.app.flask !== this._flask) { toast('Keyboard changed: reopen the tab', true); return; }
         try {
             await this.app.flask.setBytes(CH_QMK.corner, V_QMK.ccOut,
                 [def, UNIVERSAL_LAYER, kc >> 8, kc & 0xFF], 2);

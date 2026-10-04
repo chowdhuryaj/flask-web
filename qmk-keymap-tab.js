@@ -23,6 +23,7 @@ const isKeycode = (v) => Number.isInteger(v) && v >= 0 && v <= 0xFFFF;
 export class QmkKeymapTab {
     constructor(app) {
         this.app = app;             // { vial, profile, layerCount, keymap, board }
+        this._vial = app.vial;      // pinned: a write after reconnect must not reach the next board
         this.root = el('div');
         this.state = 'loading';     // loading | ready | error
         this.statusMsg = '';
@@ -76,6 +77,7 @@ export class QmkKeymapTab {
     async _write(layer, sel, kc) {
         const { app } = this;
         if (!isKeycode(kc)) throw new Error('not a QMK keycode');
+        if (app.vial !== this._vial) { toast('Keyboard changed: reopen the tab', true); return false; }
         await app.vial.setKeycode(layer, sel.row, sel.col, kc);
         app.keymap[layer][sel.row][sel.col] = kc;
         app.hud?.open && app.hud.render();
