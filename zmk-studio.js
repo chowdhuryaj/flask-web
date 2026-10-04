@@ -750,7 +750,8 @@ export class StudioClient extends EventTarget {
         if (code !== 0) {
             const name = SET_BINDING_ERROR_NAMES[code] ?? `set-binding error ${code}`;
             diag.log('studio-assign-REJECTED', `${summary} → ${name}`);
-            throw new StudioError('remote', name, code);
+            diag.snapshot();   // survives an app restart: localStorage flask-diag-snapshot
+            throw new StudioError('remote', `${name} (${summary})`, code);
         }
         diag.log('studio-assign', summary);
     }
