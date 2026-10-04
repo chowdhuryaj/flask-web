@@ -21,7 +21,7 @@ import { describe as qmkDescribe, hex as qmkHex } from './keycodes.js?v=77';
 import { keyTimingCard } from './zmk-holdtiming-card.js?v=77';
 import { zmkBehaviors } from './zmk-keycodes.js?v=77';
 import { timingBackendNow, TIMING_PARAM, HOLDTAP, decode, encode, composeTapHold, tapHoldSpecOf,
-    homeRowPlan, holdTapParts, modsText } from './behavior-catalog.js?v=77';
+    homeRowPlan, holdTapParts, modsText, mouseMacroOf, describeBinding } from './behavior-catalog.js?v=77';
 
 const ADAPTER = 'zmk-studio';   // inspectorModel's default; the inspector follows the board line
 const MODS = [['Ctl', '⌃', 0x01], ['Sft', '⇧', 0x02], ['Alt', '⌥', 0x04], ['Gui', '⌘', 0x08]];
@@ -225,7 +225,8 @@ export function createInspector({ app, dock }) {
     function source(b) {
         if (qmk) return b == null ? '' : `${qmkDescribe(b)} · ${qmkHex(b)}`;
         if (!b) return '';
-        const name = zmkBehaviors().get(b.behaviorId)?.displayName ?? `behavior #${b.behaviorId}`;
+        const d = zmkBehaviors().get(b.behaviorId);
+        const name = mouseMacroOf(d) ? describeBinding(b, AD) : d?.displayName ?? `behavior #${b.behaviorId}`;
         const hex = (n) => `0x${(n >>> 0).toString(16).toUpperCase()}`;
         return `${name} · ${hex(b.param1)} · ${hex(b.param2)}`;
     }

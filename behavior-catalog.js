@@ -929,7 +929,11 @@ export const MOUSE_MACROS = [
 /** The contract row a device behaviour is, by display-name, else node name (a nameless node reports it). */
 export const mouseMacroOf = (d) => (d ? MOUSE_MACROS.find((m) => d.displayName === m.name || d.displayName === m.node || d.node === m.node) ?? null : null);
 const MOUSE_BUTTON = { 1: 'Click', 2: 'Right click', 4: 'Middle click', 8: 'Back', 16: 'Forward' };   // pointing.h MB1..MB5 bits
-const fwLegend = (raw) => FW_LEGEND.get(behaviorsNow().get(raw?.behaviorId)?.displayName)?.(raw.param1 >>> 0, raw.param2 >>> 0);
+const fwLegend = (raw) => {
+    const d = behaviorsNow().get(raw?.behaviorId);
+    const mm = mouseMacroOf(d);   // same glyph and label as the raw &mmv/&msc key it replaces
+    return mm ? { top: '', main: mm.name } : FW_LEGEND.get(d?.displayName)?.(raw.param1 >>> 0, raw.param2 >>> 0);
+};
 
 function advancedCap(raw, adapter) {
     if (adapter === 'qmk') return capLabel(raw);
@@ -949,6 +953,7 @@ export function describeBinding(binding, adapter = adapterOf(binding)) {
         if (adapter === 'zmk-typed' && binding?.action === 1) return usageLabel(binding.param1);
         const d = behaviorsNow().get(binding?.behaviorId);
         const fw = fwLegend(binding);
+        if (mouseMacroOf(d)) return `${fw.main} (macro)`;
         if (fw && d?.displayName?.startsWith('Neru Menu + ')) return `${d.displayName}: ${fw.main}`;
         return d?.displayName || `Unnamed behavior #${binding?.behaviorId}`;
     }
