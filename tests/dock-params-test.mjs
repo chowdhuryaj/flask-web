@@ -42,6 +42,7 @@ eq(nt('adv:92:2').binding.param1, U(0x1F), 'double = 2');
 eq([nt('adv:94:G').cap, nt('adv:94:G').sub], ['Grid', 'Neru']);
 eq(nt('adv:94:R').label, 'Neru R-grid: recursive grid: narrow by 3×3 cells, then click, stays on this layer');
 ok(nt('adv:92:R').label.endsWith('then back to Base'));
+ok(!nt('adv:92:N') && !nt('adv:92:P') && !nt('adv:92:X') && !nt('adv:92:Z') && nt('adv:94:N'), 'instant actions: stay tile only');
 eq(neruTiles.filter((t) => t.id.startsWith('adv:94:')).length, 14, 'every menu letter');
 ok(!neruTiles.some((t) => / A$|Neru A\b/.test(t.cap + ' ' + t.label)), 'no "Neru A" placeholder');
 ok(nt('adv:93') && nt('adv:91') === undefined, 'Neru Menu keeps its one tile');

@@ -58,6 +58,7 @@ export const MOUSE_MACRO_HINT = 'needs firmware with mouse macros (mm_*/sc_*)';
 const NERU_USAGE = (c) => kpParam(c === '2' ? 0x1F : 0x04 + c.charCodeAt(0) - 65);
 const HOLD_MODS = [['⌃ Ctrl', 0xE0], ['⇧ Shift', 0xE1], ['⌥ Opt', 0xE2], ['⌘ Cmd', 0xE3]];
 const NERU_KEY = { 'Neru Menu + Key (stay)': 'stays on this layer', 'Neru Menu + Key (to base)': 'then back to Base' };
+const NERU_INSTANT = { N: 1, P: 1, X: 1, Z: 1 };   // no Neru mode to exit; only the (stay) tile
 const NERU_PLAIN = { 'Neru Hints': 'Neru Hints: label every clickable target, type one to click', 'Neru Menu': 'Neru menu: opens the letter menu (g grid, r rgrid, b bisect …)' };
 const MOD_HOLD = { 'Mod / Neru Hints': 'Neru Hints', 'Leader / Shift': 'Leader' };   // param1 = the held key, param2 unused
 const LAYER_SHORT = { 'hold-layer': 'mo', 'toggle-layer': 'tog', 'to-layer': 'to', 'one-shot-layer': 'sl', 'tap-toggle': 'tt', 'default-layer': 'df' };
@@ -197,6 +198,9 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
                 neru.push(tile({ id: `adv:${d.id}`, label: NERU_PLAIN[n], desc }, { behaviorId: d.id, param1: 0, param2: 0 }, adapter));
             } else if (NERU_KEY[n]) {
                 for (const [c, name] of Object.entries(NERU_MENU)) {
+                    // n/p/x/z finish at once: a "to base" key's &to L_BASE lands after
+                    // Neru's return-to-Mouse hook and strands the board on Base.
+                    if (c in NERU_INSTANT && n === 'Neru Menu + Key (to base)') continue;
                     neru.push(tile({ id: `adv:${d.id}:${c}`, label: `Neru ${name}: ${NERU_DESC[c]}, ${NERU_KEY[n]}`, desc },
                         { behaviorId: d.id, param1: NERU_USAGE(c), param2: 0 }, adapter));
                 }
