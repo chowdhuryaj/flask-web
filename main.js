@@ -308,6 +308,7 @@ function updateStatus(device) {
 
 function disconnectUI() {
     connectGen++;
+    ambiguousReconnectShown = false;   // a replug after a manual connect should toast/auto-reconnect again
     app.familyUnresolved = false;   // a stale flag would block every Unplugged edit
     app.hud.close();
     app.protocolVersion = null;
