@@ -898,6 +898,7 @@ const MOD_WORD = { 0: '⌃ Ctrl', 1: '⇧ Shift', 2: '⌥ Opt', 3: '⌘ Cmd' }; 
 const holdMod = (p1) => { const id = p1 & 0xFFFF; return id >= 0xE0 && id <= 0xE7 && !(p1 >>> 24) ? MOD_WORD[(id - 0xE0) % 4] : usageCap(p1); };
 const ARROWS = [['↖', '↑', '↗'], ['←', '', '→'], ['↙', '↓', '↘']];   // [y -1 up..+1 down][x -1..+1]
 const FW_LEGEND = new Map([
+    ['Globe / Fn (OS)', () => ({ top: 'Fn', main: 'Globe' })],   // Totem globe_os: Globe on mac, Ctrl+Alt+Win on PC
     ['Neru Hints', () => ({ top: 'Neru', main: 'Hints' })],
     ['Neru Menu', () => ({ top: 'Neru', main: 'Neru menu' })],
     ['Neru Menu + Key (to base)', neruKey],
