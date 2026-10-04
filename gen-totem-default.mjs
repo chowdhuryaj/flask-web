@@ -239,9 +239,10 @@ export function parseKeymap(src) {
     // --- catalog: stock first (fixed order), then every custom node.
     const behaviors = [];
     const byLabel = {};
-    const add = (label, displayName, metadata, unassignable = false) => {
+    const add = (label, displayName, metadata, unassignable = false, bindingCells = null) => {
         const id = behaviors.length + 1;
-        behaviors.push({ id, displayName, metadata, node: label, ...(unassignable ? { unassignable: true } : {}) });
+        // `cells` = the node's #binding-cells, kept because metadata can omit a dummy cell (&ht_sdel L_NUMBER 0).
+        behaviors.push({ id, displayName, metadata, node: label, ...(bindingCells != null ? { cells: bindingCells } : {}), ...(unassignable ? { unassignable: true } : {}) });
         byLabel[label] = id;
     };
     for (const [label, [name, md]] of Object.entries(STOCK)) add(label, name, md);
@@ -280,7 +281,8 @@ export function parseKeymap(src) {
         // Studio refuses to assign it. On the wire it is indistinguishable from a core
         // behavior with sets_len 0 (get_behavior_details sends zero sets for both), so
         // the app hides these by this flag/name instead.
-        add(n.label ?? n.name, str(n.props['display-name']) ?? '', md, md.length === 0);
+        const bc = n.props['#binding-cells'] ? Number(cells(n.props['#binding-cells'])[0]) : null;
+        add(n.label ?? n.name, str(n.props['display-name']) ?? '', md, md.length === 0, bc);
     }
 
     // --- argument resolution

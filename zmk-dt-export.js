@@ -207,6 +207,8 @@ export function exportKeymapText(data, opts = {}) {
         if (k2 === '-' && p2 >>> 0) { k2 = 'raw'; notExported.push(`${where}: &${node} second parameter ${hex(p2)} has no metadata, written as a raw number`); }
         if (k1 !== '-') args.push(val(k1, p1));
         if (k2 !== '-' && !(k1 === 'bt' && !BT_WITH_PROFILE.has(p1 >>> 0))) args.push(val(k2, p2));
+        // catalog `cells` (#binding-cells): a 2-cell node needs its dummy cell written (&ht_sdel L_NUMBER 0).
+        while (args.length < (meta?.cells ?? 0)) args.push(String(args.length ? p2 >>> 0 : p1 >>> 0));
         return `&${node}${args.length ? ' ' + args.join(' ') : ''}`;
     };
     const typedOut = (o, where) => {   // combo / tap-dance output {action,behaviorId,param1,param2}

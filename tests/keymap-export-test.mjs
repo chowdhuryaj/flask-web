@@ -40,6 +40,7 @@ ok(/&kp F\s+&kp X\s+&kp L/.test(text), 'base row 1 keys appear');
 ok(text.includes('&fht_l LCTRL N') && text.includes('&fht_r RCTRL I'), 'flask hold-taps keep hold/tap args');
 ok(text.includes('&kp LS(TAB)'), 'modifier wrapper');
 ok(text.includes('&bt BT_SEL 3') && text.includes('&bt BT_CLR'), 'bluetooth symbols');
+ok(text.includes('&ht_sdel L_NUMBER 0'), '2-cell behaviour keeps its dummy second cell')
 ok(text.includes('&sw_layout OS_NEXT') && text.includes('#define OS_NEXT ZMK_SWITCH_LAYOUT_NEXT'), 'switch-layout param kept');
 ok(text.includes('/* not exported:'), 'not-exported block is always present');
 eq(notExported, [], 'the default Totem state exports completely');
@@ -111,6 +112,9 @@ ok(usageToDt((0x07 << 16) | 0x91).startsWith('ZMK_HID_USAGE('), 'unknown usage i
 
 // ---- cross-check against the real firmware keymap
 const real = join(homedir(), 'dev/Input/Flask-Svalboard/Totem-ZMK/config/totem.keymap');
+if (!existsSync(real) && process.env.FLASK_SKIP_FW_CHECK !== '1') {
+    throw new Error(`keymap-export-test: firmware repo not found at ${real}; set FLASK_SKIP_FW_CHECK=1 to skip the cross-check`);
+}
 if (existsSync(real)) {
     const src = readFileSync(real, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const ALIAS = { RET: 'ENTER', RETURN: 'ENTER', DOWN_ARROW: 'DOWN', UP_ARROW: 'UP', LEFT_ARROW: 'LEFT', RIGHT_ARROW: 'RIGHT',
@@ -122,11 +126,11 @@ if (existsSync(real)) {
     const norm = (cell) => cell.trim().replace(/\s+/g, ' ').replace(/\b[A-Z_]+\b/g, (w) => ALIAS[w] ?? w)
         .replace(/\b[A-Z]+\b/g, (w) => SHIFTED[w] ?? w);
     // Layer constants compare by number (the firmware says L_NAV, the export derives L_NAVIGATION
-    // from the display name); a trailing dummy `0` cell is dropped (metadata carries no param for it).
+    // from the display name). Trailing dummy cells are exported as written (catalog `cells`).
     const layerDefs = (t) => Object.fromEntries([...t.matchAll(/^#define\s+(L_\w+)\s+(\d+)/gm)].map((m) => [m[1], m[2]]));
     const realDefs = layerDefs(readFileSync(real, 'utf8')), ourDefs = layerDefs(text);
     const cellsFor = (defs) => (bindingsText) => bindingsText.replace(/[<>]/g, ' ').split('&').slice(1).map(norm)
-        .map((c) => c.replace(/\bL_[A-Z0-9_]+\b/g, (w) => `layer${defs[w] ?? w}`).replace(/ 0$/, '')).map((c) => `&${c}`);
+        .map((c) => c.replace(/\bL_[A-Z0-9_]+\b/g, (w) => `layer${defs[w] ?? w}`)).map((c) => `&${c}`);
     // pointing.h names -> the MOVE_X/MOVE_Y/MBn form the export writes (steps from the keymap's tuning block).
     const pct = (n) => Number(src.match(new RegExp(`#define\\s+${n}\\s+(\\d+)`))?.[1] ?? 100);
     const mv = Math.trunc(1800 * pct('MOUSE_SPEED_PCT') / 100), sc = Math.trunc(20 * pct('SCROLL_SPEED_PCT') / 100);
@@ -153,7 +157,7 @@ if (existsSync(real)) {
     eq(comboSet(ourCombos).length, T.combos.length, 'every default combo exported');
     eq(realTail.length, T.combos.length, 'every exported combo (keys -> output) exists in the firmware keymap');
 } else {
-    console.log('keymap-export-test: firmware repo not found, cross-check skipped');
+    console.log('keymap-export-test: FLASK_SKIP_FW_CHECK=1, firmware cross-check skipped');
 }
 
 console.log(`keymap-export-test: ${checks} checks OK`);
