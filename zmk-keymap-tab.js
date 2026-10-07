@@ -57,12 +57,18 @@ function studioClient() {
 // leaked and made "Connect ZMK Studio" a dead end until reload (WC-01).
 let serialLockHeld = false;
 let serialLockRelease = null;
+// The last request() promise settles only once the browser has really freed
+// the lock. release() is async, so a back-to-back release + ifAvailable
+// request (silent USB attempt, then silent BLE) saw our own lock as taken.
+let serialLockDone = Promise.resolve();
 
-function acquireSerialLock() {
-    if (serialLockHeld) return Promise.resolve(true);
-    if (!globalThis.navigator?.locks) return Promise.resolve(true);
+async function acquireSerialLock() {
+    if (serialLockHeld) return true;
+    if (!globalThis.navigator?.locks) return true;
+    await serialLockDone;
+    if (serialLockHeld) return true;
     return new Promise((resolve) => {
-        navigator.locks.request('flask-web-serial', { ifAvailable: true }, (lock) => {
+        serialLockDone = navigator.locks.request('flask-web-serial', { ifAvailable: true }, (lock) => {
             if (!lock) { resolve(false); return; }
             serialLockHeld = true;
             resolve(true);

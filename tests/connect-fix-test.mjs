@@ -26,7 +26,10 @@ const locks = {
     request(name, opts, cb) {
         if (heldLocks.has(name)) return Promise.resolve(cb(null));
         heldLocks.add(name);
-        return Promise.resolve(cb({ name })).finally(() => heldLocks.delete(name));
+        // Chromium frees the lock over IPC, after the callback's promise
+        // settles: model that lag so a back-to-back release + request races.
+        return Promise.resolve(cb({ name })).then(() => new Promise((r) => setTimeout(r, 5)))
+            .finally(() => heldLocks.delete(name));
     },
 };
 
@@ -165,8 +168,14 @@ const mkTab = (over = {}) => {
     // The silent connect fails (no granted port); the lock must not stay held.
     const t1 = mkTab();
     await assert.rejects(t1._connect(false), (e) => e.kind === 'cancelled'); checks++;
-    eq(heldLocks.has('flask-web-serial'), false, 'failed connect releases the serial lock');
     eq(_serialLockState().held, false, 'module state agrees');
+    // Straight back in (load(): silent USB, then silent BLE) while the
+    // browser is still freeing our own lock: no "in use" refusal.
+    const t0 = mkTab();
+    await assert.rejects(t0._connect(false), (e) => e.kind === 'cancelled'); checks++;
+    ok(!toasts.some((m) => /in use by another/.test(m)), 'back-to-back connect waits for its own release');
+    await new Promise((r) => setTimeout(r, 20));
+    eq(heldLocks.has('flask-web-serial'), false, 'failed connect releases the serial lock');
     // A new tab instance (reconnect rebuild) is not locked out.
     const t2 = mkTab();
     await assert.rejects(t2._connect(false), (e) => e.kind === 'cancelled'); checks++;
@@ -184,7 +193,7 @@ const mkTab = (over = {}) => {
     await t4._connect(false);
     ok(!toasts.some((m) => /in use by another/.test(m)), 'replacement instance reuses the page-wide lock');
     t4._onSerialDisconnect();
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 20));
     eq(heldLocks.has('flask-web-serial'), false, 'released on disconnect');
     await t4.client.disconnect();
 }
