@@ -22,7 +22,7 @@ import { StudioClient, StudioError, LOCK_UNLOCKED } from './zmk-studio.js?v=79';
 import { zmkApplyPendingKeymap, queuedLayersMatch, seedWorkspaceFromDevice } from './zmk-offline.js?v=79';
 import { exportFlaskState, applyFlaskState } from './zmk-export.js?v=79';
 import { keymapLayersData, diffKeymapLayers, pairLayers, keymapDiffers, keymapDiffSummary } from './zmk-keymap-sync.js?v=79';
-import { ZMK_VIDPID, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=79';
+import { ZMK_VIDPID, ZMK_FAMILY_LABELS, zmkFamilyMismatch, ZMK_FAMILY_UNRESOLVED_MSG } from './zmk.js?v=79';
 import { TOTEM_GEOM } from './zmk-totem-layout.js?v=79';
 import {
     consumerUsages, kpParam, cpParam, usageFromName, eventToUsageParam,
@@ -144,8 +144,9 @@ export class ZmkKeymapTab {
             await this._handshake();
         } else {
             // Silent path: a previously-granted USB port opens without a
-            // gesture; failing that, a previously-granted Bluetooth device
-            // (only where the browser has navigator.bluetooth.getDevices).
+            // gesture; failing that, Bluetooth: the desktop app's helper finds
+            // the connected keyboard on its own; a browser only reopens a
+            // granted device where it has navigator.bluetooth.getDevices.
             try {
                 await this._connect(false);
             } catch {
@@ -169,7 +170,8 @@ export class ZmkKeymapTab {
         const verify = this.app?.zmkStudioSim ? null : (c) => this._verifyPort(c);
         try {
             if (via === 'ble' && !this.app?.zmkStudioSim) {
-                await this.client.connectBluetooth({ requestIfNeeded, verify });
+                await this.client.connectBluetooth({ requestIfNeeded, verify,
+                    name: this._bleName() });
             } else {
                 await this.client.connect({
                     filters: [{ usbVendorId: ZMK_VIDPID.vid, usbProductId: ZMK_VIDPID.pid }],
@@ -451,6 +453,12 @@ export class ZmkKeymapTab {
     /** The snapshot is per keyboard, so it is always this board's family
      * (an unlabelled file counts as Imprint in zmkFamilyMismatch). */
     _family() { return this.app?.profile?.family ?? this.app?.family; }
+    /** Name the desktop BLE helper looks for: the HID product name, else the
+     * family label without its "(ZMK)" tag. */
+    _bleName() {
+        return this.app?.hid?.device?.productName
+            || (ZMK_FAMILY_LABELS[this._family()] ?? '').replace(/\s*\(.*\)$/, '');
+    }
 
     /** Restore saved copy: write it live, never save; ⟲ undoes. */
     async _restoreSnapshot(snap, live) {

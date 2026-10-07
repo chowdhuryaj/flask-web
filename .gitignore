@@ -1,3 +1,4 @@
 .DS_Store
 desktop/node_modules/
 desktop/dist/
+desktop/ble-helper/ble-helper

@@ -13,8 +13,11 @@
 //  - device access is scoped to the known keyboard VID/PIDs below, for both
 //    the chooser (select-hid-device / select-serial-port) and the stored
 //    grants (setDevicePermissionHandler); other permissions are denied.
-//    Web Bluetooth (Studio over BLE) is gated only by select-bluetooth-device
-//    (onSelectBluetooth): Electron 33 has no Bluetooth permission hooks.
+//    Studio over BLE on macOS goes through the bundled CoreBluetooth helper
+//    (ble-helper/main.swift, spawned below; three named IPC channels, app
+//    origin only). Web Bluetooth stays for other platforms, gated only by
+//    select-bluetooth-device (onSelectBluetooth): Electron 33 has no
+//    Bluetooth permission hooks.
 //
 // Storage origin: totem-flask://app is fixed, so localStorage (offline
 // workspaces, Modes, theme, auto-restore snapshots) survives updates and is
@@ -25,12 +28,13 @@
 //      TOTEM_NO_PANEL=1       HUD as a plain focusable:false window instead of type:'panel'
 
 const { app, BrowserWindow, Menu, protocol, session, screen, dialog, shell, ipcMain, globalShortcut } = require('electron');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const os = require('os');
 const path = require('path');
+const readline = require('readline');
 
 const SCHEME = 'totem-flask';
 const ORIGIN = `${SCHEME}://app`;
@@ -212,6 +216,77 @@ function onSelectBluetooth(contents, event, devices, callback) {
     btPending.delete(contents);
     const d = pickDevice(list, 'Bluetooth', (x) => x.deviceName || x.deviceId);
     callback(d ? d.deviceId : '');
+}
+
+/** ZMK Studio over BLE on macOS: one helper process per session
+ * (ble-helper/main.swift has the stdio protocol). Spawned from here so TCC
+ * attributes Bluetooth to this app (its Info.plist has the usage string).
+ * Events go to the opening webContents as 'ble-studio-event':
+ * {type: 'ready', name} | {type: 'data', bytes} | {type: 'error', code, message} | {type: 'closed'}. */
+const BLE_HELPER = app.isPackaged
+    ? path.join(path.dirname(process.execPath), 'ble-helper')
+    : path.join(__dirname, 'ble-helper', 'ble-helper');
+const BLE_MAX_WRITE = 64 * 1024;
+let bleSession = null;      // { proc, wc }
+
+function bleEmit(s, ev) {
+    if (bleSession === s && !s.wc.isDestroyed()) s.wc.send('ble-studio-event', ev);
+}
+
+function bleOpen(wc, name) {
+    bleClose(bleSession);
+    const s = { proc: null, wc };
+    bleSession = s;
+    if (NO_DEVICE || process.platform !== 'darwin') {
+        bleEmit(s, { type: 'error', code: 'notFound', message: 'Bluetooth devices are disabled' });
+        bleEmit(s, { type: 'closed' });
+        bleSession = null;
+        return;
+    }
+    const proc = spawn(BLE_HELPER, [String(name ?? '').slice(0, 64)], { stdio: ['pipe', 'pipe', 'pipe'] });
+    s.proc = proc;
+    proc.stdin.on('error', () => {});   // helper gone: 'exit' reports it
+    proc.stderr.on('data', (d) => console.warn(`ble-helper: ${String(d).trim()}`));
+    readline.createInterface({ input: proc.stdout }).on('line', (line) => {
+        let m;
+        try { m = JSON.parse(line); } catch { return; }
+        if (m.ev === 'ready') bleEmit(s, { type: 'ready', name: String(m.name ?? '') });
+        else if (m.ev === 'data') bleEmit(s, { type: 'data', bytes: new Uint8Array(Buffer.from(String(m.b64 ?? ''), 'base64')) });
+        else if (m.ev === 'error') bleEmit(s, { type: 'error', code: String(m.code ?? 'failed'), message: String(m.msg ?? '') });
+        // 'closed' is sent once, on process exit (below).
+    });
+    const end = () => {
+        if (s.ended) return;
+        s.ended = true;
+        bleEmit(s, { type: 'closed' });
+        if (bleSession === s) bleSession = null;
+    };
+    // A failed spawn may never fire 'exit'.
+    proc.on('error', (e) => {
+        bleEmit(s, { type: 'error', code: 'failed', message: `Bluetooth helper failed to start (${e.code || e.message})` });
+        end();
+    });
+    proc.on('exit', (code, signal) => {
+        // A crash (e.g. a TCC abort) prints nothing; say so.
+        if (signal) bleEmit(s, { type: 'error', code: 'failed', message: `Bluetooth helper stopped (${signal})` });
+        end();
+    });
+}
+
+function bleWrite(wc, bytes) {
+    const s = bleSession;
+    if (!s?.proc || s.wc !== wc || !(bytes instanceof Uint8Array) || !bytes.length || bytes.length > BLE_MAX_WRITE) return;
+    s.proc.stdin.write(`${Buffer.from(bytes).toString('base64')}\n`);
+}
+
+/** EOF on stdin makes the helper drop its GATT client and exit; kill it if
+ * it has not after 2 s. Quitting the app closes the pipe the same way. */
+function bleClose(s) {
+    if (!s) return;
+    if (bleSession === s) bleSession = null;
+    if (!s.proc) return;
+    try { s.proc.stdin.end(); } catch { /* already gone */ }
+    setTimeout(() => { if (s.proc.exitCode === null && s.proc.signalCode === null) s.proc.kill(); }, 2000);
 }
 
 app.on('web-contents-created', (_e, contents) => {
@@ -644,6 +719,11 @@ async function start() {
         hudWin.setSize(hudSettings.width, height);
         placeHud(true);   // cornerBounds clamps a too-tall HUD to the display
     });
+    // Studio over BLE (macOS helper); only the app origin, only its own session.
+    ipcMain.on('ble-studio-open', (e, name) => { if (fromApp(e)) bleOpen(e.sender, name); });
+    ipcMain.on('ble-studio-write', (e, bytes) => { if (fromApp(e)) bleWrite(e.sender, bytes); });
+    ipcMain.on('ble-studio-close', (e) => { if (fromApp(e) && bleSession?.wc === e.sender) bleClose(bleSession); });
+    app.on('will-quit', () => bleClose(bleSession));
     for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
         screen.on(ev, () => placeHud(true));
     }
@@ -710,7 +790,10 @@ async function start() {
         child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     });
     // A reload drops the renderer's handle on the popup; don't leave it orphaned.
-    win.webContents.on('did-start-loading', () => { if (hudWin && !hudWin.isDestroyed()) hudWin.close(); });
+    win.webContents.on('did-start-loading', () => {
+        if (hudWin && !hudWin.isDestroyed()) hudWin.close();
+        if (bleSession?.wc === win.webContents) bleClose(bleSession);
+    });
 
     win.loadURL(`${ORIGIN}/`);
 
@@ -747,6 +830,7 @@ function smoke(win) {
         const probe = await win.webContents.executeJavaScript(
             'JSON.stringify({hid: "hid" in navigator, serial: "serial" in navigator,'
             + ' bluetooth: "bluetooth" in navigator, btGetDevices: typeof navigator.bluetooth?.getDevices,'
+            + ' bleStudio: typeof window.totemFlask?.bleStudio?.open,'
             + ' secure: isSecureContext, origin: location.origin,'
             + ' electronUA: navigator.userAgent.includes("Electron"),'
             + ' bridge: typeof window.totemFlask, title: document.title,'
@@ -810,6 +894,8 @@ function smoke(win) {
             });
             console.log(`FLASK_DESKTOP_SMOKE ${ORIGIN}/ ${probe}`);
             console.log(`FLASK_DESKTOP_SMOKE devices ${devices}`);
+            // Presence only: running the helper would touch Bluetooth (see above).
+            console.log(`FLASK_DESKTOP_SMOKE ble-helper ${JSON.stringify({ path: BLE_HELPER, exists: fs.existsSync(BLE_HELPER) })}`);
             console.log(`FLASK_DESKTOP_SMOKE hud ${hudProbe}`);
             console.log(`FLASK_DESKTOP_SMOKE console-errors ${errors.length}${errors.length ? ' ' + JSON.stringify(errors) : ''}`);
             app.exit(errors.length ? 2 : 0);

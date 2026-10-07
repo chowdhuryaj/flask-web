@@ -462,6 +462,99 @@ export class GattPort {
     }
 }
 
+/** The desktop app's CoreBluetooth bridge (window.totemFlask.bleStudio,
+ * macOS only), or null. */
+export function nativeBle() {
+    return globalThis.window?.totemFlask?.bleStudio ?? null;
+}
+
+/** Desktop BLE transport: the same SerialPort look-alike over the bundled
+ * CoreBluetooth helper (desktop/ble-helper/main.swift). Unlike Web Bluetooth
+ * it reaches a keyboard already connected to the Mac (ZMK stops advertising
+ * then), with no chooser and no user gesture. `bridge`: { open(name,
+ * onEvent), write(bytes), close() }; events {type: 'ready'|'data'|'error'|
+ * 'closed'}. The helper chunks writes to the link MTU. */
+export class NativeBlePort {
+    constructor(bridge, name = '') {
+        this.bridge = bridge;
+        this.name = name;
+        this.transport = 'ble';
+        this.readable = null;
+        this.writable = null;
+        this.error = null;      // first {code, message} the helper reported
+        this._ctl = null;
+        this._opening = null;   // { resolve, reject } until 'ready'
+        this._done = false;
+    }
+
+    open() {
+        this.readable = new ReadableStream({
+            start: (ctl) => { this._ctl = ctl; },
+            cancel: () => this.close(),
+        });
+        this.writable = new WritableStream({
+            write: (chunk) => {
+                if (this._done) throw new Error('Bluetooth link closed');
+                this.bridge.write(chunk);
+            },
+        });
+        return new Promise((resolve, reject) => {
+            this._opening = { resolve, reject };
+            this.bridge.open(this.name, (ev) => this._onEvent(ev));
+        });
+    }
+
+    _onEvent(ev) {
+        if (this._done) return;
+        if (ev?.type === 'ready') {
+            if (ev.name) this.name = ev.name;
+            this._opening?.resolve();
+            this._opening = null;
+        } else if (ev?.type === 'data') {
+            if (ev.bytes?.length) this._ctl.enqueue(new Uint8Array(ev.bytes));
+        } else if (ev?.type === 'error') {
+            this.error ??= { code: String(ev.code ?? 'failed'), message: String(ev.message ?? '') };
+        } else if (ev?.type === 'closed') {
+            this._end();
+        }
+    }
+
+    /** Link gone or closed: end the stream (StudioClient's read loop then
+     * tears down), or fail a pending open with the helper's error. */
+    _end() {
+        if (this._done) return;
+        this._done = true;
+        try { this._ctl?.close(); } catch { /* already cancelled */ }
+        if (this._opening) {
+            this.error ??= { code: 'failed', message: 'Bluetooth helper closed' };
+            this._opening.reject(Object.assign(new Error(this.error.message), { code: this.error.code }));
+            this._opening = null;
+        }
+    }
+
+    async close() {
+        if (this._done) return;
+        this.bridge.close();
+        this._end();
+    }
+}
+
+/** Text for a failed desktop BLE connect. */
+function nativeBleMessage(err, label) {
+    switch (err?.code) {
+    case 'unauthorized':
+        return 'Totem-Flask needs Bluetooth permission: System Settings > Privacy & Security > Bluetooth.';
+    case 'off':
+        return 'Bluetooth is off. Turn it on, then connect again.';
+    case 'notFound':
+        return `${label} not found over Bluetooth. Is it awake and connected to this Mac?`;
+    case undefined:
+        return `${label} did not answer ZMK Studio over Bluetooth.`;
+    default:
+        return `${label} over Bluetooth: ${err.message || err.code}`;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Client
 
@@ -509,7 +602,7 @@ export class StudioClient extends EventTarget {
         return typeof navigator !== 'undefined' && 'serial' in navigator;
     }
     static bluetoothSupported() {
-        return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+        return !!nativeBle() || (typeof navigator !== 'undefined' && 'bluetooth' in navigator);
     }
 
     /** 'usb' | 'ble' | null — the transport of the open connection. */
@@ -562,19 +655,30 @@ export class StudioClient extends EventTarget {
      * Same as connect(), over Bluetooth LE (Studio GATT service). Silent path:
      * navigator.bluetooth.getDevices() where the browser has it (Chromium's
      * new permissions backend); otherwise requestDevice, which needs a click.
-     * `bluetooth` is injectable for tests.
+     * The desktop app's CoreBluetooth bridge (`native`) replaces both: it
+     * finds the connected keyboard by `name` with no chooser, so the silent
+     * path works too. `bluetooth` and `native` are injectable for tests.
      */
-    async connectBluetooth({ requestIfNeeded = true, verify = null, bluetooth = globalThis.navigator?.bluetooth } = {}) {
-        if (!bluetooth) throw new StudioError('unsupported', 'Web Bluetooth is not supported in this browser');
+    async connectBluetooth({ requestIfNeeded = true, verify = null, name = '',
+        bluetooth = globalThis.navigator?.bluetooth, native = nativeBle() } = {}) {
+        if (!native && !bluetooth) throw new StudioError('unsupported', 'Web Bluetooth is not supported in this browser');
         if (this.connected) return;
         this._wrongBoard = false;
+        const wrongBoard = () => new StudioError('wrongBoard',
+            'That Bluetooth keyboard is a different board than the connected keyboard');
+        if (native) {
+            const port = new NativeBlePort(native, name);
+            if (await this._attempt(port, verify)) return;
+            if (this._wrongBoard) throw wrongBoard();
+            const msg = nativeBleMessage(port.error, name || 'Keyboard');
+            // Silent path (app launch) stays silent: nothing awake is not an error.
+            throw new StudioError(requestIfNeeded ? 'openFailed' : 'cancelled', msg);
+        }
         let granted = [];
         try { granted = (await bluetooth.getDevices?.()) ?? []; } catch { /* no permissions backend */ }
         for (const dev of granted) {
             if (await this._attempt(new GattPort(dev), verify)) return;
         }
-        const wrongBoard = () => new StudioError('wrongBoard',
-            'That Bluetooth keyboard is a different board than the connected keyboard');
         if (!requestIfNeeded) {
             throw this._wrongBoard ? wrongBoard() : new StudioError('cancelled', 'No granted Bluetooth device');
         }
