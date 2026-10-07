@@ -1,5 +1,5 @@
 // ZMK keymap editor tab — live keymap editing over ZMK Studio RPC
-// (WebSerial). ZMK-line module: the Vial-for-ZMK surface. The device is the
+// (WebSerial or Web Bluetooth). ZMK-line module: the Vial-for-ZMK surface. The device is the
 // source of truth for everything rendered here — key geometry
 // (get_physical_layouts), layers/bindings (get_keymap), and the behavior
 // catalog (behaviors subsystem) all arrive over the wire on connect.
@@ -137,29 +137,41 @@ export class ZmkKeymapTab {
             // Reconnect of a discarded tab instance — port is still open.
             await this._handshake();
         } else {
-            // Silent path: a previously-granted port opens without a gesture.
+            // Silent path: a previously-granted USB port opens without a
+            // gesture; failing that, a previously-granted Bluetooth device
+            // (only where the browser has navigator.bluetooth.getDevices).
             try {
                 await this._connect(false);
-            } catch { /* stay on the connect card */ }
+            } catch {
+                if (this.app.zmkStudioSim || !StudioClient.bluetoothSupported()) return;
+                try { await this._connect(false, 'ble'); } catch { /* stay on the connect card */ }
+            }
         }
     }
 
     // ---- connection ----
 
-    async _connect(requestIfNeeded) {
+    /** via: 'usb' (WebSerial) | 'ble' (Web Bluetooth GATT). */
+    async _connect(requestIfNeeded, via = 'usb') {
         if (!(await acquireSerialLock())) {
-            toast('ZMK Studio serial is in use by another flask-web tab', true);
+            toast('ZMK Studio is in use by another flask-web tab', true);
             return;
         }
         this.state = 'connecting';
+        this.statusMsg = via === 'ble' ? 'Connecting over Bluetooth…' : '';
         this.render();
+        const verify = this.app?.zmkStudioSim ? null : (c) => this._verifyPort(c);
         try {
-            await this.client.connect({
-                filters: [{ usbVendorId: ZMK_VIDPID.vid, usbProductId: ZMK_VIDPID.pid }],
-                requestIfNeeded,
-                hintKey: this._family() ?? '',
-                verify: this.app?.zmkStudioSim ? null : (c) => this._verifyPort(c),
-            });
+            if (via === 'ble' && !this.app?.zmkStudioSim) {
+                await this.client.connectBluetooth({ requestIfNeeded, verify });
+            } else {
+                await this.client.connect({
+                    filters: [{ usbVendorId: ZMK_VIDPID.vid, usbProductId: ZMK_VIDPID.pid }],
+                    requestIfNeeded,
+                    hintKey: this._family() ?? '',
+                    verify,
+                });
+            }
         } catch (e) {
             if (!this.client.connected) releaseSerialLock();
             this.state = 'idle';
@@ -278,7 +290,7 @@ export class ZmkKeymapTab {
     }
 
     async _refuseWrongBoard(got, want) {
-        const msg = `The Studio serial port is a different board (${got} keys, this ${this._family()} has ${want}). Unplug the other board or pick the right port.`;
+        const msg = `The Studio connection is a different board (${got} keys, this ${this._family()} has ${want}). Unplug the other board or pick the right port.`;
         try { await this.client.disconnect(); } catch { /* already closed */ }
         releaseSerialLock();
         this.keymap = null;
@@ -519,7 +531,7 @@ export class ZmkKeymapTab {
         board.unbind(this.adapter);
         this.state = 'idle';
         this.render();
-        toast('ZMK Studio serial disconnected', true);
+        toast('ZMK Studio disconnected', true);
     }
 
     _handleRpcError(e, prefix) {
@@ -957,12 +969,16 @@ export class ZmkKeymapTab {
         switch (this.state) {
         case 'unsupported':
             this.root.replaceChildren(card('Keymap', 'ZMK Studio',
-                el('p', { class: 'muted', text: 'Live keymap editing needs WebSerial, which this browser lacks. Use Chrome or Edge.' })));
+                el('p', { class: 'muted', text: 'Live keymap editing needs WebSerial or Web Bluetooth, which this browser lacks. Use Chrome or Edge.' })));
             return;
         case 'idle':
             this.root.replaceChildren(card('Keymap', 'ZMK Studio',
-                el('p', { class: 'muted', text: 'The keymap is edited live over the ZMK Studio serial port — a separate USB endpoint from the tuning connection.' }),
-                el('button', { class: 'btn', text: 'Connect ZMK Studio', onclick: () => this._connect(true) })));
+                el('p', { class: 'muted', text: 'The keymap is edited live over ZMK Studio, a separate connection from tuning: the USB serial port, or Bluetooth.' }),
+                el('div', { class: 'row' },
+                    StudioClient.serialSupported() || this.app.zmkStudioSim
+                        ? el('button', { class: 'btn', text: 'Connect over USB', onclick: () => this._connect(true) }) : null,
+                    StudioClient.bluetoothSupported() && !this.app.zmkStudioSim
+                        ? el('button', { class: 'btn', text: 'Connect over Bluetooth', onclick: () => this._connect(true, 'ble') }) : null)));
             return;
         case 'connecting':
         case 'loading':

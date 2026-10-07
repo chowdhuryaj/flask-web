@@ -1,4 +1,4 @@
-// ZMK Studio RPC client — WebSerial transport + framing + a minimal
+// ZMK Studio RPC client — WebSerial + Web Bluetooth transports, framing, a minimal
 // hand-rolled proto3 codec. ZMK-line module (see zmk.js header: ALL ZMK
 // code lives in zmk-scoped files; nothing here may be imported by a QMK
 // module).
@@ -391,9 +391,85 @@ export class StudioError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// Bluetooth LE transport: a SerialPort look-alike (open/close/readable/
+// writable) over Studio's GATT characteristic, so StudioClient runs the same
+// framing and RPC code over either transport. Same SOF/ESC/EOF frames as
+// serial. UUIDs and properties from zmk app/src/studio/uuid.h +
+// gatt_rpc_transport.c (WRITE | READ | INDICATE, encrypted) and
+// zmk-studio-ts-client src/transport/gatt.ts, fetched 2026-10-07.
+
+export const STUDIO_GATT_SERVICE = '00000000-0196-6107-c967-c5cfb1c2482a';
+export const STUDIO_GATT_RPC_CHAR = '00000001-0196-6107-c967-c5cfb1c2482a';
+// ponytail: default ATT MTU 23 - 3; Web Bluetooth exposes no MTU. The
+// firmware concatenates writes into its RX ring, so any split is valid.
+export const GATT_WRITE_CHUNK = 20;
+
+export class GattPort {
+    constructor(device) {
+        this.device = device;
+        this.transport = 'ble';
+        this.readable = null;
+        this.writable = null;
+        this._char = null;
+        this._unlisten = () => {};
+    }
+
+    async open() {
+        const dev = this.device;
+        if (!dev.gatt) throw new Error('device has no GATT server');
+        const server = dev.gatt.connected ? dev.gatt : await dev.gatt.connect();
+        const svc = await server.getPrimaryService(STUDIO_GATT_SERVICE);
+        const ch = await svc.getCharacteristic(STUDIO_GATT_RPC_CHAR);
+        this._char = ch;
+        // ts-client: a reconnect loses indications unless they are stopped first.
+        await ch.stopNotifications().catch(() => {});
+        await ch.startNotifications();
+        this.readable = new ReadableStream({
+            start: (ctl) => {
+                const onValue = (ev) => {
+                    const v = ev.target?.value;
+                    if (v) ctl.enqueue(new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)));
+                };
+                const onGone = () => { this._unlisten(); try { ctl.close(); } catch { /* cancelled */ } };
+                ch.addEventListener('characteristicvaluechanged', onValue);
+                dev.addEventListener('gattserverdisconnected', onGone);
+                this._unlisten = () => {
+                    ch.removeEventListener('characteristicvaluechanged', onValue);
+                    dev.removeEventListener('gattserverdisconnected', onGone);
+                };
+            },
+            cancel: () => this._unlisten(),
+        });
+        // The firmware characteristic has WRITE, not WRITE_WITHOUT_RESPONSE.
+        const send = ch.properties?.writeWithoutResponse && !ch.properties?.write
+            ? (b) => ch.writeValueWithoutResponse(b)
+            : (b) => ch.writeValueWithResponse(b);
+        this.writable = new WritableStream({
+            async write(chunk) {
+                for (let i = 0; i < chunk.length; i += GATT_WRITE_CHUNK) {
+                    await send(chunk.slice(i, i + GATT_WRITE_CHUNK));
+                }
+            },
+        });
+    }
+
+    async close() {
+        this._unlisten();
+        try { await this._char?.stopNotifications(); } catch { /* link gone */ }
+        this._char = null;
+        // Drops only this page's GATT client; macOS keeps the HID link up.
+        try { this.device.gatt?.disconnect(); } catch { /* already down */ }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Client
 
 const RPC_TIMEOUT_MS = 2000;
+// ponytail: fixed factor. Studio indicates <=27 bytes per connection event
+// (gatt_rpc_transport.c indicate_buffer), so a multi-KB get_keymap takes
+// seconds over BLE. Measure on hardware and tune if timeouts show up.
+const BLE_TIMEOUT_SCALE = 5;
 const SAVE_TIMEOUT_MS = 5000;   // settings flash write can be slow
 const PROBE_TIMEOUT_MS = 800;   // silent CDC port: give up fast, try the next
 
@@ -427,8 +503,17 @@ export class StudioClient extends EventTarget {
     }
 
     static supported() {
+        return StudioClient.serialSupported() || StudioClient.bluetoothSupported();
+    }
+    static serialSupported() {
         return typeof navigator !== 'undefined' && 'serial' in navigator;
     }
+    static bluetoothSupported() {
+        return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+    }
+
+    /** 'usb' | 'ble' | null — the transport of the open connection. */
+    get transport() { return this.port ? (this.port.transport ?? 'usb') : null; }
 
     get connected() { return this.port !== null && this._writer !== null; }
 
@@ -442,7 +527,7 @@ export class StudioClient extends EventTarget {
      * get_device_info before it is kept.
      */
     async connect({ filters = [], requestIfNeeded = true, verify = null, hintKey = '' } = {}) {
-        if (!StudioClient.supported()) {
+        if (!StudioClient.serialSupported()) {
             throw new StudioError('unsupported', 'WebSerial is not supported in this browser');
         }
         if (this.connected) return;
@@ -470,6 +555,43 @@ export class StudioClient extends EventTarget {
             if (this._wrongBoard) throw wrongBoard();
             throw new StudioError('timeout',
                 'That port did not answer ZMK Studio. Connect again and pick the other one.');
+        }
+    }
+
+    /**
+     * Same as connect(), over Bluetooth LE (Studio GATT service). Silent path:
+     * navigator.bluetooth.getDevices() where the browser has it (Chromium's
+     * new permissions backend); otherwise requestDevice, which needs a click.
+     * `bluetooth` is injectable for tests.
+     */
+    async connectBluetooth({ requestIfNeeded = true, verify = null, bluetooth = globalThis.navigator?.bluetooth } = {}) {
+        if (!bluetooth) throw new StudioError('unsupported', 'Web Bluetooth is not supported in this browser');
+        if (this.connected) return;
+        this._wrongBoard = false;
+        let granted = [];
+        try { granted = (await bluetooth.getDevices?.()) ?? []; } catch { /* no permissions backend */ }
+        for (const dev of granted) {
+            if (await this._attempt(new GattPort(dev), verify)) return;
+        }
+        const wrongBoard = () => new StudioError('wrongBoard',
+            'That Bluetooth keyboard is a different board than the connected keyboard');
+        if (!requestIfNeeded) {
+            throw this._wrongBoard ? wrongBoard() : new StudioError('cancelled', 'No granted Bluetooth device');
+        }
+        let dev;
+        try {
+            dev = await bluetooth.requestDevice({
+                filters: [{ services: [STUDIO_GATT_SERVICE] }],
+                optionalServices: [STUDIO_GATT_SERVICE],
+            });
+        } catch (e) {
+            if (e?.name === 'NotFoundError') throw new StudioError('cancelled', 'No Bluetooth keyboard selected');
+            throw new StudioError('openFailed', `Bluetooth unavailable: ${e?.message ?? e}`);
+        }
+        if (!(await this._attempt(new GattPort(dev), verify))) {
+            if (this._wrongBoard) throw wrongBoard();
+            throw new StudioError('openFailed',
+                `${dev.name || 'Keyboard'} not reachable over Bluetooth. Is it awake and connected to this Mac?`);
         }
     }
 
@@ -509,7 +631,10 @@ export class StudioClient extends EventTarget {
     async _attempt(port, verify) {
         try {
             if (!(await this._openAndProbe(port))) return false;
-        } catch { return false; }       // busy: try the next one
+        } catch (e) {                   // busy / unreachable: try the next one
+            diag.log('studio-open', e.message);
+            return false;
+        }
         let good = true;
         if (verify) {
             try { good = (await verify(this)) !== false; } catch { good = false; }
@@ -527,8 +652,9 @@ export class StudioClient extends EventTarget {
         try {
             await port.open({ baudRate: 12500 });   // CDC-ACM: value is ignored
         } catch (e) {
-            throw new StudioError('openFailed',
-                `Serial port busy or unavailable — close ZMK Studio or other serial apps (${e.message})`);
+            throw new StudioError('openFailed', port.transport === 'ble'
+                ? `Bluetooth GATT connect failed (${e.message})`
+                : `Serial port busy or unavailable — close ZMK Studio or other serial apps (${e.message})`);
         }
 
         this.port = port;
@@ -536,7 +662,7 @@ export class StudioClient extends EventTarget {
         this._decoder = new FrameDecoder();
         this._writer = port.writable.getWriter();
         this._reader = port.readable.getReader();
-        navigator.serial.addEventListener('disconnect', this._onSerialDisconnect);
+        if (port.transport !== 'ble') navigator.serial.addEventListener('disconnect', this._onSerialDisconnect);
         this._readLoop();   // intentionally un-awaited
         try {
             await this._rpc(SUB_CORE, fVarint(CORE_GET_DEVICE_INFO, 1, true), { timeout: PROBE_TIMEOUT_MS });
@@ -546,7 +672,7 @@ export class StudioClient extends EventTarget {
             await this._teardown();
             return false;
         }
-        diag.log('studio-open', 'serial port opened');
+        diag.log('studio-open', `${port.transport === 'ble' ? 'Bluetooth' : 'serial port'} opened`);
         return true;
     }
 
@@ -559,7 +685,7 @@ export class StudioClient extends EventTarget {
         const port = this.port;
         if (!port) return;
         this.port = null;
-        navigator.serial.removeEventListener('disconnect', this._onSerialDisconnect);
+        globalThis.navigator?.serial?.removeEventListener('disconnect', this._onSerialDisconnect);
         this._rejectPending(new StudioError('notConnected', 'Serial connection closed'));
         try { await this._reader?.cancel(); } catch { /* already dead */ }
         try { this._reader?.releaseLock(); } catch { /* ok */ }
@@ -674,7 +800,7 @@ export class StudioClient extends EventTarget {
     _rpc(subsysField, innerBytes, { timeout = RPC_TIMEOUT_MS } = {}) {
         return this._enqueue(() => new Promise((resolve, reject) => {
             if (!this.connected) {
-                reject(new StudioError('notConnected', 'Studio serial not connected'));
+                reject(new StudioError('notConnected', 'Studio not connected'));
                 return;
             }
             const id = this._nextId++;
@@ -686,7 +812,7 @@ export class StudioClient extends EventTarget {
                         this._pending = null;
                         reject(new StudioError('timeout', 'Device did not answer in time'));
                     }
-                }, timeout),
+                }, this.port?.transport === 'ble' ? timeout * BLE_TIMEOUT_SCALE : timeout),
             };
             this._writer.write(encodeFrame(payload)).catch((e) => {
                 this._rejectPending(new StudioError('notConnected', `Serial write failed: ${e.message}`));

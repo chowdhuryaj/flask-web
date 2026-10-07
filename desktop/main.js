@@ -13,6 +13,8 @@
 //  - device access is scoped to the known keyboard VID/PIDs below, for both
 //    the chooser (select-hid-device / select-serial-port) and the stored
 //    grants (setDevicePermissionHandler); other permissions are denied.
+//    Web Bluetooth (Studio over BLE) is gated only by select-bluetooth-device
+//    (onSelectBluetooth): Electron 33 has no Bluetooth permission hooks.
 //
 // Storage origin: totem-flask://app is fixed, so localStorage (offline
 // workspaces, Modes, theme, auto-restore snapshots) survives updates and is
@@ -182,8 +184,39 @@ function wireSecurity(ses) {
             && !(NO_DEVICE && ['hid', 'serial'].includes(permission))));
 }
 
+/** Web Bluetooth chooser: ZMK Studio over BLE. Chromium only lists devices
+ * matching the page's requestDevice filter (the Studio GATT service,
+ * zmk-studio.js); the split peripheral ("Totem R") never runs Studio and is
+ * dropped by name too. Electron 33 (lib/bluetooth_chooser.cc) fires this
+ * event at scan start (often with an empty list), on every device found and
+ * at scan idle, each with a fresh callback; with preventDefault it never
+ * cancels on its own, so: answer on the first usable list, else cancel after
+ * BT_PICK_MS. Electron 33 has no Bluetooth permission hooks (its
+ * BluetoothDelegate allows every frame), so this chooser is the only gate.
+ * ponytail: a second Studio board found after the first is not offered. */
+const BT_PICK_MS = 10000;
+const btPending = new WeakMap();    // webContents -> { cb, timer }
+
+function onSelectBluetooth(contents, event, devices, callback) {
+    event.preventDefault();
+    if (NO_DEVICE || !isAppUrl(contents.getURL())) { callback(''); return; }
+    let st = btPending.get(contents);
+    if (!st) {
+        st = { cb: null, timer: setTimeout(() => { btPending.delete(contents); st.cb(''); }, BT_PICK_MS) };
+        btPending.set(contents, st);
+    }
+    st.cb = callback;
+    const list = devices.filter((d) => !/ R$/.test(d.deviceName || ''));
+    if (!list.length) return;           // keep scanning until BT_PICK_MS
+    clearTimeout(st.timer);
+    btPending.delete(contents);
+    const d = pickDevice(list, 'Bluetooth', (x) => x.deviceName || x.deviceId);
+    callback(d ? d.deviceId : '');
+}
+
 app.on('web-contents-created', (_e, contents) => {
     contents.on('will-attach-webview', (e) => e.preventDefault());
+    contents.on('select-bluetooth-device', (event, devices, callback) => onSelectBluetooth(contents, event, devices, callback));
     contents.on('will-navigate', (e, url) => { if (!isAppUrl(url)) e.preventDefault(); });
 });
 
@@ -713,6 +746,7 @@ function smoke(win) {
     win.webContents.on('did-finish-load', async () => {
         const probe = await win.webContents.executeJavaScript(
             'JSON.stringify({hid: "hid" in navigator, serial: "serial" in navigator,'
+            + ' bluetooth: "bluetooth" in navigator, btGetDevices: typeof navigator.bluetooth?.getDevices,'
             + ' secure: isSecureContext, origin: location.origin,'
             + ' electronUA: navigator.userAgent.includes("Electron"),'
             + ' bridge: typeof window.totemFlask, title: document.title,'
@@ -720,6 +754,9 @@ function smoke(win) {
         // HID only: navigator.serial.getPorts() makes Chromium enumerate
         // Bluetooth serial ports (IOBluetooth), which aborts a binary whose
         // Info.plist has no NSBluetoothAlwaysUsageDescription (crash 2026-10-01).
+        // Launched from a shell, TCC checks the RESPONSIBLE process (e.g. the
+        // agent's CLI), so any Bluetooth touch aborts even with the keys in our
+        // plist (seen 2026-10-07). Smoke must never touch the adapter.
         const devices = await win.webContents.executeJavaScript(
             'navigator.hid.getDevices().then((h) => JSON.stringify({hid: h.length}))');
         await win.webContents.executeJavaScript('localStorage.setItem("flask-smoke","1")');
