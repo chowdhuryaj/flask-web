@@ -38,6 +38,17 @@ ok(text.includes('#include <dt-bindings/zmk/keys.h>'), 'keys.h');
 for (const n of T.layers.map((l) => `L_${l.name.toUpperCase().replace(/\W+/g, '_')}`)) ok(text.includes(`#define ${n}`), `define ${n}`);
 ok(/&kp F\s+&kp X\s+&kp L/.test(text), 'base row 1 keys appear');
 ok(text.includes('&fht_l LCTRL N') && text.includes('&fht_r RCTRL I'), 'flask hold-taps keep hold/tap args');
+
+// adaptive-tap hold-taps (not in the generated Totem data until it is regenerated): written by display name
+{
+    const beh = [{ id: 901, displayName: 'Hold-Tap R / Adaptive', metadata: [] }, { id: 902, displayName: 'Adaptive Key / Layer', metadata: [] }];
+    const lay = { id: 0, name: 'Base', bindings: [
+        { behavior: beh[0].displayName, behaviorId: 901, param1: 0x700E4 | (0x0C << 24), param2: 8 },
+        { behavior: beh[1].displayName, behaviorId: 902, param1: 0, param2: 5 }] };
+    const out = exportKeymapText({ family: 'zmk', layers: [lay] }, { behaviors: beh, date: '2026-10-11' }).text;
+    ok(/&fhta_r \S+ 8\b/.test(out), 'fhta_r keeps the set as its second arg');
+    ok(/&ht_fak L_BASE 5\b/.test(out), 'ht_fak keeps the set');
+}
 ok(text.includes('&kp LS(TAB)'), 'modifier wrapper');
 ok(text.includes('&bt BT_SEL 3') && text.includes('&bt BT_CLR'), 'bluetooth symbols');
 ok(text.includes('&ht_sdel L_NUMBER 0'), '2-cell behaviour keeps its dummy second cell')

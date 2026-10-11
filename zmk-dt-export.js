@@ -90,6 +90,9 @@ const STOCK = {
 const FIRMWARE = {
     'Hold-Tap L (live)': ['fht_l', 'u', 'u'], 'Hold-Tap R (live)': ['fht_r', 'u', 'u'],
     'Hold-Tap (live)': ['fht', 'u', 'u'],
+    // Adaptive tap: param2 is the &fak set (0-15), hold is a key. ht_fak: layer hold, same set.
+    'Hold-Tap L / Adaptive': ['fhta_l', 'u', 'n'], 'Hold-Tap R / Adaptive': ['fhta_r', 'u', 'n'],
+    'Hold-Tap / Adaptive': ['fhta', 'u', 'n'], 'Adaptive Key / Layer': ['ht_fak', 'l', 'n'],
     'Layer-Tap Control combo (live)': ['flt_ctl', 'l', 'u'], 'Layer-Tap Fn combo (live)': ['flt_fn', 'l', 'u'],
     'Mod-Tap copy/cut combo (live)': ['fmt_copy', 'u', 'u'], 'Mod-Tap undo/redo combo (live)': ['fmt_undo', 'u', 'u'],
     'Mod-Tap Fn arrows (live)': ['fmt_nav', 'u', 'u'], 'Autoshift (live)': ['fas_ht', 'u', 'u'],

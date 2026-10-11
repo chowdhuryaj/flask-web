@@ -254,13 +254,20 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
     }
 
     function assign(entryId, params) {
+        // An Adaptive Key pick on a hold-tap key swaps only the tap and keeps the hold (&fhta_* / &ht_fak).
+        let keepHold = false;
+        if (entryId === 'adaptive' && adapter === 'zmk-studio' && currentValue != null) {
+            const spec = tapHoldSpecOf(currentValue, adapter);
+            const r = spec?.hold ? composeTapHold({ tap: { adaptive: params.slot }, hold: spec.hold, hand: handNow() }, adapter) : null;
+            if (r?.ok) { entryId = r.entryId; params = r.params; keepHold = true; }
+        }
         let v;
         try { v = encode(entryId, params, adapter); } catch (err) { setCap(String(err.message)); return; }
         const e = entries.find((x) => x.id === entryId);
         // Live timing is per KEY-POSITION slot. A helper ('fixed' / variant)
         // runs from its own slot, so writing the key's slot would be wrong.
         let timing = null;
-        if (adapter === 'zmk-studio' && e && params.live && params.live !== 'off'
+        if (adapter === 'zmk-studio' && e && !keepHold && params.live && params.live !== 'off'
             && params.live !== 'fixed' && params.variant == null && posNow() != null) {
             const be = timingBackendNow();
             if (be.runtime) {
@@ -628,7 +635,8 @@ export function buildPickerBody({ surface, value = null, app = {}, position, hos
         return { tap: th.tap, hold, hand: handNow(), timing: th.timing };
     }
 
-    const tapCap = (k) => (k ? capParts(encode('key', { key: k.key, mods: k.mods ?? 0 }, adapter), adapter) : null);
+    const tapCap = (k) => (!k ? null : k.adaptive != null ? { top: '', main: `AK${k.adaptive}` }
+        : capParts(encode('key', { key: k.key, mods: k.mods ?? 0 }, adapter), adapter));
     const tapText = (k) => { const c = tapCap(k); return c ? `${c.top}${c.main}` : ''; };
 
     function holdText() {

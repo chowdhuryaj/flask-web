@@ -161,7 +161,11 @@ export function dockModel(entries, sections, adapter = ADAPTER) {
             if (x) { x.build = build; out.push(x); }
         } else if (params.length === 1 && params[0].kind === 'slot') {
             const p = params[0];
-            for (let i = p.min ?? 0; i <= (p.max ?? 15); i++) out.push(t(String(i), `${e.name} ${i}`, safe(() => encode(e.id, { [p.key]: i }, adapter))));
+            for (let i = p.min ?? 0; i <= (p.max ?? 15); i++) {
+                const x = t(String(i), `${e.name} ${i}`, safe(() => encode(e.id, { [p.key]: i }, adapter)));
+                if (x && e.id === 'adaptive') x.adaptive = i;   // keeps the key's hold when the key has one (see effective)
+                out.push(x);
+            }
         } else {
             const c = params.find((p) => p.kind === 'choice' && p.key === 'code');
             const prof = params.find((p) => p.key === 'profile');
@@ -357,12 +361,20 @@ export function createDock({ app, assign, tools = [], surface = keySurfaceOf(app
             const spec = tapHoldSpecOf(board.bindingOf(), AD);
             return t.build(spec?.tap) ?? t.binding;
         }
+        if (t.adaptive != null) {   // AK tile on a hold-tap: swap only the tap, keep the hold (&fhta_* / &ht_fak)
+            const spec = tapHoldSpecOf(board.bindingOf(), AD);
+            if (spec?.hold) {
+                const r = composeTapHold({ tap: { adaptive: t.adaptive }, hold: spec.hold, hand: board.handOf(board.selectedKey()?.pos) }, AD);
+                if (r.ok) return r.value;
+            }
+        }
         return t.binding;
     };
 
     function click(t) {
         if (t.disabled) return;
         if (t.kind === 'key' && target) { target.set({ key: t.key, mods: (t.mods | armed) & 0xFF }); return; }
+        if (t.adaptive != null && target?.which === 'tap') { target.set({ adaptive: t.adaptive }); return; }
         assign(effective(t));
     }
 

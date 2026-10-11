@@ -86,7 +86,7 @@ export function createInspector({ app, dock }) {
         if (!m.tap) { msg = 'Pick the tap key first: click a key tile, or use Press a key.'; render(); return; }
         const pos = sel()?.pos;
         if (!next || (next.kind === 'mods' && !next.mods)) {
-            await put(encode('key', { key: m.tap.key, mods: m.tap.mods ?? 0 }, AD));
+            await put(plainOf(m.tap));
             return;
         }
         const hold = next.kind === 'mods' ? { kind: 'mods', mods: next.right ? next.mods << 4 : next.mods }
@@ -97,16 +97,20 @@ export function createInspector({ app, dock }) {
         await put(r.value);
     }
 
+    // The no-hold binding of a tap: a plain key, or &fak N for an adaptive tap.
+    const plainOf = (tap) => (tap.adaptive != null ? encode('adaptive', { slot: tap.adaptive }, AD) : encode('key', { key: tap.key, mods: tap.mods ?? 0 }, AD));
+
     async function setTap(k) {
         const m = inspectorModel(board.bindingOf(), AD);
-        const tap = { key: k.key, mods: k.mods ?? 0 };
+        const tap = k.adaptive != null ? { adaptive: k.adaptive } : { key: k.key, mods: k.mods ?? 0 };
         if (m.hasHold) {
             const hold = m.kind === 'mods' ? { kind: 'mods', mods: m.right ? m.mods << 4 : m.mods }
                 : m.kind === 'layer' ? { kind: 'layer', layer: m.layer } : { kind: 'key', ...m.holdKey };
             const r = composeTapHold({ tap, hold, hand: board.handOf(sel()?.pos), timing: m.spec?.timing }, AD);
             if (r.ok) { await put(r.value); return; }
+            msg = r.message;
         }
-        await put(encode('key', { key: tap.key, mods: tap.mods }, AD));
+        await put(plainOf(tap));
     }
 
     const sideNow = (m) => (local.right ?? (m.hasHold && m.kind === 'mods' ? m.right : board.handOf(sel()?.pos) === 'right'));
@@ -167,7 +171,8 @@ export function createInspector({ app, dock }) {
             el('button', { class: 'btn small ghost', type: 'button', text: 'Done', 'aria-label': 'Deselect the key',
                 onclick: () => board.select(null) }));
 
-        const tapLg = tapKnown ? legendOf(encode('key', { key: m.tap.key, mods: m.tap.mods ?? 0 }, AD), AD) : lg;
+        const tapLg = !tapKnown ? lg : m.tap.adaptive != null ? { main: `AK${m.tap.adaptive}` }
+            : legendOf(encode('key', { key: m.tap.key, mods: m.tap.mods ?? 0 }, AD), AD);
         const slots = el('div', { class: 'insp-slots' },
             slotBox('tap', 'TAP', tapKnown ? tapLg.main : lg.main, tapKnown ? 'quick press' : 'not a plain key', tapKnown ? '' : lg.kind === 'plain' ? '' : lg.kind,
                 dock.target?.which === 'tap', () => armTarget('tap')),

@@ -77,4 +77,79 @@ const F = 0x09, SHIFT = 0x02;
     const noKey = zrow.map((k, i) => (i === 0 ? { ...k, binding: { behaviorId: id('Momentary Layer'), param1: 1, param2: 0 } } : k));
     ok(/no plain key/.test(C.homeRowPlan(noKey, 'GACS', 'zmk-studio').message));
 }
+
+// ---- adaptive tap: &fhta_l/_r/(none) <mods> <set>, &ht_fak <layer> <set>, &fak <set> ----
+{
+    const fx = fixture('totem');
+    let n = 900;
+    const add = (displayName) => { const d = { id: n++, displayName, metadata: [{ param1: [], param2: [] }] }; fx.behaviors.push(d); return d.id; };
+    const A = { l: add('Hold-Tap L / Adaptive'), r: add('Hold-Tap R / Adaptive'), n: add('Hold-Tap / Adaptive') };
+    const FAK = add('Adaptive Key'), HTFAK = add('Adaptive Key / Layer');
+    setZmkContext({ behaviors: new Map(fx.behaviors.map((d) => [d.id, d])), layers: LAYERS });
+    const CAG = 0x01 | 0x04 | 0x08;   // Ctrl+Alt+Gui
+    const spec = (tap, hold, hand) => ({ tap, hold, hand });
+    const mods = (m, right) => ({ kind: 'mods', mods: right ? m << 4 : m });
+
+    // compose: AK8 + Ctrl+Alt+Gui on a right-hand key -> &fhta_r (hold = kp usages, tap param = the set)
+    const r = C.composeTapHold(spec({ adaptive: 8 }, mods(CAG, true), 'right'), 'zmk-studio');
+    eq(r.ok, true);
+    eq(r.value, { behaviorId: A.r, param1: C.encode('mod-tap', { hold: CAG << 4, tap: 4, live: 'right' }, 'zmk-studio').param1, param2: 8 }, '&fhta_r (Ctrl Alt Gui) 8');
+    eq(r.via, 'Hold-Tap R / Adaptive');
+    eq(C.composeTapHold(spec({ adaptive: 3 }, mods(CAG), 'left'), 'zmk-studio').value.behaviorId, A.l, 'left hand -> fhta_l');
+    eq(C.composeTapHold(spec({ adaptive: 3 }, mods(CAG), null), 'zmk-studio').value.behaviorId, A.n, 'no hand -> fhta');
+    eq(C.composeTapHold(spec({ adaptive: 15 }, mods(CAG, true), 'right'), 'zmk-studio').value.param2, 15, 'set 15');
+
+    // decode back: Tap = AK8, Hold = the modifiers, editable as any hold-tap
+    eq(C.tapHoldSpecOf(r.value, 'zmk-studio'), { tap: { adaptive: 8 }, hold: { kind: 'mods', mods: CAG << 4 }, timing: 200 });
+    eq(C.holdTapParts(r.value, 'zmk-studio'), { entryId: 'mod-tap', hold: C.modsText(CAG << 4), tag: 'live', tap: 'AK8' });
+    eq(C.capParts(r.value, 'zmk-studio').main, 'AK8');
+    eq(C.decode(r.value, 'zmk-studio').params.live, 'right');
+    const again = C.composeTapHold({ ...C.tapHoldSpecOf(r.value, 'zmk-studio'), hand: 'right' }, 'zmk-studio');
+    eq(again.value, r.value, 'decode -> compose round trip');
+    // the existing live nodes and the compiled list never absorb the adaptive nodes
+    eq(C.liveSides().sort(), ['any', 'left', 'right']);
+
+    // change the tap to a letter -> back to &fht_r with the same hold
+    const spec2 = C.tapHoldSpecOf(r.value, 'zmk-studio');
+    const toKey = C.composeTapHold({ tap: { key: 0x36 }, hold: spec2.hold, hand: 'right' }, 'zmk-studio');
+    eq(toKey.via, 'Hold-Tap R (live)');
+    eq(C.tapHoldSpecOf(toKey.value, 'zmk-studio').tap, { key: 0x36, mods: 0 });
+    eq(C.tapHoldSpecOf(toKey.value, 'zmk-studio').hold, spec2.hold, 'hold kept');
+
+    // drop the hold -> &fak 8
+    const bare = C.composeTapHold({ tap: { adaptive: 8 }, hold: null }, 'zmk-studio');
+    eq(bare.value, { behaviorId: FAK, param1: 8, param2: 0 });
+    eq(C.tapHoldSpecOf(bare.value, 'zmk-studio'), { tap: { adaptive: 8 }, hold: null });
+    // and a hold can be added back from the plain AK key
+    eq(C.composeTapHold({ ...C.tapHoldSpecOf(bare.value, 'zmk-studio'), hold: mods(CAG, true), hand: 'right' }, 'zmk-studio').value, r.value);
+
+    // layer hold -> the existing &ht_fak <layer> <set>
+    const lay = C.composeTapHold(spec({ adaptive: 8 }, { kind: 'layer', layer: 2 }, 'right'), 'zmk-studio');
+    eq(lay.value, { behaviorId: HTFAK, param1: 2, param2: 8 });
+    eq(C.tapHoldSpecOf(lay.value, 'zmk-studio'), { tap: { adaptive: 8 }, hold: { kind: 'layer', layer: 2 } });
+    eq(C.composeTapHold({ tap: { key: 0x2C }, hold: { kind: 'layer', layer: 2 }, hand: 'right' }, 'zmk-studio').via, 'Layer-Tap', 'letter tap on layer hold -> Layer-Tap');
+
+    // hold on a key (any key can hold) keeps working with an adaptive tap
+    const hk = C.composeTapHold(spec({ adaptive: 1 }, { kind: 'key', key: 0x3A }, 'left'), 'zmk-studio');
+    eq(hk.value.behaviorId, A.l); eq(C.tapHoldSpecOf(hk.value, 'zmk-studio').hold, { kind: 'key', key: 0x3A, mods: 0 });
+
+    // not offered where the firmware cannot do it
+    ok(!C.composeTapHold(spec({ adaptive: 1 }, mods(CAG), null), 'zmk-typed').ok, 'no adaptive hold-tap in typed slots');
+    ok(!C.composeTapHold(spec({ adaptive: 1 }, mods(CAG), null), 'qmk').ok, 'no adaptive hold-tap on QMK');
+    eq(C.isRecursiveOutput({ action: 3, behaviorId: A.r, param1: r.value.param1, param2: 8 }), true, 'hold-tap with an adaptive tap recurses like &fak');
+    eq(C.isRecursiveOutput({ action: 3, ...toKey.value }), false);
+
+    // inspector model: Tap box reads AK8, Hold box the modifiers
+    const { inspectorModel } = await import('../keymap-inspector.js?v=79').catch(() => ({}));
+    if (inspectorModel) {
+        const m = inspectorModel(r.value, 'zmk-studio');
+        eq([m.tap, m.hasHold, m.kind, m.right, m.mods], [{ adaptive: 8 }, true, 'mods', true, CAG]);
+        eq(inspectorModel(lay.value, 'zmk-studio').layer, 2);
+    }
+
+    // a device without the adaptive hold-tap nodes says so
+    useZmk('totem');
+    const none = C.composeTapHold(spec({ adaptive: 8 }, mods(CAG, true), 'right'), 'zmk-studio');
+    ok(!none.ok && /Adaptive/.test(none.message), none.message);
+}
 console.log(`taphold-test: ${checks} checks OK`);

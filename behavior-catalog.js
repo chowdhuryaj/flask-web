@@ -386,6 +386,9 @@ export function classifyZmk(d) {
     if (s === 'hid_usage/hid_usage' && (m = name.match(/^Hold-Tap(?: ([LR]))? \(live\)$/))) {
         return { entryId: 'mod-tap', set: { live: m[1] === 'L' ? 'left' : m[1] === 'R' ? 'right' : 'any' } };
     }
+    // Adaptive tap (&fhta_*): param2 is an &fak set index, not a key. `ak` = the side this
+    // variant serves; kept out of the live / compiled timing lists (those read set.live / !set.live).
+    if ((m = name.match(/^Hold-Tap(?: ([LR]))? \/ Adaptive$/))) return { entryId: 'mod-tap', set: { ak: m[1] === 'L' ? 'left' : m[1] === 'R' ? 'right' : 'any' } };
     if (/\(live\)$/.test(name) && s === 'hid_usage/hid_usage') return { entryId: 'mod-tap', set: { live: 'fixed', helper: true } };
     if (/\(live\)$/.test(name) && s === 'layer_id/hid_usage') return { entryId: 'layer-tap', set: { live: 'fixed', helper: true } };
     if (s === 'layer_id/hid_usage' && (m = name.match(/^Layer-Tap \((\w+) (\d+)\)$/))) return { entryId: 'layer-tap', set: { timing: +m[2] } };
@@ -568,8 +571,8 @@ export function decode(binding, adapter = adapterOf(binding)) {
 export function isRecursiveOutput(o) {
     if (!o || o.action !== 3) return false;
     try {
-        const id = decodeTyped({ action: 3, behaviorId: o.behaviorId, param1: o.param1 ?? 0, param2: o.param2 ?? 0 }).entryId;
-        return id === 'tap-dance' || id === 'adaptive';
+        const d = decodeTyped({ action: 3, behaviorId: o.behaviorId, param1: o.param1 ?? 0, param2: o.param2 ?? 0 });
+        return d.entryId === 'tap-dance' || d.entryId === 'adaptive' || d.params.adaptive != null;   // a hold-tap with an adaptive tap recurses too
     } catch { return false; }
 }
 
@@ -686,6 +689,11 @@ function decodeStudio(b) {
         case 'key-toggle': return { entryId, params: usageToKey(p1) };
         case 'mod-tap': {
             const hold = usageToMask(p1);
+            if (set.ak) {   // &fhta_*: adaptive tap, side-specific live node
+                const ap = { hold: hold ?? 0, adaptive: p2, timing: TIMING_PARAM.default, mode: 'plain', live: set.ak };
+                if (hold == null) ap.holdKey = p1;
+                return { entryId, params: ap };
+            }
             const params = { hold: hold ?? 0, tap: usageToKey(p2).key, tapMods: usageToKey(p2).mods,
                 timing: set.timing ?? TIMING_PARAM.default, mode: set.mode ?? 'plain', live: set.live ?? 'off' };
             if (hold == null) params.holdKey = p1;
@@ -735,6 +743,10 @@ export function behaviorFor(entryId, params = {}) {
     if (p.variant != null && vs.some((v) => v.behaviorId === p.variant)) return p.variant;   // helper (virtual slot)
     const mode = p.mode ?? 'plain';
     const live = p.live ?? 'off';
+    if (entryId === 'mod-tap' && p.adaptive != null) {
+        const side = p.live === 'left' || p.live === 'right' ? p.live : 'any';
+        return (vs.find((v) => v.set.ak === side) ?? vs.find((v) => v.set.ak === 'any'))?.behaviorId ?? null;
+    }
     if (entryId === 'mod-tap' || entryId === 'layer-tap') {
         if (mode === 'smart') return vs.find((v) => v.set.mode === 'smart')?.behaviorId ?? null;
         if (live !== 'off') {
@@ -743,7 +755,7 @@ export function behaviorFor(entryId, params = {}) {
             const pick = lv.find((v) => v.side === live) ?? (r && lv.find((v) => v.behaviorId === r.behaviorId));
             if (pick) return pick.behaviorId;
         }
-        const compiled = vs.filter((v) => !v.set.mode && !v.set.live).map((v) => ({ behaviorId: v.behaviorId, ms: v.set.timing }));
+        const compiled = vs.filter((v) => !v.set.mode && !v.set.live && !v.set.ak).map((v) => ({ behaviorId: v.behaviorId, ms: v.set.timing }));
         const r = resolveTiming(entryId, p.timing ?? TIMING_PARAM.default, compiled, { side: null });
         return r?.behaviorId ?? compiled[0]?.behaviorId ?? null;
     }
@@ -759,7 +771,7 @@ function encodeStudio(id, params) {
     switch (id) {
         case 'key': case 'key-toggle': return B(keyToUsage(p.key ?? 0, p.mods));
         case 'media-key': return B(((HID_PAGE_CONSUMER << 16) | (p.code & 0xFFFF)) >>> 0);
-        case 'mod-tap': return B(p.holdKey ?? needMods(id, p.hold), keyToUsage(p.tap ?? 0, p.tapMods));
+        case 'mod-tap': return B(p.holdKey ?? needMods(id, p.hold), p.adaptive != null ? p.adaptive : keyToUsage(p.tap ?? 0, p.tapMods));
         case 'one-shot-mod': return B(p.key ?? needMods(id, p.mods));
         case 'layer-tap': return B(p.layer, keyToUsage(p.tap ?? 0, p.tapMods));
         case 'hold-layer': case 'to-layer': case 'toggle-layer': case 'num-word': case 'one-shot-layer': return B(p.layer);
@@ -835,7 +847,7 @@ export function capParts(binding, adapter = adapterOf(binding)) {
         case 'key-toggle': return { top: 'Toggle', main: keyCap(adapter, p.key, p.mods).main };
         case 'mod-tap':
             return { top: `Mod-tap ${p.holdKey != null ? usageCap(p.holdKey) : modsText(p.hold)}${timingTag(p)}`.trim(),
-                main: keyCap(adapter, p.tap, p.tapMods ?? 0).main };
+                main: p.adaptive != null ? `AK${p.adaptive}` : keyCap(adapter, p.tap, p.tapMods ?? 0).main };
         case 'layer-tap': return { top: `LT ${layerText(adapter, p.layer)}${timingTag(p)}`, main: keyCap(adapter, p.tap, p.tapMods ?? 0).main };
         case 'one-shot-mod': return { top: `One-shot${timingTag(p)}`, main: p.key != null ? usageCap(p.key) : modsText(p.mods) || '·' };
         case 'hold-layer': case 'to-layer': case 'toggle-layer': case 'tap-toggle': case 'default-layer': case 'smart-layer': case 'num-word':
@@ -981,7 +993,7 @@ export function holdTapParts(binding, adapter = adapterOf(binding)) {
     try { d = decode(binding, adapter); } catch { return null; }
     const p = d.params;
     if (d.entryId !== 'mod-tap' && d.entryId !== 'layer-tap') return null;
-    const k = keyCap(adapter, p.tap, p.tapMods ?? 0);
+    const k = p.adaptive != null ? { top: '', main: `AK${p.adaptive}` } : keyCap(adapter, p.tap, p.tapMods ?? 0);
     const hold = d.entryId === 'layer-tap' ? layerText(adapter, p.layer)
         : p.holdKey != null ? usageCap(p.holdKey) : modsText(p.hold);
     return { entryId: d.entryId, hold: hold || '·', tag: timingTag(p).replace(/^ · /, ''), tap: (k.top + k.main) || '·' };
@@ -1006,7 +1018,7 @@ export function liveSideFor(hand, sides = liveSides()) {
 /**
  * Tap + Hold → a binding for `adapter`, or a reason it can't be stored.
  * @param {object} spec
- * @param {{key:number, mods?:number}|null} spec.tap
+ * @param {{key:number, mods?:number}|{adaptive:number}|null} spec.tap  `{adaptive: N}` = &fak set N (ZMK live nodes only)
  * @param {{kind:'mods', mods:number}|{kind:'layer', layer:number}|{kind:'key', key:number, mods?:number}|null} spec.hold
  * @param {'left'|'right'|null} [spec.hand]  the key's hand (ZMK live variant)
  * @param {number} [spec.timing]  ms (ZMK live slot / nearest compiled variant)
@@ -1014,10 +1026,18 @@ export function liveSideFor(hand, sides = liveSides()) {
  *          |{ok:false, message:string, fallback?:'tap-dance'}}
  */
 export function composeTapHold({ tap, hold, hand = null, timing } = {}, adapter) {
-    if (!tap?.key) return { ok: false, message: 'Pick the TAP key.' };
+    const ak = tap?.adaptive;
+    if (!tap?.key && ak == null) return { ok: false, message: 'Pick the TAP key.' };
+    if (ak != null) {
+        if (adapter === 'qmk' || adapter === 'zmk-typed') return { ok: false, message: 'An adaptive key can only be a key tap, not part of a combo, tap dance or QMK tap-hold.' };
+        if (!hold) {   // no hold: the adaptive key itself
+            try { return { ok: true, value: encode('adaptive', { slot: ak }, adapter), entryId: 'adaptive', params: { slot: ak }, via: 'Adaptive Key' }; }
+            catch { return { ok: false, message: 'This keyboard has no adaptive key.' }; }
+        }
+    }
     if (!hold) return { ok: false, message: 'Pick what HOLD does.' };
     if (hold.kind === 'mods' && !(hold.mods & 0xFF)) return { ok: false, message: 'Pick at least one modifier to hold.' };
-    const tapMods = tap.mods & 0xFF;
+    const tapMods = ak != null ? 0 : tap.mods & 0xFF;
     const qmk = adapter === 'qmk';
     if (qmk) {
         const t = keyCap(adapter, tap.key, tapMods);
@@ -1036,19 +1056,27 @@ export function composeTapHold({ tap, hold, hand = null, timing } = {}, adapter)
     }
     const isStudio = adapter === 'zmk-studio';
     let entryId, params;
+    if (hold.kind === 'layer' && ak != null) {   // &ht_fak <layer> <set>: no catalog entry, a raw firmware binding
+        const d = [...behaviorsNow().values()].find((x) => x.displayName === 'Adaptive Key / Layer');
+        if (!d) return { ok: false, message: 'This keyboard has no hold-tap that can tap an adaptive key (needs the Adaptive Key / Layer firmware node).' };
+        const value = { behaviorId: d.id, param1: hold.layer >>> 0, param2: ak >>> 0 };
+        return { ok: true, value, entryId: 'advanced', params: { raw: value }, via: d.displayName };
+    }
     if (hold.kind === 'layer') {
         entryId = 'layer-tap';
         params = { layer: hold.layer, tap: tap.key, ...(tapMods ? { tapMods } : {}) };
     } else {
         entryId = 'mod-tap';
+        const tapP = ak != null ? { adaptive: ak } : { tap: tap.key, ...(tapMods ? { tapMods } : {}) };
         params = hold.kind === 'key'
-            ? { hold: 0, holdKey: keyToUsage(hold.key, hold.mods ?? 0), tap: tap.key, ...(tapMods ? { tapMods } : {}) }
-            : { hold: hold.mods & 0xFF, tap: tap.key, ...(tapMods ? { tapMods } : {}) };
+            ? { hold: 0, holdKey: keyToUsage(hold.key, hold.mods ?? 0), ...tapP }
+            : { hold: hold.mods & 0xFF, ...tapP };
         if (isStudio) params.live = liveSideFor(hand);
     }
     if (!qmk) params.timing = timing ?? TIMING_PARAM.default;
     let value;
     try { value = encode(entryId, params, adapter); } catch {
+        if (ak != null) return { ok: false, message: 'This keyboard has no hold-tap that can tap an adaptive key (needs the Hold-Tap / Adaptive firmware nodes).' };
         return { ok: false, message: `This keyboard has no ${entryId === 'layer-tap' ? 'layer-tap' : 'mod-tap'} behavior for this slot.` };
     }
     if (qmk) return { ok: true, value, entryId, params, via: entryId === 'layer-tap' ? 'LT()' : 'MT()' };
@@ -1064,10 +1092,15 @@ export function tapHoldSpecOf(binding, adapter) {
     try { d = decode(binding, adapter); } catch { return null; }
     const p = d.params;
     if (d.entryId === 'key') return { tap: { key: p.key, mods: p.mods ?? 0 }, hold: null };
-    if (d.entryId === 'layer-tap') return { tap: { key: p.tap, mods: p.tapMods ?? 0 }, hold: { kind: 'layer', layer: p.layer }, timing: p.timing };
+    if (d.entryId === 'adaptive') return { tap: { adaptive: p.slot }, hold: null };
+    const tapOf = () => (p.adaptive != null ? { adaptive: p.adaptive } : { key: p.tap, mods: p.tapMods ?? 0 });
+    if (d.entryId === 'advanced' && adapter === 'zmk-studio' && behaviorsNow().get(p.raw?.behaviorId)?.displayName === 'Adaptive Key / Layer') {
+        return { tap: { adaptive: p.raw.param2 >>> 0 }, hold: { kind: 'layer', layer: p.raw.param1 >>> 0 } };   // &ht_fak
+    }
+    if (d.entryId === 'layer-tap') return { tap: tapOf(), hold: { kind: 'layer', layer: p.layer }, timing: p.timing };
     if (d.entryId === 'mod-tap') {
         const hold = p.holdKey != null ? { kind: 'key', ...usageToKey(p.holdKey) } : { kind: 'mods', mods: p.hold };
-        return { tap: { key: p.tap, mods: p.tapMods ?? 0 }, hold, timing: p.timing };
+        return { tap: tapOf(), hold, timing: p.timing };
     }
     return null;
 }
