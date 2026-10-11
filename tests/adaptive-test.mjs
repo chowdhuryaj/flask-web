@@ -63,16 +63,21 @@ eq('adaptive' in parseKeymap('/ { keymap { compatible = "zmk,keymap"; base { bin
 {
     // payload = frame bytes 3+ (the address prefix is the first byte(s)).
     const rule1 = hex('01 00 00 07 00 05 01 F4 00');
-    eq(decodeAkRule(rule1), { rule: 1, set: 0, trigger: 0x00070005, maxIdleMs: 500, strict: false });
+    eq(decodeAkRule(rule1), { rule: 1, set: 0, trigger: 0x00070005, maxIdleMs: 500, strict: false, skip: false });
     eq(encodeAkRule(1, decodeAkRule(rule1)), rule1, 'rule 1 (rti_b: B within 500 ms)');
     const rule20 = hex('14 00 02 07 00 38 01 F4 00');
     eq(decodeAkRule(rule20).trigger, 0x02070038); eq(encodeAkRule(20, decodeAkRule(rule20)), rule20, 'rule 20 QMARK');
     const rule24 = hex('18 01 00 07 00 50 00 00 00');
-    eq(decodeAkRule(rule24), { rule: 24, set: 1, trigger: 0x00070050, maxIdleMs: 0, strict: false });
+    eq(decodeAkRule(rule24), { rule: 24, set: 1, trigger: 0x00070050, maxIdleMs: 0, strict: false, skip: false });
     eq(encodeAkRule(24, decodeAkRule(rule24)), rule24, 'rule 24 (ak_alt LEFT, no idle)');
     eq(encodeAkRule(40, { set: 0, trigger: 0x0007001A, maxIdleMs: 500 }), hex('28 00 00 07 00 1A 01 F4 00'), 'SET rule 40');
     eq(encodeAkRule(40, { set: 0, trigger: 0x0007001A, maxIdleMs: 20000 }), hex('28 00 00 07 00 1A 4E 20 00'), 'idle 20000 as sent');
     eq(encodeAkRule(40, { strict: true })[8], 1, 'flags bit0 = exact mods');
+    eq(encodeAkRule(40, { skip: true })[8], 2, 'flags bit1 = skip');
+    eq(encodeAkRule(40, { strict: true, skip: true })[8], 3, 'both flags');
+    eq(decodeAkRule(hex('28 00 00 07 00 0B 00 00 02')).skip, true, 'decode skip');
+    eq(decodeAkRule(hex('28 00 00 07 00 0B 00 00 02')).strict, false, 'skip alone is not exact');
+    eq(encodeAkRule(40, decodeAkRule(hex('28 00 00 07 00 0B 00 00 03'))), hex('28 00 00 07 00 0B 00 00 03'), 'skip+exact round trip');
     eq(encodeAkRule(40, {}), hex('28 00 00 00 00 00 00 00 00'), 'DELETE rule 40');
 
     const step = hex('01 00 01 00 00 00 07 00 08 00 00 00 00');
@@ -124,7 +129,7 @@ const mkWs = () => {
     const ws = mkWs();
     const f = new ZmkOfflineFlask(ws);
     eq(await f.getU16(CH_ZMK.adaptive, V.akEnabled), 1, 'boots enabled');
-    eq(await f.getU16(CH_ZMK.adaptive, V.akSetCount), 4); eq(await f.getU16(CH_ZMK.adaptive, V.akRuleCount), 64);
+    eq(await f.getU16(CH_ZMK.adaptive, V.akSetCount), 8); eq(await f.getU16(CH_ZMK.adaptive, V.akRuleCount), 64);
     eq(await f.getU16(CH_ZMK.adaptive, V.akStepCount), 6);
     let live = 0;
     for (let i = 0; i < 64; i++) if (decodeAkRule(await f.getBytes(CH_ZMK.adaptive, V.akRule, [i])).trigger) live++;
@@ -139,7 +144,7 @@ const mkWs = () => {
     eq((await f.getBytes(CH_ZMK.adaptive, V.akFallback, [2])).slice(0, 12), hex('02 00 00 00 00 00 00 00 00 00 00 00'), 'GET fallback 2 (none)');
     await throwsUnhandled(() => f.getBytes(CH_ZMK.adaptive, V.akStep, [1, 6]), 'step >= STEPS');
     await throwsUnhandled(() => f.getBytes(CH_ZMK.adaptive, V.akRule, [64]), 'rule >= RULES');
-    await throwsUnhandled(() => f.getBytes(CH_ZMK.adaptive, V.akFallback, [4]), 'fallback set >= SETS');
+    await throwsUnhandled(() => f.getBytes(CH_ZMK.adaptive, V.akFallback, [8]), 'fallback set >= SETS');
     await throwsUnhandled(() => f.setU16(CH_ZMK.adaptive, V.akSetCount, 9), 'counts are read-only');
     eq(await f.setU16(CH_ZMK.adaptive, V.akEnabled, 0), 0); eq(await f.getU16(CH_ZMK.adaptive, V.akEnabled), 0, 'enabled SET');
 
@@ -149,7 +154,8 @@ const mkWs = () => {
         hex('28 00 01 00 00 00 07 00 0B 00 00 00 00'), 'SET rule 40 step 0');
     eq(await f.setBytes(CH_ZMK.adaptive, V.akRule, hex('28 00 00 07 00 1A 4E 20 00')), hex('28 00 00 07 00 1A 27 10 00'), 'idle 20000 clamps to 10000');
     eq((await f.setBytes(CH_ZMK.adaptive, V.akRule, hex('28 00 00 00 00 1A 01 F4 02')))[3], 7, 'page 0 -> 7');
-    eq((await f.setBytes(CH_ZMK.adaptive, V.akRule, hex('28 00 00 07 00 1A 01 F4 03')))[8], 1, 'flags: only bit0 (exact mods) is kept');
+    eq((await f.setBytes(CH_ZMK.adaptive, V.akRule, hex('28 00 00 07 00 1A 01 F4 03')))[8], 3, 'flags: bits 0-1 (exact, skip) are kept');
+    eq((await f.setBytes(CH_ZMK.adaptive, V.akRule, hex('28 00 00 07 00 1A 01 F4 FE')))[8], 2, 'flags: bits 2-7 dropped');
     await throwsUnhandled(() => f.setBytes(CH_ZMK.adaptive, V.akRule, hex('28 09 00 07 00 1A 01 F4 00')), 'set 9 >= SETS refused');
     await throwsUnhandled(() => f.setBytes(CH_ZMK.adaptive, V.akRule, hex('40 00 00 07 00 1A 01 F4 00')), 'rule >= RULES refused');
     await throwsUnhandled(() => f.setBytes(CH_ZMK.adaptive, V.akStep, hex('28 06 01 00 00 00 07 00 0B 00 00 00 00')), 'step >= STEPS refused');
@@ -179,7 +185,7 @@ const mkWs = () => {
     eq(createZmkTemplate('imprint').zmk.adaptive, undefined, 'no table on the imprint workspace');
     // a totem template without generated data still serves the module, empty
     const bare = new ZmkOfflineFlask(createZmkTemplate('totem'));
-    eq(await bare.getU16(CH_ZMK.adaptive, V.akSetCount), 4, 'totem always serves the module');
+    eq(await bare.getU16(CH_ZMK.adaptive, V.akSetCount), 8, 'totem always serves the module');
     // stored older totem workspace gains the table
     const old = createZmkTemplate('totem'); delete old.zmk.adaptive; delete old.zmkDirty.akRule;
     normalizeZmkWorkspace(old);
@@ -237,15 +243,21 @@ const mkWs = () => {
     const a = mkApp();
     await a.flask.setBytes(CH_ZMK.adaptive, V.akRule, hex('03 00 00 00 00 00 00 00 00'));      // delete default rule 3
     await a.flask.setBytes(CH_ZMK.adaptive, V.akRule, hex('28 01 00 07 00 1A 00 64 01'));      // new rule 40 in set 1, exact mods
+    await a.flask.setBytes(CH_ZMK.adaptive, V.akRule, hex('29 07 00 07 00 0B 00 00 02'));      // rule 41 in set 7, skip
+    await a.flask.setBytes(CH_ZMK.adaptive, V.akStep, hex('29 00 01 00 00 00 07 00 15 00 00 00 00'));  // types R
+    await a.flask.setBytes(CH_ZMK.adaptive, V.akFallback, [7, 1, 0, 0, 0x00, 0x07, 0x00, 0x0D, 0, 0, 0, 0]);  // set 7 fallback J
     await a.flask.setBytes(CH_ZMK.adaptive, V.akStep, hex('28 00 02 00 00 00 00 00 07 00 00 00 00'));  // macro slot 7
     await a.flask.setBytes(CH_ZMK.adaptive, V.akFallback, [2, 1, 0, 0, 0x00, 0x07, 0x00, 0x2C, 0, 0, 0, 0]);
     await a.flask.setU16(CH_ZMK.adaptive, V.akEnabled, 0);
     const state = await exportFlaskState(a);
     eq(state.adaptive.enabled, 0);
-    eq(state.adaptive.rules.length, 35, '35 live rules (one default deleted, one added)');
+    eq(state.adaptive.rules.length, 36, '36 live rules (one default deleted, two added)');
     ok(!state.adaptive.rules.some((r) => r.index === 3), 'deleted default is absent from the file');
     eq(state.adaptive.rules.find((r) => r.index === 40),
-        { index: 40, set: 1, trigger: 0x7001A, maxIdleMs: 100, strict: true, steps: [{ action: 2, behaviorId: 0, param1: 7, param2: 0 }] });
+        { index: 40, set: 1, trigger: 0x7001A, maxIdleMs: 100, strict: true, skip: false, steps: [{ action: 2, behaviorId: 0, param1: 7, param2: 0 }] });
+    eq(state.adaptive.rules.find((r) => r.index === 41), { index: 41, set: 7, trigger: 0x7000B, maxIdleMs: 0, strict: false, skip: true,
+        steps: [{ action: 1, behaviorId: 0, param1: 0x70015, param2: 0 }] }, 'skip rule in set 7 exports with skip');
+    eq(state.adaptive.fallback.length, 8, 'fallbacks for all 8 sets');
     eq(state.adaptive.fallback[2], { action: 1, behaviorId: 0, param1: 0x7002C, param2: 0 });
     eq(JSON.parse(JSON.stringify(state.adaptive)), state.adaptive, 'JSON-safe');
 
@@ -264,6 +276,8 @@ const mkWs = () => {
         return out;
     };
     eq(await dump(b), await dump(a), 'imported table equals the exported one');
+    eq(decodeAkRule(await b.flask.getBytes(CH_ZMK.adaptive, V.akRule, [41])).skip, true, 'skip survives import');
+    eq(decodeAkFallback(await b.flask.getBytes(CH_ZMK.adaptive, V.akFallback, [7])).param1, 0x7000D, 'set 7 fallback restored');
     eq(await b.flask.getU16(CH_ZMK.adaptive, V.akEnabled), 0, 'enabled restored');
     eq(decodeAkFallback(await b.flask.getBytes(CH_ZMK.adaptive, V.akFallback, [2])).param1, 0x7002C, 'fallback restored');
     eq(decodeAkRule(await b.flask.getBytes(CH_ZMK.adaptive, V.akRule, [3])).trigger, 0, 'the deleted default stays deleted');

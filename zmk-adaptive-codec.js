@@ -7,7 +7,7 @@
 //   fallback 0x52: [set, action, behavior u16 BE, p1 u32, p2 u32]          (12 B)
 //
 // trigger = encoded usage (id bits 0-15, page 16-23 with 0 meaning 7, mods
-// 24-31); trigger 0 deletes the rule. flags bit0 = exact mods. A rule's
+// 24-31); trigger 0 deletes the rule. flags bit0 = exact mods, bit1 = skip (match the key before the last). A rule's
 // output is the contiguous prefix of its steps up to the first NONE; it is
 // live when trigger != 0 and step 0 is not NONE. Step action vocabulary =
 // tap dance / combos v2: 0 none / 1 usage / 2 flask_macros slot / 3
@@ -24,13 +24,14 @@ export function decodeAkRule(b) {
         rule: b[0], set: b[1] ?? 0, trigger: u32at(b, 2),
         maxIdleMs: (((b[6] ?? 0) << 8) | (b[7] ?? 0)) >>> 0,
         strict: ((b[8] ?? 0) & 1) === 1,
+        skip: ((b[8] ?? 0) & 2) === 2,
     };
 }
 
-export function encodeAkRule(rule, { set = 0, trigger = 0, maxIdleMs = 0, strict = false }) {
+export function encodeAkRule(rule, { set = 0, trigger = 0, maxIdleMs = 0, strict = false, skip = false }) {
     const idle = maxIdleMs & 0xFFFF;
     return [rule & 0xFF, set & 0xFF, ...putU32(trigger >>> 0),
-        (idle >>> 8) & 0xFF, idle & 0xFF, strict ? 1 : 0];
+        (idle >>> 8) & 0xFF, idle & 0xFF, (strict ? 1 : 0) | (skip ? 2 : 0)];
 }
 
 export function decodeAkStep(b) {

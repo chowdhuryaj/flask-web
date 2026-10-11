@@ -64,7 +64,7 @@ const IMPRINT = {
     tdSlots: 16,
     tdTaps: 4,
     // v18 (Totem only; imprint has no flask_adaptive): Kconfig defaults.
-    adaptiveSets: 4,
+    adaptiveSets: 8,   // totem.conf CONFIG_ZMK_FLASK_ADAPTIVE_SETS=8
     adaptiveRules: 64,
     adaptiveSteps: 6,
 };
@@ -455,14 +455,14 @@ const clampMs = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // table comes from gen-totem-default.mjs (TOTEM_DEFAULT.adaptive, parsed from
 // the keymap's flask,adaptive-defaults); a keymap without it boots empty.
 const akNone = () => ({ action: AK_ACTION.none, behaviorId: 0, param1: 0, param2: 0 });
-const akEmptyRule = () => ({ set: 0, trigger: 0, maxIdleMs: 0, strict: false,
+const akEmptyRule = () => ({ set: 0, trigger: 0, maxIdleMs: 0, strict: false, skip: false,
     steps: Array.from({ length: IMPRINT.adaptiveSteps }, akNone) });
 /** `def` = TOTEM_DEFAULT.adaptive shape: { fallback: [out], rules: [{set,
  * trigger, maxIdleMs, strict, steps: [out]}] }. */
 export function adaptiveTable(def) {
     const rules = Array.from({ length: IMPRINT.adaptiveRules }, akEmptyRule);
     (def?.rules ?? []).slice(0, rules.length).forEach((r, i) => {
-        rules[i] = { set: r.set, trigger: r.trigger >>> 0, maxIdleMs: r.maxIdleMs ?? 0, strict: !!r.strict,
+        rules[i] = { set: r.set, trigger: r.trigger >>> 0, maxIdleMs: r.maxIdleMs ?? 0, strict: !!r.strict, skip: !!r.skip,
             steps: Array.from({ length: IMPRINT.adaptiveSteps }, (_, k) => ({ ...akNone(), ...(r.steps[k] ?? {}) })) };
     });
     const fallback = Array.from({ length: IMPRINT.adaptiveSets }, (_, i) => ({ ...akNone(), ...(def?.fallback?.[i] ?? {}) }));
@@ -1051,7 +1051,7 @@ export class ZmkOfflineFlask extends OfflineFlask {
                 if (d.set >= ak.fallback.length) throw new Error('unhandled');
                 // Page 0 means the keyboard page.
                 const trigger = ((d.trigger >>> 16) & 0xFF) ? d.trigger : (d.trigger | (7 << 16)) >>> 0;
-                Object.assign(r, { set: d.set, trigger, maxIdleMs: Math.min(d.maxIdleMs, 10000), strict: d.strict });
+                Object.assign(r, { set: d.set, trigger, maxIdleMs: Math.min(d.maxIdleMs, 10000), strict: d.strict, skip: d.skip });
             }
             dirty(d.rule);
             return encodeAkRule(d.rule, ak.rules[d.rule]);

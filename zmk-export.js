@@ -215,7 +215,7 @@ async function exportFlaskStateInner(app) {
                 if (!d.action || isRecursiveOutput(d)) break;
                 steps.push(out1(d));
             }
-            if (steps.length) rules.push({ index: i, set: h.set, trigger: h.trigger, maxIdleMs: h.maxIdleMs, strict: h.strict, steps });
+            if (steps.length) rules.push({ index: i, set: h.set, trigger: h.trigger, maxIdleMs: h.maxIdleMs, strict: h.strict, skip: h.skip, steps });
         }
         out.adaptive = { enabled: await g(CH_ZMK.adaptive, V.akEnabled), fallback, rules };
     }

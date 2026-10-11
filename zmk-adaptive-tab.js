@@ -37,7 +37,7 @@ const readOut = (d) => {
     const o = { action: d.action, behaviorId: d.behaviorId, param1: d.param1, param2: d.param2 };
     return isRecursiveOutput(o) ? { ...noStep(), unknown: true } : o;
 };
-const emptyRule = (index, nSteps) => ({ index, set: 0, trigger: 0, maxIdleMs: 0, strict: false,
+const emptyRule = (index, nSteps) => ({ index, set: 0, trigger: 0, maxIdleMs: 0, strict: false, skip: false,
     steps: Array.from({ length: nSteps }, noStep) });
 
 /** Live steps of a rule (its contiguous output). */
@@ -120,7 +120,7 @@ export class ZmkAdaptiveTab {
     async writeHeader(i, patch = {}) {
         const r = this.rules[i];
         const echo = decodeAkRule(await this.app.flask.setBytes(CH_ZMK.adaptive, V.akRule, encodeAkRule(i, { ...r, ...patch }), 1));
-        Object.assign(r, { set: echo.set, trigger: echo.trigger, maxIdleMs: echo.maxIdleMs, strict: echo.strict });
+        Object.assign(r, { set: echo.set, trigger: echo.trigger, maxIdleMs: echo.maxIdleMs, strict: echo.strict, skip: echo.skip });
         if (echo.trigger === 0) r.steps = Array.from({ length: this.stepCount }, noStep);
         this.bar?.markEdited();
     }
@@ -263,7 +263,7 @@ export class ZmkAdaptiveTab {
         const i = this.freeIndex();
         if (i < 0) throw new Error(`All ${this.ruleCount} rules are in use`);
         const before = this.rules[i];
-        this.rules[i] = { ...emptyRule(i, this.stepCount), set, trigger, maxIdleMs, strict: false };
+        this.rules[i] = { ...emptyRule(i, this.stepCount), set, trigger, maxIdleMs, strict: false, skip: false };
         let wrote = false;
         try {
             await this.writeHeader(i);
@@ -301,7 +301,7 @@ export class ZmkAdaptiveTab {
         const B = structuredClone(this.rules[b]);
         await this.guard('Reorder', async () => {
             for (const [to, from] of [[a, B], [b, A]]) {
-                await this.writeHeader(to, { set: from.set, trigger: from.trigger, maxIdleMs: from.maxIdleMs, strict: from.strict });
+                await this.writeHeader(to, { set: from.set, trigger: from.trigger, maxIdleMs: from.maxIdleMs, strict: from.strict, skip: from.skip });
                 await this.writeSteps(to, from.steps);
             }
         });
@@ -487,7 +487,7 @@ export class ZmkAdaptiveTab {
         // trigger, has an output, its idle limit is no tighter, and it is not stricter on mods.
         const earlier = group.slice(0, pos).some((o) => o.trigger === r.trigger && liveSteps(o).length
             && (o.maxIdleMs === 0 || (r.maxIdleMs !== 0 && o.maxIdleMs >= r.maxIdleMs))
-            && (!o.strict || r.strict));
+            && (!o.strict || r.strict) && !!o.skip === !!r.skip);
         const text = this.ruleText(r);
         const idle = el('input', {
             type: 'number', min: 0, max: 10000, value: r.maxIdleMs || '', placeholder: 'any', style: 'width:72px',
@@ -500,6 +500,10 @@ export class ZmkAdaptiveTab {
             type: 'checkbox', checked: r.strict,
             onchange: (e) => this.guard('Exact-mods write', () => this.writeHeader(i, { strict: e.target.checked })),
         });
+        const skip = el('input', {
+            type: 'checkbox', checked: r.skip,
+            onchange: (e) => this.guard('Skip write', () => this.writeHeader(i, { skip: e.target.checked })),
+        });
         return el('div', { class: 'row', 'data-rule': i, style: 'flex-wrap:wrap; gap:8px' },
             el('span', { style: 'display:inline-flex; gap:2px' },
                 el('button', { class: 'btn small', text: '↑', title: 'earlier = higher priority', disabled: pos === 0,
@@ -510,6 +514,7 @@ export class ZmkAdaptiveTab {
                 class: 'btn small', 'data-act': 'trigger', title: 'change the key that has to come right before',
                 onclick: () => this.pickTrigger(r.trigger, `Rule ${i}: after which key?`, (u) => this.guard('Trigger write', () => this.writeHeader(i, { trigger: u }))),
             }, outCell({ action: 1, param1: r.trigger }, TRIG_SURFACE) ?? '?'),
+            r.skip ? el('span', { class: 'note', 'data-skip': i, text: '_', title: 'skip magic: any key in between' }) : null,
             el('span', { class: 'faint', text: '→' }),
             el('button', {
                 class: 'btn small' + (live ? '' : ' faint'), 'data-act': 'output', style: 'flex:1 1 120px; text-align:left',
@@ -522,6 +527,8 @@ export class ZmkAdaptiveTab {
             el('span', { class: 'faint', text: 'within' }), idle, el('span', { class: 'faint', text: 'ms' }),
             el('label', { class: 'faint', title: 'only when the modifiers held match exactly (default: the trigger\'s modifiers must be a subset)' },
                 exact, ' exact mods'),
+            el('label', { class: 'faint', title: 'Match the key before the last one (skip magic)' },
+                skip, ' skip'),
             earlier ? el('span', { class: 'note', title: 'an earlier rule in this set has the same trigger and wins first',
                 text: '⚠ shadowed' }) : null,
             el('button', { class: 'btn small', text: '✕', title: 'delete this rule', 'data-act': 'delete',
@@ -539,7 +546,7 @@ export class ZmkAdaptiveTab {
                     text: custom || `Set ${set}`, placeholder: `Set ${set}`,
                     onCommit: (v) => { zmkSetSlotName(this.fam, 'adaptive', set, v); this.render(); },
                 }),
-                    el('span', { class: 'hint', text: `${group.length} rule${group.length === 1 ? '' : 's'} · Keys picker: Run › Adaptive key › set ${set}` })),
+                    el('span', { class: 'hint', text: `${group.length} rule${group.length === 1 ? '' : 's'}${group.length && group.every((r) => r.skip) ? ' · Skip magic: matches the key before the last one' : ''} · Keys picker: Run › Adaptive key › set ${set}` })),
                 el('span', { style: 'flex:1' }),
                 el('button', { class: 'btn small primary', text: '＋ Add rule', 'data-act': 'add-rule',
                     onclick: () => this.addDraft(set) })),
